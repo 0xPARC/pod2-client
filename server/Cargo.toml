@@ -1,0 +1,40 @@
+[package]
+name = "pod2-server"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pod2_server"
+path = "src/lib.rs"
+
+[dependencies]
+pod2 = { workspace = true }
+pod2_solver = { path = "../solver" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+schemars = { workspace = true }
+num = { workspace = true }
+num-bigint = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
+anyhow = "1.0.56"
+rusqlite = { version = "0.33.0", features = ["bundled"] }
+deadpool-sqlite = { version = "0.10.0", features = ["rt_tokio_1"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+config = { version = "0.14", features = ["toml"] }
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.21.0", features = ["full"] }
+uuid = { version = "1.16.0", features = ["v4"] }
+
+[dev-dependencies]
+rand = "0.8"
+tempfile = "3.10" # For creating temporary config files in tests
+axum-test = "14.0" # For testing Axum handlers
+chrono = { version = "0.4", features = ["serde"] } # For timestamps
