@@ -712,12 +712,13 @@ fn collect_wildcards(args: &[StatementTmplArg]) -> Result<HashSet<Wildcard>, Sol
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ir;
     use pod2::{
         lang::{self, parse},
         middleware::{NativePredicate, Params, Predicate},
     };
+
+    use super::*;
+    use crate::ir;
 
     #[test]
     fn test_simple_magic_set_transform() -> Result<(), lang::LangError> {

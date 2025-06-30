@@ -4,7 +4,6 @@ use std::{
 };
 
 use itertools::Itertools;
-
 use pod2::middleware::{
     AnchoredKey as MWAnchoredKey, CustomPredicateRef, PodId, Predicate, Statement,
     StatementTmplArg, Value, ValueRef, Wildcard,
@@ -208,9 +207,8 @@ impl<'a> ProofReconstructor<'a> {
                     Ok(Statement::Custom(cpr.clone(), vals))
                 }
                 Predicate::Native(np) => {
-                    use Statement::*;
-
                     use pod2::middleware::NativePredicate as NP;
+                    use Statement::*;
                     let s = match (np, fact.args.as_slice()) {
                         (NP::Equal, [a, b]) => Equal(a.clone(), b.clone()),
                         (NP::NotEqual, [a, b]) => NotEqual(a.clone(), b.clone()),

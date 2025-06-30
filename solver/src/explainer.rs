@@ -1,15 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
+use pod2::middleware::{
+    AnchoredKey, PodId, Predicate, StatementTmpl, StatementTmplArg, Value, ValueRef, Wildcard,
+};
+
 use crate::{
     engine::semi_naive::{Bindings, Fact, FactStore, SemiNaiveEngine},
     error::SolverError,
     ir::{Atom, PredicateIdentifier, Rule},
     metrics::NoOpMetrics,
     semantics::materializer::Materializer,
-};
-
-use pod2::middleware::{
-    AnchoredKey, PodId, Predicate, StatementTmpl, StatementTmplArg, Value, ValueRef, Wildcard,
 };
 
 type MissingAtom = StatementTmpl;

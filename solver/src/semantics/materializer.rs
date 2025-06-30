@@ -6,7 +6,6 @@ use std::{
 };
 
 use itertools::Itertools;
-
 use pod2::middleware::{
     self, AnchoredKey, CustomPredicateRef, PodId, Predicate, StatementTmplArg, TypedValue, Value,
     ValueRef,

@@ -4,7 +4,6 @@
 use std::collections::HashSet;
 
 use log::trace;
-
 use pod2::{
     frontend::Operation,
     middleware::{

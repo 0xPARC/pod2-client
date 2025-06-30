@@ -4,7 +4,7 @@ members = ["solver", "server"]
 
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "main" }
+pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-literals" }
 pod2_solver = { path = "solver" }
 hex = "0.4.3"
 itertools = "0.14.0"
@@ -38,4 +38,4 @@ tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
 
 [workspace.dev-dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "main", features = ["examples"] }
+pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-literals", features = ["examples"] }

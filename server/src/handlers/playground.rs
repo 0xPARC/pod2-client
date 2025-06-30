@@ -9,11 +9,6 @@ use chrono::Utc;
 use hex::ToHex;
 use log::info;
 use num::BigUint;
-use rusqlite::{params, OptionalExtension};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
-use super::pod_management::{PodData, PodInfo};
 use pod2::{
     backends::plonky2::{
         mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
@@ -24,9 +19,12 @@ use pod2::{
     lang::{self, parser, LangError},
     middleware::{containers::Set, Params, PodId, VDSet, Value as PodValue},
 };
-
 use pod2_solver::{self, db::IndexablePod, error::SolverError, metrics::MetricsLevel};
+use rusqlite::{params, OptionalExtension};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
+use super::pod_management::{PodData, PodInfo};
 use crate::{
     api_types::{
         Diagnostic, DiagnosticSeverity, ExecuteCodeRequest, ValidateCodeRequest,
@@ -654,11 +652,10 @@ mod tests {
     use axum_test::TestServer;
     use chrono::Utc;
     use env_logger::Builder;
+    use pod2::backends::plonky2::mock::signedpod::MockSigner;
     use serde_json::json;
 
     use super::*; // Imports handlers, PlaygroundApiError, etc.
-    use pod2::backends::plonky2::mock::signedpod::MockSigner;
-
     use crate::{
         db::{self, init_db_pool, ConnectionPool},
         routes::create_router,

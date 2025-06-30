@@ -7,16 +7,21 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use chrono::Utc;
 use hex::ToHex;
+use pod2::{
+    backends::plonky2::mock::signedpod::MockSigner,
+    frontend::{
+        serialization::{SerializedMainPod, SerializedSignedPod},
+        MainPod, SignedPod, SignedPodBuilder,
+    },
+    middleware::{hash_str, Hash, Value as PodValue},
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use chrono::Utc;
 
-use pod2::frontend::{serialization::{SerializedMainPod, SerializedSignedPod}, MainPod};
-use pod2::{backends::plonky2::mock::signedpod::MockSigner, frontend::{SignedPod, SignedPodBuilder}, middleware::{Hash, hash_str, Value as PodValue}}; 
+use super::AppError;
 use crate::db::ConnectionPool;
-
-use super::AppError; 
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(tag = "pod_data_variant", content = "pod_data_payload")] // This will determine the JSON structure
@@ -39,7 +44,7 @@ impl PodData {
 pub struct PodInfo {
     pub id: String,
     pub pod_type: String, // This will store the string "signed" or "main" from the DB
-    pub data: PodData,   // Changed from Value to the strongly-typed enum
+    pub data: PodData,    // Changed from Value to the strongly-typed enum
     pub label: Option<String>,
     pub created_at: String,
     pub space: String,
@@ -49,7 +54,7 @@ pub struct PodInfo {
 #[derive(Deserialize)]
 pub struct SignRequest {
     private_key: String,
-    entries: HashMap<String, PodValue>, 
+    entries: HashMap<String, PodValue>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -67,10 +72,13 @@ pub async fn import_pod_to_space(
     Json(payload): Json<ImportPodRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let conn = pool.get().await.context("Failed to get DB connection")?;
-    
+
     let now = Utc::now().to_rfc3339();
 
-    let space_exists_conn = pool.get().await.context("Failed to get DB connection for space check")?;
+    let space_exists_conn = pool
+        .get()
+        .await
+        .context("Failed to get DB connection for space check")?;
     let space_id_check_clone = space_id.clone();
     let space_exists = space_exists_conn
         .interact(move |conn| {
@@ -83,32 +91,41 @@ pub async fn import_pod_to_space(
         .context("Failed to check if space exists")?;
 
     if !space_exists {
-        return Err(AppError::NotFound(format!("Space with id '{}' not found", space_id)));
+        return Err(AppError::NotFound(format!(
+            "Space with id '{}' not found",
+            space_id
+        )));
     }
 
     // Re-bind pod_data_enum so it can be moved into PodInfo later
     let final_pod_data_enum = match payload.pod_type.as_str() {
         "signed" => {
             let helper: SerializedSignedPod = serde_json::from_value(payload.data.clone())
-                .context("Failed to deserialize data into SerializedSignedPod for PodInfo construction")?;
+                .context(
+                    "Failed to deserialize data into SerializedSignedPod for PodInfo construction",
+                )?;
             PodData::Signed(helper)
         }
         "main" => {
-            let helper: SerializedMainPod = serde_json::from_value(payload.data.clone())
-                .context("Failed to deserialize data into SerializedMainPod for PodInfo construction")?;
+            let helper: SerializedMainPod = serde_json::from_value(payload.data.clone()).context(
+                "Failed to deserialize data into SerializedMainPod for PodInfo construction",
+            )?;
             PodData::Main(helper)
         }
         _ => unreachable!(), // Should have been caught earlier
     };
 
-    let pod_id_obj = match &final_pod_data_enum  { // Borrow here
-        PodData::Signed(signed_pod_helper) => SignedPod::try_from(signed_pod_helper.clone()).unwrap().id(), // Clone helper if needed by try_from
-        PodData::Main(main_pod_helper) => MainPod::try_from(main_pod_helper.clone()).unwrap().id() // Clone helper if needed by try_from
+    let pod_id_obj = match &final_pod_data_enum {
+        // Borrow here
+        PodData::Signed(signed_pod_helper) => {
+            SignedPod::try_from(signed_pod_helper.clone()).unwrap().id()
+        } // Clone helper if needed by try_from
+        PodData::Main(main_pod_helper) => MainPod::try_from(main_pod_helper.clone()).unwrap().id(), // Clone helper if needed by try_from
     };
-    
+
     // Serialize the Hash part of Id (pod_id_obj.0) to a string for DB and PodInfo
     let pod_id_string_for_db_and_info: String = pod_id_obj.0.encode_hex();
-    
+
     let pod_id_for_response = pod_id_string_for_db_and_info.clone();
     let pod_id_for_error_msg = pod_id_string_for_db_and_info.clone();
 
@@ -119,19 +136,19 @@ pub async fn import_pod_to_space(
         .context("Failed to serialize final PodData enum to JSON for storage")?;
 
     let space_id_clone_for_db = space_id.clone();
-    let pod_type_for_db_and_info = payload.pod_type.clone(); 
+    let pod_type_for_db_and_info = payload.pod_type.clone();
     let label_for_db_and_info = payload.label.clone();
-    let created_at_for_info = now.clone(); // For PodInfo response
+    let created_at_for_info = now.clone();
 
     conn.interact(move |conn| {
         conn.execute(
             "INSERT INTO pods (id, pod_type, data, label, created_at, space) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
-                pod_id_string_for_db_and_info, // Use the serialized string ID
-                pod_type_for_db_and_info, 
-                data_blob_for_db, // Use the blob from final_pod_data_enum
-                label_for_db_and_info, 
-                now, // For DB
+                pod_id_string_for_db_and_info,
+                pod_type_for_db_and_info,
+                data_blob_for_db,
+                label_for_db_and_info,
+                now,
                 space_id_clone_for_db
             ],
         )
@@ -154,7 +171,6 @@ pub async fn import_pod_to_space(
     Ok((StatusCode::CREATED, Json(created_pod_info)))
 }
 
-
 // Handler for DELETE /api/pods/:space_id/:pod_id
 pub async fn delete_pod_from_space(
     State(pool): State<ConnectionPool>,
@@ -175,7 +191,10 @@ pub async fn delete_pod_from_space(
         .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
         .context("DB interaction failed for delete_pod_from_space")?
-        .context(format!("Failed to delete pod '{}' from space '{}'", pod_id, space_id))?;
+        .context(format!(
+            "Failed to delete pod '{}' from space '{}'",
+            pod_id, space_id
+        ))?;
 
     if rows_deleted == 0 {
         Err(AppError::NotFound(format!(
@@ -187,7 +206,6 @@ pub async fn delete_pod_from_space(
     }
 }
 
-
 // Handler for GET /api/pods/:space
 pub async fn list_pods_in_space(
     State(pool): State<ConnectionPool>,
@@ -198,7 +216,7 @@ pub async fn list_pods_in_space(
         .await
         .context("Failed to get DB connection from pool")?;
 
-    let space_clone = space.clone(); 
+    let space_clone = space.clone();
     let pods = conn
         .interact(move |conn|
             {
@@ -246,10 +264,10 @@ pub async fn list_pods_in_space(
                 pod_iter.collect::<Result<Vec<_>, _>>()
             }
         )
-        .await 
+        .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
         .context("Database interaction failed")? 
-        .context(format!("Failed to query pods for space '{}'", space))?; 
+        .context(format!("Failed to query pods for space '{}'", space))?;
 
     Ok(Json(pods))
 }
@@ -264,8 +282,8 @@ pub async fn get_pod_by_id(
         .await
         .context("Failed to get DB connection from pool")?;
 
-    let space_clone = space.clone(); 
-    let id_clone = id.clone(); 
+    let space_clone = space.clone();
+    let id_clone = id.clone();
 
     let pod_info_result = conn
         .interact(move |conn| -> anyhow::Result<PodInfo> { // Changed return type for interact
@@ -308,26 +326,28 @@ pub async fn get_pod_by_id(
                     space: space_val,
                 })
             });
-            
             match pod_info_internal {
                 Ok(pod) => Ok(pod),
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
                     // Specific error to be handled by the outer match
-                    Err(anyhow::anyhow!(rusqlite::Error::QueryReturnedNoRows)) 
+                    Err(anyhow::anyhow!(rusqlite::Error::QueryReturnedNoRows))
                 }
                 Err(e) => Err(anyhow::Error::from(e).context("Failed during pod query_row")), 
             }
         })
-        .await 
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e)) 
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
         .context("Database interaction failed")?;
-        
+
     match pod_info_result {
         Ok(pod) => Ok(Json(pod)),
         Err(err) => {
             // Check if the error is specifically QueryReturnedNoRows from the interact block
-            if err.downcast_ref::<rusqlite::Error>().is_some_and(|e| matches!(e, rusqlite::Error::QueryReturnedNoRows)) {
-                 Err(AppError::NotFound(format!(
+            if err
+                .downcast_ref::<rusqlite::Error>()
+                .is_some_and(|e| matches!(e, rusqlite::Error::QueryReturnedNoRows))
+            {
+                Err(AppError::NotFound(format!(
                     "Pod with id '{}' not found in space '{}'",
                     id, space
                 )))
@@ -343,26 +363,27 @@ pub async fn get_pod_by_id(
 }
 
 // Handler for POST /api/pods/sign
-pub async fn sign_pod(
-    Json(payload): Json<SignRequest>,
-) -> Result<Json<SignedPod>, AppError> {
-    log::debug!("Received sign request: {:?}", "payload hidden"); 
+pub async fn sign_pod(Json(payload): Json<SignRequest>) -> Result<Json<SignedPod>, AppError> {
+    log::debug!("Received sign request: {:?}", "payload hidden");
 
-    let mut signer = MockSigner { pk: payload.private_key };
+    let mut signer = MockSigner {
+        pk: payload.private_key,
+    };
     log::debug!("Created signer for pk: {}", signer.pk);
 
-    let params = pod2::middleware::Params::default(); 
+    let params = pod2::middleware::Params::default();
     let mut builder = SignedPodBuilder::new(&params);
     log::debug!("Created SignedPodBuilder");
 
     for (key, value) in payload.entries {
-        log::trace!("Inserting entry: key='{}', value=...", key); 
+        log::trace!("Inserting entry: key='{}', value=...", key);
         builder.insert(&key, value);
     }
     log::debug!("Inserted all entries into builder");
 
-    let signed_pod = builder.sign(&mut signer)
-        .context("Failed to sign the POD")?; 
+    let signed_pod = builder
+        .sign(&mut signer)
+        .context("Failed to sign the POD")?;
     log::debug!("Successfully signed POD with id: {}", signed_pod.id().0);
 
     Ok(Json(signed_pod))
@@ -376,27 +397,27 @@ pub async fn hash_string(body: String) -> Result<Json<Hash>, AppError> {
     Ok(Json(hash_result))
 }
 
-
 #[cfg(test)]
 mod tests {
     use axum_test::TestServer;
     use chrono::Utc;
     use hex::ToHex;
+    use pod2::{
+        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
+        frontend::{MainPodBuilder, SignedPod, SignedPodBuilder},
+        middleware::{self, hash_str, Key, Params as PodParams, PodId, Value as PodValue},
+        op,
+    };
     use rusqlite::params;
     use serde_json::{json, Value};
     use tracing_subscriber::prelude::*;
 
     use super::*; // Imports PodInfo, SignRequest etc. and handlers
-    use pod2::{
-        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner}, 
-        frontend::{MainPodBuilder, SignedPod, SignedPodBuilder}, 
-        middleware::{self, hash_str, Key, Params as PodParams, PodId, Value as PodValue}, 
-        op, 
-     
-    };
     use crate::{
-        db::{self, init_db_pool, ConnectionPool}, handlers::playground::MOCK_VD_SET, routes::create_router
-    };   
+        db::{self, init_db_pool, ConnectionPool},
+        handlers::playground::MOCK_VD_SET,
+        routes::create_router,
+    };
 
     // Helper to insert a test space
     async fn insert_test_space(pool: &ConnectionPool, id: &str) {
@@ -417,7 +438,7 @@ mod tests {
     // Helper to insert a test pod (contract for data_payload changes)
     async fn insert_test_pod(
         pool: &ConnectionPool,
-        id: &str, // This MUST be the hex string of the PodId embedded in data_payload
+        id: &str,       // This MUST be the hex string of the PodId embedded in data_payload
         pod_type: &str, // Should be "main" or "signed"
         data_payload: &Value, // MUST be a valid SerializedSignedPod or SerializedMainPod as JSON
         label: Option<&str>,
@@ -441,12 +462,15 @@ mod tests {
                     .expect("Test data failed to deserialize to SerializedMainPod");
                 PodData::Main(helper)
             }
-            _ => panic!("Unsupported pod_type '{}' in test setup. Must be \"main\" or \"signed\".", pod_type),
+            _ => panic!(
+                "Unsupported pod_type '{}' in test setup. Must be \"main\" or \"signed\".",
+                pod_type
+            ),
         };
 
         conn.interact(move |conn| {
             let now = Utc::now().to_rfc3339();
-            let data_blob = serde_json::to_vec(&pod_data_enum_for_test).unwrap(); 
+            let data_blob = serde_json::to_vec(&pod_data_enum_for_test).unwrap();
             conn.execute(
                 "INSERT INTO pods (id, pod_type, data, label, created_at, space) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![id_owned, pod_type_owned, data_blob, label_owned, now, space_owned],
@@ -461,27 +485,40 @@ mod tests {
     async fn response_to_pods(response: axum_test::TestResponse) -> Vec<PodInfo> {
         response.json()
     }
-    
+
     // Test server setup specific to these tests
     pub async fn create_test_server_with_pool() -> (TestServer, ConnectionPool) {
-        let pool = init_db_pool(None).await.expect("Failed to init db pool for test");
-        db::create_schema(&pool).await.expect("Failed to create schema for test");
+        let pool = init_db_pool(None)
+            .await
+            .expect("Failed to init db pool for test");
+        db::create_schema(&pool)
+            .await
+            .expect("Failed to create schema for test");
         let router = create_router(pool.clone());
         (TestServer::new(router).unwrap(), pool)
     }
 
     // Helper function to create sample SerializedSignedPod data as serde_json::Value
-    fn create_sample_signed_pod_data(params: &PodParams, unique_id_str: &str, entries: Vec<(&str, PodValue)>) -> (String, Value) {
+    fn create_sample_signed_pod_data(
+        params: &PodParams,
+        unique_id_str: &str,
+        entries: Vec<(&str, PodValue)>,
+    ) -> (String, Value) {
         let mut signed_builder = SignedPodBuilder::new(params);
         for (key, value) in entries {
             signed_builder.insert(key, value);
         }
         // Use part of unique_id_str for signer to ensure some variation if needed, though id() is content-based
-        let mut signer = MockSigner { pk: format!("test_signer_{}", unique_id_str) };
-        let signed_pod = signed_builder.sign(&mut signer).expect("Failed to sign sample pod");
-        
+        let mut signer = MockSigner {
+            pk: format!("test_signer_{}", unique_id_str),
+        };
+        let signed_pod = signed_builder
+            .sign(&mut signer)
+            .expect("Failed to sign sample pod");
+
         let pod_id_str = signed_pod.id().0.encode_hex();
-        let data_payload_value = serde_json::to_value(&signed_pod).expect("Failed to serialize SignedPod for sample data");
+        let data_payload_value = serde_json::to_value(&signed_pod)
+            .expect("Failed to serialize SignedPod for sample data");
         (pod_id_str, data_payload_value)
     }
 
@@ -489,23 +526,31 @@ mod tests {
     fn create_sample_main_pod_data(params: &PodParams) -> (String, Value) {
         let mut main_builder = MainPodBuilder::new(params, &*MOCK_VD_SET);
         // Add a simple operation: eq for a new entry
-        main_builder.priv_op(op!(new_entry, "test", middleware::Value::from("sample_value")))
+        main_builder
+            .priv_op(op!(
+                new_entry,
+                "test",
+                middleware::Value::from("sample_value")
+            ))
             .expect("Failed to add new_entry op to sample main pod builder");
 
         let mut prover = MockProver {};
-        let main_pod = main_builder.prove(&mut prover, params).expect("Failed to prove sample main pod");
+        let main_pod = main_builder
+            .prove(&mut prover, params)
+            .expect("Failed to prove sample main pod");
 
         let pod_id_str = main_pod.id().0.encode_hex();
-        let data_payload_value = serde_json::to_value(&main_pod).expect("Failed to serialize MainPod for sample data");
+        let data_payload_value =
+            serde_json::to_value(&main_pod).expect("Failed to serialize MainPod for sample data");
         (pod_id_str, data_payload_value)
     }
 
     #[tokio::test]
     async fn test_list_pods_in_space() {
-        let pool = init_db_pool(None)
+        let pool = init_db_pool(None).await.expect("Failed to init db pool");
+        db::create_schema(&pool)
             .await
-            .expect("Failed to init db pool");
-        db::create_schema(&pool).await.expect("Failed to create schema for test_list_pods_in_space");
+            .expect("Failed to create schema for test_list_pods_in_space");
         let router = create_router(pool.clone());
         let server = TestServer::new(router).unwrap();
 
@@ -529,9 +574,9 @@ mod tests {
 
         // Create and insert a SignedPod using helper
         let (signed_pod1_id_str, signed_pod1_data_payload) = create_sample_signed_pod_data(
-            &test_params, 
-            "list_signed1", 
-            vec![("value_signed", PodValue::from(2))]
+            &test_params,
+            "list_signed1",
+            vec![("value_signed", PodValue::from(2))],
         );
         insert_test_pod(
             &pool,
@@ -560,8 +605,9 @@ mod tests {
         let pods = response_to_pods(response).await;
 
         assert_eq!(pods.len(), 2);
-        
-        let expected_serialized_main_pod1: SerializedMainPod = serde_json::from_value(main_pod1_data_payload.clone()).unwrap();
+
+        let expected_serialized_main_pod1: SerializedMainPod =
+            serde_json::from_value(main_pod1_data_payload.clone()).unwrap();
         let expected_pod_data1 = PodData::Main(expected_serialized_main_pod1);
         assert!(pods.iter().any(|p| p.id == main_pod1_id_str
             && p.pod_type == "main"
@@ -569,7 +615,8 @@ mod tests {
             && p.label == Some("label1".to_string())
             && p.space == "space1"));
 
-        let expected_serialized_signed_pod1: SerializedSignedPod = serde_json::from_value(signed_pod1_data_payload.clone()).unwrap();
+        let expected_serialized_signed_pod1: SerializedSignedPod =
+            serde_json::from_value(signed_pod1_data_payload.clone()).unwrap();
         let expected_pod_data2 = PodData::Signed(expected_serialized_signed_pod1);
         assert!(pods.iter().any(|p| p.id == signed_pod1_id_str
             && p.pod_type == "signed"
@@ -584,7 +631,8 @@ mod tests {
         let p2 = &pods_space2[0];
         assert_eq!(p2.id, main_pod2_id_str);
         assert_eq!(p2.pod_type, "main");
-        let expected_serialized_main_pod2: SerializedMainPod = serde_json::from_value(main_pod2_data_payload.clone()).unwrap();
+        let expected_serialized_main_pod2: SerializedMainPod =
+            serde_json::from_value(main_pod2_data_payload.clone()).unwrap();
         assert_eq!(p2.data, PodData::Main(expected_serialized_main_pod2));
         assert_eq!(p2.label, Some("label3".to_string()));
     }
@@ -596,7 +644,7 @@ mod tests {
         insert_test_space(&pool, space_name).await;
 
         let test_params = PodParams::default();
-        let (main_pod_id_str_for_get, main_pod_data_payload_for_get) = 
+        let (main_pod_id_str_for_get, main_pod_data_payload_for_get) =
             create_sample_main_pod_data(&test_params);
 
         // Fetch created_at after insertion for reliable comparison
@@ -609,15 +657,21 @@ mod tests {
             space_name,
         )
         .await;
-        
-        let response = server.get(&format!("/api/pods/{}/{}", space_name, main_pod_id_str_for_get)).await;
+
+        let response = server
+            .get(&format!(
+                "/api/pods/{}/{}",
+                space_name, main_pod_id_str_for_get
+            ))
+            .await;
         assert_eq!(response.status_code(), StatusCode::OK);
         let pod: PodInfo = response.json();
 
         assert_eq!(pod.id, main_pod_id_str_for_get);
         assert_eq!(pod.pod_type, "main");
         assert_eq!(pod.space, space_name);
-        let expected_serialized_main_pod: SerializedMainPod = serde_json::from_value(main_pod_data_payload_for_get.clone()).unwrap();
+        let expected_serialized_main_pod: SerializedMainPod =
+            serde_json::from_value(main_pod_data_payload_for_get.clone()).unwrap();
         assert_eq!(pod.data, PodData::Main(expected_serialized_main_pod));
         assert_eq!(pod.label, Some("test_label_get".to_string()));
     }
@@ -625,7 +679,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_pod_by_id_not_found_in_space() {
         let (server, pool) = create_test_server_with_pool().await;
-        
+
         let space_name_correct = "other_space_for_pod";
         let space_name_request = "test_space_for_request";
 
@@ -634,20 +688,29 @@ mod tests {
 
         let test_params = PodParams::default();
         let (pod_id_str, pod_data) = create_sample_main_pod_data(&test_params);
-        
-        insert_test_pod(
-            &pool, 
-            &pod_id_str, 
-            "main", 
-            &pod_data, 
-            None, 
-            space_name_correct // Pod is in 'other_space_for_pod'
-        ).await;
 
-        let response = server.get(&format!("/api/pods/{}/{}", space_name_request, pod_id_str)).await; 
+        insert_test_pod(
+            &pool,
+            &pod_id_str,
+            "main",
+            &pod_data,
+            None,
+            space_name_correct, // Pod is in 'other_space_for_pod'
+        )
+        .await;
+
+        let response = server
+            .get(&format!("/api/pods/{}/{}", space_name_request, pod_id_str))
+            .await;
         assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
         let body = response.text();
-        assert!(body.contains(format!("Pod with id '{}' not found in space '{}'", pod_id_str, space_name_request).as_str()));
+        assert!(body.contains(
+            format!(
+                "Pod with id '{}' not found in space '{}'",
+                pod_id_str, space_name_request
+            )
+            .as_str()
+        ));
     }
 
     #[tokio::test]
@@ -655,25 +718,35 @@ mod tests {
         let (server, pool) = create_test_server_with_pool().await;
         let space_name = "test_space_for_id_not_found";
         insert_test_space(&pool, space_name).await;
-        
-        let test_params = PodParams::default();
-        let (existing_pod_id_str, existing_pod_data) = 
-            create_sample_main_pod_data(&test_params);
-        
-        insert_test_pod(
-            &pool, 
-            &existing_pod_id_str, 
-            "main", 
-            &existing_pod_data, 
-            None, 
-            space_name
-        ).await;
 
-        let non_existent_id_str: String = PodId(hash_str("non_existent_pod_id_string_for_test")).0.encode_hex(); // Create a plausible but non-existent ID
-        let response = server.get(&format!("/api/pods/{}/{}", space_name, non_existent_id_str)).await;
+        let test_params = PodParams::default();
+        let (existing_pod_id_str, existing_pod_data) = create_sample_main_pod_data(&test_params);
+
+        insert_test_pod(
+            &pool,
+            &existing_pod_id_str,
+            "main",
+            &existing_pod_data,
+            None,
+            space_name,
+        )
+        .await;
+
+        let non_existent_id_str: String = PodId(hash_str("non_existent_pod_id_string_for_test"))
+            .0
+            .encode_hex(); // Create a plausible but non-existent ID
+        let response = server
+            .get(&format!("/api/pods/{}/{}", space_name, non_existent_id_str))
+            .await;
         assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
         let body = response.text();
-        assert!(body.contains(format!("Pod with id '{}' not found in space '{}'", non_existent_id_str, space_name).as_str()));
+        assert!(body.contains(
+            format!(
+                "Pod with id '{}' not found in space '{}'",
+                non_existent_id_str, space_name
+            )
+            .as_str()
+        ));
     }
 
     #[tokio::test]
@@ -684,8 +757,10 @@ mod tests {
             .set_default();
 
         let pool = init_db_pool(None).await.expect("Failed to init db pool");
-        db::create_schema(&pool).await.expect("Failed to create schema for test_sign_pod_success");
-        let router = create_router(pool.clone()); 
+        db::create_schema(&pool)
+            .await
+            .expect("Failed to create schema for test_sign_pod_success");
+        let router = create_router(pool.clone());
         let server = TestServer::new(router).unwrap();
 
         let request_payload = json!({
@@ -708,24 +783,32 @@ mod tests {
         let response_pod: SignedPod = response.json();
 
         assert!(response_pod.verify().is_ok());
-        assert_eq!(response_pod.kvs().len(), 7); 
+        assert_eq!(response_pod.kvs().len(), 7);
         assert!(response_pod.kvs().contains_key(&Key::from("name")));
-        assert_eq!(response_pod.kvs().get(&Key::from("name")), Some(&PodValue::from("Alice")));
-        assert_eq!(response_pod.kvs().get(&Key::from("age")), Some(&PodValue::from(30)));
+        assert_eq!(
+            response_pod.kvs().get(&Key::from("name")),
+            Some(&PodValue::from("Alice"))
+        );
+        assert_eq!(
+            response_pod.kvs().get(&Key::from("age")),
+            Some(&PodValue::from(30))
+        );
     }
 
     #[tokio::test]
     async fn test_hash_string_success() {
         let pool = init_db_pool(None).await.expect("Failed to init db pool");
-        db::create_schema(&pool).await.expect("Failed to create schema for test_hash_string_success");
+        db::create_schema(&pool)
+            .await
+            .expect("Failed to create schema for test_hash_string_success");
         let router = create_router(pool.clone());
         let server = TestServer::new(router).unwrap();
 
         let input_string = "hello world";
         let response = server
             .post("/api/hash")
-            .content_type("text/plain") 
-            .text(input_string.to_string()) 
+            .content_type("text/plain")
+            .text(input_string.to_string())
             .await;
 
         assert_eq!(response.status_code(), StatusCode::OK);
@@ -733,7 +816,7 @@ mod tests {
         let expected_hash = hash_str(input_string);
         assert_eq!(response_hash, expected_hash);
     }
-    
+
     #[tokio::test]
     async fn test_import_pod_to_space_and_delete() {
         let (server, pool) = create_test_server_with_pool().await;
@@ -743,7 +826,7 @@ mod tests {
         insert_test_space(&pool, space_id).await;
 
         let mut signer = MockSigner {
-          pk: "0x1234567890abcdef".to_string(),
+            pk: "0x1234567890abcdef".to_string(),
         };
         let params = middleware::Params::default();
         let mut pod_builder = SignedPodBuilder::new(&params);
@@ -756,12 +839,18 @@ mod tests {
             "data": serde_json::to_value(pod).unwrap(),
             "label": "My Test Pod For Import Delete"
         });
-        
-        let response = server.post(&format!("/api/pods/{}", space_id))
+
+        let response = server
+            .post(&format!("/api/pods/{}", space_id))
             .json(&import_payload)
             .await;
         println!("Response: {:?}", response.text());
-        assert_eq!(response.status_code(), StatusCode::CREATED, "Response: {:?}", response.text());
+        assert_eq!(
+            response.status_code(),
+            StatusCode::CREATED,
+            "Response: {:?}",
+            response.text()
+        );
 
         let conn_check = pool.get().await.unwrap();
         let space_id_check = space_id.to_string();
@@ -774,7 +863,7 @@ mod tests {
                 let id_val: String = row.get(0)?;
                 let pod_type_from_db: String = row.get(1)?;
                 let data_blob: Vec<u8> = row.get(2)?;
-                let pod_data_from_db: PodData = serde_json::from_slice(&data_blob).unwrap_or_else(|e| 
+                let pod_data_from_db: PodData = serde_json::from_slice(&data_blob).unwrap_or_else(|e|
                     panic!("Failed to deserialize PodData from DB in test: {:?}. Blob: {:?}", e, data_blob)
                 );
                 let label_val: Option<String> = row.get(3)?;
@@ -790,21 +879,29 @@ mod tests {
                 })
             })
         }).await.unwrap();
-        
-        assert!(pod_info_res.is_ok(), "Pod not found in DB after import: {:?}", pod_info_res.err());
+
+        assert!(
+            pod_info_res.is_ok(),
+            "Pod not found in DB after import: {:?}",
+            pod_info_res.err()
+        );
         let pod_info = pod_info_res.unwrap();
         assert_eq!(pod_info.id, pod_id_string);
-        assert_eq!(pod_info.pod_type, "signed"); 
+        assert_eq!(pod_info.pod_type, "signed");
 
         // Assert data content
         // let expected_imported_helper: MainPodHelper = serde_json::from_value(import_main_pod_helper_data.clone()).unwrap();
         // let expected_pod_data_imported = PodData::Main(expected_imported_helper);
         // assert_eq!(pod_info.data, expected_pod_data_imported);
 
-        let response = server.delete(&format!("/api/pods/{}/{}", space_id, pod_id_string)).await;
+        let response = server
+            .delete(&format!("/api/pods/{}/{}", space_id, pod_id_string))
+            .await;
         assert_eq!(response.status_code(), StatusCode::NO_CONTENT);
 
-        let response = server.get(&format!("/api/pods/{}/{}", space_id, pod_id)).await;
+        let response = server
+            .get(&format!("/api/pods/{}/{}", space_id, pod_id))
+            .await;
         assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
     }
-} 
+}

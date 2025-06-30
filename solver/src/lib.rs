@@ -82,8 +82,6 @@ fn run_solve<M: MetricsSink>(
 #[cfg(test)]
 mod tests {
     use hex::ToHex;
-
-    use super::*;
     use pod2::{
         backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
         examples::{
@@ -93,6 +91,8 @@ mod tests {
         lang::parse,
         middleware::Params,
     };
+
+    use super::*;
 
     #[test]
     fn test_ethdos() {

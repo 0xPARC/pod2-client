@@ -12,6 +12,9 @@ use std::{
 };
 
 use log::{debug, trace};
+use pod2::middleware::{
+    self, CustomPredicateRef, NativeOperation, Predicate, StatementTmplArg, ValueRef, Wildcard,
+};
 
 use crate::{
     engine::proof_reconstruction::ProofReconstructor,
@@ -21,10 +24,6 @@ use crate::{
     planner::QueryPlan,
     proof::Proof,
     semantics::materializer::Materializer,
-};
-
-use pod2::middleware::{
-    self, CustomPredicateRef, NativeOperation, Predicate, StatementTmplArg, ValueRef, Wildcard,
 };
 
 /// A map from variables in a rule to their concrete values for a given solution.
@@ -828,8 +827,6 @@ mod tests {
     use std::sync::Arc;
 
     use hex::ToHex;
-
-    use super::*;
     use pod2::{
         backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
         examples::{attest_eth_friend, custom::eth_dos_batch, MOCK_VD_SET},
@@ -841,6 +838,7 @@ mod tests {
         },
     };
 
+    use super::*;
     use crate::{
         db::{FactDB, IndexablePod, TestPod},
         explainer::MissingFactFinder,
