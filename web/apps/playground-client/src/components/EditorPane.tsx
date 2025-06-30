@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
 import Editor, { type OnChange, type Monaco, loader } from "@monaco-editor/react";
 import * as monacoApi from "monaco-editor/esm/vs/editor/editor.api";
 import { useAppStore } from "../lib/store";

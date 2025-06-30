@@ -8,8 +8,8 @@ use std::{
 use itertools::Itertools;
 
 use pod2::middleware::{
-    self, AnchoredKey, CustomPredicateRef, Params, PodId, Predicate, StatementTmplArg, TypedValue,
-    Value, ValueRef,
+    self, AnchoredKey, CustomPredicateRef, PodId, Predicate, StatementTmplArg, TypedValue, Value,
+    ValueRef,
 };
 
 use crate::{

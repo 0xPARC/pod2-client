@@ -44,6 +44,7 @@ pub trait MetricsSink: Default + Send + Sync {
     /// Records the number of new facts from a completed iteration.
     fn record_delta_size(&mut self, num_facts: usize);
     /// Records a delta.
+    #[allow(unused_variables)]
     fn record_delta(&mut self, delta: FactStore) {}
 }
 
@@ -58,6 +59,7 @@ impl MetricsSink for NoOpMetrics {
     }
     fn record_delta_size(&mut self, _num_facts: usize) { /* no-op */
     }
+    #[allow(unused_variables)]
     fn record_delta(&mut self, delta: FactStore) {
         /* no-op */
     }

@@ -234,7 +234,7 @@ impl Proof {
         let mut pod_cover: Vec<PodId> = Vec::new();
 
         // Pre-select pods for statements with a single provider.
-        for (st, pods) in &stmt_providers {
+        for pods in stmt_providers.values() {
             if pods.len() == 1 {
                 let p = *pods.iter().next().unwrap();
                 if !pod_cover.contains(&p) {

@@ -37,7 +37,7 @@ pub fn print_all_facts(facts: &FactStore) {
 }
 
 pub fn print_provenance(provenance: &ProvenanceStore) {
-    for ((predicate, args), (rule, bindings)) in provenance {
+    for ((predicate, args), (_, bindings)) in provenance {
         println!(
             "{:?}",
             match predicate {

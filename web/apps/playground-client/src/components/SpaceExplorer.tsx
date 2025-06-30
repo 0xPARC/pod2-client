@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useSpaces, useCreateSpace, useDeleteSpace } from "../hooks/useSpaceData";
 import { useAppStore } from "../lib/store";
-import { AlertTriangle, Loader2, Folder, Plus, MoreHorizontal, Trash2 } from "lucide-react"; // Using lucide-react for icons
+import { AlertTriangle, Loader2, Folder, Plus, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,

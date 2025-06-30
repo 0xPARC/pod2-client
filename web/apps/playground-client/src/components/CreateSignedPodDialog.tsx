@@ -339,18 +339,6 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
       handleUpdateItem(itemId, { type: newType, value: newValue });
     };
 
-    const renderItemValueInput = (item: PodCollectionItem, nestingLevel: number) => {
-      switch (item.type) {
-        case 'string':
-        case 'Int':
-        case 'Raw':
-          return <Input type={item.type === 'Int' ? 'number' : 'text'} value={item.value} onChange={e => handleUpdateItem(item.id, { value: e.target.value })} placeholder={`Enter ${item.type} value`} className="flex-grow" />;
-        case 'boolean':
-          return <input type="checkbox" checked={!!item.value} onChange={e => handleUpdateItem(item.id, { value: e.target.checked })} className="ml-2 h-5 w-5" />;
-        default: // Array, Set, Dictionary not supported as item types for now
-          return <Input disabled value={`Type ${item.type} not supported in collections yet.`} className="bg-gray-100 dark:bg-gray-800" />;
-      }
-    };
 
     return (
       <div className="space-y-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-800/50 ml-4">
@@ -419,19 +407,6 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
       if (newType === 'boolean') newValue = false;
       if (newType === 'Array' || newType === 'Set' || newType === 'Dictionary') newValue = [];
       handleUpdateItem(itemId, { type: newType, value: newValue });
-    };
-
-    const renderItemValueInput = (item: PodDictionaryItem, nestingLevel: number) => {
-      switch (item.type) {
-        case 'string':
-        case 'Int':
-        case 'Raw':
-          return <Input type={item.type === 'Int' ? 'number' : 'text'} value={item.value} onChange={e => handleUpdateItem(item.id, { value: e.target.value })} placeholder={`Enter ${item.type} value`} className="flex-grow" />;
-        case 'boolean':
-          return <input type="checkbox" checked={!!item.value} onChange={e => handleUpdateItem(item.id, { value: e.target.checked })} className="ml-2 h-5 w-5" />;
-        default:
-          return <Input disabled value={`Type ${item.type} not supported in collections yet.`} className="bg-gray-100 dark:bg-gray-800" />;
-      }
     };
 
     return (

@@ -1,6 +1,5 @@
 import React from "react";
 import EditorPane from "./components/EditorPane"; // Import the EditorPane component
-import ControlsPane from "./components/ControlsPane"; // Import ControlsPane
 import ResultsPane from "./components/ResultsPane"; // Import ResultsPane
 import IdeLayout from "./components/IdeLayout"; // Import the new layout
 import SpaceExplorer from "./components/SpaceExplorer"; // Import SpaceExplorer

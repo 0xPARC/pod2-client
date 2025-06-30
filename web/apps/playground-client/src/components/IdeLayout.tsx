@@ -6,7 +6,7 @@ import {
   ResizableHandle,
 } from "./ui/resizable"; // Keep shadcn components
 import type { ImperativePanelGroupHandle } from "react-resizable-panels"; // Import type from base library
-import { PanelLeftClose, PanelLeftOpen, PanelBottomClose, PanelBottomOpen } from "lucide-react"; // Example icons
+import { PanelBottomClose, PanelBottomOpen } from "lucide-react"; // Example icons
 import MainAreaTabs from "./MainAreaTabs"; // Import MainAreaTabs
 import PodViewerPane from "./PodViewerPane"; // Import PodViewerPane
 import { LeftSidebar } from "./LeftSidebar";
@@ -39,28 +39,6 @@ const IdeLayout: React.FC<{
 
     const verticalPanelGroupRef = useRef<ImperativePanelGroupHandle>(null);
 
-    // Handler for when the main horizontal panel group is resized
-    const handleHorizontalResize = (sizes: number[]) => {
-      // For a 2-panel group, sizes[0] is the explorer, sizes[1] is the main content
-      // We don't strictly need to store the explorer width for now if
-      // collapsing is handled by a dedicated state.
-      // If we wanted to store a specific "restored" width, we could do:
-      // if (!isExplorerCollapsed && sizes.length > 0) {
-      //   storeExplorerWidth(sizes[0]);
-      // }
-    };
-
-    // Handler for when the vertical panel group (editor/results) is resized
-    const handleVerticalResize = (sizes: number[]) => {
-      // For a 2-panel group, sizes[0] is editor, sizes[1] is results
-      if (sizes.length > 1) {
-        // Assuming the results pane is the second panel
-        // setResultsPaneSize(sizes[1]); // This would store the actual pixel/relative value
-        // For simplicity now, let's assume the component manages its internal relative sizing.
-        // We only need to control the open/closed state and initial/default size.
-      }
-    };
-
     const handleResultsToggle = () => {
       setIsResultsPaneOpen(!isResultsPaneOpen);
     };
@@ -87,7 +65,6 @@ const IdeLayout: React.FC<{
         <ResizablePanelGroup
           direction="horizontal"
           className="flex-grow border dark:border-gray-700"
-          onLayout={(sizes: number[]) => handleHorizontalResize(sizes)}
         >
           <LeftSidebar toggleExplorer={toggleExplorer} isExplorerCollapsed={isExplorerCollapsed} explorerContent={explorerContent} />
           {!isExplorerCollapsed && <ResizableHandle withHandle className="bg-gray-100 dark:bg-gray-800" />}

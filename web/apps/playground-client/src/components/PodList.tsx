@@ -3,7 +3,7 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { deletePodFromSpace } from "../lib/backendServiceClient";
 import { useAppStore } from "../lib/store";
 import { usePodsInSpace, podKeys } from "../hooks/useSpaceData";
-import { AlertTriangle, Loader2, FileText, FileCheck2, FilePenLine, Trash2, PlusCircle, FilePen, Import, ClipboardPaste } from "lucide-react";
+import { AlertTriangle, Loader2, FileText, FileCheck2, FilePenLine, Trash2, PlusCircle, ClipboardPaste } from "lucide-react";
 import type { PodInfo } from "@pod2/pod2js";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
