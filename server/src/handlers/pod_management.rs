@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use axum::{
     extract::{Path, State},
@@ -47,7 +49,7 @@ pub struct PodInfo {
 #[derive(Deserialize)]
 pub struct SignRequest {
     private_key: String,
-    entries: std::collections::HashMap<String, PodValue>, // Use the PodValue type
+    entries: HashMap<String, PodValue>, 
 }
 
 #[derive(Deserialize, Debug)]
@@ -382,6 +384,7 @@ mod tests {
     use hex::ToHex;
     use rusqlite::params;
     use serde_json::{json, Value};
+    use tracing_subscriber::prelude::*;
 
     use super::*; // Imports PodInfo, SignRequest etc. and handlers
     use pod2::{
@@ -675,6 +678,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_sign_pod_success() {
+        let _guard = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_test_writer()
+            .set_default();
+
         let pool = init_db_pool(None).await.expect("Failed to init db pool");
         db::create_schema(&pool).await.expect("Failed to create schema for test_sign_pod_success");
         let router = create_router(pool.clone()); 
@@ -683,11 +691,15 @@ mod tests {
         let request_payload = json!({
             "private_key": "my_secret_key",
             "entries": {
-                "name": "Alice", 
-                "age": {"Int": "30"}, 
+                "name": "Alice",
+                "age": { "Int": "30" },
                 "city": "Metropolis",
-                "verified": true, 
-                "tags": ["a", "b", {"Int": "123"}] 
+                "verified": true,
+                "tags": { "max_depth": 32, "array": [
+                    "a",
+                    "b",
+                    { "Int": "123" }
+                ]}
             }
         });
 

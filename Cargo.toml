@@ -19,6 +19,23 @@ num = { version = "0.4.3", features = ["num-bigint"] }
 num-bigint = { version = "0.4.6", features = ["rand"] }
 pest = "2.8.0"
 pest_derive = "2.8.0"
+anyhow = "1.0.56"
+axum = "0.7"
+axum-test = "14.0"
+chrono = "0.4"
+clap = "4"
+config = "0.14"
+deadpool-sqlite = "0.10.0"
+rand = "0.8"
+rusqlite = "0.33.0"
+tempfile = "3.10"
+tokio = "1.21.0"
+toml = "0.8"
+tower-http = "0.5"
+uuid = "1.16.0"
+tracing = "0.1.41"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
 
 [workspace.dev-dependencies]
 pod2 = { git = "https://github.com/0xPARC/pod2", branch = "main", features = ["examples"] }

@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 pod2 = { workspace = true }
-pod2_solver = { path = "../solver" }
+pod2_solver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
@@ -21,20 +21,23 @@ num = { workspace = true }
 num-bigint = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
-anyhow = "1.0.56"
-rusqlite = { version = "0.33.0", features = ["bundled"] }
-deadpool-sqlite = { version = "0.10.0", features = ["rt_tokio_1"] }
-axum = "0.7"
-tower-http = { version = "0.5", features = ["trace", "cors"] }
-config = { version = "0.14", features = ["toml"] }
-clap = { version = "4", features = ["derive"] }
-toml = "0.8"
-chrono = { version = "0.4", features = ["serde"] }
-tokio = { version = "1.21.0", features = ["full"] }
-uuid = { version = "1.16.0", features = ["v4"] }
+anyhow = { workspace = true }
+rusqlite = { workspace = true, features = ["bundled"] }
+deadpool-sqlite = { workspace = true, features = ["rt_tokio_1"] }
+axum = { workspace = true }
+tower-http = { workspace = true, features = ["trace", "cors"] }
+config = { workspace = true, features = ["toml"] }
+clap = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tokio = { workspace = true, features = ["full"] }
+uuid = { workspace = true, features = ["v4"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-log = { workspace = true }
 
 [dev-dependencies]
-rand = "0.8"
-tempfile = "3.10" # For creating temporary config files in tests
-axum-test = "14.0" # For testing Axum handlers
-chrono = { version = "0.4", features = ["serde"] } # For timestamps
+rand = { workspace = true }
+tempfile = { workspace = true } # For creating temporary config files in tests
+axum-test = { workspace = true } # For testing Axum handlers
+chrono = { workspace = true, features = ["serde"] } # For timestamps
