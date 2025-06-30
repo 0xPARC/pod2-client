@@ -2,6 +2,19 @@
 
 This repo contains experimental client tools and applications for [POD2](https://github.com/0xPARC/pod2).
 
+## Prerequisites
+
+- Rust and Cargo
+- `pnpm` for web components
+
+## Setup
+
+By default, we use the `main` branch for POD2 from GitHub. You can override this to use a local repository by creating a `./cargo/config.toml` file and overriding the path. An example file at `.cargo/config.toml.example` shows how to do this, and can be copied and edited.
+
+## Usage
+
+To run the playground components, simply run `./playground.sh`.
+
 ## Components
 
 ### ./server

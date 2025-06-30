@@ -1,0 +1,12 @@
+# This is a local configuration file for development.
+# It should NOT be checked into version control.
+# Add your local dependency overrides here.
+
+[patch."https://github.com/0xPARC/pod2"]
+# Path to the local pod2 repository.
+# This path is relative to the repository root directory.
+# If your 'pod2' and 'client-pod2' folders are siblings, this path will work:
+pod2 = { path = "../pod2" }
+
+# Alternatively, you can use an absolute path:
+# pod2 = { path = "/path/to/your/local/pod2" }

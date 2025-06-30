@@ -3,9 +3,6 @@ resolver = "2"
 members = ["solver", "server"]
 
 
-[patch."https://github.com/0xPARC/pod2"]
-pod2 = { path = "../pod2/dev" }
-
 [workspace.dependencies]
 pod2 = { git = "https://github.com/0xPARC/pod2", branch = "main" }
 pod2_solver = { path = "solver" }
