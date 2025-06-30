@@ -13,7 +13,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ScrollArea } from "./ui/scroll-area";
 import { PlusCircle, Trash2 } from "lucide-react";
-import type { Value, Dictionary } from "@/types/pod2";
+import type { Value, Dictionary } from "@pod2/pod2js";
 import {
   signPod,
   type SignPodRequest,

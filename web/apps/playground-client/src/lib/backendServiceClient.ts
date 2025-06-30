@@ -5,7 +5,7 @@ import type {
   MainPod,
   SignedPod,
   Value,
-} from "@/types/pod2";
+} from "@pod2/pod2js";
 
 // --- Type definitions (mirroring Rust structs from src/server/api_types.rs) ---
 

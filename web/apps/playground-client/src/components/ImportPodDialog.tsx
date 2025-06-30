@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import Ajv, { type ValidateFunction } from "ajv/dist/2019";
 import { importPodDataToSpace, type ImportPodClientPayload } from "@/lib/backendServiceClient";
 import { podKeys } from "@/hooks/useSpaceData";
-import type { MainPod, SignedPod } from "@/types/pod2";
-import fullSchema from "@/schemas.json";
+import type { MainPod, SignedPod } from "@pod2/pod2js";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,43 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
-
-// --- AJV Setup ---
-const ajv = new Ajv({ allErrors: true, strict: false });
-let validateMainPod: ValidateFunction<MainPod> | ((data: any) => data is MainPod);
-let validateSignedPod: ValidateFunction<Omit<SignedPod, 'id' | 'verify'>> | ((data: any) => data is Omit<SignedPod, 'id' | 'verify'>);
-
-// Flag to indicate if AJV setup was successful for detailed error reporting
-let ajvSuccessfullySetup = false;
-
-try {
-  ajv.compile(fullSchema);
-  const mainPodValidator = ajv.getSchema<MainPod>("#/definitions/MainPod");
-  const signedPodValidator = ajv.getSchema<Omit<SignedPod, 'id' | 'verify'>>("#/definitions/SignedPod");
-
-  if (mainPodValidator) {
-    validateMainPod = mainPodValidator;
-  } else {
-    throw new Error("Could not get validator for MainPod");
-  }
-  if (signedPodValidator) {
-    validateSignedPod = signedPodValidator;
-  } else {
-    throw new Error("Could not get validator for SignedPod");
-  }
-  ajvSuccessfullySetup = true; // Mark AJV as successfully set up
-} catch (e) {
-  console.error("Failed to compile AJV schemas:", e);
-  ajvSuccessfullySetup = false;
-  validateMainPod = (data: any): data is MainPod => {
-    console.warn("AJV MainPod setup failed, using basic type guard.");
-    return !!(data && data.publicStatements && data.proof && data.podClass && data.podType);
-  };
-  validateSignedPod = (data: any): data is Omit<SignedPod, 'id' | 'verify'> => {
-    console.warn("AJV SignedPod setup failed, using basic type guard.");
-    return !!(data && data.entries && data.proof && data.podClass && data.podType);
-  };
-}
+import { validateMainPod, validateSignedPod } from "@pod2/pod2js";
 
 interface ImportPodDialogProps {
   isOpen: boolean;
@@ -84,17 +46,11 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
     }
     try {
       const parsed = JSON.parse(jsonInput);
-      let mainPodValid = false;
-      let signedPodValid = false;
+      const mainPodValid = validateMainPod(parsed);
+      const mainPodErrors = mainPodValid.success ? null : JSON.stringify(mainPodValid.errors, null, 2);
 
-      // It's important to call both validators to get their error states if using ajv.errors
-      mainPodValid = validateMainPod(parsed);
-      const mainPodErrors = ajvSuccessfullySetup && ajv.errors ? JSON.stringify(ajv.errors, null, 2) : "Invalid MainPod structure.";
-      ajv.errors = null; // Clear errors before next validation
-
-      signedPodValid = validateSignedPod(parsed);
-      const signedPodErrors = ajvSuccessfullySetup && ajv.errors ? JSON.stringify(ajv.errors, null, 2) : "Invalid SignedPod structure.";
-      ajv.errors = null; // Clear errors
+      const signedPodValid = validateSignedPod(parsed);
+      const signedPodErrors = signedPodValid.success ? null : JSON.stringify(signedPodValid.errors, null, 2);
 
       if (mainPodValid) {
         setParsedPod(parsed as MainPod);

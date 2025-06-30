@@ -5,7 +5,7 @@ import {
   createSpace,
   deleteSpace,
 } from "../lib/backendServiceClient";
-import type { SpaceInfo, PodInfo } from "../types/pod2";
+import type { SpaceInfo, PodInfo } from "@pod2/pod2js";
 import { useAppStore } from "../lib/store";
 
 // Query key factory for spaces

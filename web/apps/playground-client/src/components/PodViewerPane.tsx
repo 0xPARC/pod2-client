@@ -1,7 +1,7 @@
 import React from "react";
 import { useAppStore } from "../lib/store";
 import MainPodCard from "./MainPodCard";
-import type { PodData } from "@/types/pod2"; // For type checking, added PodData and SignedPod
+import type { PodData } from "@pod2/pod2js"; // For type checking, added PodData and SignedPod
 import SignedPodCard from "./SignedPodCard";
 
 const PodViewerPane: React.FC = () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Value, Dictionary, Set as PodSet, RawValue, Array as PodArray } from '../types/pod2';
+import type { Value, Dictionary, Set as PodSet, RawValue, Array as PodArray } from '@pod2/pod2js';
 import { KeyRoundIcon } from 'lucide-react';
 
 interface ValueRendererProps {

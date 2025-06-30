@@ -1,5 +1,5 @@
 import React from "react";
-import type { MainPod, ValueRef } from "@/types/pod2";
+import type { MainPod, ValueRef } from "@pod2/pod2js";
 import ValueRenderer from "./ValueRenderer";
 import { FileCheck2, ClipboardCopy } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";

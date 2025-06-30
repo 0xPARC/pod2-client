@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAppStore } from "../lib/store";
 import { useSpaces } from "../hooks/useSpaceData";
 import { importPodDataToSpace, type ImportPodClientPayload } from "../lib/backendServiceClient";
-import type { MainPod, SpaceInfo } from "@/types/pod2";
+import type { MainPod, SpaceInfo } from "@pod2/pod2js";
 import { useQueryClient } from "@tanstack/react-query";
 import { podKeys } from "../hooks/useSpaceData";
 

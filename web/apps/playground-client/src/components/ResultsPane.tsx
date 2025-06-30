@@ -1,66 +1,15 @@
 import React, { useState } from "react";
-import Ajv, { type ValidateFunction } from "ajv/dist/2019";
 import { useAppStore } from "../lib/store";
 import MainPodCard from "./MainPodCard";
-import type { MainPod } from "@/types/pod2";
-import fullSchema from "@/schemas.json"; // Import the full schema
-import AddToSpaceDialog from "./AddToSpaceDialog"; // Import the dialog
-import { Button } from "./ui/button"; // Import Button for "Add to Space"
-import { PlusCircle } from "lucide-react"; // Icon for the button
+import type { MainPod } from "@pod2/pod2js";
+import AddToSpaceDialog from "./AddToSpaceDialog";
+import { Button } from "./ui/button";
+import { PlusCircle } from "lucide-react";
 import { MermaidDiagram } from "@lightenna/react-mermaid-diagram";
+import { validateMainPod } from "@pod2/pod2js";
 
-// --- AJV Setup ---
-// Make AJV less strict about unknown formats like "uint"
-const ajv = new Ajv({ allErrors: true, strict: false });
-
-let validateMainPod:
-  | ValidateFunction<MainPod>
-  | ((data: any) => data is MainPod);
-
-try {
-  // Compile the entire schema. AJV will process all definitions.
-  // No need to add fullSchema separately with addSchema if we compile it directly.
-  ajv.compile(fullSchema);
-
-  // Get the specific validator for MainPodHelper using its path within the full schema.
-  const specificValidator = ajv.getSchema<MainPod>(
-    "#/definitions/MainPod"
-  );
-
-  if (specificValidator) {
-    validateMainPod = specificValidator;
-    console.log(
-      "MainPod schema validator obtained successfully via getSchema."
-    );
-  } else {
-    // This case should ideally not be hit if the schema path is correct
-    // and MainPodHelper is defined in fullSchema.definitions.
-    throw new Error(
-      "Could not get validator for #/definitions/MainPod from compiled schema."
-    );
-  }
-} catch (e) {
-  console.error("Failed to compile full schema or get MainPod validator:", e);
-  // Fallback validator if compilation or getSchema fails
-  validateMainPod = (data: any): data is MainPod => {
-    console.warn("AJV setup failed, using basic type guard for MainPod.");
-    return !!(
-      data &&
-      typeof data.podClass === "string" &&
-      typeof data.podType === "string" &&
-      typeof data.proof === "string" &&
-      Array.isArray(data.publicStatements)
-    );
-  };
-}
-
-// Updated type guard using AJV
 function isMainPod(obj: any): obj is MainPod {
-  if (validateMainPod(obj)) {
-    return true;
-  }
-  // console.log('AJV validation errors:', validateMainPod.errors); // Optional: for debugging
-  return false;
+  return validateMainPod(obj).success;
 }
 
 const ResultsPane: React.FC = () => {

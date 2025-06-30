@@ -30,6 +30,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+
+    "customConditions": ["@pod2/source"]
+
+
   }
 }
