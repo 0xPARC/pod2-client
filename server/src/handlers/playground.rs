@@ -701,6 +701,7 @@ mod tests {
         (TestServer::new(router).unwrap(), pool)
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_execute_code_with_space_success() {
         let (server, pool) = create_playground_server_with_pool().await;

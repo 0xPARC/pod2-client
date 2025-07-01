@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use pod2::middleware::StatementTmpl;
+use hex::ToHex;
+use pod2::middleware::{Hash, StatementTmpl, TypedValue, Value};
 
 use crate::{
     db::{FactDB, IndexablePod},
@@ -79,6 +80,20 @@ fn run_solve<M: MetricsSink>(
     Ok((proof, engine.into_metrics()))
 }
 
+pub fn value_to_podlang_literal(value: Value) -> String {
+    match value.typed() {
+        TypedValue::Int(i) => i.to_string(),
+        TypedValue::String(s) => s.clone(),
+        TypedValue::Bool(b) => b.to_string(),
+        TypedValue::Array(a) => todo!(),
+        TypedValue::Dictionary(d) => todo!(),
+        TypedValue::Set(s) => todo!(),
+        TypedValue::PublicKey(p) => format!("PublicKey({})", p),
+        TypedValue::PodId(p) => format!("0x{}", p.0.encode_hex::<String>()),
+        TypedValue::Raw(r) => format!("Raw(0x{})", r.encode_hex::<String>()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use hex::ToHex;
@@ -124,9 +139,10 @@ mod tests {
       )
       "#,
             batch.id().encode_hex::<String>(),
-            alice.public_key(),
-            bob.public_key()
+            value_to_podlang_literal(alice.public_key()),
+            value_to_podlang_literal(bob.public_key())
         );
+        println!("req1: {}", req1);
 
         let request = parse(&req1, &params, &[batch.clone()])
             .unwrap()

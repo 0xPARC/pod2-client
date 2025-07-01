@@ -1,14 +1,14 @@
 use std::{
     cell::RefCell,
     collections::{hash_map::DefaultHasher, HashSet},
-    hash::{Hash, Hasher},
+    hash::{Hash as StdHash, Hasher},
     sync::Arc,
 };
 
 use itertools::Itertools;
 use pod2::middleware::{
-    self, AnchoredKey, CustomPredicateRef, PodId, Predicate, StatementTmplArg, TypedValue, Value,
-    ValueRef,
+    self, AnchoredKey, CustomPredicateRef, Hash, PodId, Predicate, StatementTmplArg, TypedValue,
+    Value, ValueRef,
 };
 
 use crate::{
@@ -108,6 +108,10 @@ impl<'a> Materializer {
                     if let TypedValue::PodId(pod_id) = v.typed() {
                         let ak = middleware::AnchoredKey::new(*pod_id, key.clone());
                         self.db.get_value_by_anchored_key(&ak).cloned()
+                    } else if let TypedValue::Raw(raw) = v.typed() {
+                        let pod_id = PodId(Hash(raw.0));
+                        let ak = middleware::AnchoredKey::new(pod_id, key.clone());
+                        self.db.get_value_by_anchored_key(&ak).cloned()
                     } else {
                         None
                     }
@@ -149,7 +153,7 @@ impl<'a> Materializer {
     fn column_choices(
         &self,
         arg_tmpl: &StatementTmplArg,
-        binding: &Option<Value>,
+        bindings: &Bindings,
     ) -> Vec<Option<ValueRef>> {
         match arg_tmpl {
             // Literal arguments always have exactly one possible value: itself.
@@ -158,7 +162,7 @@ impl<'a> Materializer {
             // We do not attempt to infer a set of possible values free wildcards;
             // however, predicate handlers may attempt to deduce the value of a wildcard
             // at a later stage.
-            StatementTmplArg::Wildcard(_) => match binding {
+            StatementTmplArg::Wildcard(w) => match bindings.get(w) {
                 Some(v) => vec![Some(ValueRef::Literal(v.clone()))], // bound
                 None => vec![None],                                  // still free
             },
@@ -167,7 +171,7 @@ impl<'a> Materializer {
             // If the wildcard for the PodId is bound, then we can construct an anchored key.
             // If the wildcard for the PodId is free, then we can enumerate all anchored keys
             // for pods that have that key.
-            StatementTmplArg::AnchoredKey(_, key) => match binding {
+            StatementTmplArg::AnchoredKey(pod_wc, key) => match bindings.get(pod_wc) {
                 // pod already bound
                 Some(v) => match PodId::try_from(v.typed()) {
                     Ok(pid) => vec![Some(ValueRef::Key(AnchoredKey::new(pid, key.clone())))],
@@ -187,16 +191,14 @@ impl<'a> Materializer {
         }
     }
 
-    fn candidate_statement_args_from_bindings(
-        &self,
-        args: &[StatementTmplArg],
-        binds: &[Option<Value>], // binding_vector
-    ) -> impl Iterator<Item = Vec<Option<ValueRef>>> + 'a {
+    fn candidate_statement_args_from_bindings<'b>(
+        &'b self,
+        args: &'b [StatementTmplArg],
+        bindings: &'b Bindings,
+    ) -> impl Iterator<Item = Vec<Option<ValueRef>>> + 'b {
         args.iter()
-            // Pairs arguments with their binding
-            .zip(binds)
             // Return a list of possible values for each argument
-            .map(|(arg, bind)| self.column_choices(arg, bind))
+            .map(move |arg| self.column_choices(arg, bindings))
             .collect::<Vec<_>>()
             .into_iter()
             // We now have a list of lists, so we can enumerate all possible combinations.
@@ -214,19 +216,19 @@ impl<'a> Materializer {
             return Ok(Relation::new());
         }
 
-        let binding_vector: Vec<Option<Value>> = args
-            .iter()
-            .map(|arg| self.resolve_term(arg, bindings))
-            .collect();
-
         let rel: Relation = match predicate {
-            Predicate::Custom(cpr) => self
-                .iter_custom_statements(&cpr, &binding_vector)
-                .map(|(fact_values, source)| Fact {
-                    source,
-                    args: fact_values.into_iter().map(ValueRef::Literal).collect(),
-                })
-                .collect(),
+            Predicate::Custom(cpr) => {
+                let binding_vector: Vec<Option<Value>> = args
+                    .iter()
+                    .map(|arg| self.resolve_term(arg, bindings))
+                    .collect();
+                self.iter_custom_statements(&cpr, &binding_vector)
+                    .map(|(fact_values, source)| Fact {
+                        source,
+                        args: fact_values.into_iter().map(ValueRef::Literal).collect(),
+                    })
+                    .collect()
+            }
 
             Predicate::Native(native_pred) => {
                 let mut rel = Relation::new();
@@ -248,7 +250,7 @@ impl<'a> Materializer {
                 //   path
 
                 let candidate_args_iter =
-                    self.candidate_statement_args_from_bindings(&args, &binding_vector);
+                    self.candidate_statement_args_from_bindings(&args, bindings);
 
                 // Ok, now we have our candidate args. We need to dispatch to the handler.
                 let handler = PredicateHandler::for_native_predicate(native_pred);
