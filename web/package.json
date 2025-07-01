@@ -5,6 +5,7 @@
     "build": "TURBO_UI=0 turbo run build",
     "dev": "TURBO_UI=0 turbo run dev",
     "lint": "TURBO_UI=0 turbo run lint",
+    "watch": "TURBO_UI=0 turbo watch dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "TURBO_UI=0 turbo run check-types"
   },

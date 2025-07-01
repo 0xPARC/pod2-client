@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use pod2::server::{config::Config, db, handlers::playground, routes};
-use pod2_server::handlers;
+use pod2_server::{config::Config, db, handlers, routes};
 use tokio::net::TcpListener;
 
 #[derive(Parser, Debug)]

@@ -19,9 +19,9 @@
     }
   },
   "scripts": {
-    "build": "pnpm gen-types && tsdown --outDir dist --entry src/index.ts --format esm --format cjs --dts",
+    "build": "tsdown --outDir dist --entry src/index.ts --format esm --format cjs --dts",
     "postinstall": "pnpm gen-types",
-    "gen-types": " mkdir -p dist/types; json2ts --no-additionalProperties src/schemas.json > src/types/pod2.d.ts"
+    "gen-types": "node script/gen-types.js"
   },
   "keywords": [],
   "author": "",

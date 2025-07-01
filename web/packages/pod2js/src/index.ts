@@ -1,8 +1,8 @@
-import { Ajv2019, ErrorObject, ValidateFunction } from "ajv/dist/2019.js";
-import { MainPod, SignedPod } from "./types/pod2.js";
+import { Ajv2019, type ValidateFunction } from "ajv/dist/2019.js";
+import type { MainPod, SignedPod } from "../generated/types/pod2.d.ts";
 import schema from "./schemas.json" with { type: "json" };
 
-export type * from "./types/pod2.d.ts";
+export type * from "../generated/types/pod2.d.ts";
 
 const ajv = new Ajv2019({ allErrors: true, strict: false });
 

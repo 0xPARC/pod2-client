@@ -13,9 +13,7 @@ use pod2::{
     backends::plonky2::{
         mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
     },
-    frontend::{
-        serialization::SerializedSignedPod, MainPod, MainPodBuilder, SignedPod, SignedPodBuilder,
-    },
+    frontend::{MainPod, MainPodBuilder, SerializedSignedPod, SignedPod, SignedPodBuilder},
     lang::{self, parser, LangError},
     middleware::{containers::Set, Params, PodId, VDSet, Value as PodValue},
 };
@@ -343,7 +341,7 @@ pub async fn execute_code_handler(
                 IndexablePod::MainPod(pod) => {
                     builder.add_recursive_pod(pod.as_ref().clone());
                 }
-                IndexablePod::TestPod(pod) => {}
+                IndexablePod::TestPod(_pod) => {}
             }
         }
     }

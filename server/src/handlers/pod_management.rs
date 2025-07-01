@@ -11,10 +11,7 @@ use chrono::Utc;
 use hex::ToHex;
 use pod2::{
     backends::plonky2::mock::signedpod::MockSigner,
-    frontend::{
-        serialization::{SerializedMainPod, SerializedSignedPod},
-        MainPod, SignedPod, SignedPodBuilder,
-    },
+    frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
     middleware::{hash_str, Hash, Value as PodValue},
 };
 use schemars::JsonSchema;

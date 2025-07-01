@@ -9,7 +9,9 @@ import { MermaidDiagram } from "@lightenna/react-mermaid-diagram";
 import { validateMainPod } from "@pod2/pod2js";
 
 function isMainPod(obj: any): obj is MainPod {
-  return validateMainPod(obj).success;
+  const result = validateMainPod(obj);
+  console.log(result);
+  return result.success;
 }
 
 const ResultsPane: React.FC = () => {
