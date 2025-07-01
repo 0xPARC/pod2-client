@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use hex::ToHex;
-use pod2::middleware::{Hash, StatementTmpl, TypedValue, Value};
+use pod2::middleware::{StatementTmpl, TypedValue, Value};
 
 use crate::{
     db::{FactDB, IndexablePod},
@@ -142,7 +142,6 @@ mod tests {
             value_to_podlang_literal(alice.public_key()),
             value_to_podlang_literal(bob.public_key())
         );
-        println!("req1: {}", req1);
 
         let request = parse(&req1, &params, &[batch.clone()])
             .unwrap()
