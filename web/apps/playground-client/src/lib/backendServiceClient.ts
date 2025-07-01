@@ -36,6 +36,7 @@ export interface ValidateCodeResponse {
 export interface ExecuteCodeRequest {
   code: string;
   space_id: string;
+  mock: boolean;
 }
 
 // Assuming the success response for execute might be a generic JSON value for now
@@ -127,12 +128,14 @@ export async function validateCode(
  */
 export async function executeCode(
   source: string,
-  spaceId: string
+  spaceId: string,
+  mock: boolean = false
 ): Promise<ExecuteCodeResponse> {
   try {
     const requestPayload: ExecuteCodeRequest = {
       code: source,
       space_id: spaceId,
+      mock,
     };
     const response = await fetch(`${API_BASE_URL}/execute`, {
       method: "POST",

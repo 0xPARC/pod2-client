@@ -47,6 +47,9 @@ const ControlsPane: React.FC = () => {
   const setExecutionError = useAppStore((state) => state.setExecutionError);
   const setIsResultsPaneOpen = useAppStore((state) => state.setIsResultsPaneOpen);
   const activeSpaceId = useAppStore((state) => state.activeSpaceId);
+  const mock = useAppStore((state) => state.mock);
+  const setMock = useAppStore((state) => state.setMock);
+
 
   const handleExecute = async () => {
     if (hasErrors) {
@@ -57,7 +60,7 @@ const ControlsPane: React.FC = () => {
     setExecutionError(null);
     setExecutionResult(null);
     try {
-      const result = await executeCode(fileContent, activeSpaceId ?? "");
+      const result = await executeCode(fileContent, activeSpaceId ?? "", mock);
       setExecutionResult(JSON.stringify(result, null, 2));
     } catch (error) {
       if (error instanceof Error) {
@@ -98,6 +101,11 @@ const ControlsPane: React.FC = () => {
         >
           {isLoadingExecution ? "Executing..." : "Execute"}
         </button>
+
+        <div className="flex items-center space-x-2 text-sm">
+          <input type="checkbox" id="mock" onChange={() => setMock(!mock)} checked={mock} disabled={isLoadingExecution} />
+          <label htmlFor="mock">Mock</label>
+        </div>
 
         {!isLoadingExecution &&
           (hasErrors ? (
