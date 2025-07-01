@@ -35,10 +35,16 @@ pub struct ExecuteMvpRequest {
     pub code: String,
 }
 
+fn mock_default() -> bool {
+    false
+}
+
 #[derive(Deserialize, Debug)]
 pub struct ExecuteCodeRequest {
     pub code: String,
     pub space_id: String,
+    #[serde(default = "mock_default")]
+    pub mock: bool,
 }
 
 // For a successful execution, the response body will be `Json<serde_json::Value>`

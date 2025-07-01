@@ -11,11 +11,15 @@ use log::info;
 use num::BigUint;
 use pod2::{
     backends::plonky2::{
-        mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
+        mainpod::Prover, mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey,
+        signedpod::Signer,
     },
     frontend::{MainPod, MainPodBuilder, SerializedSignedPod, SignedPod, SignedPodBuilder},
     lang::{self, parser, LangError},
-    middleware::{containers::Set, Params, PodId, VDSet, Value as PodValue},
+    middleware::{
+        containers::Set, Params, PodId, PodProver, PodType, VDSet, Value as PodValue,
+        DEFAULT_VD_SET,
+    },
 };
 use pod2_solver::{self, db::IndexablePod, error::SolverError, metrics::MetricsLevel};
 use rusqlite::{params, OptionalExtension};
@@ -298,11 +302,19 @@ pub async fn execute_code_handler(
     let mut original_main_pods: HashMap<PodId, &MainPod> = HashMap::new();
 
     for signed_pod_ref in &owned_signed_pods {
+        // If not in mock mode, Signed PODs must be of type Signed.
+        if !payload.mock && signed_pod_ref.pod.pod_type().0 != PodType::Signed as usize {
+            continue;
+        }
         all_pods_for_facts.push(IndexablePod::signed_pod(signed_pod_ref));
         original_signed_pods.insert(signed_pod_ref.id(), signed_pod_ref);
     }
 
     for main_pod_ref in &owned_main_pods {
+        // If not in mock mode, Main PODs must be of type Main.
+        if !payload.mock && main_pod_ref.pod.pod_type().0 != PodType::Main as usize {
+            continue;
+        }
         all_pods_for_facts.push(IndexablePod::main_pod(main_pod_ref));
         original_main_pods.insert(main_pod_ref.id(), main_pod_ref);
     }
@@ -323,7 +335,13 @@ pub async fn execute_code_handler(
 
     let (pod_ids, ops) = proof.to_inputs();
 
-    let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
+    let vd_set = if payload.mock {
+        &*MOCK_VD_SET
+    } else {
+        &*DEFAULT_VD_SET
+    };
+
+    let mut builder = MainPodBuilder::new(&params, vd_set);
     for (operation, public) in ops {
         if public {
             builder.pub_op(operation).unwrap();
@@ -345,8 +363,12 @@ pub async fn execute_code_handler(
             }
         }
     }
-    let prover = MockProver {};
-    let result_main_pod = builder.prove(&prover, &params).unwrap();
+    let prover: Box<dyn PodProver> = if payload.mock {
+        Box::new(MockProver {})
+    } else {
+        Box::new(Prover {})
+    };
+    let result_main_pod = builder.prove(&*prover, &params).unwrap();
 
     let result = ExecuteResult {
         main_pod: result_main_pod,

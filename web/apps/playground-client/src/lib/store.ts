@@ -18,6 +18,7 @@ interface AppState {
   isBackendConnected: boolean;
   isStoreInitialized: boolean; // To track if initial load is done
   activeSpaceId: string | null;
+  mock: boolean;
   // --- IDE Layout State ---
   isExplorerCollapsed: boolean;
   isResultsPaneOpen: boolean;
@@ -27,9 +28,10 @@ interface AppState {
   setLoadingExecution: (isLoading: boolean) => void;
   setExecutionResult: (result: string | null) => void;
   setExecutionError: (error: string | null) => void;
-  setEditorDiagnostics: (diagnostics: any[]) => void; // Replace 'any'
+  setEditorDiagnostics: (diagnostics: any[]) => void;
   setIsBackendConnected: (isConnected: boolean) => void;
   setActiveSpaceId: (spaceId: string | null) => void;
+  setMock: (mock: boolean) => void;
   // --- IDE Layout Actions ---
   toggleExplorer: () => void;
   setIsResultsPaneOpen: (isOpen: boolean) => void;
@@ -51,6 +53,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoadingExecution: false,
   executionResult: null,
   executionError: null,
+  mock: false,
+  setMock: (mock) => set({ mock }),
   editorDiagnostics: [],
   hasErrors: false, // Initial value, will be updated based on editorDiagnostics
   isBackendConnected: false, // Assume not connected initially
