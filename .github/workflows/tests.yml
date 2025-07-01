@@ -2,10 +2,10 @@ name: Rust Tests
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     types: [ready_for_review, opened, synchronize, reopened]
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -13,10 +13,9 @@ jobs:
     name: Rust tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-    - name: Run tests
-      run: cargo test --release
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly-2025-01-20
+      - name: Run tests
+        run: cargo test --release

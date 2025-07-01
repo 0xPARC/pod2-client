@@ -2,10 +2,10 @@ name: Rustfmt Check
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     types: [ready_for_review, opened, synchronize, reopened]
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   rustfmt:
@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: nightly-2025-01-20
           components: rustfmt
       - name: Check formatting
         uses: actions-rust-lang/rustfmt@v1
