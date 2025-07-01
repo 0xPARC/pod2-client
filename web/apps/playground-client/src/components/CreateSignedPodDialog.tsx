@@ -140,7 +140,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
           keys.add(key);
           dict.kvs[key] = convertUiValueToPodValue(item.value, item.type);
         }
-        return { Dictionary: dict };
+        return dict;
 
       default:
         throw new Error(`Unsupported value type: ${type}`);
