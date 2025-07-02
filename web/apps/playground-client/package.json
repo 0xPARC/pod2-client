@@ -48,7 +48,7 @@
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react-oxc@latest",
     "jsdom": "^26.0.0",
-    "prettier": "^3.5.3",
+    "prettier": "^3.6",
     "tw-animate-css": "^1.2.9",
     "typescript": "^5.8",
     "vite": "npm:rolldown-vite@latest",
