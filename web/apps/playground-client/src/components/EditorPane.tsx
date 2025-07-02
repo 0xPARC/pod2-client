@@ -161,7 +161,7 @@ const EditorPane: React.FC = () => {
             theme === "dark"
               ? "vs-dark"
               : theme === "system" &&
-                window.matchMedia("(prefers-color-scheme: dark)").matches
+                  window.matchMedia("(prefers-color-scheme: dark)").matches
                 ? "vs-dark"
                 : "vs-light"
           }

@@ -745,8 +745,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                                     e.target.value === "boolean"
                                       ? false
                                       : e.target.value === "Array" ||
-                                        e.target.value === "Set" ||
-                                        e.target.value === "Dictionary"
+                                          e.target.value === "Set" ||
+                                          e.target.value === "Dictionary"
                                         ? []
                                         : ""
                                 })

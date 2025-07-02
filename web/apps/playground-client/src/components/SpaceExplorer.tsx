@@ -127,10 +127,11 @@ const SpaceExplorer: React.FC = () => {
         <div
           key={space.id}
           className={`group w-full flex items-center justify-between space-x-2 px-2 py-1.5 text-sm rounded-md transition-colors duration-100
-                        ${activeSpaceId === space.id
-              ? "bg-blue-100 dark:bg-blue-700/30 text-blue-700 dark:text-blue-300 font-medium"
-              : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
+                        ${
+                          activeSpaceId === space.id
+                            ? "bg-blue-100 dark:bg-blue-700/30 text-blue-700 dark:text-blue-300 font-medium"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        }`}
         >
           <button
             onClick={() => setActiveSpaceId(space.id)}

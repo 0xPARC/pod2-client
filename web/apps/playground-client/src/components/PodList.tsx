@@ -112,7 +112,7 @@ const PodListItem: React.FC<PodListItemProps> = ({
             }
           >
             {deleteMutation.isPending &&
-              deleteMutation.variables?.podId === pod.id ? (
+            deleteMutation.variables?.podId === pod.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Trash2 className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
