@@ -1,12 +1,12 @@
+import { MermaidDiagram } from "@lightenna/react-mermaid-diagram";
+import type { MainPod } from "@pod2/pod2js";
+import { validateMainPod } from "@pod2/pod2js";
+import { PlusCircle } from "lucide-react";
 import React, { useState } from "react";
 import { useAppStore } from "../lib/store";
-import MainPodCard from "./MainPodCard";
-import type { MainPod } from "@pod2/pod2js";
 import AddToSpaceDialog from "./AddToSpaceDialog";
+import MainPodCard from "./MainPodCard";
 import { Button } from "./ui/button";
-import { PlusCircle } from "lucide-react";
-import { MermaidDiagram } from "@lightenna/react-mermaid-diagram";
-import { validateMainPod } from "@pod2/pod2js";
 
 function isMainPod(obj: any): obj is MainPod {
   const result = validateMainPod(obj);

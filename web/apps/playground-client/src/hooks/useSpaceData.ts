@@ -1,17 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { PodInfo, SpaceInfo } from "@pod2/pod2js";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  listSpaces,
-  listPodsInSpace,
   createSpace,
   deleteSpace,
+  listPodsInSpace,
+  listSpaces
 } from "../lib/backendServiceClient";
-import type { SpaceInfo, PodInfo } from "@pod2/pod2js";
 import { useAppStore } from "../lib/store";
 
 // Query key factory for spaces
 const spaceKeys = {
   all: ["spaces"] as const,
-  detail: (id: string) => [...spaceKeys.all, id] as const, // For future use if fetching single space details
+  detail: (id: string) => [...spaceKeys.all, id] as const // For future use if fetching single space details
 };
 
 // Query key factory for pods
@@ -20,7 +20,7 @@ export const podKeys = {
   inSpace: (spaceId: string | null) =>
     [...podKeys.all, "inSpace", spaceId] as const,
   detail: (spaceId: string, podId: string) =>
-    [...podKeys.inSpace(spaceId), podId] as const, // For future use
+    [...podKeys.inSpace(spaceId), podId] as const // For future use
 };
 
 /**
@@ -29,7 +29,7 @@ export const podKeys = {
 export function useSpaces() {
   return useQuery<SpaceInfo[], Error>({
     queryKey: spaceKeys.all,
-    queryFn: listSpaces,
+    queryFn: listSpaces
     // Optional: configure staleTime, cacheTime, etc.
     // staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -50,7 +50,7 @@ export function usePodsInSpace(spaceId: string | null) {
       }
       return listPodsInSpace(spaceId);
     },
-    enabled: !!spaceId, // Only run the query if spaceId is truthy
+    enabled: !!spaceId // Only run the query if spaceId is truthy
     // Optional: configure staleTime, cacheTime, etc.
     // staleTime: 1 * 60 * 1000, // 1 minute, as POD list might change more often
   });
@@ -62,7 +62,7 @@ export function useCreateSpace() {
     mutationFn: (spaceId: string) => createSpace(spaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
-    },
+    }
     // Optional: Add onError to handle errors, e.g., show a toast notification
   });
 }
@@ -79,7 +79,7 @@ export function useDeleteSpace() {
         setActiveSpaceId(null);
       }
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
-    },
+    }
     // Optional: Add onError to handle errors
   });
 }

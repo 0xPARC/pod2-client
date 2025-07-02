@@ -23,12 +23,12 @@ export function validateMainPod(data: any): Result<MainPod> {
   if (mainPodValidator && mainPodValidator(data)) {
     return {
       success: true,
-      pod: data,
+      pod: data
     };
   }
   return {
     success: false,
-    errors: ajv.errors,
+    errors: ajv.errors
   };
 }
 
@@ -39,12 +39,12 @@ export function validateSignedPod(data: any): Result<SignedPod> {
   if (signedPodValidator && signedPodValidator(data)) {
     return {
       success: true,
-      pod: data,
+      pod: data
     };
   }
   return {
     success: false,
-    errors: ajv.errors,
+    errors: ajv.errors
   };
 }
 

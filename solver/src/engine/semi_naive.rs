@@ -1368,7 +1368,8 @@ mod tests {
             }
             println!();
         }
-        let vd_set = &*MOCK_VD_SET;
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let vd_set = &MOCK_VD_SET;
         let mut builder = MainPodBuilder::new(&params, vd_set);
         let prover = MockProver {};
 

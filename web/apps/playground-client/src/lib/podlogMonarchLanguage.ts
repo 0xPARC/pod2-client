@@ -25,12 +25,12 @@ export const podlogMonarchLanguage = {
     "DictNotContains",
     "ArrayContains",
     "SetContains",
-    "SetNotContains",
+    "SetNotContains"
     // Note: 'true' and 'false' are removed from here as they'll have specific rules
   ],
 
   operators: [
-    "=", // Removed , : [ ] ( ) as they are handled by delimiter or bracket rules
+    "=" // Removed , : [ ] ( ) as they are handled by delimiter or bracket rules
     // '#[' and '#{' are not standard operators, might be part of a custom construct
   ],
 
@@ -61,16 +61,16 @@ export const podlogMonarchLanguage = {
         {
           token: "string.quoted.double.podlog",
           bracket: "@open",
-          next: "@string_double",
-        },
+          next: "@string_double"
+        }
       ],
       [
         /'/,
         {
           token: "string.quoted.single.podlog",
           bracket: "@open",
-          next: "@string_single",
-        },
+          next: "@string_single"
+        }
       ],
 
       // Variables: start with '?', use explicit char class
@@ -82,9 +82,9 @@ export const podlogMonarchLanguage = {
         {
           cases: {
             "@keywords": "keyword.control.podlog", // More specific token
-            "@default": "identifier.podlog",
-          },
-        },
+            "@default": "identifier.podlog"
+          }
+        }
       ],
 
       // Delimiters and brackets
@@ -95,14 +95,14 @@ export const podlogMonarchLanguage = {
       [/:/, "delimiter.colon.podlog"],
 
       // Other symbols treated as operators if not covered above
-      [/[=><!~?&|+*\/%#^\\-]+/, "operator.podlog"],
+      [/[=><!~?&|+*/%#^\\-]+/, "operator.podlog"]
     ],
 
     comment: [
       [/[^\\/*]+/, "comment.block.podlog"], // More specific
       [/\/\*/, "comment.block.podlog", "@push"],
-      ["\\\\*\/", "comment.block.podlog", "@pop"],
-      [/[\/*]/, "comment.block.podlog"],
+      ["\\\\*/", "comment.block.podlog", "@pop"],
+      [/[/*]/, "comment.block.podlog"]
     ],
 
     string_double: [
@@ -115,9 +115,9 @@ export const podlogMonarchLanguage = {
         {
           token: "string.quoted.double.podlog",
           bracket: "@close",
-          next: "@pop",
-        },
-      ],
+          next: "@pop"
+        }
+      ]
     ],
 
     string_single: [
@@ -130,18 +130,18 @@ export const podlogMonarchLanguage = {
         {
           token: "string.quoted.single.podlog",
           bracket: "@close",
-          next: "@pop",
-        },
-      ],
+          next: "@pop"
+        }
+      ]
     ],
 
     whitespace: [
       [/[ \\t\\r\\n]+/, "white"], // Kept as 'white' or could be 'whitespace.podlog'
-      [/\/\//, "comment.line.podlog", "@commentLine"], // More specific
+      [/\/\//, "comment.line.podlog", "@commentLine"] // More specific
     ],
 
     commentLine: [
-      [/.*/, "comment.line.podlog", "@pop"], // More specific
-    ],
-  },
+      [/.*/, "comment.line.podlog", "@pop"] // More specific
+    ]
+  }
 } as languages.IMonarchLanguage;

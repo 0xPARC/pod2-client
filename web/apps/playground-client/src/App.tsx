@@ -1,10 +1,10 @@
+import { Toaster } from "@/components/ui/sonner"; // Added Toaster import
 import React from "react";
 import EditorPane from "./components/EditorPane"; // Import the EditorPane component
-import ResultsPane from "./components/ResultsPane"; // Import ResultsPane
 import IdeLayout from "./components/IdeLayout"; // Import the new layout
-import SpaceExplorer from "./components/SpaceExplorer"; // Import SpaceExplorer
 import PodList from "./components/PodList"; // Import PodList
-import { Toaster } from "@/components/ui/sonner"; // Added Toaster import
+import ResultsPane from "./components/ResultsPane"; // Import ResultsPane
+import SpaceExplorer from "./components/SpaceExplorer"; // Import SpaceExplorer
 
 interface AppProps {
   children?: React.ReactNode; // For router outlet

@@ -12,7 +12,7 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "vitest/importMeta"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -33,7 +33,5 @@
     },
 
     "customConditions": ["@pod2/source"]
-
-
   }
 }

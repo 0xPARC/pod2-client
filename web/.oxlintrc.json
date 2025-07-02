@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "no-restricted-globals": ["error", "event", "Buffer"],
+    "no-commonjs": "error",
+    "no-import-type-side-effects": "error",
+    "typescript/no-non-null-asserted-nullish-coalescing": "error",
+    "guard-for-in": "error"
+  },
+  "ignorePatterns": ["dist/**", "vite.config.js"]
+}

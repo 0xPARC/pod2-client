@@ -9,6 +9,11 @@
       "cache": true,
       "outputLogs": "new-only"
     },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": true,
+      "outputLogs": "new-only"
+    },
     "lint": {
       "cache": true,
       "outputLogs": "new-only"

@@ -1,7 +1,7 @@
+import type { PodData } from "@pod2/pod2js"; // For type checking, added PodData and SignedPod
 import React from "react";
 import { useAppStore } from "../lib/store";
 import MainPodCard from "./MainPodCard";
-import type { PodData } from "@pod2/pod2js"; // For type checking, added PodData and SignedPod
 import SignedPodCard from "./SignedPodCard";
 
 const PodViewerPane: React.FC = () => {
@@ -11,7 +11,8 @@ const PodViewerPane: React.FC = () => {
     return (
       <div className="p-4 h-full flex items-center justify-center bg-gray-50 dark:bg-gray-800/30">
         <p className="text-muted-foreground">
-          No POD selected. Select a POD from the explorer to view its details here.
+          No POD selected. Select a POD from the explorer to view its details
+          here.
         </p>
       </div>
     );
@@ -25,7 +26,13 @@ const PodViewerPane: React.FC = () => {
   if (podData.pod_data_variant === "Main") {
     // The payload for Main is MainPod
     const mainPodPayload = podData.pod_data_payload;
-    podContent = <MainPodCard mainPod={mainPodPayload} podId={selectedPod.id} label={selectedPod.label} />;
+    podContent = (
+      <MainPodCard
+        mainPod={mainPodPayload}
+        podId={selectedPod.id}
+        label={selectedPod.label}
+      />
+    );
   } else if (podData.pod_data_variant === "Signed") {
     // The payload for Signed is SignedPod
     const signedPodPayload = podData.pod_data_payload;
@@ -39,18 +46,14 @@ const PodViewerPane: React.FC = () => {
   } else {
     // Fallback for unknown pod_data_variant
     // This case should ideally not be reached if PodData is a discriminated union correctly handled
-    podContent = (
-      <p>Unknown POD data variant</p>
-    );
+    podContent = <p>Unknown POD data variant</p>;
   }
 
   return (
     <div className="p-4 h-full bg-gray-50 dark:bg-gray-800/30 overflow-y-auto">
-      <div className="mx-auto">
-        {podContent}
-      </div>
+      <div className="mx-auto">{podContent}</div>
     </div>
   );
 };
 
-export default PodViewerPane; 
+export default PodViewerPane;

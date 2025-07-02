@@ -1,4 +1,4 @@
-name: Rustfmt Check
+name: Rust Tests
 
 on:
   pull_request:
@@ -8,15 +8,14 @@ on:
     branches: [main]
 
 jobs:
-  rustfmt:
+  test:
     if: github.event.pull_request.draft == false
-    name: Rust formatting
+    name: Rust tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly-2025-01-20
-          components: rustfmt
-      - name: Check formatting
-        uses: actions-rust-lang/rustfmt@v1
+      - name: Run tests
+        run: cargo test --release

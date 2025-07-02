@@ -35,6 +35,7 @@ use crate::{
     db::ConnectionPool,
 };
 
+#[allow(clippy::declare_interior_mutable_const)]
 pub const MOCK_VD_SET: LazyLock<VDSet> = LazyLock::new(|| VDSet::new(6, &[]).unwrap());
 
 #[derive(Serialize, Deserialize)]
@@ -336,6 +337,7 @@ pub async fn execute_code_handler(
     let (pod_ids, ops) = proof.to_inputs();
 
     let vd_set = if payload.mock {
+        #[allow(clippy::borrow_interior_mutable_const)]
         &*MOCK_VD_SET
     } else {
         &*DEFAULT_VD_SET

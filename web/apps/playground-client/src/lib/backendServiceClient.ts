@@ -1,11 +1,11 @@
-import { useAppStore } from "./store";
 import type {
-  SpaceInfo,
-  PodInfo,
   MainPod,
+  PodInfo,
   SignedPod,
-  Value,
+  SpaceInfo,
+  Value
 } from "@pod2/pod2js";
+import { useAppStore } from "./store";
 
 // --- Type definitions (mirroring Rust structs from src/server/api_types.rs) ---
 
@@ -13,7 +13,7 @@ export enum DiagnosticSeverity {
   Error = "Error",
   Warning = "Warning",
   Information = "Information",
-  Hint = "Hint",
+  Hint = "Hint"
 }
 
 export interface Diagnostic {
@@ -65,9 +65,9 @@ export async function validateCode(
     const response = await fetch(`${API_BASE_URL}/validate`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(requestPayload),
+      body: JSON.stringify(requestPayload)
     });
 
     if (!response.ok) {
@@ -114,9 +114,9 @@ export async function validateCode(
           start_line: 1,
           start_column: 1,
           end_line: 1,
-          end_column: 1,
-        },
-      ],
+          end_column: 1
+        }
+      ]
     };
   }
 }
@@ -135,14 +135,14 @@ export async function executeCode(
     const requestPayload: ExecuteCodeRequest = {
       code: source,
       space_id: spaceId,
-      mock,
+      mock
     };
     const response = await fetch(`${API_BASE_URL}/execute`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(requestPayload),
+      body: JSON.stringify(requestPayload)
     });
 
     if (!response.ok) {
@@ -196,8 +196,8 @@ export async function listSpaces(): Promise<SpaceInfo[]> {
     const response = await fetch(`${API_BASE_URL}/spaces`, {
       method: "GET",
       headers: {
-        Accept: "application/json", // Important for content negotiation
-      },
+        Accept: "application/json" // Important for content negotiation
+      }
     });
 
     if (!response.ok) {
@@ -242,8 +242,8 @@ export async function listPodsInSpace(spaceId: string): Promise<PodInfo[]> {
     const response = await fetch(`${API_BASE_URL}/pods/${spaceId}`, {
       method: "GET",
       headers: {
-        Accept: "application/json",
-      },
+        Accept: "application/json"
+      }
     });
 
     if (!response.ok) {
@@ -301,7 +301,7 @@ export async function importPodDataToSpace(
   const backendPayload = {
     podType: payload.podType,
     data: payload.data, // This should be serialized by JSON.stringify automatically
-    label: payload.label,
+    label: payload.label
   };
 
   try {
@@ -309,9 +309,9 @@ export async function importPodDataToSpace(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Accept: "application/json",
+        Accept: "application/json"
       },
-      body: JSON.stringify(backendPayload), // Send the constructed backendPayload
+      body: JSON.stringify(backendPayload) // Send the constructed backendPayload
     });
 
     if (!response.ok) {
@@ -358,8 +358,8 @@ export async function deletePodFromSpace(
     const response = await fetch(`${API_BASE_URL}/pods/${spaceId}/${podId}`, {
       method: "DELETE",
       headers: {
-        Accept: "application/json", // Or appropriate if no content is expected
-      },
+        Accept: "application/json" // Or appropriate if no content is expected
+      }
     });
 
     if (!response.ok) {
@@ -405,9 +405,9 @@ export async function createSpace(spaceId: string): Promise<Response> {
     const response = await fetch(`${API_BASE_URL}/spaces`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ id: spaceId }),
+      body: JSON.stringify({ id: spaceId })
     });
 
     if (!response.ok) {
@@ -438,7 +438,7 @@ export async function createSpace(spaceId: string): Promise<Response> {
 export async function deleteSpace(spaceId: string): Promise<void> {
   try {
     const response = await fetch(`${API_BASE_URL}/spaces/${spaceId}`, {
-      method: "DELETE",
+      method: "DELETE"
     });
 
     if (!response.ok) {
@@ -482,9 +482,9 @@ export async function signPod(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Accept: "application/json",
+        Accept: "application/json"
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {

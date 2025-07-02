@@ -1,7 +1,7 @@
-import React from "react";
-import { useAppStore, type MainAreaTab } from "../lib/store";
-import { Button } from "./ui/button"; // Using shadcn Button
 import { Code, Package } from "lucide-react"; // Icons for tabs
+import React from "react";
+import { type MainAreaTab, useAppStore } from "../lib/store";
+import { Button } from "./ui/button"; // Using shadcn Button
 
 const MainAreaTabs: React.FC = () => {
   const activeTab = useAppStore((state) => state.activeMainAreaTab);
@@ -37,4 +37,4 @@ const MainAreaTabs: React.FC = () => {
   );
 };
 
-export default MainAreaTabs; 
+export default MainAreaTabs;

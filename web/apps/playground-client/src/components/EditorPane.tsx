@@ -1,38 +1,40 @@
-import React, { useEffect, useCallback, useRef } from "react";
-import Editor, { type OnChange, type Monaco, loader } from "@monaco-editor/react";
-import * as monacoApi from "monaco-editor/esm/vs/editor/editor.api";
-import { useAppStore } from "../lib/store";
+import Editor, {
+  type Monaco,
+  type OnChange,
+  loader
+} from "@monaco-editor/react";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-  validateCode,
-  DiagnosticSeverity,
   type Diagnostic as ApiDiagnostic,
+  DiagnosticSeverity,
+  validateCode
 } from "../lib/backendServiceClient";
 import { podlogMonarchLanguage } from "../lib/podlogMonarchLanguage";
-import * as monaco from 'monaco-editor';
-import { useTheme } from "./theme-provider";
+import { useAppStore } from "../lib/store";
 import ControlsPane from "./ControlsPane";
+import { useTheme } from "./theme-provider";
 
 loader.config({ monaco });
 
 // Helper to convert API Diagnostic to Monaco MarkerData
-const toMonacoMarker = (diag: ApiDiagnostic): monacoApi.editor.IMarkerData => {
-  // Use monacoApi type
-  let severity: monacoApi.MarkerSeverity; // Use monacoApi type
+const toMonacoMarker = (diag: ApiDiagnostic): monaco.editor.IMarkerData => {
+  let severity: monaco.MarkerSeverity;
   switch (diag.severity) {
     case DiagnosticSeverity.Error:
-      severity = monacoApi.MarkerSeverity.Error; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Error;
       break;
     case DiagnosticSeverity.Warning:
-      severity = monacoApi.MarkerSeverity.Warning; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Warning;
       break;
     case DiagnosticSeverity.Information:
-      severity = monacoApi.MarkerSeverity.Info; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Info;
       break;
     case DiagnosticSeverity.Hint:
-      severity = monacoApi.MarkerSeverity.Hint; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Hint;
       break;
     default:
-      severity = monacoApi.MarkerSeverity.Info; // Default // Use monacoApi type
+      severity = monaco.MarkerSeverity.Info;
   }
   return {
     message: diag.message,
@@ -40,7 +42,7 @@ const toMonacoMarker = (diag: ApiDiagnostic): monacoApi.editor.IMarkerData => {
     startLineNumber: diag.start_line,
     startColumn: diag.start_column,
     endLineNumber: diag.end_line,
-    endColumn: diag.end_column,
+    endColumn: diag.end_column
   };
 };
 
@@ -56,7 +58,7 @@ const EditorPane: React.FC = () => {
   );
   const isStoreInitialized = useAppStore((state) => state.isStoreInitialized);
 
-  const editorRef = useRef<monacoApi.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const debounceTimeoutRef = useRef<number | null>(null);
 
@@ -124,7 +126,7 @@ const EditorPane: React.FC = () => {
   }, [editorDiagnostics]); // Depends on editorDiagnostics, editorRef and monacoRef are stable
 
   function handleEditorDidMount(
-    mountedEditor: monacoApi.editor.IStandaloneCodeEditor,
+    mountedEditor: monaco.editor.IStandaloneCodeEditor,
     mountedMonaco: Monaco
   ) {
     editorRef.current = mountedEditor;
@@ -153,7 +155,14 @@ const EditorPane: React.FC = () => {
           height="100%"
           width="100%"
           language="podlog"
-          theme={theme === "dark" ? "vs-dark" : theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs-light"}
+          theme={
+            theme === "dark"
+              ? "vs-dark"
+              : theme === "system" &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "vs-dark"
+                : "vs-light"
+          }
           value={fileContent}
           onChange={handleEditorChange}
           onMount={handleEditorDidMount}
@@ -162,7 +171,7 @@ const EditorPane: React.FC = () => {
             fontSize: 14,
             wordWrap: "on",
             scrollBeyondLastLine: false,
-            automaticLayout: true,
+            automaticLayout: true
           }}
         />
       </div>
