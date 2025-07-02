@@ -3,8 +3,7 @@ import Editor, {
   type OnChange,
   loader
 } from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
-import * as monacoApi from "monaco-editor/esm/vs/editor/editor.api";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   type Diagnostic as ApiDiagnostic,
@@ -19,24 +18,23 @@ import { useTheme } from "./theme-provider";
 loader.config({ monaco });
 
 // Helper to convert API Diagnostic to Monaco MarkerData
-const toMonacoMarker = (diag: ApiDiagnostic): monacoApi.editor.IMarkerData => {
-  // Use monacoApi type
-  let severity: monacoApi.MarkerSeverity; // Use monacoApi type
+const toMonacoMarker = (diag: ApiDiagnostic): monaco.editor.IMarkerData => {
+  let severity: monaco.MarkerSeverity;
   switch (diag.severity) {
     case DiagnosticSeverity.Error:
-      severity = monacoApi.MarkerSeverity.Error; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Error;
       break;
     case DiagnosticSeverity.Warning:
-      severity = monacoApi.MarkerSeverity.Warning; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Warning;
       break;
     case DiagnosticSeverity.Information:
-      severity = monacoApi.MarkerSeverity.Info; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Info;
       break;
     case DiagnosticSeverity.Hint:
-      severity = monacoApi.MarkerSeverity.Hint; // Use monacoApi type
+      severity = monaco.MarkerSeverity.Hint;
       break;
     default:
-      severity = monacoApi.MarkerSeverity.Info; // Default // Use monacoApi type
+      severity = monaco.MarkerSeverity.Info;
   }
   return {
     message: diag.message,
@@ -60,7 +58,7 @@ const EditorPane: React.FC = () => {
   );
   const isStoreInitialized = useAppStore((state) => state.isStoreInitialized);
 
-  const editorRef = useRef<monacoApi.editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const debounceTimeoutRef = useRef<number | null>(null);
 
@@ -128,7 +126,7 @@ const EditorPane: React.FC = () => {
   }, [editorDiagnostics]); // Depends on editorDiagnostics, editorRef and monacoRef are stable
 
   function handleEditorDidMount(
-    mountedEditor: monacoApi.editor.IStandaloneCodeEditor,
+    mountedEditor: monaco.editor.IStandaloneCodeEditor,
     mountedMonaco: Monaco
   ) {
     editorRef.current = mountedEditor;

@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "tsdown --outDir dist --entry src/index.ts --format esm --format cjs --dts",
+    "test": "echo 'todo'",
     "postinstall": "pnpm gen-types",
     "gen-types": "node script/gen-types.js"
   },

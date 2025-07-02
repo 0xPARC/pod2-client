@@ -6,8 +6,7 @@
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
     "build": "vite build && tsc",
-    "serve": "vite preview",
-    "test": "vitest run"
+    "serve": "vite preview"
   },
   "dependencies": {
     "@lightenna/react-mermaid-diagram": "^1.0.17",
@@ -53,7 +52,8 @@
     "typescript": "^5.8",
     "vite": "npm:rolldown-vite@latest",
     "vite-bundle-visualizer": "^1.2.1",
-    "vitest": "^3.2.2",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4",
     "web-vitals": "^4.2.4"
   }
 }
