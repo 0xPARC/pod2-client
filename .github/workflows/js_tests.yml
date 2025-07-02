@@ -1,5 +1,4 @@
-name: Build and Test
-run-name: Build and Test
+name: JS Tests
 
 on:
   push:
@@ -16,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Build-and-Test:
+  test:
     #env:
     #TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
     #TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
