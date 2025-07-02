@@ -15,7 +15,7 @@ jobs:
     #TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
     #TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     runs-on:
-      labels: ubuntu-latest-l
+      labels: ubuntu-latest
 
     steps:
       - name: Check out repository code
