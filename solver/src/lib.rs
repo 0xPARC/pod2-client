@@ -211,6 +211,7 @@ mod tests {
         let (result, _) = solve(&request, &pods, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
+        #[allow(clippy::borrow_interior_mutable_const)]
         let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
 
         let (pod_ids, ops) = result.to_inputs();

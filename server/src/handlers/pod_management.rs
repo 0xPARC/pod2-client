@@ -521,7 +521,8 @@ mod tests {
 
     // Helper function to create sample SerializedMainPod data as serde_json::Value
     fn create_sample_main_pod_data(params: &PodParams) -> (String, Value) {
-        let mut main_builder = MainPodBuilder::new(params, &*MOCK_VD_SET);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let mut main_builder = MainPodBuilder::new(params, &MOCK_VD_SET);
         // Add a simple operation: eq for a new entry
         main_builder
             .priv_op(op!(
@@ -531,9 +532,9 @@ mod tests {
             ))
             .expect("Failed to add new_entry op to sample main pod builder");
 
-        let mut prover = MockProver {};
+        let prover = MockProver {};
         let main_pod = main_builder
-            .prove(&mut prover, params)
+            .prove(&prover, params)
             .expect("Failed to prove sample main pod");
 
         let pod_id_str = main_pod.id().0.encode_hex();
