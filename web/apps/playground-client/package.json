@@ -7,10 +7,7 @@
     "start": "vite --port 3000",
     "build": "vite build && tsc",
     "serve": "vite preview",
-    "test": "vitest run",
-    "lint": "eslint",
-    "format": "prettier",
-    "check": "prettier --write . && eslint --fix"
+    "test": "vitest run"
   },
   "dependencies": {
     "@lightenna/react-mermaid-diagram": "^1.0.17",
@@ -45,7 +42,6 @@
     "zustand": "^5.0.4"
   },
   "devDependencies": {
-    "@tanstack/eslint-config": "^0.1.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.2.0",
     "@types/react": "^19.0.8",

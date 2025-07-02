@@ -1,20 +1,20 @@
-import React, { useEffect, useCallback, useRef } from "react";
 import Editor, {
-  type OnChange,
   type Monaco,
+  type OnChange,
   loader
 } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import * as monacoApi from "monaco-editor/esm/vs/editor/editor.api";
-import { useAppStore } from "../lib/store";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-  validateCode,
+  type Diagnostic as ApiDiagnostic,
   DiagnosticSeverity,
-  type Diagnostic as ApiDiagnostic
+  validateCode
 } from "../lib/backendServiceClient";
 import { podlogMonarchLanguage } from "../lib/podlogMonarchLanguage";
-import * as monaco from "monaco-editor";
-import { useTheme } from "./theme-provider";
+import { useAppStore } from "../lib/store";
 import ControlsPane from "./ControlsPane";
+import { useTheme } from "./theme-provider";
 
 loader.config({ monaco });
 
@@ -161,7 +161,7 @@ const EditorPane: React.FC = () => {
             theme === "dark"
               ? "vs-dark"
               : theme === "system" &&
-                  window.matchMedia("(prefers-color-scheme: dark)").matches
+                window.matchMedia("(prefers-color-scheme: dark)").matches
                 ? "vs-dark"
                 : "vs-light"
           }

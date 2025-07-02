@@ -1,35 +1,35 @@
-import React, { useState } from "react";
-import {
-  useSpaces,
-  useCreateSpace,
-  useDeleteSpace
-} from "../hooks/useSpaceData";
-import { useAppStore } from "../lib/store";
 import {
   AlertTriangle,
-  Loader2,
   Folder,
-  Plus,
+  Loader2,
   MoreHorizontal,
+  Plus,
   Trash2
 } from "lucide-react";
+import React, { useState } from "react";
+import { toast } from "sonner";
+import {
+  useCreateSpace,
+  useDeleteSpace,
+  useSpaces
+} from "../hooks/useSpaceData";
+import { useAppStore } from "../lib/store";
 import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "./ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "./ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter
-} from "./ui/dialog";
 import { Input } from "./ui/input";
-import { toast } from "sonner";
 
 const SpaceExplorer: React.FC = () => {
   const { data: spaces, isLoading, error, refetch } = useSpaces();
@@ -127,11 +127,10 @@ const SpaceExplorer: React.FC = () => {
         <div
           key={space.id}
           className={`group w-full flex items-center justify-between space-x-2 px-2 py-1.5 text-sm rounded-md transition-colors duration-100
-                        ${
-                          activeSpaceId === space.id
-                            ? "bg-blue-100 dark:bg-blue-700/30 text-blue-700 dark:text-blue-300 font-medium"
-                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                        }`}
+                        ${activeSpaceId === space.id
+              ? "bg-blue-100 dark:bg-blue-700/30 text-blue-700 dark:text-blue-300 font-medium"
+              : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
         >
           <button
             onClick={() => setActiveSpaceId(space.id)}

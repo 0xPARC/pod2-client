@@ -1,11 +1,11 @@
-import { useAppStore } from "./store";
 import type {
-  SpaceInfo,
-  PodInfo,
   MainPod,
+  PodInfo,
   SignedPod,
+  SpaceInfo,
   Value
 } from "@pod2/pod2js";
+import { useAppStore } from "./store";
 
 // --- Type definitions (mirroring Rust structs from src/server/api_types.rs) ---
 

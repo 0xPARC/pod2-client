@@ -1,16 +1,16 @@
-import React from "react";
 import type { MainPod, ValueRef } from "@pod2/pod2js";
-import ValueRenderer from "./ValueRenderer";
-import { FileCheck2, ClipboardCopy } from "lucide-react";
+import { ClipboardCopy, FileCheck2 } from "lucide-react";
+import React from "react";
+import { toast } from "sonner";
+import { Button } from "./ui/button";
 import {
   Card,
-  CardHeader,
-  CardTitle,
+  CardContent,
   CardDescription,
-  CardContent
+  CardHeader,
+  CardTitle
 } from "./ui/card";
-import { Button } from "./ui/button";
-import { toast } from "sonner";
+import ValueRenderer from "./ValueRenderer";
 
 interface MainPodCardProps {
   mainPod: MainPod;

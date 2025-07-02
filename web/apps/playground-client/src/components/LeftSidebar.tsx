@@ -1,7 +1,7 @@
 import { Github, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { ResizablePanel } from "./ui/resizable";
 import { ModeToggle } from "./mode-toggle";
 import { Button } from "./ui/button";
+import { ResizablePanel } from "./ui/resizable";
 
 export function LeftSidebar({
   toggleExplorer,

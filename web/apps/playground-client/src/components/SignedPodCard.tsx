@@ -1,16 +1,16 @@
-import React from "react";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
-  CardTitle,
-  CardDescription
+  CardTitle
 } from "@/components/ui/card";
-import { FileSignature, ClipboardCopy } from "lucide-react";
 import type { SignedPod } from "@pod2/pod2js";
+import { ClipboardCopy, FileSignature } from "lucide-react";
+import React from "react";
+import { toast } from "sonner";
 import ValueRenderer from "./ValueRenderer";
 import { Button } from "./ui/button";
-import { toast } from "sonner";
 
 interface SignedPodCardProps {
   signedPod: SignedPod;

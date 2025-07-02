@@ -1,11 +1,11 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { PodInfo, SpaceInfo } from "@pod2/pod2js";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  listSpaces,
-  listPodsInSpace,
   createSpace,
-  deleteSpace
+  deleteSpace,
+  listPodsInSpace,
+  listSpaces
 } from "../lib/backendServiceClient";
-import type { SpaceInfo, PodInfo } from "@pod2/pod2js";
 import { useAppStore } from "../lib/store";
 
 // Query key factory for spaces

@@ -2,13 +2,13 @@
 
 import { execSync } from "child_process";
 import {
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
   existsSync,
-  renameSync
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
 } from "fs";
-import { join, dirname } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);

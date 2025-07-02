@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "oxlint",
     "test": "turbo run test",
     "watch": "turbo watch dev",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@prettier/plugin-oxc": "^0.0.4",
+    "oxlint": "^1.5.0",
     "prettier": "^3.6",
     "turbo": "^2.5.0",
     "typescript": "5.8.2"

@@ -1,28 +1,28 @@
-import React, { useState, useEffect } from "react";
+import type { Dictionary, Value } from "@pod2/pod2js";
+import { useQueryClient } from "@tanstack/react-query";
+import { PlusCircle, Trash2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { podKeys } from "../hooks/useSpaceData";
+import {
+  type ImportPodClientPayload,
+  type SignPodRequest,
+  importPodDataToSpace,
+  signPod
+} from "../lib/backendServiceClient";
+import { Button } from "./ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose
+  DialogHeader,
+  DialogTitle
 } from "./ui/dialog";
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ScrollArea } from "./ui/scroll-area";
-import { PlusCircle, Trash2 } from "lucide-react";
-import type { Value, Dictionary } from "@pod2/pod2js";
-import {
-  signPod,
-  type SignPodRequest,
-  importPodDataToSpace,
-  type ImportPodClientPayload
-} from "../lib/backendServiceClient";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { podKeys } from "../hooks/useSpaceData";
 
 // Define the structure for an entry in the UI
 type ValueTypeName =
@@ -745,8 +745,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                                     e.target.value === "boolean"
                                       ? false
                                       : e.target.value === "Array" ||
-                                          e.target.value === "Set" ||
-                                          e.target.value === "Dictionary"
+                                        e.target.value === "Set" ||
+                                        e.target.value === "Dictionary"
                                         ? []
                                         : ""
                                 })

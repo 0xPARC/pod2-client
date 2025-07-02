@@ -1,5 +1,5 @@
-import React from "react";
 import type { MainPod } from "@pod2/pod2js"; // Adjusted path
+import React from "react";
 
 interface MainPodCardProps {
   mainPod: MainPod;

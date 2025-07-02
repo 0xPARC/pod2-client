@@ -1,23 +1,3 @@
-import React, { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { deletePodFromSpace } from "../lib/backendServiceClient";
-import { useAppStore } from "../lib/store";
-import { usePodsInSpace, podKeys } from "../hooks/useSpaceData";
-import {
-  AlertTriangle,
-  Loader2,
-  FileText,
-  FileCheck2,
-  FilePenLine,
-  Trash2,
-  PlusCircle,
-  ClipboardPaste
-} from "lucide-react";
-import type { PodInfo } from "@pod2/pod2js";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import ImportPodDialog from "./ImportPodDialog";
-import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +9,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { PodInfo } from "@pod2/pod2js";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  ClipboardPaste,
+  FileCheck2,
+  FilePenLine,
+  FileText,
+  Loader2,
+  PlusCircle,
+  Trash2
+} from "lucide-react";
+import React, { useState } from "react";
 import { toast } from "sonner";
+import { podKeys, usePodsInSpace } from "../hooks/useSpaceData";
+import { deletePodFromSpace } from "../lib/backendServiceClient";
+import { useAppStore } from "../lib/store";
+import CreateSignedPodDialog from "./CreateSignedPodDialog";
+import ImportPodDialog from "./ImportPodDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,7 +112,7 @@ const PodListItem: React.FC<PodListItemProps> = ({
             }
           >
             {deleteMutation.isPending &&
-            deleteMutation.variables?.podId === pod.id ? (
+              deleteMutation.variables?.podId === pod.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Trash2 className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />

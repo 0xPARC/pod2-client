@@ -95,14 +95,14 @@ export const podlogMonarchLanguage = {
       [/:/, "delimiter.colon.podlog"],
 
       // Other symbols treated as operators if not covered above
-      [/[=><!~?&|+*\/%#^\\-]+/, "operator.podlog"]
+      [/[=><!~?&|+*/%#^\\-]+/, "operator.podlog"]
     ],
 
     comment: [
       [/[^\\/*]+/, "comment.block.podlog"], // More specific
       [/\/\*/, "comment.block.podlog", "@push"],
-      ["\\\\*\/", "comment.block.podlog", "@pop"],
-      [/[\/*]/, "comment.block.podlog"]
+      ["\\\\*/", "comment.block.podlog", "@pop"],
+      [/[/*]/, "comment.block.podlog"]
     ],
 
     string_double: [
