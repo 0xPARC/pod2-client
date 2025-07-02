@@ -3,7 +3,16 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { deletePodFromSpace } from "../lib/backendServiceClient";
 import { useAppStore } from "../lib/store";
 import { usePodsInSpace, podKeys } from "../hooks/useSpaceData";
-import { AlertTriangle, Loader2, FileText, FileCheck2, FilePenLine, Trash2, PlusCircle, ClipboardPaste } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  FileText,
+  FileCheck2,
+  FilePenLine,
+  Trash2,
+  PlusCircle,
+  ClipboardPaste
+} from "lucide-react";
 import type { PodInfo } from "@pod2/pod2js";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -18,11 +27,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
-
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "./ui/dropdown-menu";
 
 function truncateText(text: string, maxLength: number = 16) {
   if (text.length <= maxLength) return text;
@@ -39,33 +52,49 @@ const getErrorMessage = (err: unknown): string => {
 interface PodListItemProps {
   pod: PodInfo;
   activeSpaceId: string | null; // Needed for the delete dialog message
-  deleteMutation: ReturnType<typeof useMutation<void, Error, { spaceId: string; podId: string }>>;
+  deleteMutation: ReturnType<
+    typeof useMutation<void, Error, { spaceId: string; podId: string }>
+  >;
   onDeletePod: (podId: string) => void;
   onSelectPod: (pod: PodInfo) => void; // Added prop for selecting a POD
 }
 
-const PodListItem: React.FC<PodListItemProps> = ({ pod, activeSpaceId, deleteMutation, onDeletePod, onSelectPod }) => {
-  let icon = <FileText className="mr-2 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />;
+const PodListItem: React.FC<PodListItemProps> = ({
+  pod,
+  activeSpaceId,
+  deleteMutation,
+  onDeletePod,
+  onSelectPod
+}) => {
+  let icon = (
+    <FileText className="mr-2 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+  );
   let displayType = pod.pod_type; // e.g., "main" or "signed"
 
   if (pod.data.pod_data_variant === "Main") {
-    icon = <FileCheck2 className="mr-2 h-4 w-4 flex-shrink-0 text-sky-500 dark:text-sky-400" />;
-    displayType = `${pod.data.pod_data_payload.podType || 'N/A'}`;
+    icon = (
+      <FileCheck2 className="mr-2 h-4 w-4 flex-shrink-0 text-sky-500 dark:text-sky-400" />
+    );
+    displayType = `${pod.data.pod_data_payload.podType || "N/A"}`;
   } else if (pod.data.pod_data_variant === "Signed") {
-    icon = <FilePenLine className="mr-2 h-4 w-4 flex-shrink-0 text-teal-500 dark:text-teal-400" />;
-    displayType = `${pod.data.pod_data_payload.podType || 'N/A'}`;
+    icon = (
+      <FilePenLine className="mr-2 h-4 w-4 flex-shrink-0 text-teal-500 dark:text-teal-400" />
+    );
+    displayType = `${pod.data.pod_data_payload.podType || "N/A"}`;
   }
 
   return (
     <li
       key={pod.id}
       className="flex items-center justify-between px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md group cursor-pointer"
-      title={`ID: ${pod.id}\nLabel: ${pod.label || 'None'}\nCreated: ${new Date(pod.created_at).toLocaleString()}`}
+      title={`ID: ${pod.id}\nLabel: ${pod.label || "None"}\nCreated: ${new Date(pod.created_at).toLocaleString()}`}
       onClick={() => onSelectPod(pod)} // Call onSelectPod when the item is clicked
     >
       <div className="flex items-center truncate flex-grow">
         {icon}
-        <span className="truncate font-medium max-w-[16ch]">{pod.label || pod.id}</span>
+        <span className="truncate font-medium max-w-[16ch]">
+          {pod.label || pod.id}
+        </span>
         <span className="ml-1.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
           ({displayType})
         </span>
@@ -77,9 +106,13 @@ const PodListItem: React.FC<PodListItemProps> = ({ pod, activeSpaceId, deleteMut
             size="icon"
             className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0 ml-1 pointer-events-auto"
             title={`Delete POD ${pod.label || pod.id}`}
-            disabled={deleteMutation.isPending && deleteMutation.variables?.podId === pod.id}
+            disabled={
+              deleteMutation.isPending &&
+              deleteMutation.variables?.podId === pod.id
+            }
           >
-            {deleteMutation.isPending && deleteMutation.variables?.podId === pod.id ? (
+            {deleteMutation.isPending &&
+            deleteMutation.variables?.podId === pod.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Trash2 className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
@@ -90,8 +123,10 @@ const PodListItem: React.FC<PodListItemProps> = ({ pod, activeSpaceId, deleteMut
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              POD "<strong>{truncateText(pod.label || pod.id)}</strong>" (ID: {truncateText(pod.id)}) from space "<strong>{activeSpaceId}</strong>".
+              This action cannot be undone. This will permanently delete the POD
+              "<strong>{truncateText(pod.label || pod.id)}</strong>" (ID:{" "}
+              {truncateText(pod.id)}) from space "
+              <strong>{activeSpaceId}</strong>".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -112,19 +147,28 @@ const PodListItem: React.FC<PodListItemProps> = ({ pod, activeSpaceId, deleteMut
 function PodList() {
   const activeSpaceId = useAppStore((state) => state.activeSpaceId);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false); // State for dialog
-  const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] = useState(false); // State for new dialog
-  const setActiveMainAreaTab = useAppStore((state) => state.setActiveMainAreaTab); // Get action
-  const setSelectedPodForViewing = useAppStore((state) => state.setSelectedPodForViewing); // Get action
+  const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
+    useState(false); // State for new dialog
+  const setActiveMainAreaTab = useAppStore(
+    (state) => state.setActiveMainAreaTab
+  ); // Get action
+  const setSelectedPodForViewing = useAppStore(
+    (state) => state.setSelectedPodForViewing
+  ); // Get action
   const {
     data: pods = [],
     isLoading,
     isError,
     error,
-    refetch,
+    refetch
   } = usePodsInSpace(activeSpaceId);
   const queryClient = useQueryClient();
 
-  const deleteMutation = useMutation<void, Error, { spaceId: string; podId: string }>({
+  const deleteMutation = useMutation<
+    void,
+    Error,
+    { spaceId: string; podId: string }
+  >({
     mutationFn: ({ spaceId, podId }: { spaceId: string; podId: string }) =>
       deletePodFromSpace(spaceId, podId),
     onSuccess: (_, variables) => {
@@ -132,14 +176,14 @@ function PodList() {
         `POD "${variables.podId}" deleted successfully from space "${variables.spaceId}".`
       );
       queryClient.invalidateQueries({
-        queryKey: podKeys.inSpace(variables.spaceId),
+        queryKey: podKeys.inSpace(variables.spaceId)
       });
     },
     onError: (err, variables) => {
       toast.error(
         `Failed to delete POD "${variables.podId}": ${getErrorMessage(err)}`
       );
-    },
+    }
   });
 
   const handleDeletePod = (podId: string) => {
@@ -181,11 +225,7 @@ function PodList() {
           <AlertTriangle className="mr-2 h-5 w-5 flex-shrink-0" />
           Error loading PODs: {getErrorMessage(error)}
         </div>
-        <Button
-          onClick={() => refetch()}
-          variant="outline"
-          size="sm"
-        >
+        <Button onClick={() => refetch()} variant="outline" size="sm">
           Retry
         </Button>
       </div>
@@ -206,7 +246,9 @@ function PodList() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsCreateSignedPodDialogOpen(true)}>
+              <DropdownMenuItem
+                onClick={() => setIsCreateSignedPodDialogOpen(true)}
+              >
                 <FilePenLine className="h-4 w-4" /> Sign POD
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsImportDialogOpen(true)}>
@@ -249,4 +291,4 @@ function PodList() {
   );
 }
 
-export default PodList; 
+export default PodList;

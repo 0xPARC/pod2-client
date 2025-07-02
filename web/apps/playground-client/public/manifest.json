@@ -1,9 +1,7 @@
 {
   "short_name": "TanStack App",
   "name": "Create TanStack App Sample",
-  "icons": [
-
-  ],
+  "icons": [],
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#000000",

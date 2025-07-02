@@ -45,11 +45,12 @@ const ControlsPane: React.FC = () => {
   const setLoadingExecution = useAppStore((state) => state.setLoadingExecution);
   const setExecutionResult = useAppStore((state) => state.setExecutionResult);
   const setExecutionError = useAppStore((state) => state.setExecutionError);
-  const setIsResultsPaneOpen = useAppStore((state) => state.setIsResultsPaneOpen);
+  const setIsResultsPaneOpen = useAppStore(
+    (state) => state.setIsResultsPaneOpen
+  );
   const activeSpaceId = useAppStore((state) => state.activeSpaceId);
   const mock = useAppStore((state) => state.mock);
   const setMock = useAppStore((state) => state.setMock);
-
 
   const handleExecute = async () => {
     if (hasErrors) {
@@ -93,17 +94,24 @@ const ControlsPane: React.FC = () => {
           onClick={handleExecute}
           disabled={hasErrors || isLoadingExecution}
           className={`text-sm px-4 py-2 rounded font-semibold flex items-center justify-center
-                    ${hasErrors || isLoadingExecution
-              ? "bg-gray-400 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-600 text-white"
-            }
+                    ${
+                      hasErrors || isLoadingExecution
+                        ? "bg-gray-400 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }
                   `}
         >
           {isLoadingExecution ? "Executing..." : "Execute"}
         </button>
 
         <div className="flex items-center space-x-2 text-sm">
-          <input type="checkbox" id="mock" onChange={() => setMock(!mock)} checked={mock} disabled={isLoadingExecution} />
+          <input
+            type="checkbox"
+            id="mock"
+            onChange={() => setMock(!mock)}
+            checked={mock}
+            disabled={isLoadingExecution}
+          />
           <label htmlFor="mock">Mock</label>
         </div>
 
@@ -130,7 +138,7 @@ const ControlsPane: React.FC = () => {
             </div>
           ))}
       </div>
-    </div >
+    </div>
   );
 };
 

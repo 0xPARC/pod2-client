@@ -79,7 +79,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEditorDiagnostics: (diagnostics) =>
     set({
       editorDiagnostics: diagnostics,
-      hasErrors: diagnostics.length > 0,
+      hasErrors: diagnostics.length > 0
     }),
   setIsBackendConnected: (isConnected) =>
     set({ isBackendConnected: isConnected }),
@@ -126,7 +126,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         fileContent: fileContentToSet,
         activeSpaceId: storedActiveSpaceId,
-        isStoreInitialized: true,
+        isStoreInitialized: true
       });
       if (storedActiveSpaceId !== null) {
         console.log("Active space ID loaded from localForage.");
@@ -138,7 +138,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         fileContent: "// Error loading file content from localForage.\n",
         activeSpaceId: null, // Fallback for activeSpaceId on error
-        isStoreInitialized: true,
+        isStoreInitialized: true
       }); // Fallback content
     }
   },
@@ -147,7 +147,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeMainAreaTab: "editor", // Default to editor tab
   selectedPodForViewing: null,
   setActiveMainAreaTab: (tab) => set({ activeMainAreaTab: tab }),
-  setSelectedPodForViewing: (pod) => set({ selectedPodForViewing: pod }),
+  setSelectedPodForViewing: (pod) => set({ selectedPodForViewing: pod })
 }));
 
 // Initialize by loading from localForage when the app starts

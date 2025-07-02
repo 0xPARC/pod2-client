@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "../lib/store";
 import { useSpaces } from "../hooks/useSpaceData";
-import { importPodDataToSpace, type ImportPodClientPayload } from "../lib/backendServiceClient";
+import {
+  importPodDataToSpace,
+  type ImportPodClientPayload
+} from "../lib/backendServiceClient";
 import type { MainPod, SpaceInfo } from "@pod2/pod2js";
 import { useQueryClient } from "@tanstack/react-query";
 import { podKeys } from "../hooks/useSpaceData";
@@ -13,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -22,9 +25,9 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "./ui/select";
-import { toast } from "sonner"; // Corrected import for sonner
+import { toast } from "sonner";
 import { Loader2, AlertCircle } from "lucide-react";
 
 interface AddToSpaceDialogProps {
@@ -38,7 +41,7 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
   isOpen,
   onOpenChange,
   mainPodToSave,
-  defaultSpaceId,
+  defaultSpaceId
 }) => {
   const { data: spaces, isLoading: isLoadingSpaces } = useSpaces();
   const activeStoreSpaceId = useAppStore((state) => state.activeSpaceId);
@@ -84,23 +87,26 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
     const payload: ImportPodClientPayload = {
       podType: "main",
       data: mainPodToSave,
-      label: podLabel.trim() === "" ? undefined : podLabel.trim(),
+      label: podLabel.trim() === "" ? undefined : podLabel.trim()
     };
 
     try {
       const newPodInfo = await importPodDataToSpace(targetSpaceId, payload);
       toast("POD Saved Successfully", {
-        description: `POD "${newPodInfo.label || newPodInfo.id}" added to space "${targetSpaceId}".`,
+        description: `POD "${newPodInfo.label || newPodInfo.id}" added to space "${targetSpaceId}".`
       });
-      queryClient.invalidateQueries({ queryKey: podKeys.inSpace(targetSpaceId) });
+      queryClient.invalidateQueries({
+        queryKey: podKeys.inSpace(targetSpaceId)
+      });
       // Optionally, if the target space is not the active one, offer to switch or switch automatically
       // if (targetSpaceId !== activeStoreSpaceId) setActiveSpaceId(targetSpaceId);
       onOpenChange(false); // Close dialog
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+      const errorMessage =
+        error instanceof Error ? error.message : "An unknown error occurred.";
       setSaveError(errorMessage);
       toast.error("Failed to Save POD", {
-        description: errorMessage,
+        description: errorMessage
       });
     } finally {
       setIsSaving(false);
@@ -115,7 +121,8 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Add MainPod to Space</DialogTitle>
           <DialogDescription>
-            Select a space and optionally provide a label for this POD. The Pod Class will be derived automatically.
+            Select a space and optionally provide a label for this POD. The Pod
+            Class will be derived automatically.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -125,7 +132,8 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
             </Label>
             {isLoadingSpaces ? (
               <div className="col-span-3 flex items-center">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading spaces...
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading
+                spaces...
               </div>
             ) : spaces && spaces.length > 0 ? (
               <Select
@@ -171,11 +179,26 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSaving}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving || isLoadingSpaces || !targetSpaceId || !spaces || spaces.length === 0}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button
+            onClick={handleSave}
+            disabled={
+              isSaving ||
+              isLoadingSpaces ||
+              !targetSpaceId ||
+              !spaces ||
+              spaces.length === 0
+            }
+          >
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
             Add POD
           </Button>
         </DialogFooter>
@@ -184,4 +207,4 @@ const AddToSpaceDialog: React.FC<AddToSpaceDialogProps> = ({
   );
 };
 
-export default AddToSpaceDialog; 
+export default AddToSpaceDialog;

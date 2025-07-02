@@ -1,14 +1,18 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import Editor, { type OnChange, type Monaco, loader } from "@monaco-editor/react";
+import Editor, {
+  type OnChange,
+  type Monaco,
+  loader
+} from "@monaco-editor/react";
 import * as monacoApi from "monaco-editor/esm/vs/editor/editor.api";
 import { useAppStore } from "../lib/store";
 import {
   validateCode,
   DiagnosticSeverity,
-  type Diagnostic as ApiDiagnostic,
+  type Diagnostic as ApiDiagnostic
 } from "../lib/backendServiceClient";
 import { podlogMonarchLanguage } from "../lib/podlogMonarchLanguage";
-import * as monaco from 'monaco-editor';
+import * as monaco from "monaco-editor";
 import { useTheme } from "./theme-provider";
 import ControlsPane from "./ControlsPane";
 
@@ -40,7 +44,7 @@ const toMonacoMarker = (diag: ApiDiagnostic): monacoApi.editor.IMarkerData => {
     startLineNumber: diag.start_line,
     startColumn: diag.start_column,
     endLineNumber: diag.end_line,
-    endColumn: diag.end_column,
+    endColumn: diag.end_column
   };
 };
 
@@ -153,7 +157,14 @@ const EditorPane: React.FC = () => {
           height="100%"
           width="100%"
           language="podlog"
-          theme={theme === "dark" ? "vs-dark" : theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs-light"}
+          theme={
+            theme === "dark"
+              ? "vs-dark"
+              : theme === "system" &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "vs-dark"
+                : "vs-light"
+          }
           value={fileContent}
           onChange={handleEditorChange}
           onMount={handleEditorDidMount}
@@ -162,7 +173,7 @@ const EditorPane: React.FC = () => {
             fontSize: 14,
             wordWrap: "on",
             scrollBeyondLastLine: false,
-            automaticLayout: true,
+            automaticLayout: true
           }}
         />
       </div>

@@ -7,11 +7,13 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "watch": "turbo watch dev",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "^3.5.3",
+    "@prettier/plugin-oxc": "^0.0.4",
+    "prettier": "^3.6",
     "turbo": "^2.5.0",
     "typescript": "5.8.2"
   },

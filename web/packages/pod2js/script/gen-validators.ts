@@ -11,8 +11,8 @@ function compileSchemas(schemas: any) {
     code: {
       esm: true,
       source: true,
-      optimize: true,
-    },
+      optimize: true
+    }
   });
   return (standaloneCode as any)(ajv, {
     AnchoredKey: "#/definitions/AnchoredKey",
@@ -40,7 +40,7 @@ function compileSchemas(schemas: any) {
     VDSet: "#/definitions/VDSet",
     Value: "#/definitions/Value",
     ValueRef: "#/definitions/ValueRef",
-    Wildcard: "#/definitions/Wildcard",
+    Wildcard: "#/definitions/Wildcard"
   });
 }
 

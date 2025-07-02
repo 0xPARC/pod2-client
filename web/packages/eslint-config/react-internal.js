@@ -21,19 +21,19 @@ export const config = [
       ...pluginReact.configs.flat.recommended.languageOptions,
       globals: {
         ...globals.serviceworker,
-        ...globals.browser,
-      },
-    },
+        ...globals.browser
+      }
+    }
   },
   {
     plugins: {
-      "react-hooks": pluginReactHooks,
+      "react-hooks": pluginReactHooks
     },
     settings: { react: { version: "detect" } },
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
       // React scope no longer necessary with new JSX transform.
-      "react/react-in-jsx-scope": "off",
-    },
-  },
+      "react/react-in-jsx-scope": "off"
+    }
+  }
 ];

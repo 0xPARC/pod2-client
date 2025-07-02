@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { importPodDataToSpace, type ImportPodClientPayload } from "@/lib/backendServiceClient";
+import {
+  importPodDataToSpace,
+  type ImportPodClientPayload
+} from "@/lib/backendServiceClient";
 import { podKeys } from "@/hooks/useSpaceData";
 import type { MainPod, SignedPod } from "@pod2/pod2js";
 import { Button } from "@/components/ui/button";
@@ -11,7 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogClose
 } from "@/components/ui/dialog";
 import { Textarea } from "./ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -26,10 +29,16 @@ interface ImportPodDialogProps {
   activeSpaceId: string | null;
 }
 
-const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange, activeSpaceId }) => {
+const ImportPodDialog: React.FC<ImportPodDialogProps> = ({
+  isOpen,
+  onOpenChange,
+  activeSpaceId
+}) => {
   const [jsonInput, setJsonInput] = useState("");
   const [label, setLabel] = useState("");
-  const [parsedPod, setParsedPod] = useState<MainPod | Omit<SignedPod, 'id' | 'verify'> | null>(null);
+  const [parsedPod, setParsedPod] = useState<
+    MainPod | Omit<SignedPod, "id" | "verify"> | null
+  >(null);
   const [podType, setPodType] = useState<"main" | "signed" | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isJsonValid, setIsJsonValid] = useState<boolean | null>(null);
@@ -47,10 +56,14 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
     try {
       const parsed = JSON.parse(jsonInput);
       const mainPodValid = validateMainPod(parsed);
-      const mainPodErrors = mainPodValid.success ? null : JSON.stringify(mainPodValid.errors, null, 2);
+      const mainPodErrors = mainPodValid.success
+        ? null
+        : JSON.stringify(mainPodValid.errors, null, 2);
 
       const signedPodValid = validateSignedPod(parsed);
-      const signedPodErrors = signedPodValid.success ? null : JSON.stringify(signedPodValid.errors, null, 2);
+      const signedPodErrors = signedPodValid.success
+        ? null
+        : JSON.stringify(signedPodValid.errors, null, 2);
 
       if (mainPodValid) {
         setParsedPod(parsed as MainPod);
@@ -58,14 +71,16 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
         setValidationError(null);
         setIsJsonValid(true);
       } else if (signedPodValid) {
-        setParsedPod(parsed as Omit<SignedPod, 'id' | 'verify'>);
+        setParsedPod(parsed as Omit<SignedPod, "id" | "verify">);
         setPodType("signed");
         setValidationError(null);
         setIsJsonValid(true);
       } else {
         setParsedPod(null);
         setPodType(null);
-        setValidationError(`Not a valid MainPod or SignedPod.\nMainPod errors: ${mainPodErrors}\nSignedPod errors: ${signedPodErrors}`);
+        setValidationError(
+          `Not a valid MainPod or SignedPod.\nMainPod errors: ${mainPodErrors}\nSignedPod errors: ${signedPodErrors}`
+        );
         setIsJsonValid(false);
       }
     } catch (e) {
@@ -82,15 +97,21 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
       return importPodDataToSpace(activeSpaceId, payload);
     },
     onSuccess: (data) => {
-      toast.success(`POD "${data.label || data.id}" imported successfully into space "${activeSpaceId}".`);
-      queryClient.invalidateQueries({ queryKey: podKeys.inSpace(activeSpaceId) });
+      toast.success(
+        `POD "${data.label || data.id}" imported successfully into space "${activeSpaceId}".`
+      );
+      queryClient.invalidateQueries({
+        queryKey: podKeys.inSpace(activeSpaceId)
+      });
       onOpenChange(false);
       setJsonInput("");
       setLabel("");
     },
     onError: (err) => {
-      toast.error(`Failed to import POD: ${err instanceof Error ? err.message : String(err)}`);
-    },
+      toast.error(
+        `Failed to import POD: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   });
 
   const handleSubmit = () => {
@@ -102,7 +123,7 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
     importMutation.mutate({
       podType: podType,
       data: parsedPod,
-      label: label.trim() || undefined,
+      label: label.trim() || undefined
     });
   };
 
@@ -123,7 +144,8 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
         <DialogHeader>
           <DialogTitle>Import POD to {activeSpaceId || "Space"}</DialogTitle>
           <DialogDescription>
-            Paste the JSON representation of a MainPod or SignedPod. Pod Class will be derived. Label is optional.
+            Paste the JSON representation of a MainPod or SignedPod. Pod Class
+            will be derived. Label is optional.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -133,18 +155,24 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
               id="pod-json"
               placeholder='{"podClass": "MyPodClass", "podType": "ExampleType", "publicStatements": [], "proof": "0x..."}'
               value={jsonInput}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setJsonInput(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setJsonInput(e.target.value)
+              }
               rows={8}
               className="min-h-[150px] max-h-[300px] font-mono text-xs overflow-scroll"
             />
             {isJsonValid === true && (
               <div className="flex items-center text-xs text-green-600 dark:text-green-500 mt-1">
-                <CheckCircle2 className="h-4 w-4 mr-1" /> Valid {podType} JSON detected.
+                <CheckCircle2 className="h-4 w-4 mr-1" /> Valid {podType} JSON
+                detected.
               </div>
             )}
             {isJsonValid === false && validationError && (
               <div className="flex items-center text-xs text-red-600 dark:text-red-500 mt-1">
-                <AlertCircle className="h-4 w-4 mr-1 flex-shrink-0" /> {validationError.split('\n').map((line, i) => <div key={i}>{line}</div>)}
+                <AlertCircle className="h-4 w-4 mr-1 flex-shrink-0" />{" "}
+                {validationError.split("\n").map((line, i) => (
+                  <div key={i}>{line}</div>
+                ))}
               </div>
             )}
           </div>
@@ -154,7 +182,9 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
               <Input
                 id="pod-label"
                 value={label}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLabel(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setLabel(e.target.value)
+                }
                 placeholder="e.g., Alice's Valid ID"
               />
             </div>
@@ -164,7 +194,10 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={!isJsonValid || importMutation.isPending}>
+          <Button
+            onClick={handleSubmit}
+            disabled={!isJsonValid || importMutation.isPending}
+          >
             {importMutation.isPending ? "Importing..." : "Import POD"}
           </Button>
         </DialogFooter>
@@ -173,4 +206,4 @@ const ImportPodDialog: React.FC<ImportPodDialogProps> = ({ isOpen, onOpenChange,
   );
 };
 
-export default ImportPodDialog; 
+export default ImportPodDialog;

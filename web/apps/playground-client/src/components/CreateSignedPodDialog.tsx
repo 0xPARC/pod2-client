@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogClose
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -18,14 +18,21 @@ import {
   signPod,
   type SignPodRequest,
   importPodDataToSpace,
-  type ImportPodClientPayload,
+  type ImportPodClientPayload
 } from "../lib/backendServiceClient";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { podKeys } from "../hooks/useSpaceData";
 
 // Define the structure for an entry in the UI
-type ValueTypeName = "string" | "boolean" | "Int" | "Raw" | "Array" | "Set" | "Dictionary";
+type ValueTypeName =
+  | "string"
+  | "boolean"
+  | "Int"
+  | "Raw"
+  | "Array"
+  | "Set"
+  | "Dictionary";
 
 // Add a type for items within an array or set
 interface PodCollectionItem {
@@ -62,7 +69,7 @@ interface CreateSignedPodDialogProps {
 const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
   isOpen,
   onOpenChange,
-  activeSpaceId,
+  activeSpaceId
 }) => {
   const [entries, setEntries] = useState<PodEntry[]>([]);
   const [isFormValid, setIsFormValid] = useState(false);
@@ -75,64 +82,75 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
   // New helper function in CreateSignedPodDialog
   const convertUiValueToPodValue = (value: any, type: ValueTypeName): Value => {
     switch (type) {
-      case 'string':
+      case "string":
         return value as string;
-      case 'boolean':
-        if (typeof value === 'boolean') {
+      case "boolean":
+        if (typeof value === "boolean") {
           return value;
         }
         // Attempt to parse common string representations, default to false
         const val = String(value).toLowerCase();
-        return val === 'true' || val === '1';
-      case 'Int':
+        return val === "true" || val === "1";
+      case "Int":
         const num = Number(value);
         if (!Number.isInteger(num)) {
           throw new Error(`Invalid integer value: ${value}`);
         }
         return { Int: String(value) };
-      case 'Raw':
+      case "Raw":
         // Basic hex validation (optional, backend might do more)
         if (/^[0-9a-fA-F]*$/.test(value)) {
           return { Raw: String(value) };
         } else {
           throw new Error(`Invalid hex string for Raw value: ${value}`);
         }
-      case 'Array':
+      case "Array":
         if (!Array.isArray(value)) {
           throw new Error(`Value for Array is not a list`);
         }
-        return { array: value.map((item: PodCollectionItem) => convertUiValueToPodValue(item.value, item.type)), max_depth: 32 };
+        return {
+          array: value.map((item: PodCollectionItem) =>
+            convertUiValueToPodValue(item.value, item.type)
+          ),
+          max_depth: 32
+        };
 
-      case 'Set':
+      case "Set":
         if (!Array.isArray(value)) {
           throw new Error(`Value for Set is not a list`);
         }
-        const setValues = value.map((item: PodCollectionItem) => convertUiValueToPodValue(item.value, item.type));
+        const setValues = value.map((item: PodCollectionItem) =>
+          convertUiValueToPodValue(item.value, item.type)
+        );
 
         // Client-side uniqueness check for primitives.
         // Note: This is a shallow check and won't work for nested objects.
         // A more robust solution would involve deep equality checks or serialization.
         const seen = new Set();
         for (const v of setValues) {
-          const key = typeof v === 'object' ? JSON.stringify(v) : v;
+          const key = typeof v === "object" ? JSON.stringify(v) : v;
           if (seen.has(key)) {
-            throw new Error(`Duplicate value found in Set: '${JSON.stringify(v)}'. Sets must contain unique values.`);
+            throw new Error(
+              `Duplicate value found in Set: '${JSON.stringify(v)}'. Sets must contain unique values.`
+            );
           }
           seen.add(key);
         }
 
         return { set: setValues, max_depth: 32 };
 
-      case 'Dictionary':
+      case "Dictionary":
         if (!Array.isArray(value)) {
-          throw new Error(`Value for Dictionary is not a list of key-value pairs`);
+          throw new Error(
+            `Value for Dictionary is not a list of key-value pairs`
+          );
         }
         const dict: Dictionary = { kvs: {}, max_depth: 32 };
         const keys = new Set<string>();
         for (const item of value as PodDictionaryItem[]) {
           const key = item.key.trim();
           if (!key) {
-            throw new Error('Dictionary key cannot be empty.');
+            throw new Error("Dictionary key cannot be empty.");
           }
           if (keys.has(key)) {
             throw new Error(`Duplicate key in Dictionary: '${key}'`);
@@ -156,8 +174,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
         keyName: "",
         valueType: "string",
         value: "",
-        keyInteracted: false,
-      },
+        keyInteracted: false
+      }
     ]);
   };
 
@@ -182,7 +200,10 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
       for (const entry of entries) {
         if (!entry.keyName.trim()) {
           allEntriesValid = false;
-          if (entry.keyInteracted && entry.keyError !== "Key cannot be empty.") {
+          if (
+            entry.keyInteracted &&
+            entry.keyError !== "Key cannot be empty."
+          ) {
             updateEntry(entry.id, { keyError: "Key cannot be empty." });
           }
         } else if (keys.has(entry.keyName.trim())) {
@@ -227,14 +248,19 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     const signedPodEntries: { [key: string]: Value } = {};
     let conversionError = false;
 
-    entries.forEach(entry => {
+    entries.forEach((entry) => {
       if (conversionError) return;
       if (entry.keyName.trim()) {
         try {
-          const podValue = convertUiValueToPodValue(entry.value, entry.valueType);
+          const podValue = convertUiValueToPodValue(
+            entry.value,
+            entry.valueType
+          );
           signedPodEntries[entry.keyName.trim()] = podValue;
         } catch (e) {
-          toast.error(`Error processing entry '${entry.keyName}': ${(e as Error).message}`);
+          toast.error(
+            `Error processing entry '${entry.keyName}': ${(e as Error).message}`
+          );
           conversionError = true;
           return;
         }
@@ -247,7 +273,9 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     }
 
     if (Object.keys(signedPodEntries).length === 0 && entries.length > 0) {
-      toast.error("No valid entries to sign after processing. Check for errors or unsupported types.");
+      toast.error(
+        "No valid entries to sign after processing. Check for errors or unsupported types."
+      );
       return;
     }
     if (entries.length === 0) {
@@ -257,7 +285,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
 
     const requestPayload: SignPodRequest = {
       private_key: privateKey.trim(),
-      entries: signedPodEntries,
+      entries: signedPodEntries
     };
 
     try {
@@ -282,18 +310,26 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
           podType: "signed",
           data: signedPodData, // The actual SignedPod object from signPod response
           // You might want to add a default label or let user specify one later
-          // label: `Signed POD - ${new Date().toISOString()}` 
-          label: label.trim() ? label.trim() : undefined,
+          // label: `Signed POD - ${new Date().toISOString()}`
+          label: label.trim() ? label.trim() : undefined
         };
-        const importedPodInfo = await importPodDataToSpace(activeSpaceId, importPayload);
-        toast.success(`POD ${importedPodInfo.id.slice(0, 12)}... imported successfully into space ${activeSpaceId}!`);
+        const importedPodInfo = await importPodDataToSpace(
+          activeSpaceId,
+          importPayload
+        );
+        toast.success(
+          `POD ${importedPodInfo.id.slice(0, 12)}... imported successfully into space ${activeSpaceId}!`
+        );
 
         // Invalidate queries to refresh PodList
-        queryClient.invalidateQueries({ queryKey: podKeys.inSpace(activeSpaceId) });
-
+        queryClient.invalidateQueries({
+          queryKey: podKeys.inSpace(activeSpaceId)
+        });
       } catch (importError) {
         console.error("Failed to import signed POD:", importError);
-        toast.error(`Failed to import signed POD: ${(importError as Error).message}`);
+        toast.error(
+          `Failed to import signed POD: ${(importError as Error).message}`
+        );
         // Continue to close and reset, as signing itself was successful
       }
 
@@ -312,64 +348,109 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
 
   const renderCollectionInput = (
     value: any,
-    collectionType: 'Array' | 'Set',
+    collectionType: "Array" | "Set",
     onChange: (newValue: any) => void,
     nestingLevel: number
   ) => {
     const items: PodCollectionItem[] = Array.isArray(value) ? value : [];
 
     const handleAddItem = () => {
-      const newItem: PodCollectionItem = { id: crypto.randomUUID(), type: 'string', value: '' };
+      const newItem: PodCollectionItem = {
+        id: crypto.randomUUID(),
+        type: "string",
+        value: ""
+      };
       onChange([...items, newItem]);
     };
 
     const handleRemoveItem = (itemId: string) => {
-      onChange(items.filter(item => item.id !== itemId));
+      onChange(items.filter((item) => item.id !== itemId));
     };
 
-    const handleUpdateItem = (itemId: string, updatedFields: Partial<PodCollectionItem>) => {
-      const newItems = items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item);
+    const handleUpdateItem = (
+      itemId: string,
+      updatedFields: Partial<PodCollectionItem>
+    ) => {
+      const newItems = items.map((item) =>
+        item.id === itemId ? { ...item, ...updatedFields } : item
+      );
       onChange(newItems);
     };
 
     const handleUpdateItemType = (itemId: string, newType: ValueTypeName) => {
-      let newValue: any = '';
-      if (newType === 'boolean') newValue = false;
-      if (newType === 'Array' || newType === 'Set' || newType === 'Dictionary') newValue = [];
+      let newValue: any = "";
+      if (newType === "boolean") newValue = false;
+      if (newType === "Array" || newType === "Set" || newType === "Dictionary")
+        newValue = [];
       handleUpdateItem(itemId, { type: newType, value: newValue });
     };
-
 
     return (
       <div className="space-y-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-800/50 ml-4">
         {items.map((item) => (
-          <div key={item.id} className="flex items-start space-x-2 p-2 border rounded-md bg-background shadow-sm">
+          <div
+            key={item.id}
+            className="flex items-start space-x-2 p-2 border rounded-md bg-background shadow-sm"
+          >
             <div className="flex-grow space-y-2">
               <div className="flex items-end space-x-2">
                 <div className="flex-grow w-1/3">
-                  <Label htmlFor={`item-type-${item.id}`} className="text-xs font-semibold">Item Type</Label>
+                  <Label
+                    htmlFor={`item-type-${item.id}`}
+                    className="text-xs font-semibold"
+                  >
+                    Item Type
+                  </Label>
                   <select
                     id={`item-type-${item.id}`}
                     value={item.type}
-                    onChange={e => handleUpdateItemType(item.id, e.target.value as ValueTypeName)}
+                    onChange={(e) =>
+                      handleUpdateItemType(
+                        item.id,
+                        e.target.value as ValueTypeName
+                      )
+                    }
                     className="w-full p-2 border rounded-md bg-background h-10 text-sm"
                   >
                     <option value="string">String</option>
                     <option value="boolean">Boolean</option>
                     <option value="Int">Integer</option>
                     <option value="Raw">Raw (Hex)</option>
-                    <option value="Array" disabled={nestingLevel >= 1}>Array</option>
-                    <option value="Set" disabled={nestingLevel >= 1}>Set</option>
-                    <option value="Dictionary" disabled={nestingLevel >= 1}>Dictionary</option>
+                    <option value="Array" disabled={nestingLevel >= 1}>
+                      Array
+                    </option>
+                    <option value="Set" disabled={nestingLevel >= 1}>
+                      Set
+                    </option>
+                    <option value="Dictionary" disabled={nestingLevel >= 1}>
+                      Dictionary
+                    </option>
                   </select>
                 </div>
                 <div className="flex-grow w-2/3">
-                  <Label htmlFor={`item-value-${item.id}`} className="text-xs font-semibold">Item Value</Label>
-                  {renderValueInput(item.value, item.type, (newValue) => handleUpdateItem(item.id, { value: newValue }), nestingLevel + 1)}
+                  <Label
+                    htmlFor={`item-value-${item.id}`}
+                    className="text-xs font-semibold"
+                  >
+                    Item Value
+                  </Label>
+                  {renderValueInput(
+                    item.value,
+                    item.type,
+                    (newValue) =>
+                      handleUpdateItem(item.id, { value: newValue }),
+                    nestingLevel + 1
+                  )}
                 </div>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)} className="mt-5 text-gray-500 hover:text-red-600 flex-shrink-0" title="Remove Item">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleRemoveItem(item.id)}
+              className="mt-5 text-gray-500 hover:text-red-600 flex-shrink-0"
+              title="Remove Item"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -389,63 +470,122 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     const items: PodDictionaryItem[] = Array.isArray(value) ? value : [];
 
     const handleAddItem = () => {
-      const newItem: PodDictionaryItem = { id: crypto.randomUUID(), key: '', type: 'string', value: '' };
+      const newItem: PodDictionaryItem = {
+        id: crypto.randomUUID(),
+        key: "",
+        type: "string",
+        value: ""
+      };
       onChange([...items, newItem]);
     };
 
     const handleRemoveItem = (itemId: string) => {
-      onChange(items.filter(item => item.id !== itemId));
+      onChange(items.filter((item) => item.id !== itemId));
     };
 
-    const handleUpdateItem = (itemId: string, updatedFields: Partial<PodDictionaryItem>) => {
-      const newItems = items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item);
+    const handleUpdateItem = (
+      itemId: string,
+      updatedFields: Partial<PodDictionaryItem>
+    ) => {
+      const newItems = items.map((item) =>
+        item.id === itemId ? { ...item, ...updatedFields } : item
+      );
       onChange(newItems);
     };
 
     const handleUpdateItemType = (itemId: string, newType: ValueTypeName) => {
-      let newValue: any = '';
-      if (newType === 'boolean') newValue = false;
-      if (newType === 'Array' || newType === 'Set' || newType === 'Dictionary') newValue = [];
+      let newValue: any = "";
+      if (newType === "boolean") newValue = false;
+      if (newType === "Array" || newType === "Set" || newType === "Dictionary")
+        newValue = [];
       handleUpdateItem(itemId, { type: newType, value: newValue });
     };
 
     return (
       <div className="space-y-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-800/50 ml-4">
         {items.map((item) => (
-          <div key={item.id} className="flex items-start space-x-2 p-2 border rounded-md bg-background shadow-sm">
+          <div
+            key={item.id}
+            className="flex items-start space-x-2 p-2 border rounded-md bg-background shadow-sm"
+          >
             <div className="flex-grow space-y-2">
               <div className="flex items-end space-x-2">
                 {/* Key Input */}
                 <div className="flex-grow w-1/4">
-                  <Label htmlFor={`dict-key-${item.id}`} className="text-xs font-semibold">Key</Label>
-                  <Input id={`dict-key-${item.id}`} value={item.key} onChange={e => handleUpdateItem(item.id, { key: e.target.value })} placeholder="Enter key" />
+                  <Label
+                    htmlFor={`dict-key-${item.id}`}
+                    className="text-xs font-semibold"
+                  >
+                    Key
+                  </Label>
+                  <Input
+                    id={`dict-key-${item.id}`}
+                    value={item.key}
+                    onChange={(e) =>
+                      handleUpdateItem(item.id, { key: e.target.value })
+                    }
+                    placeholder="Enter key"
+                  />
                 </div>
                 {/* Type Selector */}
                 <div className="flex-grow w-1/4">
-                  <Label htmlFor={`dict-type-${item.id}`} className="text-xs font-semibold">Type</Label>
+                  <Label
+                    htmlFor={`dict-type-${item.id}`}
+                    className="text-xs font-semibold"
+                  >
+                    Type
+                  </Label>
                   <select
                     id={`dict-type-${item.id}`}
                     value={item.type}
-                    onChange={e => handleUpdateItemType(item.id, e.target.value as ValueTypeName)}
+                    onChange={(e) =>
+                      handleUpdateItemType(
+                        item.id,
+                        e.target.value as ValueTypeName
+                      )
+                    }
                     className="w-full p-2 border rounded-md bg-background h-10 text-sm"
                   >
                     <option value="string">String</option>
                     <option value="boolean">Boolean</option>
                     <option value="Int">Integer</option>
                     <option value="Raw">Raw (Hex)</option>
-                    <option value="Array" disabled={nestingLevel >= 1}>Array</option>
-                    <option value="Set" disabled={nestingLevel >= 1}>Set</option>
-                    <option value="Dictionary" disabled={nestingLevel >= 1}>Dictionary</option>
+                    <option value="Array" disabled={nestingLevel >= 1}>
+                      Array
+                    </option>
+                    <option value="Set" disabled={nestingLevel >= 1}>
+                      Set
+                    </option>
+                    <option value="Dictionary" disabled={nestingLevel >= 1}>
+                      Dictionary
+                    </option>
                   </select>
                 </div>
                 {/* Value Input */}
                 <div className="flex-grow w-2/4">
-                  <Label htmlFor={`dict-value-${item.id}`} className="text-xs font-semibold">Value</Label>
-                  {renderValueInput(item.value, item.type, (newValue) => handleUpdateItem(item.id, { value: newValue }), nestingLevel + 1)}
+                  <Label
+                    htmlFor={`dict-value-${item.id}`}
+                    className="text-xs font-semibold"
+                  >
+                    Value
+                  </Label>
+                  {renderValueInput(
+                    item.value,
+                    item.type,
+                    (newValue) =>
+                      handleUpdateItem(item.id, { value: newValue }),
+                    nestingLevel + 1
+                  )}
                 </div>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)} className="mt-5 text-gray-500 hover:text-red-600 flex-shrink-0" title="Remove Item">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleRemoveItem(item.id)}
+              className="mt-5 text-gray-500 hover:text-red-600 flex-shrink-0"
+              title="Remove Item"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -504,8 +644,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Create New Signed POD</DialogTitle>
           <DialogDescription>
-            Define the key-value entries for your new Signed POD in space: {activeSpaceId || "None"}.
-            Keys must be unique and non-empty.
+            Define the key-value entries for your new Signed POD in space:{" "}
+            {activeSpaceId || "None"}. Keys must be unique and non-empty.
           </DialogDescription>
         </DialogHeader>
 
@@ -530,7 +670,9 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                 placeholder="Enter your private key"
                 className={privateKeyError ? "border-red-500" : ""}
               />
-              {privateKeyError && <p className="text-xs text-red-500 mt-1">{privateKeyError}</p>}
+              {privateKeyError && (
+                <p className="text-xs text-red-500 mt-1">{privateKeyError}</p>
+              )}
             </div>
 
             {/* Label Input */}
@@ -546,7 +688,9 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
             </div>
           </div>
 
-          <ScrollArea className="flex-grow border rounded-md p-1 pr-3 max-h-[calc(100%-4rem-2rem)]"> {/* Adjust max-height for key input */}
+          <ScrollArea className="flex-grow border rounded-md p-1 pr-3 max-h-[calc(100%-4rem-2rem)]">
+            {" "}
+            {/* Adjust max-height for key input */}
             {entries.length === 0 ? (
               <p className="text-sm text-gray-500 text-center py-4">
                 No entries added yet. Click "Add Entry" to start.
@@ -554,7 +698,10 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
             ) : (
               <div className="space-y-4">
                 {entries.map((entry, _index) => (
-                  <div key={entry.id} className="p-3 border rounded-lg shadow-sm bg-background">
+                  <div
+                    key={entry.id}
+                    className="p-3 border rounded-lg shadow-sm bg-background"
+                  >
                     <div className="flex items-start space-x-3">
                       <div className="flex-grow space-y-2">
                         {/* Key and Type Row */}
@@ -565,12 +712,23 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                             <Input
                               id={`key-${entry.id}`}
                               value={entry.keyName}
-                              onChange={(e) => updateEntry(entry.id, { keyName: e.target.value, keyError: undefined })}
-                              onBlur={() => updateEntry(entry.id, { keyInteracted: true })} // Set interacted on blur
+                              onChange={(e) =>
+                                updateEntry(entry.id, {
+                                  keyName: e.target.value,
+                                  keyError: undefined
+                                })
+                              }
+                              onBlur={() =>
+                                updateEntry(entry.id, { keyInteracted: true })
+                              } // Set interacted on blur
                               placeholder="Enter key (e.g., 'user_id')"
                               className={entry.keyError ? "border-red-500" : ""}
                             />
-                            {entry.keyError && <p className="text-xs text-red-500 mt-1">{entry.keyError}</p>}
+                            {entry.keyError && (
+                              <p className="text-xs text-red-500 mt-1">
+                                {entry.keyError}
+                              </p>
+                            )}
                           </div>
 
                           {/* Value Type Selector */}
@@ -583,7 +741,14 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                                 updateEntry(entry.id, {
                                   valueType: e.target.value as ValueTypeName,
                                   // Reset value when type changes to avoid type mismatches
-                                  value: e.target.value === "boolean" ? false : (e.target.value === "Array" || e.target.value === "Set" || e.target.value === "Dictionary" ? [] : ""),
+                                  value:
+                                    e.target.value === "boolean"
+                                      ? false
+                                      : e.target.value === "Array" ||
+                                          e.target.value === "Set" ||
+                                          e.target.value === "Dictionary"
+                                        ? []
+                                        : ""
                                 })
                               }
                               className="w-full p-2 border rounded-md bg-background h-[calc(2.25rem+2px)]" // Match input height
@@ -591,7 +756,9 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                               <option value="string">String</option>
                               <option value="boolean">Boolean</option>
                               <option value="Int">Integer (Int64)</option>
-                              <option value="Raw">Raw Bytes (Hex String)</option>
+                              <option value="Raw">
+                                Raw Bytes (Hex String)
+                              </option>
                               <option value="Array">Array</option>
                               <option value="Set">Set</option>
                               <option value="Dictionary">Dictionary</option>
@@ -602,7 +769,13 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                         {/* Value Input */}
                         <div className="flex flex-col gap-2 pt-2">
                           <Label htmlFor={`value-${entry.id}`}>Value</Label>
-                          {renderValueInput(entry.value, entry.valueType, (newValue) => updateEntry(entry.id, { value: newValue }), 0)}
+                          {renderValueInput(
+                            entry.value,
+                            entry.valueType,
+                            (newValue) =>
+                              updateEntry(entry.id, { value: newValue }),
+                            0
+                          )}
                         </div>
                       </div>
                       <Button
@@ -635,4 +808,4 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
   );
 };
 
-export default CreateSignedPodDialog; 
+export default CreateSignedPodDialog;

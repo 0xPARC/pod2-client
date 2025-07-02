@@ -37,4 +37,4 @@ const MainAreaTabs: React.FC = () => {
   );
 };
 
-export default MainAreaTabs; 
+export default MainAreaTabs;

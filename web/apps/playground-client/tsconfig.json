@@ -33,7 +33,5 @@
     },
 
     "customConditions": ["@pod2/source"]
-
-
   }
 }
