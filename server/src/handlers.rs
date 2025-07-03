@@ -7,6 +7,7 @@ pub mod space_management;
 pub enum AppError {
     DatabaseError(anyhow::Error),
     NotFound(String),
+    BadRequest(String),
 }
 
 // Tell axum how to convert `AppError` into a response.
@@ -24,6 +25,10 @@ impl IntoResponse for AppError {
             AppError::NotFound(msg) => {
                 log::warn!("Resource not found: {}", msg);
                 (StatusCode::NOT_FOUND, msg).into_response()
+            }
+            AppError::BadRequest(msg) => {
+                log::warn!("Bad request: {}", msg);
+                (StatusCode::BAD_REQUEST, msg).into_response()
             }
         }
     }
