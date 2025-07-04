@@ -1,10 +1,47 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    api_types::{PodData, PodInfo, SpaceInfo},
-    db::Db,
-};
+use crate::Db;
+
+
+// --- General API Data Structures ---
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SpaceInfo {
+    pub id: String,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(tag = "pod_data_variant", content = "pod_data_payload")]
+pub enum PodData {
+    Signed(SerializedSignedPod),
+    Main(SerializedMainPod),
+}
+
+impl PodData {
+    /// Returns a string representation of the pod data variant.
+    pub fn type_str(&self) -> &'static str {
+        match self {
+            PodData::Signed(_) => "signed",
+            PodData::Main(_) => "main",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct PodInfo {
+    pub id: String,
+    pub pod_type: String,
+    pub data: PodData,
+    pub label: Option<String>,
+    pub created_at: String,
+    pub space: String,
+}
+
 
 pub async fn create_space(db: &Db, id: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();

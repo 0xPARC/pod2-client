@@ -2,7 +2,8 @@ use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use pod2_server::{config::Config, db, handlers, routes};
+use pod2_db::Db;
+use pod2_server::{config::Config, handlers, routes};
 use tokio::net::TcpListener;
 
 #[derive(Parser, Debug)]
@@ -27,7 +28,7 @@ async fn main() -> Result<()> {
     log::info!("Loaded configuration: {:?}", config);
 
     // Initialize the database
-    let db = db::Db::new(Some(&config.db_path), &db::MIGRATIONS)
+    let db = Db::new(Some(&config.db_path), &pod2_db::MIGRATIONS)
         .await
         .context("Failed to initialize database")?;
 

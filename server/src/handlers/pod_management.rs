@@ -17,10 +17,7 @@ use pod2::{
 use serde::Deserialize;
 
 use super::AppError;
-use crate::{
-    api_types::{PodData, PodInfo},
-    db::{store, Db},
-};
+use pod2_db::{store::{self, PodData, PodInfo}, Db};
 
 // Request body for the /api/pods/sign endpoint
 #[derive(Deserialize)]
@@ -200,11 +197,8 @@ mod tests {
     use tracing_subscriber::prelude::*;
 
     use super::*; // Imports PodInfo, SignRequest etc. and handlers
-    use crate::{
-        db::{self},
-        handlers::playground::MOCK_VD_SET,
-        routes::create_router,
-    };
+    use crate::{handlers::playground::MOCK_VD_SET, routes::create_router};
+    use pod2_db::Db;
 
     // Helper to insert a test space
     async fn insert_test_space(db: &Db, id: &str) {
@@ -266,7 +260,7 @@ mod tests {
     // Test server setup specific to these tests
     pub async fn create_test_server_with_db() -> (TestServer, Arc<Db>) {
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );

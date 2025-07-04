@@ -10,7 +10,8 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
-use crate::{db::Db, handlers};
+use crate::handlers;
+use pod2_db::Db;
 
 pub fn create_router(db: Arc<Db>) -> Router {
     Router::new()

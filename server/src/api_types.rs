@@ -1,41 +1,5 @@
-use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-// --- General API Data Structures ---
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct SpaceInfo {
-    pub id: String,
-    pub created_at: String,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(tag = "pod_data_variant", content = "pod_data_payload")]
-pub enum PodData {
-    Signed(SerializedSignedPod),
-    Main(SerializedMainPod),
-}
-
-impl PodData {
-    /// Returns a string representation of the pod data variant.
-    pub fn type_str(&self) -> &'static str {
-        match self {
-            PodData::Signed(_) => "signed",
-            PodData::Main(_) => "main",
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct PodInfo {
-    pub id: String,
-    pub pod_type: String,
-    pub data: PodData,
-    pub label: Option<String>,
-    pub created_at: String,
-    pub space: String,
-}
 
 // --- Validation Structures ---
 

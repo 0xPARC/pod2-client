@@ -1,5 +1,5 @@
 [package]
-name = "pod2-server"
+name = "pod2_server"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,6 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 pod2 = { workspace = true }
 pod2_solver = { workspace = true }
+pod2_db = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
@@ -23,9 +24,9 @@ pest = { workspace = true }
 pest_derive = { workspace = true }
 anyhow = { workspace = true }
 rusqlite = { workspace = true, features = ["bundled"] }
-rusqlite_migration = { version = "2.1.0", features = ["from-directory"] }
-lazy_static = "1.5.0"
-include_dir = "0.7.4"
+rusqlite_migration = { workspace = true, features = ["from-directory"] }
+lazy_static = { workspace = true }
+include_dir = { workspace = true }
 deadpool-sqlite = { workspace = true, features = ["rt_tokio_1"] }
 axum = { workspace = true }
 tower-http = { workspace = true, features = ["trace", "cors"] }

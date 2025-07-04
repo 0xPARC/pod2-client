@@ -9,10 +9,7 @@ use axum::{
 use serde::Deserialize;
 
 use super::AppError;
-use crate::{
-    api_types::SpaceInfo,
-    db::{store, Db},
-};
+use pod2_db::{store::{self, SpaceInfo}, Db};
 
 #[derive(Deserialize)]
 pub struct CreateSpaceRequest {
@@ -65,19 +62,18 @@ mod tests {
         frontend::SignedPodBuilder,
         middleware::{Params as PodParams, Value as PodValue},
     };
+    use pod2_db::{store::{self, PodData, SpaceInfo}, Db};
     use serde_json::{json, Value};
 
     use super::*;
     use crate::{
-        api_types::{PodData, SpaceInfo},
-        db,
         routes::create_router,
     };
 
     // Test helper to create a server
     pub async fn create_test_server() -> TestServer {
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );
@@ -88,7 +84,7 @@ mod tests {
     // Test helper to create a server and return the pool (useful for direct DB assertions)
     pub async fn create_test_server_with_db() -> (TestServer, Arc<Db>) {
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );
