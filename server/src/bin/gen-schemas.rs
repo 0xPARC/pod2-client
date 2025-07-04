@@ -1,6 +1,6 @@
 use anyhow::Result;
 use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
-use pod2_server::handlers::{pod_management::PodInfo, space_management::SpaceInfo};
+use pod2_server::api_types::{PodInfo, SpaceInfo};
 use schemars::{gen::SchemaSettings, JsonSchema};
 
 #[allow(dead_code)]

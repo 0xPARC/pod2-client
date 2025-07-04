@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     http::Method,
     routing::{delete, get, post},
@@ -8,9 +10,9 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
-use crate::{db::ConnectionPool, handlers};
+use crate::{db::Db, handlers};
 
-pub fn create_router(pool: ConnectionPool) -> Router {
+pub fn create_router(db: Arc<Db>) -> Router {
     Router::new()
         .route(
             "/api/pods/:space_id",
@@ -44,7 +46,7 @@ pub fn create_router(pool: ConnectionPool) -> Router {
             "/api/spaces/:space_id",
             delete(handlers::space_management::delete_space),
         )
-        .with_state(pool)
+        .with_state(db)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),

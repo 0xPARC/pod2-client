@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -26,21 +26,17 @@ async fn main() -> Result<()> {
 
     log::info!("Loaded configuration: {:?}", config);
 
-    // Initialize database pool (init_db_pool is now async)
-    let db_pool = db::init_db_pool(Some(&config.db_path))
+    // Initialize the database
+    let db = db::Db::new(Some(&config.db_path), &db::MIGRATIONS)
         .await
-        .context("Failed to initialize database pool")?;
+        .context("Failed to initialize database")?;
 
-    db::create_schema(&db_pool)
-        .await
-        .context("Failed to create schema")?;
-
-    handlers::playground::setup_zukyc_space(&db_pool)
+    handlers::playground::setup_zukyc_space(&db)
         .await
         .context("Failed to setup Zukyc space")?;
 
     // Create the Axum router
-    let app = routes::create_router(db_pool);
+    let app = routes::create_router(Arc::new(db));
 
     // Bind the server to the address
     let addr = format!("0.0.0.0:{}", config.port);
