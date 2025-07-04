@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -5,7 +7,6 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 
 use super::AppError;
 use crate::{
@@ -21,9 +22,7 @@ pub struct CreateSpaceRequest {
 // --- Space Management Handlers ---
 
 // Handler for GET /api/spaces
-pub async fn list_spaces(
-    State(db): State<Arc<Db>>,
-) -> Result<Json<Vec<SpaceInfo>>, AppError> {
+pub async fn list_spaces(State(db): State<Arc<Db>>) -> Result<Json<Vec<SpaceInfo>>, AppError> {
     let spaces = store::list_spaces(&db).await?;
     Ok(Json(spaces))
 }
@@ -57,12 +56,8 @@ pub async fn delete_space(
 #[cfg(test)]
 mod tests {
     // Renamed from space_management_tests to just tests for consistency
-    use super::*;
-    use crate::{
-        api_types::{PodData, SpaceInfo},
-        db,
-        routes::create_router,
-    };
+    use std::sync::Arc;
+
     use axum_test::TestServer;
     use hex::ToHex;
     use pod2::{
@@ -71,7 +66,13 @@ mod tests {
         middleware::{Params as PodParams, Value as PodValue},
     };
     use serde_json::{json, Value};
-    use std::sync::Arc;
+
+    use super::*;
+    use crate::{
+        api_types::{PodData, SpaceInfo},
+        db,
+        routes::create_router,
+    };
 
     // Test helper to create a server
     pub async fn create_test_server() -> TestServer {
@@ -177,54 +178,24 @@ mod tests {
         let test_params = PodParams::default();
         let (pod_id1, pod_data1) =
             create_sample_signed_pod_data(&test_params, "pod1", vec![("a", PodValue::from(1))]);
-        let (pod_id2, pod_data2) = create_sample_signed_pod_data(
-            &test_params,
-            "pod2",
-            vec![("b", PodValue::from(2))],
-        );
-        let (pod_id3, pod_data3) = create_sample_signed_pod_data(
-            &test_params,
-            "pod3",
-            vec![("c", PodValue::from(3))],
-        );
+        let (pod_id2, pod_data2) =
+            create_sample_signed_pod_data(&test_params, "pod2", vec![("b", PodValue::from(2))]);
+        let (pod_id3, pod_data3) =
+            create_sample_signed_pod_data(&test_params, "pod3", vec![("c", PodValue::from(3))]);
 
-        let pod_data_enum1 =
-            PodData::Signed(serde_json::from_value(pod_data1).unwrap());
-        let pod_data_enum2 =
-            PodData::Signed(serde_json::from_value(pod_data2).unwrap());
-        let pod_data_enum3 =
-            PodData::Signed(serde_json::from_value(pod_data3).unwrap());
+        let pod_data_enum1 = PodData::Signed(serde_json::from_value(pod_data1).unwrap());
+        let pod_data_enum2 = PodData::Signed(serde_json::from_value(pod_data2).unwrap());
+        let pod_data_enum3 = PodData::Signed(serde_json::from_value(pod_data3).unwrap());
 
-        store::import_pod(
-            &db,
-            &pod_id1,
-            "signed",
-            &pod_data_enum1,
-            None,
-            space_id1,
-        )
-        .await
-        .unwrap();
-        store::import_pod(
-            &db,
-            &pod_id2,
-            "signed",
-            &pod_data_enum2,
-            None,
-            space_id1,
-        )
-        .await
-        .unwrap();
-        store::import_pod(
-            &db,
-            &pod_id3,
-            "signed",
-            &pod_data_enum3,
-            None,
-            space_id2,
-        )
-        .await
-        .unwrap();
+        store::import_pod(&db, &pod_id1, "signed", &pod_data_enum1, None, space_id1)
+            .await
+            .unwrap();
+        store::import_pod(&db, &pod_id2, "signed", &pod_data_enum2, None, space_id1)
+            .await
+            .unwrap();
+        store::import_pod(&db, &pod_id3, "signed", &pod_data_enum3, None, space_id2)
+            .await
+            .unwrap();
 
         let pods_in_space1 = store::list_pods(&db, space_id1).await.unwrap();
         assert_eq!(pods_in_space1.len(), 2);

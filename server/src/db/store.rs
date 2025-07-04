@@ -10,7 +10,11 @@ pub async fn create_space(db: &Db, id: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     let id_clone = id.to_string();
 
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
 
     conn.interact(move |conn| {
         conn.execute(
@@ -26,7 +30,11 @@ pub async fn create_space(db: &Db, id: &str) -> Result<()> {
 }
 
 pub async fn list_spaces(db: &Db) -> Result<Vec<SpaceInfo>> {
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
 
     let spaces = conn
         .interact(|conn| {
@@ -65,7 +73,11 @@ pub async fn space_exists(db: &Db, id: &str) -> Result<bool> {
 }
 
 pub async fn delete_space(db: &Db, id: &str) -> Result<usize> {
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
     let id_clone = id.to_string();
 
     let rows_deleted = conn
@@ -91,7 +103,11 @@ pub async fn import_pod(
     let data_blob =
         serde_json::to_vec(data).context("Failed to serialize PodData enum for storage")?;
 
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
 
     let id_clone = id.to_string();
     let pod_type_clone = pod_type.to_string();
@@ -119,7 +135,11 @@ pub async fn import_pod(
 }
 
 pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<PodInfo>> {
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
     let space_id_clone = space_id.to_string();
     let pod_id_clone = pod_id.to_string();
 
@@ -162,7 +182,11 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
 }
 
 pub async fn list_pods(db: &Db, space_id: &str) -> Result<Vec<PodInfo>> {
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
     let space_id_clone = space_id.to_string();
 
     let pods = conn
@@ -172,14 +196,13 @@ pub async fn list_pods(db: &Db, space_id: &str) -> Result<Vec<PodInfo>> {
             )?;
             let pod_iter = stmt.query_map([&space_id_clone], |row| {
                 let data_blob: Vec<u8> = row.get(2)?;
-                let pod_data: PodData =
-                    serde_json::from_slice(&data_blob).map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            2,
-                            rusqlite::types::Type::Blob,
-                            Box::new(e),
-                        )
-                    })?;
+                let pod_data: PodData = serde_json::from_slice(&data_blob).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Blob,
+                        Box::new(e),
+                    )
+                })?;
                 Ok(PodInfo {
                     id: row.get(0)?,
                     pod_type: row.get(1)?,
@@ -198,7 +221,11 @@ pub async fn list_pods(db: &Db, space_id: &str) -> Result<Vec<PodInfo>> {
 }
 
 pub async fn delete_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<usize> {
-    let conn = db.pool().get().await.context("Failed to get DB connection")?;
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
     let space_id_clone = space_id.to_string();
     let pod_id_clone = pod_id.to_string();
 
@@ -213,4 +240,4 @@ pub async fn delete_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<usize> 
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
         .context("DB interaction failed for delete_pod")??;
     Ok(rows_deleted)
-} 
+}

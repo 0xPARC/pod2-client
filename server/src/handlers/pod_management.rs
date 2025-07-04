@@ -76,11 +76,9 @@ pub async fn import_pod_to_space(
 
     // It also determines the pod ID from the deserialized data.
     let pod_id_obj = match &pod_data_enum {
-        PodData::Signed(signed_pod_helper) => {
-            SignedPod::try_from(signed_pod_helper.clone())
-                .map_err(|e| AppError::BadRequest(format!("Invalid signed pod data: {}", e)))?
-                .id()
-        }
+        PodData::Signed(signed_pod_helper) => SignedPod::try_from(signed_pod_helper.clone())
+            .map_err(|e| AppError::BadRequest(format!("Invalid signed pod data: {}", e)))?
+            .id(),
         PodData::Main(main_pod_helper) => MainPod::try_from(main_pod_helper.clone())
             .map_err(|e| AppError::BadRequest(format!("Invalid main pod data: {}", e)))?
             .id(),

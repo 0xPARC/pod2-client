@@ -1,7 +1,6 @@
+use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
 
 // --- General API Data Structures ---
 

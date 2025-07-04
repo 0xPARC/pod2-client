@@ -467,13 +467,15 @@ pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Imports handlers, PlaygroundApiError, etc.
-    use crate::{db, routes::create_router};
+    use std::{io::Write, sync::Once};
+
     use axum_test::TestServer;
     use env_logger::Builder;
     use pod2::backends::plonky2::mock::signedpod::MockSigner;
     use serde_json::json;
-    use std::{io::Write, sync::Once};
+
+    use super::*; // Imports handlers, PlaygroundApiError, etc.
+    use crate::{db, routes::create_router};
 
     static INIT: Once = Once::new();
     fn setup_test_logging() {

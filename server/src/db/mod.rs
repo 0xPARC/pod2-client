@@ -9,8 +9,7 @@ use uuid::Uuid;
 pub mod store;
 
 lazy_static! {
-    pub static ref MIGRATIONS_DIR: Dir<'static> =
-        include_dir!("$CARGO_MANIFEST_DIR/migrations");
+    pub static ref MIGRATIONS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
     pub static ref MIGRATIONS: Migrations<'static> =
         Migrations::from_directory(&MIGRATIONS_DIR).unwrap();
 }
@@ -61,7 +60,6 @@ impl Db {
 
         Ok(Self { pool })
     }
-
 
     pub fn pool(&self) -> &ConnectionPool {
         &self.pool
@@ -171,8 +169,7 @@ mod tests {
             "'pods' table should persist in file DB",
         );
         assert!(
-            check_table_exists(&mut conn2, "spaces")
-                .expect("check_table_exists for spaces failed"),
+            check_table_exists(&mut conn2, "spaces").expect("check_table_exists for spaces failed"),
             "'spaces' table should persist in file DB",
         );
     }
