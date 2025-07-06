@@ -172,24 +172,24 @@ mod tests {
             .expect("Failed to create space 2");
 
         let test_params = PodParams::default();
-        let (pod_id1, pod_data1) =
+        let (_, pod_data1) =
             create_sample_signed_pod_data(&test_params, "pod1", vec![("a", PodValue::from(1))]);
-        let (pod_id2, pod_data2) =
+        let (_, pod_data2) =
             create_sample_signed_pod_data(&test_params, "pod2", vec![("b", PodValue::from(2))]);
-        let (pod_id3, pod_data3) =
+        let (_, pod_data3) =
             create_sample_signed_pod_data(&test_params, "pod3", vec![("c", PodValue::from(3))]);
 
         let pod_data_enum1 = PodData::Signed(serde_json::from_value(pod_data1).unwrap());
         let pod_data_enum2 = PodData::Signed(serde_json::from_value(pod_data2).unwrap());
         let pod_data_enum3 = PodData::Signed(serde_json::from_value(pod_data3).unwrap());
 
-        store::import_pod(&db, &pod_id1, "signed", &pod_data_enum1, None, space_id1)
+        store::import_pod(&db, &pod_data_enum1, None, space_id1)
             .await
             .unwrap();
-        store::import_pod(&db, &pod_id2, "signed", &pod_data_enum2, None, space_id1)
+        store::import_pod(&db, &pod_data_enum2, None, space_id1)
             .await
             .unwrap();
-        store::import_pod(&db, &pod_id3, "signed", &pod_data_enum3, None, space_id2)
+        store::import_pod(&db, &pod_data_enum3, None, space_id2)
             .await
             .unwrap();
 
