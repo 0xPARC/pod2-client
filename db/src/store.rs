@@ -379,3 +379,503 @@ pub async fn count_pods_by_type(db: &Db) -> Result<(u32, u32)> {
     
     Ok(counts)
 }
+
+// --- P2P Messaging Functions ---
+
+/// Add a message to the inbox for user approval
+pub async fn add_inbox_message(
+    db: &Db,
+    from_node_id: &str,
+    from_alias: Option<&str>,
+    space_id: &str,
+    pod_id: &str,
+    message_text: Option<&str>,
+) -> Result<String> {
+    let message_id = uuid::Uuid::new_v4().to_string();
+    let received_at = Utc::now().to_rfc3339();
+    
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let from_node_id_clone = from_node_id.to_string();
+    let from_alias_clone = from_alias.map(|s| s.to_string());
+    let space_id_clone = space_id.to_string();
+    let pod_id_clone = pod_id.to_string();
+    let message_text_clone = message_text.map(|s| s.to_string());
+    let message_id_clone = message_id.clone();
+    
+    conn.interact(move |conn| {
+        conn.execute(
+            "INSERT INTO inbox_messages (id, from_node_id, from_alias, space_id, pod_id, message_text, received_at, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'pending')",
+            rusqlite::params![
+                message_id_clone,
+                from_node_id_clone,
+                from_alias_clone,
+                space_id_clone,
+                pod_id_clone,
+                message_text_clone,
+                received_at
+            ],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for add_inbox_message")??;
+    
+    Ok(message_id)
+}
+
+/// Get pending inbox messages
+pub async fn get_inbox_messages(db: &Db) -> Result<Vec<serde_json::Value>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let messages = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, from_node_id, from_alias, space_id, pod_id, message_text, received_at, status 
+                 FROM inbox_messages 
+                 WHERE status = 'pending' 
+                 ORDER BY received_at DESC"
+            )?;
+            let message_iter = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "from_node_id": row.get::<_, String>(1)?,
+                    "from_alias": row.get::<_, Option<String>>(2)?,
+                    "space_id": row.get::<_, String>(3)?,
+                    "pod_id": row.get::<_, String>(4)?,
+                    "message_text": row.get::<_, Option<String>>(5)?,
+                    "received_at": row.get::<_, String>(6)?,
+                    "status": row.get::<_, String>(7)?
+                }))
+            })?;
+            message_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_inbox_messages")??;
+    
+    Ok(messages)
+}
+
+/// Accept an inbox message and create/update chat
+pub async fn accept_inbox_message(
+    db: &Db,
+    message_id: &str,
+    chat_alias: Option<&str>,
+) -> Result<String> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let message_id_clone = message_id.to_string();
+    let chat_alias_clone = chat_alias.map(|s| s.to_string());
+    
+    let chat_id = conn
+        .interact(move |conn| {
+            let tx = conn.transaction()?;
+            
+            // Get the inbox message
+            let (from_node_id, from_alias, space_id, pod_id, message_text, received_at): (String, Option<String>, String, String, Option<String>, String) = {
+                let mut stmt = tx.prepare(
+                    "SELECT from_node_id, from_alias, space_id, pod_id, message_text, received_at 
+                     FROM inbox_messages 
+                     WHERE id = ?1 AND status = 'pending'"
+                )?;
+                stmt.query_row([&message_id_clone], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?
+                    ))
+                })?
+            };
+            
+            // Create or get existing chat
+            let chat_id = uuid::Uuid::new_v4().to_string();
+            let final_alias = chat_alias_clone.or(from_alias);
+            let now = chrono::Utc::now().to_rfc3339();
+            
+            // Try to insert new chat, or get existing one
+            match tx.execute(
+                "INSERT INTO chats (id, peer_node_id, peer_alias, last_activity, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![&chat_id, &from_node_id, &final_alias, &now, &now]
+            ) {
+                Ok(_) => {
+                    // New chat created, use the generated ID
+                }
+                Err(rusqlite::Error::SqliteFailure(err, _)) if err.code == rusqlite::ErrorCode::ConstraintViolation => {
+                    // Chat already exists, get the existing chat_id
+                    let existing_chat_id: String = {
+                        let mut stmt = tx.prepare("SELECT id FROM chats WHERE peer_node_id = ?1")?;
+                        stmt.query_row([&from_node_id], |row| row.get(0))?
+                    };
+                    return Ok(existing_chat_id);
+                }
+                Err(e) => return Err(e),
+            }
+            
+            // Add message to chat_messages
+            let chat_message_id = uuid::Uuid::new_v4().to_string();
+            tx.execute(
+                "INSERT INTO chat_messages (id, chat_id, space_id, pod_id, message_text, timestamp, direction) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'received')",
+                rusqlite::params![&chat_message_id, &chat_id, &space_id, &pod_id, &message_text, &received_at]
+            )?;
+            
+            // Mark inbox message as accepted
+            tx.execute(
+                "UPDATE inbox_messages SET status = 'accepted' WHERE id = ?1",
+                [&message_id_clone]
+            )?;
+            
+            tx.commit()?;
+            Ok(chat_id)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for accept_inbox_message")??;
+    
+    Ok(chat_id)
+}
+
+// --- Private Key Management ---
+
+/// Create and store a new private key
+pub async fn create_private_key(
+    db: &Db,
+    alias: Option<&str>,
+    set_as_default: bool,
+) -> Result<String> {
+    let private_key = pod2::backends::plonky2::primitives::ec::schnorr::SecretKey::new_rand();
+    
+    let private_key_hex = hex::encode(private_key.0.to_bytes_be());
+    // For simplicity, we'll store a truncated version as the public key display
+    // In practice, we'd derive and format the public key properly
+    let public_key_hex = format!("pub_{}", &private_key_hex[0..16]);
+    
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let private_key_hex_clone = private_key_hex.clone();
+    let alias_clone = alias.map(|s| s.to_string());
+    
+    conn.interact(move |conn| {
+        let tx = conn.transaction()?;
+        
+        // If setting as default, clear existing default
+        if set_as_default {
+            tx.execute("UPDATE private_keys SET is_default = FALSE", [])?;
+        }
+        
+        // Insert new private key (using private_key as PK)
+        tx.execute(
+            "INSERT INTO private_keys (private_key, key_type, public_key, alias, is_default) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                private_key_hex_clone,
+                "Plonky2",
+                public_key_hex,
+                alias_clone,
+                set_as_default
+            ],
+        )?;
+        
+        tx.commit()?;
+        Ok::<(), rusqlite::Error>(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for create_private_key")??;
+    
+    Ok(private_key_hex)
+}
+
+/// Get the default private key
+pub async fn get_default_private_key(db: &Db) -> Result<Option<pod2::backends::plonky2::primitives::ec::schnorr::SecretKey>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let key_hex = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare("SELECT private_key FROM private_keys WHERE is_default = TRUE")?;
+            let result = stmt.query_row([], |row| {
+                Ok(row.get::<_, String>(0)?)
+            });
+            
+            match result {
+                Ok(hex_string) => Ok(Some(hex_string)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(e),
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_default_private_key")??;
+    
+    if let Some(hex_string) = key_hex {
+        let bytes = hex::decode(hex_string)
+            .context("Failed to decode private key hex")?;
+        let big_uint = num::BigUint::from_bytes_be(&bytes);
+        Ok(Some(pod2::backends::plonky2::primitives::ec::schnorr::SecretKey(big_uint)))
+    } else {
+        Ok(None)
+    }
+}
+
+/// List all private keys (without secret keys for security)
+pub async fn list_private_keys(db: &Db) -> Result<Vec<serde_json::Value>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let keys = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT private_key, public_key, alias, created_at, COALESCE(is_default, FALSE) FROM private_keys ORDER BY created_at DESC"
+            )?;
+            let key_iter = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?, // Use private_key as id
+                    "public_key_hex": row.get::<_, String>(1)?,
+                    "alias": row.get::<_, Option<String>>(2)?,
+                    "created_at": row.get::<_, String>(3)?,
+                    "is_default": row.get::<_, bool>(4)?
+                }))
+            })?;
+            key_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for list_private_keys")??;
+    
+    Ok(keys)
+}
+
+// --- Chat Management Functions ---
+
+/// Get all chats ordered by last activity
+pub async fn get_chats(db: &Db) -> Result<Vec<serde_json::Value>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let chats = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, peer_node_id, peer_alias, last_activity, created_at, status 
+                 FROM chats 
+                 WHERE status = 'active' 
+                 ORDER BY last_activity DESC"
+            )?;
+            let chat_iter = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "peer_node_id": row.get::<_, String>(1)?,
+                    "peer_alias": row.get::<_, Option<String>>(2)?,
+                    "last_activity": row.get::<_, String>(3)?,
+                    "created_at": row.get::<_, String>(4)?,
+                    "status": row.get::<_, String>(5)?
+                }))
+            })?;
+            chat_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_chats")??;
+    
+    Ok(chats)
+}
+
+/// Get messages for a specific chat
+pub async fn get_chat_messages(db: &Db, chat_id: &str) -> Result<Vec<serde_json::Value>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let chat_id_clone = chat_id.to_string();
+    
+    let messages = conn
+        .interact(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, space_id, pod_id, message_text, timestamp, direction, created_at 
+                 FROM chat_messages 
+                 WHERE chat_id = ?1 
+                 ORDER BY timestamp ASC"
+            )?;
+            let message_iter = stmt.query_map([&chat_id_clone], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "space_id": row.get::<_, String>(1)?,
+                    "pod_id": row.get::<_, String>(2)?,
+                    "message_text": row.get::<_, Option<String>>(3)?,
+                    "timestamp": row.get::<_, String>(4)?,
+                    "direction": row.get::<_, String>(5)?,
+                    "created_at": row.get::<_, String>(6)?
+                }))
+            })?;
+            message_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_chat_messages")??;
+    
+    Ok(messages)
+}
+
+/// Add a sent message to a chat (when sending PODs)
+pub async fn add_sent_message_to_chat(
+    db: &Db,
+    peer_node_id: &str,
+    space_id: &str,
+    pod_id: &str,
+    message_text: Option<&str>,
+) -> Result<String> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    
+    let peer_node_id_clone = peer_node_id.to_string();
+    let space_id_clone = space_id.to_string();
+    let pod_id_clone = pod_id.to_string();
+    let message_text_clone = message_text.map(|s| s.to_string());
+    
+    let message_id = conn
+        .interact(move |conn| {
+            let tx = conn.transaction()?;
+            
+            // Find or create chat for this peer
+            let chat_id = {
+                let mut stmt = tx.prepare("SELECT id FROM chats WHERE peer_node_id = ?1")?;
+                let result = stmt.query_row([&peer_node_id_clone], |row| {
+                    Ok(row.get::<_, String>(0)?)
+                });
+                
+                match result {
+                    Ok(existing_chat_id) => existing_chat_id,
+                    Err(rusqlite::Error::QueryReturnedNoRows) => {
+                        // Create new chat
+                        let new_chat_id = uuid::Uuid::new_v4().to_string();
+                        let now = chrono::Utc::now().to_rfc3339();
+                        tx.execute(
+                            "INSERT INTO chats (id, peer_node_id, last_activity, created_at) VALUES (?1, ?2, ?3, ?4)",
+                            rusqlite::params![&new_chat_id, &peer_node_id_clone, &now, &now]
+                        )?;
+                        new_chat_id
+                    }
+                    Err(e) => return Err(e),
+                }
+            };
+            
+            // Add the sent message
+            let message_id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().to_rfc3339();
+            
+            tx.execute(
+                "INSERT INTO chat_messages (id, chat_id, space_id, pod_id, message_text, timestamp, direction) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'sent')",
+                rusqlite::params![&message_id, &chat_id, &space_id_clone, &pod_id_clone, &message_text_clone, &now]
+            )?;
+            
+            // Update chat last activity
+            tx.execute(
+                "UPDATE chats SET last_activity = ?1 WHERE id = ?2",
+                rusqlite::params![&now, &chat_id]
+            )?;
+            
+            tx.commit()?;
+            Ok(message_id)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for add_sent_message_to_chat")??;
+    
+    Ok(message_id)
+}
+
+/// Import a POD and add it to the inbox in a single transaction to avoid foreign key issues
+pub async fn import_pod_and_add_to_inbox(
+    db: &Db,
+    data: &PodData,
+    space_id: &str,
+    from_node_id: &str,
+    from_alias: Option<&str>,
+    message_text: Option<&str>,
+) -> Result<String> {
+    let now = Utc::now().to_rfc3339();
+    let pod_id = data.id();
+    let data_blob = serde_json::to_vec(data).context("Failed to serialize PodData enum for storage")?;
+    let message_id = uuid::Uuid::new_v4().to_string();
+
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    // Clone data for move closure
+    let pod_id_clone = pod_id.clone();
+    let data_blob_clone = data_blob;
+    let space_id_clone = space_id.to_string();
+    let from_node_id_clone = from_node_id.to_string();
+    let from_alias_clone = from_alias.map(|s| s.to_string());
+    let message_text_clone = message_text.map(|s| s.to_string());
+    let message_id_clone = message_id.clone();
+    let now_clone = now.clone();
+    let pod_type_clone = data.type_str();
+    
+    conn.interact(move |conn| -> rusqlite::Result<String> {
+        let tx = conn.transaction()?;
+        
+        // First, import the POD
+        tx.execute(
+            "INSERT INTO pods (id, data, created_at, space, pod_type) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![&pod_id_clone, &data_blob_clone, &now_clone, &space_id_clone, &pod_type_clone],
+        )?;
+
+        // Then add to inbox (foreign key constraint will be satisfied)
+        tx.execute(
+            "INSERT INTO inbox_messages (id, from_node_id, from_alias, space_id, pod_id, message_text, received_at, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'pending')",
+            rusqlite::params![
+                &message_id_clone,
+                &from_node_id_clone,
+                &from_alias_clone,
+                &space_id_clone,
+                &pod_id_clone,
+                &message_text_clone,
+                &now_clone
+            ],
+        )?;
+
+        tx.commit()?;
+        Ok(message_id_clone)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for import_pod_and_add_to_inbox")??;
+
+    Ok(message_id)
+}

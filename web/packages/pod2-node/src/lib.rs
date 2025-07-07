@@ -4,6 +4,7 @@
 extern crate napi_derive;
 
 use pod2::frontend::MainPod as Pod2MainPod;
+use serde_json::Value as JsonValue;
 
 
 #[napi]
@@ -23,5 +24,10 @@ impl MainPod {
   #[napi]
   pub fn verify(&self) -> bool {
     self.inner.pod.verify().is_ok()
+  }
+
+  #[napi]
+  pub fn public_statements(&self) -> JsonValue {
+    serde_json::to_value(self.inner.pod.pub_statements()).unwrap()
   }
 }

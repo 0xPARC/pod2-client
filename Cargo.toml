@@ -1,10 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["solver", "server", "db"]
-
+members = ["solver", "server", "app/src-tauri", "db", "web/packages/pod2-node"]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = ["examples"] }
+pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+  "examples",
+] }
 pod2_solver = { path = "solver" }
 pod2_server = { path = "server" }
 pod2_db = { path = "db" }
@@ -43,4 +44,6 @@ tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
 
 [workspace.dev-dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = ["examples"] }
+pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+  "examples",
+] }

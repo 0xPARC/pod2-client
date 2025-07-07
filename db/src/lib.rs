@@ -16,6 +16,7 @@ lazy_static! {
 
 pub type ConnectionPool = Pool;
 
+#[derive(Clone)]
 pub struct Db {
     pool: ConnectionPool,
 }

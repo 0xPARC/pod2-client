@@ -5,3 +5,4 @@ Cargo.lock
 *.code-workspace
 *.db
 .cargo
+.claude/settings.local.json
