@@ -23,7 +23,6 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({
   podId,
   label
 }) => {
-  console.log(signedPod);
   const handleExport = async () => {
     try {
       const jsonString = JSON.stringify(signedPod, null, 2);
@@ -68,11 +67,9 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({
           Entries:
         </h4>
 
-        {/* @ts-ignore */}
-        {Object.keys(signedPod.kvs.kvs).length > 0 ? (
+        {Object.keys(signedPod.entries).length > 0 ? (
           <div className="border rounded-md">
-            {/* @ts-ignore */}
-            {Object.entries(signedPod.kvs.kvs)
+            {Object.entries(signedPod.entries)
               .sort((a, b) => a[0].localeCompare(b[0]))
               .map(([key, value], index, arr) => (
                 <div
@@ -83,7 +80,6 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({
                     {key}
                   </div>
                   <div className="w-2/3 text-gray-900 dark:text-gray-100 break-all">
-                    {/* @ts-ignore */}
                     <ValueRenderer value={value} />
                   </div>
                 </div>

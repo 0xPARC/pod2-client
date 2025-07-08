@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import { create } from 'zustand';
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { create } from "zustand";
 
 export interface PodStats {
   total_pods: number;
@@ -30,21 +30,21 @@ export interface AppStateData {
   // recent_operations?: Operation[];
 }
 
-export type PodFilter = 'all' | 'signed' | 'main';
-export type AppView = 'pods' | 'inbox' | 'chats';
+export type PodFilter = "all" | "signed" | "main";
+export type AppView = "pods" | "inbox" | "chats";
 
 interface AppStoreState {
   appState: AppStateData;
   isLoading: boolean;
   error: string | null;
-  
+
   // UI State
   currentView: AppView;
   selectedFilter: PodFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
   chatEnabled: boolean;
-  
+
   // Actions
   initialize: () => Promise<void>;
   triggerSync: () => Promise<void>;
@@ -53,7 +53,7 @@ interface AppStoreState {
   setSelectedFilter: (filter: PodFilter) => void;
   setSelectedPodId: (podId: string | null) => void;
   setExternalPodRequest: (request: string | undefined) => void;
-  
+
   // Derived getters
   getFilteredPods: () => PodInfo[];
   getSelectedPod: () => PodInfo | null;
@@ -64,37 +64,40 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     pod_stats: {
       total_pods: 0,
       signed_pods: 0,
-      main_pods: 0,
+      main_pods: 0
     },
     pod_lists: {
       signed_pods: [],
-      main_pods: [],
-    },
+      main_pods: []
+    }
   },
   chatEnabled: true,
   isLoading: false,
   error: null,
-  currentView: 'pods',
-  selectedFilter: 'all',
+  currentView: "pods",
+  selectedFilter: "all",
   selectedPodId: null,
   externalPodRequest: undefined,
 
   initialize: async () => {
     try {
       set({ isLoading: true, error: null });
-      
+
       // Get initial state
-      const appState = await invoke<AppStateData>('get_app_state');
+      const appState = await invoke<AppStateData>("get_app_state");
       set({ appState, isLoading: false });
-      
+
+      console.log("appState", appState);
+
       // Listen for state changes from the backend
-      await listen<AppStateData>('state-changed', (event) => {
+      await listen<AppStateData>("state-changed", (event) => {
         set({ appState: event.payload });
+        console.log("state-changed", event.payload);
       });
     } catch (error) {
-      set({ 
+      set({
         error: `Failed to initialize state: ${error}`,
-        isLoading: false 
+        isLoading: false
       });
     }
   },
@@ -102,12 +105,12 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   triggerSync: async () => {
     try {
       set({ isLoading: true, error: null });
-      await invoke('trigger_sync');
+      await invoke("trigger_sync");
       set({ isLoading: false });
     } catch (error) {
-      set({ 
+      set({
         error: `Failed to trigger sync: ${error}`,
-        isLoading: false 
+        isLoading: false
       });
     }
   },
@@ -135,21 +138,24 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   getFilteredPods: () => {
     const { appState, selectedFilter } = get();
     switch (selectedFilter) {
-      case 'signed':
+      case "signed":
         return appState.pod_lists.signed_pods;
-      case 'main':
+      case "main":
         return appState.pod_lists.main_pods;
-      case 'all':
+      case "all":
       default:
-        return [...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods];
+        return [
+          ...appState.pod_lists.signed_pods,
+          ...appState.pod_lists.main_pods
+        ];
     }
   },
 
   getSelectedPod: () => {
     const { selectedPodId } = get();
     if (!selectedPodId) return null;
-    
+
     const filteredPods = get().getFilteredPods();
-    return filteredPods.find(pod => pod.id === selectedPodId) || null;
-  },
+    return filteredPods.find((pod) => pod.id === selectedPodId) || null;
+  }
 }));

@@ -131,13 +131,11 @@ export function PodViewer() {
                   {selectedPod.pod_type}
 
                   {selectedPod.pod_type === "main" && (
-                    <MainPodCard
-                      mainPod={selectedPod.data.pod_data_payload.data}
-                    />
+                    <MainPodCard mainPod={selectedPod.data.pod_data_payload} />
                   )}
                   {selectedPod.pod_type === "signed" && (
                     <SignedPodCard
-                      signedPod={selectedPod.data.pod_data_payload.data}
+                      signedPod={selectedPod.data.pod_data_payload}
                     />
                   )}
                 </div>
