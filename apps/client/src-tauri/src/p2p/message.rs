@@ -30,17 +30,17 @@ impl SignedPodMessage {
     pub fn sign_and_encode(secret_key: &SecretKey, message: PodMessage) -> Result<Vec<u8>> {
         // Serialize the message to JSON
         let data = serde_json::to_vec(&message)?;
-        
+
         // Sign the data
         let signature = secret_key.sign(&data);
-        
+
         // Create signed message
         let signed_message = Self {
             from: secret_key.public(),
             data,
             signature,
         };
-        
+
         // Serialize the entire signed message to JSON
         let encoded = serde_json::to_vec(&signed_message)?;
         Ok(encoded)
@@ -50,14 +50,14 @@ impl SignedPodMessage {
     pub fn verify_and_decode(bytes: &[u8]) -> Result<(NodeId, PodMessage)> {
         // Deserialize the signed message from JSON
         let signed_message: Self = serde_json::from_slice(bytes)?;
-        
+
         // Verify the signature
         let key: PublicKey = signed_message.from;
         key.verify(&signed_message.data, &signed_message.signature)?;
-        
+
         // Deserialize the inner message
         let message: PodMessage = serde_json::from_slice(&signed_message.data)?;
-        
+
         Ok((signed_message.from, message))
     }
 }

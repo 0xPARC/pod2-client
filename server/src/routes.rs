@@ -5,13 +5,13 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
+use pod2_db::Db;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
 use crate::handlers;
-use pod2_db::Db;
 
 pub fn create_router(db: Arc<Db>) -> Router {
     Router::new()

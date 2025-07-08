@@ -32,40 +32,40 @@ impl ProtocolHandler for PodProtocolHandler {
     fn accept(&self, connection: Connection) -> BoxFuture<anyhow::Result<()>> {
         let handler = self.handler.clone();
         Box::pin(async move {
-        let node_id = connection.remote_node_id()?;
-        info!("Accepted POD connection from {}", node_id);
+            let node_id = connection.remote_node_id()?;
+            info!("Accepted POD connection from {}", node_id);
 
-        // Accept a bidirectional stream
-        let (mut send, mut recv) = connection.accept_bi().await?;
+            // Accept a bidirectional stream
+            let (mut send, mut recv) = connection.accept_bi().await?;
 
-        // Read the message
-        let message_bytes = recv.read_to_end(1024 * 1024).await?;
-        info!("Received {} bytes from {}", message_bytes.len(), node_id);
+            // Read the message
+            let message_bytes = recv.read_to_end(1024 * 1024).await?;
+            info!("Received {} bytes from {}", message_bytes.len(), node_id);
 
-        // Process the message
-        match handler
-            .handle_received_message(node_id, message_bytes)
-            .await
-        {
-            Ok(_) => {
-                info!("Successfully processed message from {}", node_id);
-                // Send acknowledgment
-                send.write_all(b"ACK").await?;
+            // Process the message
+            match handler
+                .handle_received_message(node_id, message_bytes)
+                .await
+            {
+                Ok(_) => {
+                    info!("Successfully processed message from {}", node_id);
+                    // Send acknowledgment
+                    send.write_all(b"ACK").await?;
+                }
+                Err(e) => {
+                    error!("Failed to handle message from {}: {}", node_id, e);
+                    // Send error response
+                    send.write_all(b"ERR").await?;
+                }
             }
-            Err(e) => {
-                error!("Failed to handle message from {}: {}", node_id, e);
-                // Send error response
-                send.write_all(b"ERR").await?;
-            }
-        }
 
-        // Finish the send stream
-        send.finish()?;
+            // Finish the send stream
+            send.finish()?;
 
-        // Wait for connection to close
-        connection.closed().await;
+            // Wait for connection to close
+            connection.closed().await;
 
-        Ok(())
+            Ok(())
         })
     }
 }

@@ -6,7 +6,6 @@ extern crate napi_derive;
 use pod2::frontend::MainPod as Pod2MainPod;
 use serde_json::Value as JsonValue;
 
-
 #[napi]
 #[allow(unused)]
 pub struct MainPod {

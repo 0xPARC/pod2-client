@@ -6,10 +6,13 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use pod2_db::{
+    store::{self, SpaceInfo},
+    Db,
+};
 use serde::Deserialize;
 
 use super::AppError;
-use pod2_db::{store::{self, SpaceInfo}, Db};
 
 #[derive(Deserialize)]
 pub struct CreateSpaceRequest {
@@ -62,13 +65,14 @@ mod tests {
         frontend::SignedPodBuilder,
         middleware::{Params as PodParams, Value as PodValue},
     };
-    use pod2_db::{store::{self, PodData, SpaceInfo}, Db};
+    use pod2_db::{
+        store::{self, PodData, SpaceInfo},
+        Db,
+    };
     use serde_json::{json, Value};
 
     use super::*;
-    use crate::{
-        routes::create_router,
-    };
+    use crate::routes::create_router;
 
     // Test helper to create a server
     pub async fn create_test_server() -> TestServer {

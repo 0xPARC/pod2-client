@@ -14,10 +14,13 @@ use pod2::{
     frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
     middleware::{hash_str, Hash, Value as PodValue},
 };
+use pod2_db::{
+    store::{self, PodData, PodInfo},
+    Db,
+};
 use serde::Deserialize;
 
 use super::AppError;
-use pod2_db::{store::{self, PodData, PodInfo}, Db};
 
 // Request body for the /api/pods/sign endpoint
 #[derive(Deserialize)]
@@ -83,13 +86,7 @@ pub async fn import_pod_to_space(
     let pod_id_string = pod_id_obj.0.encode_hex::<String>();
 
     // Then it calls the generic store function.
-    store::import_pod(
-        &db,
-        &pod_data_enum,
-        payload.label.as_deref(),
-        &space_id,
-    )
-    .await?;
+    store::import_pod(&db, &pod_data_enum, payload.label.as_deref(), &space_id).await?;
 
     // Finally, it constructs the response object.
     let created_pod_info = PodInfo {
@@ -191,12 +188,12 @@ mod tests {
         middleware::{self, hash_str, Key, Params as PodParams, PodId, Value as PodValue},
         op,
     };
+    use pod2_db::Db;
     use serde_json::{json, Value};
     use tracing_subscriber::prelude::*;
 
     use super::*; // Imports PodInfo, SignRequest etc. and handlers
     use crate::{handlers::playground::MOCK_VD_SET, routes::create_router};
-    use pod2_db::Db;
 
     // Helper to insert a test space
     async fn insert_test_space(db: &Db, id: &str) {
@@ -209,7 +206,7 @@ mod tests {
     // Helper to insert a test pod (contract for data_payload changes)
     async fn insert_test_pod(
         db: &Db,
-        pod_type: &str, // Should be "main" or "signed"
+        pod_type: &str,       // Should be "main" or "signed"
         data_payload: &Value, // MUST be a valid SerializedSignedPod or SerializedMainPod as JSON
         label: Option<&str>,
         space: &str,
@@ -336,14 +333,7 @@ mod tests {
             "list_signed1",
             vec![("value_signed", PodValue::from(2))],
         );
-        insert_test_pod(
-            &db,
-            "signed",
-            &signed_pod1_data_payload,
-            None,
-            "space1",
-        )
-        .await;
+        insert_test_pod(&db, "signed", &signed_pod1_data_payload, None, "space1").await;
 
         // Create and insert another MainPod for space2 using helper
         let (main_pod2_id_str, main_pod2_data_payload) = create_sample_main_pod_data(&test_params);
@@ -476,14 +466,7 @@ mod tests {
         let test_params = PodParams::default();
         let (_, existing_pod_data) = create_sample_main_pod_data(&test_params);
 
-        insert_test_pod(
-            &db,
-            "main",
-            &existing_pod_data,
-            None,
-            space_name,
-        )
-        .await;
+        insert_test_pod(&db, "main", &existing_pod_data, None, space_name).await;
 
         let non_existent_id_str: String = PodId(hash_str("non_existent_pod_id_string_for_test"))
             .0

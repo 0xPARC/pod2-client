@@ -11,22 +11,19 @@ use pod2::{
     backends::plonky2::{
         mainpod::Prover, mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey,
         signedpod::Signer,
-    }, examples::zu_kyc_sign_pod_builders, frontend::{MainPod, MainPodBuilder, SignedPod}, lang::{self, parser, LangError}, middleware::{
-        Params, PodId, PodProver, PodType, VDSet,
-        DEFAULT_VD_SET,
-    }
+    },
+    examples::zu_kyc_sign_pod_builders,
+    frontend::{MainPod, MainPodBuilder, SignedPod},
+    lang::{self, parser, LangError},
+    middleware::{Params, PodId, PodProver, PodType, VDSet, DEFAULT_VD_SET},
 };
-use pod2_db::store::PodData;
+use pod2_db::{store, store::PodData, Db};
 use pod2_solver::{self, db::IndexablePod, error::SolverError, metrics::MetricsLevel};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    api_types::{
-        Diagnostic, DiagnosticSeverity, ExecuteCodeRequest,  ValidateCodeRequest,
-        ValidateCodeResponse,
-    },
+use crate::api_types::{
+    Diagnostic, DiagnosticSeverity, ExecuteCodeRequest, ValidateCodeRequest, ValidateCodeResponse,
 };
-use pod2_db::{store, Db};
 
 #[allow(clippy::declare_interior_mutable_const)]
 pub const MOCK_VD_SET: LazyLock<VDSet> = LazyLock::new(|| VDSet::new(6, &[]).unwrap());
@@ -339,7 +336,8 @@ pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
     let mut pay_signer = Signer(SecretKey(BigUint::from(2u32)));
     let mut sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
 
-    let (gov_id_builder, pay_stub_builder, sanction_list_builder) = zu_kyc_sign_pod_builders(&params_for_test);
+    let (gov_id_builder, pay_stub_builder, sanction_list_builder) =
+        zu_kyc_sign_pod_builders(&params_for_test);
 
     let sign_results = [
         gov_id_builder.sign(&mut gov_signer),
@@ -369,8 +367,7 @@ pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
 
             for (pod, name) in pods.into_iter().zip(pod_names) {
                 let pod_data = PodData::from(pod);
-                store::import_pod(db, &pod_data, Some(name), space_id)
-                    .await?;
+                store::import_pod(db, &pod_data, Some(name), space_id).await?;
             }
             info!("Successfully set up Zukyc space.");
         }
@@ -388,12 +385,10 @@ mod tests {
 
     use axum_test::TestServer;
     use env_logger::Builder;
-    
     use serde_json::json;
 
     use super::*; // Imports handlers, PlaygroundApiError, etc.
     use crate::routes::create_router;
-    
 
     static INIT: Once = Once::new();
     fn setup_test_logging() {
