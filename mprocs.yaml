@@ -1,6 +1,6 @@
 procs:
   server:
-    cwd: ..
+    cwd: ./server
     shell: RUST_LOG=info cargo run  --release --bin pod2-server
   playground-client:
     cwd: ./apps/playground-client

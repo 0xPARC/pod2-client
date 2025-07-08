@@ -7,3 +7,4 @@ Cargo.lock
 .cargo
 .claude/settings.local.json
 node_modules
+.turbo

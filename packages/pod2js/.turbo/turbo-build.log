@@ -1,6 +1,6 @@
 
 
-> @pod2/pod2js@1.0.0 build /Users/robknight/Projects/0xPARC/client-pod2/web/packages/pod2js
+> @pod2/pod2js@1.0.0 build /Users/robknight/Projects/0xPARC/client-pod2/packages/pod2js
 > tsdown --outDir dist --entry src/index.ts --format esm --format cjs --dts
 
 [34mℹ[39m tsdown [2mv0.12.9[22m powered by rolldown [2mv1.0.0-beta.21[22m
@@ -18,4 +18,4 @@
 [34mℹ[39m [33m[CJS][39m [2mdist/[22mindex.d.cts.map  [2m10.32 kB[22m [2m│ gzip: 3.26 kB[22m
 [34mℹ[39m [33m[CJS][39m [2mdist/[22m[32m[1mindex.d.cts[22m[39m      [2m 6.83 kB[22m [2m│ gzip: 2.09 kB[22m
 [34mℹ[39m [33m[CJS][39m 2 files, total: 17.15 kB
-[32m✔[39m Build complete in [32m110ms[39m
+[32m✔[39m Build complete in [32m119ms[39m
