@@ -688,16 +688,21 @@ fn set_default_config(app: &mut App, store_name: &str) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
-    let builder = tauri::Builder::default().plugin(tauri_plugin_store::Builder::new().build());
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_store::Builder::new().build());
 
+    let debug = false;
     // Only enable single instance on non-debug builds
     #[cfg(not(debug_assertions))]
-    builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-        let _ = app
-            .get_webview_window("main")
-            .expect("no main window")
-            .set_focus();
-    }));
+    let debug = true;
+
+    if !debug {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+        }));
+    }
 
     builder
         .plugin(tauri_plugin_deep_link::init())
