@@ -689,10 +689,7 @@ pub fn run() {
     env_logger::init();
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_store::Builder::new().build());
 
-    let debug = false;
-    // Only enable single instance on non-debug builds
-    #[cfg(not(debug_assertions))]
-    let debug = true;
+    let debug = cfg!(dev);
 
     if !debug {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
