@@ -1,0 +1,7 @@
+
+
+> @pod2/pod2js@1.0.0 gen-types /Users/robknight/Projects/0xPARC/client-pod2/web/packages/pod2js
+> node script/gen-types.js
+
+Generating TypeScript types...
+Types are up to date, no changes needed

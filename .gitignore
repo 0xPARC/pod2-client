@@ -6,3 +6,4 @@ Cargo.lock
 *.db
 .cargo
 .claude/settings.local.json
+node_modules
