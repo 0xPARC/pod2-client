@@ -617,7 +617,7 @@ pub async fn get_default_private_key(
         .interact(|conn| {
             let mut stmt =
                 conn.prepare("SELECT private_key FROM private_keys WHERE is_default = TRUE")?;
-            let result = stmt.query_row([], |row| Ok(row.get::<_, String>(0)?));
+            let result = stmt.query_row([], |row| row.get::<_, String>(0));
 
             match result {
                 Ok(hex_string) => Ok(Some(hex_string)),
@@ -773,7 +773,7 @@ pub async fn add_sent_message_to_chat(
             let chat_id = {
                 let mut stmt = tx.prepare("SELECT id FROM chats WHERE peer_node_id = ?1")?;
                 let result = stmt.query_row([&peer_node_id_clone], |row| {
-                    Ok(row.get::<_, String>(0)?)
+                    row.get::<_, String>(0)
                 });
 
                 match result {
