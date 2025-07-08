@@ -542,7 +542,6 @@ pub struct AppState {
     db: Db,
     state_data: AppStateData,
     app_handle: AppHandle,
-    store_name: String,
     p2p_node: Option<p2p::P2PNode>,
 }
 
@@ -734,7 +733,6 @@ pub fn run() {
                     db,
                     state_data: AppStateData::default(),
                     app_handle,
-                    store_name,
                     p2p_node: None,
                 };
                 // Initialize state

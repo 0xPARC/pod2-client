@@ -67,5 +67,6 @@ impl SignedPodMessage {
 pub struct ReceivedMessage {
     pub from: NodeId,
     pub message: PodMessage,
+    #[allow(dead_code)]
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }

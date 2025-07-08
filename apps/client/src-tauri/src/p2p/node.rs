@@ -207,6 +207,7 @@ impl P2PNode {
     }
 
     /// Shutdown the P2P node
+    #[allow(unused)]
     pub async fn shutdown(&self) {
         if let Err(err) = self.router.shutdown().await {
             warn!("Failed to shutdown router cleanly: {}", err);
