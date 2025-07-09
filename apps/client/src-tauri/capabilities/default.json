@@ -14,6 +14,7 @@
     "deep-link:default",
     "store:default",
     "core:window:allow-toggle-maximize",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    "http:default"
   ]
 }
