@@ -14,3 +14,4 @@ dist-ssr
 .next
 *.json
 *.md
+packages/pod2-node
