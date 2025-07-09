@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use hex::ToHex;
-use pod2::{backends::plonky2::primitives::ec::schnorr::SecretKey, frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod}};
+use pod2::{
+    backends::plonky2::primitives::ec::schnorr::SecretKey,
+    frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod},
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -577,7 +580,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
             let mut count = 0;
             for row in rows {
                 let (private_key_hex, current_public_key) = row?;
-                
+
                 // Check if this looks like the old hex format (starts with "pub_")
                 if current_public_key.starts_with("pub_") {
                     // Regenerate proper public key from private key
@@ -591,7 +594,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
                     let big_uint = num::BigUint::from_bytes_be(&bytes);
                     let secret_key = SecretKey(big_uint);
                     let public_key_base58 = secret_key.public_key().to_string();
-                    
+
                     // Update the public key
                     conn.execute(
                         "UPDATE private_keys SET public_key = ?1 WHERE private_key = ?2",
@@ -600,7 +603,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
                     count += 1;
                 }
             }
-            
+
             Ok::<i32, rusqlite::Error>(count)
         })
         .await
@@ -608,7 +611,10 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
         .context("DB interaction failed for regenerate_public_keys_if_needed")??;
 
     if updated_count > 0 {
-        log::info!("Regenerated {} public keys to use proper base58 encoding", updated_count);
+        log::info!(
+            "Regenerated {} public keys to use proper base58 encoding",
+            updated_count
+        );
     }
 
     Ok(())
@@ -625,7 +631,8 @@ async fn ensure_default_private_key(db: &Db) -> Result<()> {
     // Check if a default key already exists
     let has_default = conn
         .interact(|conn| {
-            let mut stmt = conn.prepare("SELECT 1 FROM private_keys WHERE is_default = TRUE LIMIT 1")?;
+            let mut stmt =
+                conn.prepare("SELECT 1 FROM private_keys WHERE is_default = TRUE LIMIT 1")?;
             stmt.exists([])
         })
         .await
@@ -663,9 +670,7 @@ async fn ensure_default_private_key(db: &Db) -> Result<()> {
 // Note: Removed create_private_key_internal - we now use ensure_default_private_key for single-key model
 
 /// Get the default private key, creating one if it doesn't exist
-pub async fn get_default_private_key(
-    db: &Db,
-) -> Result<SecretKey> {
+pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
     // Ensure a default key exists
     ensure_default_private_key(db).await?;
 
@@ -683,9 +688,9 @@ pub async fn get_default_private_key(
 
             match result {
                 Ok(hex_string) => Ok(hex_string),
-                Err(rusqlite::Error::QueryReturnedNoRows) => {
-                    Err(anyhow::anyhow!("No default private key found after ensuring one exists"))
-                }
+                Err(rusqlite::Error::QueryReturnedNoRows) => Err(anyhow::anyhow!(
+                    "No default private key found after ensuring one exists"
+                )),
                 Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
             }
         })
@@ -723,7 +728,7 @@ pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> 
                     "is_default": true
                 }))
             });
-            
+
             match result {
                 Ok(info) => Ok(info),
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -951,12 +956,7 @@ pub async fn import_pod_and_add_to_inbox(
 }
 
 /// Update the pinned status of a POD
-pub async fn set_pod_pinned(
-    db: &Db,
-    space_id: &str,
-    pod_id: &str,
-    pinned: bool,
-) -> Result<()> {
+pub async fn set_pod_pinned(db: &Db, space_id: &str, pod_id: &str, pinned: bool) -> Result<()> {
     let conn = db
         .pool()
         .get()
@@ -1019,4 +1019,3 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
 
     Ok(pods)
 }
-

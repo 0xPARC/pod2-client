@@ -358,9 +358,14 @@ async fn send_message_as_pod(
 
     // Store the SignedPod in the database for record keeping
     let pod_data = PodData::Signed(signed_pod.clone().into());
-    store::import_pod(&app_state.db, &pod_data, Some("Message POD"), DEFAULT_SPACE_ID)
-        .await
-        .map_err(|e| format!("Failed to store message POD: {}", e))?;
+    store::import_pod(
+        &app_state.db,
+        &pod_data,
+        Some("Message POD"),
+        DEFAULT_SPACE_ID,
+    )
+    .await
+    .map_err(|e| format!("Failed to store message POD: {}", e))?;
 
     // Convert to SerializedSignedPod for P2P transmission
     let serialized_signed_pod: SerializedSignedPod = signed_pod.into();
@@ -484,41 +489,42 @@ async fn set_pod_pinned(
     pinned: bool,
 ) -> Result<(), String> {
     let mut app_state = state.lock().await;
-    
+
     store::set_pod_pinned(&app_state.db, &space_id, &pod_id, pinned)
         .await
         .map_err(|e| format!("Failed to set pod pinned status: {}", e))?;
-    
+
     // Trigger state sync to update frontend
     app_state.trigger_state_sync().await?;
-    
+
     Ok(())
 }
 
 #[tauri::command]
 async fn list_spaces(state: State<'_, Mutex<AppState>>) -> Result<Vec<serde_json::Value>, String> {
     let app_state = state.lock().await;
-    
+
     let spaces = store::list_spaces(&app_state.db)
         .await
         .map_err(|e| format!("Failed to list spaces: {}", e))?;
-        
-    Ok(spaces.into_iter().map(|s| serde_json::to_value(s).unwrap()).collect())
+
+    Ok(spaces
+        .into_iter()
+        .map(|s| serde_json::to_value(s).unwrap())
+        .collect())
 }
 
 #[tauri::command]
-async fn insert_zukyc_pods(
-    state: State<'_, Mutex<AppState>>,
-) -> Result<(), String> {
+async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let mut app_state = state.lock().await;
-    
+
     insert_zukyc_pods_to_default(&app_state.db)
         .await
         .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
-    
+
     // Trigger state sync to update frontend
     app_state.trigger_state_sync().await?;
-    
+
     Ok(())
 }
 
@@ -677,7 +683,7 @@ pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
     }
 
     log::info!("Inserting ZuKYC sample pods to default space...");
-    
+
     match sign_zukyc_pods() {
         Ok(pods) => {
             log::info!("All pods signed successfully, importing to DB...");

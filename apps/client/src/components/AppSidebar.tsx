@@ -19,7 +19,11 @@ import {
   sendPodToPeer,
   startP2pNode
 } from "@/lib/rpc";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@radix-ui/react-collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from "@radix-ui/react-collapsible";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   ChevronDownIcon,
@@ -70,7 +74,9 @@ export function AppSidebar() {
     senderAlias: ""
   });
   const [sendMode, setSendMode] = useState<"pod" | "message">("pod");
-  const [privateKeyInfo, setPrivateKeyInfo] = useState<PrivateKeyInfo | null>(null);
+  const [privateKeyInfo, setPrivateKeyInfo] = useState<PrivateKeyInfo | null>(
+    null
+  );
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [foldersExpanded, setFoldersExpanded] = useState(true);
@@ -182,68 +188,77 @@ export function AppSidebar() {
           <Collapsible open={foldersExpanded} onOpenChange={setFoldersExpanded}>
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="cursor-pointer hover:bg-accent hover:text-accent-foreground rounded px-2 py-1 flex items-center gap-2">
-                {foldersExpanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
+                {foldersExpanded ? (
+                  <ChevronDownIcon size={16} />
+                ) : (
+                  <ChevronRightIcon size={16} />
+                )}
                 Folders
               </SidebarGroupLabel>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFolderFilter("all");
-                    setSelectedFilter("all");
-                  }}
-                  isActive={currentView === "pods" && selectedFolderFilter === "all"}
-                >
-                  <FileIcon />
-                  All Folders
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {appState.pod_stats.total_pods}
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setCurrentView("pods");
+                        setSelectedFolderFilter("all");
+                        setSelectedFilter("all");
+                      }}
+                      isActive={
+                        currentView === "pods" && selectedFolderFilter === "all"
+                      }
+                    >
+                      <FileIcon />
+                      All Folders
+                    </SidebarMenuButton>
+                    <SidebarMenuBadge>
+                      {appState.pod_stats.total_pods}
+                    </SidebarMenuBadge>
+                  </SidebarMenuItem>
 
-              {foldersLoading ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton disabled>
-                    <FolderIcon />
-                    Loading...
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : (
-                folders.map((folder) => {
-                  const podCount = [...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods]
-                    .filter(p => p.space === folder.id).length;
-                  
-                  return (
-                    <SidebarMenuItem key={folder.id}>
-                      <SidebarMenuButton
-                        onClick={() => {
-                          setCurrentView("pods");
-                          setSelectedFolderFilter(folder.id);
-                          setSelectedFilter("all");
-                        }}
-                        isActive={currentView === "pods" && selectedFolderFilter === folder.id}
-                      >
+                  {foldersLoading ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton disabled>
                         <FolderIcon />
-                        {folder.id}
+                        Loading...
                       </SidebarMenuButton>
-                      <SidebarMenuBadge>
-                        {podCount}
-                      </SidebarMenuBadge>
                     </SidebarMenuItem>
-                  );
-                })
-              )}
+                  ) : (
+                    folders.map((folder) => {
+                      const podCount = [
+                        ...appState.pod_lists.signed_pods,
+                        ...appState.pod_lists.main_pods
+                      ].filter((p) => p.space === folder.id).length;
+
+                      return (
+                        <SidebarMenuItem key={folder.id}>
+                          <SidebarMenuButton
+                            onClick={() => {
+                              setCurrentView("pods");
+                              setSelectedFolderFilter(folder.id);
+                              setSelectedFilter("all");
+                            }}
+                            isActive={
+                              currentView === "pods" &&
+                              selectedFolderFilter === folder.id
+                            }
+                          >
+                            <FolderIcon />
+                            {folder.id}
+                          </SidebarMenuButton>
+                          <SidebarMenuBadge>{podCount}</SidebarMenuBadge>
+                        </SidebarMenuItem>
+                      );
+                    })
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
         </SidebarGroup>
-        
+
         <SidebarGroup>
           <SidebarGroupLabel>Filters</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -254,13 +269,20 @@ export function AppSidebar() {
                     setCurrentView("pods");
                     setSelectedFilter("pinned");
                   }}
-                  isActive={currentView === "pods" && selectedFilter === "pinned"}
+                  isActive={
+                    currentView === "pods" && selectedFilter === "pinned"
+                  }
                 >
                   <StarIcon />
                   Pinned
                 </SidebarMenuButton>
                 <SidebarMenuBadge>
-                  {[...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods].filter(p => p.pinned).length}
+                  {
+                    [
+                      ...appState.pod_lists.signed_pods,
+                      ...appState.pod_lists.main_pods
+                    ].filter((p) => p.pinned).length
+                  }
                 </SidebarMenuBadge>
               </SidebarMenuItem>
 
@@ -362,7 +384,10 @@ export function AppSidebar() {
             className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer hover:bg-accent rounded transition-colors break-all"
             title={`Click to copy: ${privateKeyInfo.public_key}`}
           >
-            🔑 {/*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key}
+            🔑{" "}
+            {
+              /*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key
+            }
           </div>
         )}
         <DropdownMenu>
@@ -384,7 +409,8 @@ export function AppSidebar() {
             {/* Private key is automatically created when needed */}
             {privateKeyInfo && (
               <DropdownMenuItem disabled>
-                Key: {privateKeyInfo.alias || "Default"} ({privateKeyInfo.public_key.substring(0, 8)}...)
+                Key: {privateKeyInfo.alias || "Default"} (
+                {privateKeyInfo.public_key.substring(0, 8)}...)
               </DropdownMenuItem>
             )}
             {nodeId && (

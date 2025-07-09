@@ -14,8 +14,13 @@ import { StarIcon, FolderIcon } from "lucide-react";
 import { Button } from "./ui/button";
 
 export function PodViewer() {
-  const { getFilteredPods, getSelectedPod, setSelectedPodId, selectedPodId, togglePodPinned } =
-    useAppStore();
+  const {
+    getFilteredPods,
+    getSelectedPod,
+    setSelectedPodId,
+    selectedPodId,
+    togglePodPinned
+  } = useAppStore();
 
   const filteredPods = getFilteredPods();
   const selectedPod = getSelectedPod();
@@ -68,13 +73,13 @@ export function PodViewer() {
                               variant="ghost"
                               size="sm"
                               className={`p-0 h-4 w-4 hover:bg-transparent ${
-                                pod.pinned 
-                                  ? "text-amber-500 hover:text-amber-600" 
+                                pod.pinned
+                                  ? "text-amber-500 hover:text-amber-600"
                                   : "text-muted-foreground hover:text-amber-500"
                               }`}
                               onClick={(e) => handleStarClick(e, pod)}
                             >
-                              <StarIcon 
+                              <StarIcon
                                 className={`h-3 w-3 ${pod.pinned ? "fill-current" : ""}`}
                               />
                             </Button>
@@ -82,7 +87,10 @@ export function PodViewer() {
                               {formatLabel(pod)}
                             </span>
                           </div>
-                          <Badge variant="secondary" className="text-xs shrink-0">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs shrink-0"
+                          >
                             {pod.pod_type}
                           </Badge>
                         </div>
@@ -92,7 +100,10 @@ export function PodViewer() {
                           </div>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <FolderIcon className="h-3 w-3" />
-                            <span className="truncate max-w-[60px]" title={pod.space}>
+                            <span
+                              className="truncate max-w-[60px]"
+                              title={pod.space}
+                            >
                               {pod.space}
                             </span>
                           </div>
@@ -154,7 +165,9 @@ export function PodViewer() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Pinned:</span>
                       <span className="flex items-center gap-1">
-                        <StarIcon className={`h-3 w-3 ${selectedPod.pinned ? "fill-current text-amber-500" : "text-muted-foreground"}`} />
+                        <StarIcon
+                          className={`h-3 w-3 ${selectedPod.pinned ? "fill-current text-amber-500" : "text-muted-foreground"}`}
+                        />
                         {selectedPod.pinned ? "Yes" : "No"}
                       </span>
                     </div>

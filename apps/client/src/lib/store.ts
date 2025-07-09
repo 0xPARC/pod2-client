@@ -34,7 +34,7 @@ interface AppStoreState {
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
   chatEnabled: boolean;
-  
+
   // Folder State
   folders: SpaceInfo[];
   foldersLoading: boolean;
@@ -158,9 +158,12 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   togglePodPinned: async (podId: string, spaceId: string) => {
     try {
       const { appState } = get();
-      const allPods = [...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods];
-      const pod = allPods.find(p => p.id === podId);
-      
+      const allPods = [
+        ...appState.pod_lists.signed_pods,
+        ...appState.pod_lists.main_pods
+      ];
+      const pod = allPods.find((p) => p.id === podId);
+
       if (pod) {
         await setPodPinned(spaceId, podId, !pod.pinned);
         // Trigger sync to update the UI
@@ -173,7 +176,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   getFilteredPods: () => {
     const { appState, selectedFilter, selectedFolderFilter } = get();
-    
+
     // Get all pods or filter by type
     let pods: PodInfo[] = [];
     switch (selectedFilter) {
@@ -184,24 +187,32 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
         pods = appState.pod_lists.main_pods;
         break;
       case "pinned":
-        pods = [...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods].filter(p => p.pinned);
+        pods = [
+          ...appState.pod_lists.signed_pods,
+          ...appState.pod_lists.main_pods
+        ].filter((p) => p.pinned);
         break;
       case "all":
       default:
-        pods = [...appState.pod_lists.signed_pods, ...appState.pod_lists.main_pods];
+        pods = [
+          ...appState.pod_lists.signed_pods,
+          ...appState.pod_lists.main_pods
+        ];
         break;
     }
 
     // Apply folder filter
     if (selectedFolderFilter !== "all") {
-      pods = pods.filter(p => p.space === selectedFolderFilter);
+      pods = pods.filter((p) => p.space === selectedFolderFilter);
     }
 
     // Sort: pinned first, then by creation date (newest first)
     return pods.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     });
   },
 
