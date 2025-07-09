@@ -23,7 +23,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "customConditions": ["@pod2/source"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -1,0 +1,2 @@
+-- No down migration - cannot revert public key format changes
+-- This is a data transformation that improves the format

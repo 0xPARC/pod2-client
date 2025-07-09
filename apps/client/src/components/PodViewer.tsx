@@ -10,10 +10,17 @@ import {
 } from "./ui/resizable";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
+import { StarIcon, FolderIcon } from "lucide-react";
+import { Button } from "./ui/button";
 
 export function PodViewer() {
-  const { getFilteredPods, getSelectedPod, setSelectedPodId, selectedPodId } =
-    useAppStore();
+  const {
+    getFilteredPods,
+    getSelectedPod,
+    setSelectedPodId,
+    selectedPodId,
+    togglePodPinned
+  } = useAppStore();
 
   const filteredPods = getFilteredPods();
   const selectedPod = getSelectedPod();
@@ -24,6 +31,11 @@ export function PodViewer() {
 
   const formatId = (id: string) => {
     return `${id.slice(0, 8)}...${id.slice(-4)}`;
+  };
+
+  const handleStarClick = (e: React.MouseEvent, pod: any) => {
+    e.stopPropagation(); // Prevent card selection
+    togglePodPinned(pod.id, pod.space);
   };
 
   return (
@@ -50,21 +62,51 @@ export function PodViewer() {
                       selectedPodId === pod.id
                         ? "bg-accent border-accent-foreground/20"
                         : ""
-                    }`}
+                    } ${pod.pinned ? "ring-1 ring-amber-200 bg-amber-50/30" : ""}`}
                     onClick={() => setSelectedPodId(pod.id)}
                   >
                     <CardContent className="p-3">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm truncate">
-                            {formatLabel(pod)}
-                          </span>
-                          <Badge variant="secondary" className="text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`p-0 h-4 w-4 hover:bg-transparent ${
+                                pod.pinned
+                                  ? "text-amber-500 hover:text-amber-600"
+                                  : "text-muted-foreground hover:text-amber-500"
+                              }`}
+                              onClick={(e) => handleStarClick(e, pod)}
+                            >
+                              <StarIcon
+                                className={`h-3 w-3 ${pod.pinned ? "fill-current" : ""}`}
+                              />
+                            </Button>
+                            <span className="font-medium text-sm truncate">
+                              {formatLabel(pod)}
+                            </span>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className="text-xs shrink-0"
+                          >
                             {pod.pod_type}
                           </Badge>
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {formatId(pod.id)}
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {formatId(pod.id)}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <FolderIcon className="h-3 w-3" />
+                            <span
+                              className="truncate max-w-[60px]"
+                              title={pod.space}
+                            >
+                              {pod.space}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -119,6 +161,15 @@ export function PodViewer() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Space:</span>
                       <span>{selectedPod.space}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Pinned:</span>
+                      <span className="flex items-center gap-1">
+                        <StarIcon
+                          className={`h-3 w-3 ${selectedPod.pinned ? "fill-current text-amber-500" : "text-muted-foreground"}`}
+                        />
+                        {selectedPod.pinned ? "Yes" : "No"}
+                      </span>
                     </div>
                   </div>
                 </div>

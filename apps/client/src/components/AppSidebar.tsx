@@ -12,21 +12,31 @@ import {
   SidebarMenuItem
 } from "@/components/ui/sidebar";
 import {
-  startP2pNode,
-  sendPodToPeer,
+  getPrivateKeyInfo,
+  insertZuKycPods,
+  PrivateKeyInfo,
   sendMessageAsPod,
-  listPrivateKeys,
-  createPrivateKey
+  sendPodToPeer,
+  startP2pNode
 } from "@/lib/rpc";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from "@radix-ui/react-collapsible";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
+  ChevronDownIcon,
+  ChevronRightIcon,
   CodeIcon,
   FileCheck2Icon,
   FileIcon,
   FilePenLineIcon,
+  FolderIcon,
   InboxIcon,
   MessageSquareIcon,
-  SettingsIcon
+  SettingsIcon,
+  StarIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
@@ -46,8 +56,12 @@ export function AppSidebar() {
     initialize,
     currentView,
     selectedFilter,
+    selectedFolderFilter,
+    folders,
+    foldersLoading,
     setCurrentView,
     setSelectedFilter,
+    setSelectedFolderFilter,
     setExternalPodRequest,
     chatEnabled
   } = useAppStore();
@@ -60,9 +74,12 @@ export function AppSidebar() {
     senderAlias: ""
   });
   const [sendMode, setSendMode] = useState<"pod" | "message">("pod");
-  const [privateKeys, setPrivateKeys] = useState<any[]>([]);
+  const [privateKeyInfo, setPrivateKeyInfo] = useState<PrivateKeyInfo | null>(
+    null
+  );
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
+  const [foldersExpanded, setFoldersExpanded] = useState(true);
 
   const handlePodRequestFromClipboard = async () => {
     try {
@@ -129,32 +146,38 @@ export function AppSidebar() {
     }
   };
 
-  const loadPrivateKeys = async () => {
+  const loadPrivateKeyInfo = async () => {
     try {
-      const keys = await listPrivateKeys();
-      setPrivateKeys(keys);
+      const keyInfo = await getPrivateKeyInfo();
+      setPrivateKeyInfo(keyInfo);
     } catch (error) {
-      console.error("Failed to load private keys:", error);
+      console.error("Failed to load private key info:", error);
     }
   };
 
-  const handleCreatePrivateKey = async () => {
+  const handleCopyPublicKey = async () => {
+    if (privateKeyInfo?.public_key) {
+      try {
+        await writeText(privateKeyInfo.public_key);
+        console.log("Public key copied to clipboard");
+      } catch (error) {
+        console.error("Failed to copy public key:", error);
+      }
+    }
+  };
+
+  const handleInsertZuKycPods = async () => {
     try {
-      const hasDefault = privateKeys.some((key) => key.is_default);
-      await createPrivateKey(
-        undefined, // No alias
-        !hasDefault // Set as default if no default exists
-      );
-      console.log("Private key created successfully");
-      loadPrivateKeys(); // Refresh the list
+      await insertZuKycPods();
+      console.log("ZuKYC pods inserted successfully");
     } catch (error) {
-      console.error("Failed to create private key:", error);
+      console.error("Failed to insert ZuKYC pods:", error);
     }
   };
 
   useEffect(() => {
     initialize();
-    loadPrivateKeys();
+    loadPrivateKeyInfo();
   }, [initialize]);
 
   return (
@@ -162,22 +185,104 @@ export function AppSidebar() {
       <SidebarHeader></SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>PODs</SidebarGroupLabel>
+          <Collapsible open={foldersExpanded} onOpenChange={setFoldersExpanded}>
+            <CollapsibleTrigger asChild>
+              <SidebarGroupLabel className="cursor-pointer hover:bg-accent hover:text-accent-foreground rounded px-2 py-1 flex items-center gap-2">
+                {foldersExpanded ? (
+                  <ChevronDownIcon size={16} />
+                ) : (
+                  <ChevronRightIcon size={16} />
+                )}
+                Folders
+              </SidebarGroupLabel>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setCurrentView("pods");
+                        setSelectedFolderFilter("all");
+                        setSelectedFilter("all");
+                      }}
+                      isActive={
+                        currentView === "pods" && selectedFolderFilter === "all"
+                      }
+                    >
+                      <FileIcon />
+                      All Folders
+                    </SidebarMenuButton>
+                    <SidebarMenuBadge>
+                      {appState.pod_stats.total_pods}
+                    </SidebarMenuBadge>
+                  </SidebarMenuItem>
+
+                  {foldersLoading ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton disabled>
+                        <FolderIcon />
+                        Loading...
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : (
+                    folders.map((folder) => {
+                      const podCount = [
+                        ...appState.pod_lists.signed_pods,
+                        ...appState.pod_lists.main_pods
+                      ].filter((p) => p.space === folder.id).length;
+
+                      return (
+                        <SidebarMenuItem key={folder.id}>
+                          <SidebarMenuButton
+                            onClick={() => {
+                              setCurrentView("pods");
+                              setSelectedFolderFilter(folder.id);
+                              setSelectedFilter("all");
+                            }}
+                            isActive={
+                              currentView === "pods" &&
+                              selectedFolderFilter === folder.id
+                            }
+                          >
+                            <FolderIcon />
+                            {folder.id}
+                          </SidebarMenuButton>
+                          <SidebarMenuBadge>{podCount}</SidebarMenuBadge>
+                        </SidebarMenuItem>
+                      );
+                    })
+                  )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Filters</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => {
                     setCurrentView("pods");
-                    setSelectedFilter("all");
+                    setSelectedFilter("pinned");
                   }}
-                  isActive={currentView === "pods" && selectedFilter === "all"}
+                  isActive={
+                    currentView === "pods" && selectedFilter === "pinned"
+                  }
                 >
-                  <FileIcon />
-                  All
+                  <StarIcon />
+                  Pinned
                 </SidebarMenuButton>
                 <SidebarMenuBadge>
-                  {appState.pod_stats.total_pods}
+                  {
+                    [
+                      ...appState.pod_lists.signed_pods,
+                      ...appState.pod_lists.main_pods
+                    ].filter((p) => p.pinned).length
+                  }
                 </SidebarMenuBadge>
               </SidebarMenuItem>
 
@@ -272,6 +377,19 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {/* Public Key Display */}
+        {privateKeyInfo && (
+          <div
+            onClick={handleCopyPublicKey}
+            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer hover:bg-accent rounded transition-colors break-all"
+            title={`Click to copy: ${privateKeyInfo.public_key}`}
+          >
+            🔑{" "}
+            {
+              /*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key
+            }
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
@@ -285,13 +403,14 @@ export function AppSidebar() {
             <DropdownMenuItem onClick={handleStartP2P} disabled={p2pLoading}>
               {p2pLoading ? "Starting P2P..." : "Start P2P Node"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleCreatePrivateKey}>
-              Create Private Key
+            <DropdownMenuItem onClick={handleInsertZuKycPods}>
+              Insert ZuKYC PODs
             </DropdownMenuItem>
-            {privateKeys.length > 0 && (
+            {/* Private key is automatically created when needed */}
+            {privateKeyInfo && (
               <DropdownMenuItem disabled>
-                Keys: {privateKeys.length} (
-                {privateKeys.filter((k) => k.is_default).length} default)
+                Key: {privateKeyInfo.alias || "Default"} (
+                {privateKeyInfo.public_key.substring(0, 8)}...)
               </DropdownMenuItem>
             )}
             {nodeId && (
@@ -379,12 +498,11 @@ export function AppSidebar() {
                     {sendMode === "pod" ? "Send POD" : "Send Message as POD"}
                   </Button>
 
-                  {sendMode === "message" &&
-                    privateKeys.filter((k) => k.is_default).length === 0 && (
-                      <div className="text-xs text-orange-600">
-                        ⚠️ No default private key found. Create one first.
-                      </div>
-                    )}
+                  {sendMode === "message" && !privateKeyInfo && (
+                    <div className="text-xs text-muted-foreground">
+                      💡 Private key will be auto-created when sending
+                    </div>
+                  )}
                 </div>
               </>
             )}

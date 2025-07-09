@@ -29,6 +29,8 @@ use tokio::sync::Mutex;
 
 mod p2p;
 
+const DEFAULT_SPACE_ID: &str = "default";
+
 #[tauri::command]
 async fn submit_pod_request(
     state: State<'_, Mutex<AppState>>,
@@ -44,7 +46,7 @@ async fn submit_pod_request(
     let mock = true;
 
     let mut app_state = state.lock().await;
-    let fetched_pod_infos = store::list_pods(&app_state.db, "zukyc")
+    let fetched_pod_infos = store::list_all_pods(&app_state.db)
         .await
         .map_err(|e| format!("Failed to list pods: {}", e))?;
 
@@ -56,7 +58,7 @@ async fn submit_pod_request(
         if pod_info.pod_type != pod_info.data.type_str() {
             log::warn!(
                 "Data inconsistency for pod_id '{}' in space '{}' during execution: DB pod_type is '{}' but deserialized PodData is for '{}'. Trusting PodData enum.",
-                pod_info.id, "zukyc", pod_info.pod_type, pod_info.data.type_str()
+                pod_info.id, DEFAULT_SPACE_ID, pod_info.pod_type, pod_info.data.type_str()
             );
             // If they mismatch, we should probably trust the actual data content (the enum variant)
             // but it indicates a potential issue elsewhere (e.g., during import or manual DB edit).
@@ -74,12 +76,12 @@ async fn submit_pod_request(
                     log::error!(
                         "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
                         pod_info.id,
-                        "zukyc",
+                        DEFAULT_SPACE_ID,
                         e
                     );
                     return Err(format!(
                         "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
-                        pod_info.id, "zukyc", e
+                        pod_info.id, DEFAULT_SPACE_ID, e
                     ));
                 }
             },
@@ -224,7 +226,7 @@ async fn send_pod_to_peer(
         .ok_or("P2P node not started. Please start the P2P node first.")?;
 
     // Get the POD from database
-    let pod_info = store::get_pod(&app_state.db, "zukyc", &pod_id)
+    let pod_info = store::get_pod(&app_state.db, DEFAULT_SPACE_ID, &pod_id)
         .await
         .map_err(|e| format!("Failed to get pod: {}", e))?
         .ok_or("Pod not found")?;
@@ -257,7 +259,7 @@ async fn send_pod_to_peer(
     store::add_sent_message_to_chat(
         &app_state.db,
         &peer_node_id,
-        "zukyc",
+        DEFAULT_SPACE_ID,
         &pod_id,
         message_text.as_deref(),
     )
@@ -303,35 +305,17 @@ async fn accept_inbox_message(
 }
 
 #[tauri::command]
-async fn create_private_key(
+async fn get_private_key_info(
     state: State<'_, Mutex<AppState>>,
-    alias: Option<String>,
-    set_as_default: bool,
-) -> Result<String, String> {
+) -> Result<serde_json::Value, String> {
     let app_state = state.lock().await;
 
-    let key_id = store::create_private_key(&app_state.db, alias.as_deref(), set_as_default)
+    store::get_default_private_key_info(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to create private key: {}", e))?;
-
-    log::info!(
-        "Created private key {} (default: {})",
-        key_id,
-        set_as_default
-    );
-    Ok(key_id)
+        .map_err(|e| format!("Failed to get private key info: {}", e))
 }
 
-#[tauri::command]
-async fn list_private_keys(
-    state: State<'_, Mutex<AppState>>,
-) -> Result<Vec<serde_json::Value>, String> {
-    let app_state = state.lock().await;
-
-    store::list_private_keys(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to list private keys: {}", e))
-}
+// Note: list_private_keys removed - we now use a single default key
 
 #[tauri::command]
 async fn send_message_as_pod(
@@ -348,11 +332,10 @@ async fn send_message_as_pod(
         .as_ref()
         .ok_or("P2P node not started. Please start the P2P node first.")?;
 
-    // Get default private key
+    // Get default private key (auto-created if needed)
     let private_key = store::get_default_private_key(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?
-        .ok_or("No default private key found. Please create a private key first.")?;
+        .map_err(|e| format!("Failed to get private key: {}", e))?;
 
     // Create a SignedPod containing the message text
     let params = Params::default();
@@ -375,9 +358,14 @@ async fn send_message_as_pod(
 
     // Store the SignedPod in the database for record keeping
     let pod_data = PodData::Signed(signed_pod.clone().into());
-    store::import_pod(&app_state.db, &pod_data, Some("Message POD"), "zukyc")
-        .await
-        .map_err(|e| format!("Failed to store message POD: {}", e))?;
+    store::import_pod(
+        &app_state.db,
+        &pod_data,
+        Some("Message POD"),
+        DEFAULT_SPACE_ID,
+    )
+    .await
+    .map_err(|e| format!("Failed to store message POD: {}", e))?;
 
     // Convert to SerializedSignedPod for P2P transmission
     let serialized_signed_pod: SerializedSignedPod = signed_pod.into();
@@ -402,7 +390,7 @@ async fn send_message_as_pod(
     store::add_sent_message_to_chat(
         &app_state.db,
         &peer_node_id,
-        "zukyc",
+        DEFAULT_SPACE_ID,
         &pod_id,
         Some(&message_text),
     )
@@ -433,11 +421,10 @@ async fn sign_pod(
         builder.insert(key, value);
     }
 
-    // Get default private key
+    // Get default private key (auto-created if needed)
     let private_key = store::get_default_private_key(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?
-        .ok_or("No default private key found. Please create a private key first.")?;
+        .map_err(|e| format!("Failed to get private key: {}", e))?;
 
     let mut signer = Signer(private_key);
 
@@ -465,7 +452,7 @@ async fn import_pod(
         _ => return Err(format!("Not a valid POD type: {}", pod_type)),
     };
 
-    let _ = store::import_pod(&app_state.db, &pod_data, label.as_deref(), "zukyc")
+    let _ = store::import_pod(&app_state.db, &pod_data, label.as_deref(), DEFAULT_SPACE_ID)
         .await
         .map_err(|e| format!("Failed to import POD: {}", e));
 
@@ -492,6 +479,53 @@ async fn get_chat_messages(
     store::get_chat_messages(&app_state.db, &chat_id)
         .await
         .map_err(|e| format!("Failed to get chat messages: {}", e))
+}
+
+#[tauri::command]
+async fn set_pod_pinned(
+    state: State<'_, Mutex<AppState>>,
+    space_id: String,
+    pod_id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    let mut app_state = state.lock().await;
+
+    store::set_pod_pinned(&app_state.db, &space_id, &pod_id, pinned)
+        .await
+        .map_err(|e| format!("Failed to set pod pinned status: {}", e))?;
+
+    // Trigger state sync to update frontend
+    app_state.trigger_state_sync().await?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn list_spaces(state: State<'_, Mutex<AppState>>) -> Result<Vec<serde_json::Value>, String> {
+    let app_state = state.lock().await;
+
+    let spaces = store::list_spaces(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to list spaces: {}", e))?;
+
+    Ok(spaces
+        .into_iter()
+        .map(|s| serde_json::to_value(s).unwrap())
+        .collect())
+}
+
+#[tauri::command]
+async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let mut app_state = state.lock().await;
+
+    insert_zukyc_pods_to_default(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
+
+    // Trigger state sync to update frontend
+    app_state.trigger_state_sync().await?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -572,17 +606,23 @@ impl AppState {
     }
 
     async fn refresh_pod_lists(&mut self) -> Result<(), String> {
-        // For now, we're using "zukyc" as the default space
-        // This could be made configurable in the future
-        let space_id = "zukyc";
-
-        let signed_pods = store::list_pods_by_type(&self.db, space_id, "signed")
+        // Load all PODs from all spaces for proper folder filtering
+        let all_pods = store::list_all_pods(&self.db)
             .await
-            .map_err(|e| format!("Failed to list signed pods: {}", e))?;
+            .map_err(|e| format!("Failed to list all pods: {}", e))?;
 
-        let main_pods = store::list_pods_by_type(&self.db, space_id, "main")
-            .await
-            .map_err(|e| format!("Failed to list main pods: {}", e))?;
+        // Separate PODs by type for the frontend structure
+        let signed_pods = all_pods
+            .iter()
+            .filter(|pod| pod.pod_type == "signed")
+            .cloned()
+            .collect();
+
+        let main_pods = all_pods
+            .iter()
+            .filter(|pod| pod.pod_type == "main")
+            .cloned()
+            .collect();
 
         self.state_data.pod_lists = PodLists {
             signed_pods,
@@ -623,16 +663,26 @@ pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
     all_signed.map_err(|e| anyhow::anyhow!("Failed to sign Zukyc pods: {}", e))
 }
 
-pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
-    let space_id = "zukyc";
-
-    if store::space_exists(db, space_id).await? {
-        log::info!("Space '{}' already exists. Skipping setup.", space_id);
+pub async fn setup_default_space(db: &Db) -> anyhow::Result<()> {
+    if store::space_exists(db, DEFAULT_SPACE_ID).await? {
+        log::info!("Default space already exists. Skipping setup.");
         return Ok(());
     }
 
-    log::info!("Setting up space '{}' with Zukyc sample pods...", space_id);
-    store::create_space(db, space_id).await?;
+    log::info!("Setting up default space...");
+    store::create_space(db, DEFAULT_SPACE_ID).await?;
+    log::info!("Successfully set up default space.");
+
+    Ok(())
+}
+
+pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
+    // Ensure default space exists
+    if !store::space_exists(db, DEFAULT_SPACE_ID).await? {
+        store::create_space(db, DEFAULT_SPACE_ID).await?;
+    }
+
+    log::info!("Inserting ZuKYC sample pods to default space...");
 
     match sign_zukyc_pods() {
         Ok(pods) => {
@@ -641,12 +691,13 @@ pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
 
             for (pod, name) in pods.into_iter().zip(pod_names) {
                 let pod_data = PodData::from(pod);
-                store::import_pod(db, &pod_data, Some(name), space_id).await?;
+                store::import_pod(db, &pod_data, Some(name), DEFAULT_SPACE_ID).await?;
             }
-            log::info!("Successfully set up Zukyc space.");
+            log::info!("Successfully inserted ZuKYC pods to default space.");
         }
         Err(e) => {
-            log::error!("Failed to sign one or more pods for Zukyc setup: {}", e);
+            log::error!("Failed to sign one or more pods for ZuKYC insertion: {}", e);
+            return Err(e);
         }
     }
 
@@ -671,7 +722,7 @@ async fn init_db(path: &str) -> Result<Db, anyhow::Error> {
         .await
         .context("Failed to initialize database")?;
 
-    setup_zukyc_space(&db).await?;
+    setup_default_space(&db).await?;
 
     Ok(db)
 }
@@ -720,6 +771,11 @@ pub fn run() {
                     .await
                     .expect("failed to initialize database");
 
+                // Regenerate public keys if needed (fixes old hex format)
+                store::regenerate_public_keys_if_needed(&db)
+                    .await
+                    .expect("failed to regenerate public keys");
+
                 let store_name = if let Ok(instance_id) = std::env::var("INSTANCE_ID") {
                     format!("app-store-{}.json", instance_id)
                 } else {
@@ -752,13 +808,15 @@ pub fn run() {
             send_pod_to_peer,
             get_inbox_messages,
             accept_inbox_message,
-            create_private_key,
-            list_private_keys,
+            get_private_key_info,
             send_message_as_pod,
             get_chats,
             get_chat_messages,
             sign_pod,
-            import_pod
+            import_pod,
+            set_pod_pinned,
+            list_spaces,
+            insert_zukyc_pods
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

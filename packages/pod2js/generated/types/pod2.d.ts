@@ -313,6 +313,7 @@ export interface PodInfo {
   label?: string | null;
   pod_type: string;
   space: string;
+  pinned: boolean;
 }
 export interface SignedPod {
   data: unknown;

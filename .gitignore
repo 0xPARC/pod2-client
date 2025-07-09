@@ -8,3 +8,4 @@ Cargo.lock
 .claude/settings.local.json
 node_modules
 .turbo
+dist
