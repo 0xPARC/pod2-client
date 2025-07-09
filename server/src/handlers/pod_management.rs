@@ -96,6 +96,7 @@ pub async fn import_pod_to_space(
         label: payload.label,
         created_at,
         space: space_id,
+        pinned: false,
     };
 
     Ok((StatusCode::CREATED, Json(created_pod_info)))

@@ -356,7 +356,7 @@
     },
     "PodInfo": {
       "type": "object",
-      "required": ["created_at", "data", "id", "pod_type", "space"],
+      "required": ["created_at", "data", "id", "pod_type", "space", "pinned"],
       "properties": {
         "created_at": {
           "type": "string"
@@ -375,6 +375,9 @@
         },
         "space": {
           "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
         }
       }
     },

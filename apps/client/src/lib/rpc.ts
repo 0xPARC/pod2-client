@@ -2,6 +2,25 @@ import { MainPod, SignedPod, Value, PodInfo } from "@pod2/pod2js";
 
 // Re-export PodInfo for use in other files
 export type { PodInfo };
+
+/**
+ * Space/Folder information
+ */
+export interface SpaceInfo {
+  id: string;
+  created_at: string;
+}
+
+/**
+ * Private key information (without the secret key)
+ */
+export interface PrivateKeyInfo {
+  id: string;
+  public_key: string; // Base58-encoded public key
+  alias: string | null;
+  created_at: string;
+  is_default: boolean;
+}
 import { invoke } from "@tauri-apps/api/core";
 
 // =============================================================================
@@ -240,27 +259,12 @@ export async function getChatMessages(chatId: string): RpcResult<any[]> {
 // =============================================================================
 
 /**
- * Create a new private key
- * @param alias - Optional alias for the key
- * @param setAsDefault - Whether to set as default key
- * @returns The key ID
+ * Get information about the default private key
+ * Note: A default key is automatically created if none exists
+ * @returns Private key information (without the secret key)
  */
-export async function createPrivateKey(
-  alias?: string,
-  setAsDefault: boolean = false
-): RpcResult<string> {
-  return invokeCommand<string>("create_private_key", {
-    alias,
-    setAsDefault
-  });
-}
-
-/**
- * List all private keys
- * @returns Array of private key information
- */
-export async function listPrivateKeys(): RpcResult<any[]> {
-  return invokeCommand<any[]>("list_private_keys");
+export async function getPrivateKeyInfo(): RpcResult<PrivateKeyInfo> {
+  return invokeCommand<PrivateKeyInfo>("get_private_key_info");
 }
 
 // =============================================================================
@@ -286,6 +290,44 @@ export async function getAppState(): RpcResult<AppStateData> {
  */
 export async function triggerSync(): RpcResult<void> {
   return invokeCommand("trigger_sync");
+}
+
+// =============================================================================
+// Folder Management
+// =============================================================================
+
+/**
+ * Set the pinned status of a POD
+ * @param spaceId - The space/folder ID
+ * @param podId - The POD ID
+ * @param pinned - Whether the POD should be pinned
+ */
+export async function setPodPinned(
+  spaceId: string,
+  podId: string,
+  pinned: boolean
+): RpcResult<void> {
+  return invokeCommand("set_pod_pinned", {
+    spaceId,
+    podId,
+    pinned
+  });
+}
+
+/**
+ * List all spaces/folders
+ * @returns Array of space information
+ */
+export async function listSpaces(): RpcResult<SpaceInfo[]> {
+  return invokeCommand<SpaceInfo[]>("list_spaces");
+}
+
+/**
+ * Insert ZuKYC sample pods to the default space
+ * @returns Promise that resolves when pods are inserted
+ */
+export async function insertZuKycPods(): RpcResult<void> {
+  return invokeCommand<void>("insert_zukyc_pods");
 }
 
 // =============================================================================

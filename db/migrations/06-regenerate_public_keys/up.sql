@@ -1,0 +1,4 @@
+-- Regenerate public keys from private keys to use proper base58 encoding
+-- This migration will be handled by Rust code since SQL can't do the cryptographic operations
+-- The up.sql file exists to mark this migration as applied
+-- See the migration handler in the Rust code for the actual implementation

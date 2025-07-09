@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use hex::ToHex;
-use pod2::frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod};
+use pod2::{backends::plonky2::primitives::ec::schnorr::SecretKey, frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod}};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +59,7 @@ pub struct PodInfo {
     pub label: Option<String>,
     pub created_at: String,
     pub space: String,
+    pub pinned: bool,
 }
 
 pub async fn create_space(db: &Db, id: &str) -> Result<()> {
@@ -199,7 +200,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
     let pod_info_result = conn
         .interact(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1 AND id = ?2",
+                "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1 AND id = ?2",
             )?;
             let result = stmt.query_row([&space_id_clone, &pod_id_clone], |row| {
                 let data_blob: Vec<u8> = row.get(2)?;
@@ -218,6 +219,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
                     label: row.get(3)?,
                     created_at: row.get(4)?,
                     space: row.get(5)?,
+                    pinned: row.get(6).unwrap_or(false),
                 })
             });
 
@@ -260,7 +262,7 @@ async fn list_pods_filtered(
             match pod_type_filter_clone {
                 Some(pod_type) => {
                     let mut stmt = conn.prepare(
-                        "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1 AND pod_type = ?2"
+                        "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1 AND pod_type = ?2"
                     )?;
                     let pod_iter = stmt.query_map([&space_id_clone, &pod_type], |row| {
                         let data_blob: Vec<u8> = row.get(2)?;
@@ -278,13 +280,14 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
+                            pinned: row.get(6).unwrap_or(false),
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
                 },
                 None => {
                     let mut stmt = conn.prepare(
-                        "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1"
+                        "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1"
                     )?;
                     let pod_iter = stmt.query_map([&space_id_clone], |row| {
                         let data_blob: Vec<u8> = row.get(2)?;
@@ -302,6 +305,7 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
+                            pinned: row.get(6).unwrap_or(false),
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
@@ -551,62 +555,120 @@ pub async fn accept_inbox_message(
 
 // --- Private Key Management ---
 
-/// Create and store a new private key
-pub async fn create_private_key(
-    db: &Db,
-    alias: Option<&str>,
-    set_as_default: bool,
-) -> Result<String> {
-    let private_key = pod2::backends::plonky2::primitives::ec::schnorr::SecretKey::new_rand();
-
-    let private_key_hex = hex::encode(private_key.0.to_bytes_be());
-    // For simplicity, we'll store a truncated version as the public key display
-    // In practice, we'd derive and format the public key properly
-    let public_key_hex = format!("pub_{}", &private_key_hex[0..16]);
-
+/// Regenerate public keys from private keys to use proper base58 encoding
+/// This should be called after migrations to fix any existing hex-based public keys
+pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
     let conn = db
         .pool()
         .get()
         .await
         .context("Failed to get DB connection")?;
 
-    let private_key_hex_clone = private_key_hex.clone();
-    let alias_clone = alias.map(|s| s.to_string());
+    let updated_count = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare("SELECT private_key, public_key FROM private_keys")?;
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?, // private_key
+                    row.get::<_, String>(1)?, // public_key
+                ))
+            })?;
 
-    conn.interact(move |conn| {
-        let tx = conn.transaction()?;
+            let mut count = 0;
+            for row in rows {
+                let (private_key_hex, current_public_key) = row?;
+                
+                // Check if this looks like the old hex format (starts with "pub_")
+                if current_public_key.starts_with("pub_") {
+                    // Regenerate proper public key from private key
+                    let bytes = match hex::decode(&private_key_hex) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            log::error!("Failed to decode private key hex for regeneration: {}", e);
+                            continue; // Skip this key and continue with others
+                        }
+                    };
+                    let big_uint = num::BigUint::from_bytes_be(&bytes);
+                    let secret_key = SecretKey(big_uint);
+                    let public_key_base58 = secret_key.public_key().to_string();
+                    
+                    // Update the public key
+                    conn.execute(
+                        "UPDATE private_keys SET public_key = ?1 WHERE private_key = ?2",
+                        rusqlite::params![public_key_base58, private_key_hex],
+                    )?;
+                    count += 1;
+                }
+            }
+            
+            Ok::<i32, rusqlite::Error>(count)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for regenerate_public_keys_if_needed")??;
 
-        // If setting as default, clear existing default
-        if set_as_default {
-            tx.execute("UPDATE private_keys SET is_default = FALSE", [])?;
-        }
+    if updated_count > 0 {
+        log::info!("Regenerated {} public keys to use proper base58 encoding", updated_count);
+    }
 
-        // Insert new private key (using private_key as PK)
-        tx.execute(
-            "INSERT INTO private_keys (private_key, key_type, public_key, alias, is_default) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                private_key_hex_clone,
-                "Plonky2",
-                public_key_hex,
-                alias_clone,
-                set_as_default
-            ],
-        )?;
-
-        tx.commit()?;
-        Ok::<(), rusqlite::Error>(())
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-    .context("DB interaction failed for create_private_key")??;
-
-    Ok(private_key_hex)
+    Ok(())
 }
 
-/// Get the default private key
+/// Helper function to ensure a default private key exists
+async fn ensure_default_private_key(db: &Db) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    // Check if a default key already exists
+    let has_default = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare("SELECT 1 FROM private_keys WHERE is_default = TRUE LIMIT 1")?;
+            stmt.exists([])
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed checking for default key")??;
+
+    if !has_default {
+        // Create a new default key
+        let private_key = SecretKey::new_rand();
+        let private_key_hex = hex::encode(private_key.0.to_bytes_be());
+        let public_key_base58 = private_key.public_key().to_string();
+
+        conn.interact(move |conn| {
+            conn.execute(
+                "INSERT INTO private_keys (private_key, key_type, public_key, alias, is_default) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![
+                    private_key_hex,
+                    "Plonky2",
+                    public_key_base58,
+                    None::<String>, // No alias for auto-created key
+                    true            // Set as default
+                ],
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for ensure_default_private_key")??;
+
+        log::info!("Auto-created default private key");
+    }
+
+    Ok(())
+}
+
+// Note: Removed create_private_key_internal - we now use ensure_default_private_key for single-key model
+
+/// Get the default private key, creating one if it doesn't exist
 pub async fn get_default_private_key(
     db: &Db,
-) -> Result<Option<pod2::backends::plonky2::primitives::ec::schnorr::SecretKey>> {
+) -> Result<SecretKey> {
+    // Ensure a default key exists
+    ensure_default_private_key(db).await?;
+
     let conn = db
         .pool()
         .get()
@@ -620,55 +682,61 @@ pub async fn get_default_private_key(
             let result = stmt.query_row([], |row| row.get::<_, String>(0));
 
             match result {
-                Ok(hex_string) => Ok(Some(hex_string)),
-                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                Err(e) => Err(e),
+                Ok(hex_string) => Ok(hex_string),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    Err(anyhow::anyhow!("No default private key found after ensuring one exists"))
+                }
+                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
             }
         })
         .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
         .context("DB interaction failed for get_default_private_key")??;
 
-    if let Some(hex_string) = key_hex {
-        let bytes = hex::decode(hex_string).context("Failed to decode private key hex")?;
-        let big_uint = num::BigUint::from_bytes_be(&bytes);
-        Ok(Some(
-            pod2::backends::plonky2::primitives::ec::schnorr::SecretKey(big_uint),
-        ))
-    } else {
-        Ok(None)
-    }
+    let bytes = hex::decode(key_hex).context("Failed to decode private key hex")?;
+    let big_uint = num::BigUint::from_bytes_be(&bytes);
+    Ok(SecretKey(big_uint))
 }
 
-/// List all private keys (without secret keys for security)
-pub async fn list_private_keys(db: &Db) -> Result<Vec<serde_json::Value>> {
+/// Get information about the default private key (without exposing the secret key)
+pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> {
+    // Ensure a default key exists
+    ensure_default_private_key(db).await?;
+
     let conn = db
         .pool()
         .get()
         .await
         .context("Failed to get DB connection")?;
 
-    let keys = conn
+    let key_info = conn
         .interact(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT private_key, public_key, alias, created_at, COALESCE(is_default, FALSE) FROM private_keys ORDER BY created_at DESC"
+                "SELECT private_key, public_key, alias, created_at FROM private_keys WHERE is_default = TRUE"
             )?;
-            let key_iter = stmt.query_map([], |row| {
+            let result = stmt.query_row([], |row| {
                 Ok(serde_json::json!({
                     "id": row.get::<_, String>(0)?, // Use private_key as id
-                    "public_key_hex": row.get::<_, String>(1)?,
+                    "public_key": row.get::<_, String>(1)?,
                     "alias": row.get::<_, Option<String>>(2)?,
                     "created_at": row.get::<_, String>(3)?,
-                    "is_default": row.get::<_, bool>(4)?
+                    "is_default": true
                 }))
-            })?;
-            key_iter.collect::<Result<Vec<_>, _>>()
+            });
+            
+            match result {
+                Ok(info) => Ok(info),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    Err(anyhow::anyhow!("No default private key found after ensuring one exists"))
+                }
+                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+            }
         })
         .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-        .context("DB interaction failed for list_private_keys")??;
+        .context("DB interaction failed for get_default_private_key_info")??;
 
-    Ok(keys)
+    Ok(key_info)
 }
 
 // --- Chat Management Functions ---
@@ -881,3 +949,74 @@ pub async fn import_pod_and_add_to_inbox(
 
     Ok(message_id)
 }
+
+/// Update the pinned status of a POD
+pub async fn set_pod_pinned(
+    db: &Db,
+    space_id: &str,
+    pod_id: &str,
+    pinned: bool,
+) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+    let space_id_clone = space_id.to_string();
+    let pod_id_clone = pod_id.to_string();
+
+    conn.interact(move |conn| -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "UPDATE pods SET pinned = ?1 WHERE space = ?2 AND id = ?3",
+            rusqlite::params![pinned, &space_id_clone, &pod_id_clone],
+        )?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for set_pod_pinned")??;
+
+    Ok(())
+}
+
+/// List all pods across all spaces (for solver)
+pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let pods = conn
+        .interact(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods ORDER BY created_at DESC"
+            )?;
+            let pod_iter = stmt.query_map([], |row| {
+                let data_blob: Vec<u8> = row.get(2)?;
+                let pod_data: PodData = serde_json::from_slice(&data_blob).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Blob,
+                        Box::new(e),
+                    )
+                })?;
+                Ok(PodInfo {
+                    id: row.get(0)?,
+                    pod_type: row.get(1)?,
+                    data: pod_data,
+                    label: row.get(3)?,
+                    created_at: row.get(4)?,
+                    space: row.get(5)?,
+                    pinned: row.get(6).unwrap_or(false),
+                })
+            })?;
+            pod_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for list_all_pods")??;
+
+    Ok(pods)
+}
+
