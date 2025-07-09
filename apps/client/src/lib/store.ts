@@ -1,34 +1,12 @@
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import { getAppState, triggerSync, type AppStateData, type PodStats, type PodLists, type PodInfo } from "./rpc";
 
-export interface PodStats {
-  total_pods: number;
-  signed_pods: number;
-  main_pods: number;
-}
+// Re-export types for backward compatibility
+export type { AppStateData, PodStats, PodLists };
 
-export interface PodInfo {
-  id: string;
-  pod_type: string;
-  data: any; // PodData from Rust
-  label?: string;
-  created_at: string;
-  space: string;
-}
-
-export interface PodLists {
-  signed_pods: PodInfo[];
-  main_pods: PodInfo[];
-}
-
-export interface AppStateData {
-  pod_stats: PodStats;
-  pod_lists: PodLists;
-  // Future state can be added here easily
-  // user_preferences?: UserPreferences;
-  // recent_operations?: Operation[];
-}
+// Use the PodInfo from rpc.ts which matches the actual API
+export type { PodInfo } from "./rpc";
 
 export type PodFilter = "all" | "signed" | "main";
 export type AppView = "pods" | "inbox" | "chats";
@@ -83,8 +61,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Get initial state
-      const appState = await invoke<AppStateData>("get_app_state");
+      // Get initial state using type-safe RPC
+      const appState = await getAppState();
       set({ appState, isLoading: false });
 
       console.log("appState", appState);
@@ -105,7 +83,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   triggerSync: async () => {
     try {
       set({ isLoading: true, error: null });
-      await invoke("trigger_sync");
+      await triggerSync();
       set({ isLoading: false });
     } catch (error) {
       set({

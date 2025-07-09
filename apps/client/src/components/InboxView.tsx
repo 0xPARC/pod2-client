@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { getInboxMessages, acceptInboxMessage } from "../lib/rpc";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -37,7 +37,7 @@ export function InboxView() {
   const loadInboxMessages = async () => {
     try {
       setLoading(true);
-      const inboxMessages = await invoke<InboxMessage[]>('get_inbox_messages');
+      const inboxMessages = await getInboxMessages();
       setMessages(inboxMessages);
     } catch (error) {
       console.error('Failed to load inbox messages:', error);
@@ -58,10 +58,10 @@ export function InboxView() {
     if (!acceptDialog.message) return;
 
     try {
-      await invoke('accept_inbox_message', {
-        messageId: acceptDialog.message.id,
-        chatAlias: acceptDialog.alias || null
-      });
+      await acceptInboxMessage(
+        acceptDialog.message.id,
+        acceptDialog.alias || undefined
+      );
       
       console.log('Message accepted successfully');
       

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { getChats, getChatMessages } from "../lib/rpc";
 import { ArrowLeftIcon, SendIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
@@ -34,7 +34,7 @@ export function ChatView() {
   const loadChats = async () => {
     try {
       setLoading(true);
-      const chatList = await invoke<Chat[]>("get_chats");
+      const chatList = await getChats();
       setChats(chatList);
     } catch (error) {
       console.error("Failed to load chats:", error);
@@ -46,9 +46,7 @@ export function ChatView() {
   const loadChatMessages = async (chatId: string) => {
     try {
       setMessagesLoading(true);
-      const messageList = await invoke<ChatMessage[]>("get_chat_messages", {
-        chatId
-      });
+      const messageList = await getChatMessages(chatId);
       setMessages(messageList);
     } catch (error) {
       console.error("Failed to load chat messages:", error);

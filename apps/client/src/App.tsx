@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { submitPodRequest } from "./lib/rpc";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -29,12 +29,10 @@ function PodRequestDialog() {
     undefined
   );
 
-  const submitPodRequest = useCallback(async (requestText: string) => {
+  const submitPodRequestHandler = useCallback(async (requestText: string) => {
     try {
       setResultStatus("pending");
-      const result = await invoke("submit_pod_request", {
-        request: requestText
-      });
+      const result = await submitPodRequest(requestText);
       await writeText(JSON.stringify(result));
       setResultStatus("success");
     } catch (error) {
@@ -45,7 +43,7 @@ function PodRequestDialog() {
 
   const handleSubmit = () => {
     if (externalPodRequest) {
-      submitPodRequest(externalPodRequest);
+      submitPodRequestHandler(externalPodRequest);
     }
   };
   return (

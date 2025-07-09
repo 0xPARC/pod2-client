@@ -130,10 +130,10 @@ export function PodViewer() {
                   <h4 className="font-medium mb-3">POD Data</h4>
                   {selectedPod.pod_type}
 
-                  {selectedPod.pod_type === "main" && (
+                  {selectedPod.data.pod_data_variant === "Main" && (
                     <MainPodCard mainPod={selectedPod.data.pod_data_payload} />
                   )}
-                  {selectedPod.pod_type === "signed" && (
+                  {selectedPod.data.pod_data_variant === "Signed" && (
                     <SignedPodCard
                       signedPod={selectedPod.data.pod_data_payload}
                     />

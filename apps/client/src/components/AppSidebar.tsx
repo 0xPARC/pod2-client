@@ -11,7 +11,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar";
-import { invoke } from "@tauri-apps/api/core";
+import { 
+  startP2pNode, 
+  sendPodToPeer, 
+  sendMessageAsPod, 
+  listPrivateKeys,
+  createPrivateKey 
+} from "@/lib/rpc";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   CodeIcon,
@@ -70,7 +76,7 @@ export function AppSidebar() {
   const handleStartP2P = async () => {
     try {
       setP2pLoading(true);
-      const nodeIdResult = await invoke<string>("start_p2p_node");
+      const nodeIdResult = await startP2pNode();
       setNodeId(nodeIdResult);
     } catch (error) {
       console.error("Failed to start P2P node:", error);
@@ -83,20 +89,20 @@ export function AppSidebar() {
     try {
       if (sendMode === "pod") {
         // Send existing POD
-        await invoke("send_pod_to_peer", {
-          peerNodeId: sendPodForm.peerNodeId,
-          podId: sendPodForm.podId,
-          messageText: null, // No message when sending existing POD
-          senderAlias: sendPodForm.senderAlias || null
-        });
+        await sendPodToPeer(
+          sendPodForm.peerNodeId,
+          sendPodForm.podId,
+          undefined, // No message when sending existing POD
+          sendPodForm.senderAlias || undefined
+        );
         console.log("POD sent successfully");
       } else {
         // Send message as POD (create new POD)
-        await invoke("send_message_as_pod", {
-          peerNodeId: sendPodForm.peerNodeId,
-          messageText: sendPodForm.messageText,
-          senderAlias: sendPodForm.senderAlias || null
-        });
+        await sendMessageAsPod(
+          sendPodForm.peerNodeId,
+          sendPodForm.messageText,
+          sendPodForm.senderAlias || undefined
+        );
         console.log("Message POD sent successfully");
       }
 
@@ -125,7 +131,7 @@ export function AppSidebar() {
 
   const loadPrivateKeys = async () => {
     try {
-      const keys = await invoke<any[]>("list_private_keys");
+      const keys = await listPrivateKeys();
       setPrivateKeys(keys);
     } catch (error) {
       console.error("Failed to load private keys:", error);
@@ -135,10 +141,10 @@ export function AppSidebar() {
   const handleCreatePrivateKey = async () => {
     try {
       const hasDefault = privateKeys.some((key) => key.is_default);
-      await invoke("create_private_key", {
-        alias: null,
-        setAsDefault: !hasDefault // Set as default if no default exists
-      });
+      await createPrivateKey(
+        undefined, // No alias
+        !hasDefault // Set as default if no default exists
+      );
       console.log("Private key created successfully");
       loadPrivateKeys(); // Refresh the list
     } catch (error) {
