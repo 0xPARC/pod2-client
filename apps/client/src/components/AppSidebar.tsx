@@ -11,12 +11,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar";
-import { 
-  startP2pNode, 
-  sendPodToPeer, 
-  sendMessageAsPod, 
+import {
+  startP2pNode,
+  sendPodToPeer,
+  sendMessageAsPod,
   listPrivateKeys,
-  createPrivateKey 
+  createPrivateKey
 } from "@/lib/rpc";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {

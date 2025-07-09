@@ -16,9 +16,6 @@ jobs:
     #TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     runs-on:
       labels: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
 
     steps:
       - name: Check out repository code
@@ -31,7 +28,7 @@ jobs:
         with:
           node-version: 20.x
           cache: "pnpm"
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: "pnpm install --frozen-lockfile"
       - name: Caching for Turborepo

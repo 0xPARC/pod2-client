@@ -1,7 +1,8 @@
 import test from 'ava'
+import { MainPod } from '../index.js'
+import serializedMainPod from './mainpod.json' assert { type: 'json' }
 
-import { sum } from '../index.js'
-
-test('sum from native', (t) => {
-  t.is(sum(1, 2), 3)
+test('deserialize main pod', (t) => {
+  const mainPod = MainPod.deserialize(JSON.stringify(serializedMainPod))
+  t.is(mainPod.verify(), true)
 })

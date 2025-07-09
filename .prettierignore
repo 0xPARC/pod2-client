@@ -11,3 +11,7 @@ dist-ssr
 .idea
 .vite
 .turbo
+.next
+*.json
+*.md
+packages/pod2-node
