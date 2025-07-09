@@ -15,6 +15,11 @@
         "@pod2/source": "./src/index.ts",
         "types": "./dist/types/pod2.d.ts",
         "default": "./dist/index.cjs"
+      },
+      "types": {
+        "@pod2/source": "./src/index.ts",
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.d.ts"
       }
     }
   },
