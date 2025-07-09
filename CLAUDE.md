@@ -103,11 +103,11 @@ The repository is organized as a multi-crate Rust workspace with web frontend co
 
 ### Core Components
 
-- **`server/`** - HTTP API server providing POD2 operations and local POD collection management (SQLite)
+- **`server/`** - DEPRECATED HTTP API server providing POD2 operations and local POD collection management
 - **`solver/`** - Datalog engine for POD Request queries, implements semi-naive evaluation
 - **`db/`** - Database abstraction layer with SQLite connection pooling and migrations
-- **`web/apps/playground-client/`** - React developer sandbox for POD management and operations
-- **`app/`** - Tauri-based desktop application (primary user-facing client)
+- **`apps/playground-client/`** - DEPRECATED React developer sandbox for POD management and operations (functionality gradually being ported to the `client` app)
+- **`apps/client/`** - Tauri-based desktop application (primary user-facing client)
 
 ### Key Relationships
 
@@ -146,22 +146,21 @@ cargo clippy
 
 ### Web Components
 ```bash
-# From web/ directory
 pnpm install
 pnpm dev          # Development mode
 pnpm build        # Production build
 pnpm test         # Run tests
 pnpm lint         # Run oxlint
 pnpm format       # Format with prettier
-pnpm check-types  # TypeScript type checking
 ```
 
 ### Tauri App
 ```bash
-# From app/ directory
+# From apps/client/ directory
 pnpm dev          # Development mode
 pnpm build        # Production build
 pnpm tauri        # Tauri CLI commands
+pnpm dlx shadcn@latest # For handling shadcn components
 ```
 
 ## Key Technical Details
@@ -243,9 +242,9 @@ pnpm test --filter playground-client  # Specific app tests
 - **Server entry point**: `server/src/bin/` (multiple binaries)
 - **Solver entry point**: `solver/src/lib.rs` (main solve function)
 - **Database migrations**: `db/migrations/` and `server/migrations/`
-- **Playground app**: `web/apps/playground-client/src/App.tsx` (developer sandbox)
-- **Tauri app**: `app/src-tauri/src/main.rs` (primary user client)
-- **Tauri frontend**: `app/src/App.tsx` (React frontend for desktop app)
+- **Playground app**: `apps/playground-client/src/App.tsx` (developer sandbox)
+- **Tauri app**: `apps/client/src-tauri/src/main.rs` (primary user client)
+- **Tauri frontend**: `apps/client/src/App.tsx` (React frontend for desktop app)
 
 ## Environment Variables
 
