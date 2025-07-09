@@ -1,6 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
-import { getAppState, triggerSync, type AppStateData, type PodStats, type PodLists, type PodInfo } from "./rpc";
+import {
+  getAppState,
+  triggerSync,
+  type AppStateData,
+  type PodStats,
+  type PodLists,
+  type PodInfo
+} from "./rpc";
 
 // Re-export types for backward compatibility
 export type { AppStateData, PodStats, PodLists };

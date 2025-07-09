@@ -57,11 +57,11 @@ export type RpcResult<T> = Promise<T>;
 function isAppStateData(obj: any): obj is AppStateData {
   return (
     obj &&
-    typeof obj === 'object' &&
+    typeof obj === "object" &&
     obj.pod_stats &&
-    typeof obj.pod_stats.total_pods === 'number' &&
-    typeof obj.pod_stats.signed_pods === 'number' &&
-    typeof obj.pod_stats.main_pods === 'number' &&
+    typeof obj.pod_stats.total_pods === "number" &&
+    typeof obj.pod_stats.signed_pods === "number" &&
+    typeof obj.pod_stats.main_pods === "number" &&
     obj.pod_lists &&
     Array.isArray(obj.pod_lists.signed_pods) &&
     Array.isArray(obj.pod_lists.main_pods)
@@ -72,19 +72,22 @@ function isAppStateData(obj: any): obj is AppStateData {
  * Handle and format RPC errors consistently
  */
 function handleRpcError(error: any): never {
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     throw new Error(error);
   }
   if (error?.message) {
     throw new Error(error.message);
   }
-  throw new Error('Unknown RPC error');
+  throw new Error("Unknown RPC error");
 }
 
 /**
  * Wrapper for Tauri invoke that handles errors consistently
  */
-async function invokeCommand<T>(command: string, args?: Record<string, any>): Promise<T> {
+async function invokeCommand<T>(
+  command: string,
+  args?: Record<string, any>
+): Promise<T> {
   try {
     return await invoke(command, args);
   } catch (error) {
@@ -132,9 +135,7 @@ export async function importPod(
  * @param request - The POD request string
  * @returns The resulting MainPod
  */
-export async function submitPodRequest(
-  request: string
-): RpcResult<MainPod> {
+export async function submitPodRequest(request: string): RpcResult<MainPod> {
   return invokeCommand<MainPod>("submit_pod_request", { request });
 }
 
@@ -272,11 +273,11 @@ export async function listPrivateKeys(): RpcResult<any[]> {
  */
 export async function getAppState(): RpcResult<AppStateData> {
   const result = await invokeCommand<any>("get_app_state");
-  
+
   if (!isAppStateData(result)) {
-    throw new Error('Invalid app state data received from backend');
+    throw new Error("Invalid app state data received from backend");
   }
-  
+
   return result;
 }
 

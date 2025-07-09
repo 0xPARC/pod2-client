@@ -7,11 +7,11 @@ export function MainContent() {
   const { currentView } = useAppStore();
 
   switch (currentView) {
-    case 'pods':
+    case "pods":
       return <PodViewer />;
-    case 'inbox':
+    case "inbox":
       return <InboxView />;
-    case 'chats':
+    case "chats":
       return <ChatView />;
     default:
       return <PodViewer />;

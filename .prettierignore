@@ -11,3 +11,6 @@ dist-ssr
 .idea
 .vite
 .turbo
+.next
+*.json
+*.md

@@ -6,4 +6,5 @@
 export declare class MainPod {
   static deserialize(serializedPod: string): MainPod
   verify(): boolean
+  publicStatements(): JsonValue
 }

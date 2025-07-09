@@ -1,6 +1,6 @@
 
 
-> @pod2/pod2js@1.0.0 test /Users/robknight/Projects/0xPARC/client-pod2/web/packages/pod2js
+> @pod2/pod2js@1.0.0 test /Users/robknight/Projects/0xPARC/client-pod2/packages/pod2js
 > echo 'todo'
 
 todo

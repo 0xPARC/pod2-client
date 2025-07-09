@@ -2,17 +2,23 @@ import { useState, useEffect } from "react";
 import { getInboxMessages, acceptInboxMessage } from "../lib/rpc";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
 } from "./ui/dialog";
 
 interface InboxMessage {
@@ -22,7 +28,7 @@ interface InboxMessage {
   pod_id: string;
   message_text?: string;
   received_at: string;
-  status: 'pending' | 'accepted' | 'declined';
+  status: "pending" | "accepted" | "declined";
 }
 
 export function InboxView() {
@@ -32,7 +38,7 @@ export function InboxView() {
     open: boolean;
     message?: InboxMessage;
     alias: string;
-  }>({ open: false, alias: '' });
+  }>({ open: false, alias: "" });
 
   const loadInboxMessages = async () => {
     try {
@@ -40,7 +46,7 @@ export function InboxView() {
       const inboxMessages = await getInboxMessages();
       setMessages(inboxMessages);
     } catch (error) {
-      console.error('Failed to load inbox messages:', error);
+      console.error("Failed to load inbox messages:", error);
     } finally {
       setLoading(false);
     }
@@ -62,16 +68,18 @@ export function InboxView() {
         acceptDialog.message.id,
         acceptDialog.alias || undefined
       );
-      
-      console.log('Message accepted successfully');
-      
+
+      console.log("Message accepted successfully");
+
       // Remove the accepted message from the inbox
-      setMessages(prev => prev.filter(m => m.id !== acceptDialog.message!.id));
-      
+      setMessages((prev) =>
+        prev.filter((m) => m.id !== acceptDialog.message!.id)
+      );
+
       // Close dialog
-      setAcceptDialog({ open: false, alias: '' });
+      setAcceptDialog({ open: false, alias: "" });
     } catch (error) {
-      console.error('Failed to accept message:', error);
+      console.error("Failed to accept message:", error);
     }
   };
 
@@ -81,15 +89,15 @@ export function InboxView() {
 
   useEffect(() => {
     loadInboxMessages();
-    
+
     // Listen for incoming POD events
-    const unlisten = listen('p2p-pod-received', () => {
-      console.log('New POD received, refreshing inbox...');
+    const unlisten = listen("p2p-pod-received", () => {
+      console.log("New POD received, refreshing inbox...");
       loadInboxMessages();
     });
-    
+
     return () => {
-      unlisten.then(f => f());
+      unlisten.then((f) => f());
     };
   }, []);
 
@@ -124,48 +132,42 @@ export function InboxView() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg">
-                      POD from {message.from_alias || 'Unknown Sender'}
+                      POD from {message.from_alias || "Unknown Sender"}
                     </CardTitle>
                     <CardDescription>
                       Node ID: {message.from_node_id.slice(0, 16)}...
                     </CardDescription>
                   </div>
-                  <Badge variant="secondary">
-                    {message.status}
-                  </Badge>
+                  <Badge variant="secondary">{message.status}</Badge>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 gap-2 text-sm">
                   <div>
-                    <span className="font-medium">POD ID:</span>{' '}
+                    <span className="font-medium">POD ID:</span>{" "}
                     <span className="font-mono text-xs">{message.pod_id}</span>
                   </div>
                   <div>
-                    <span className="font-medium">Received:</span>{' '}
+                    <span className="font-medium">Received:</span>{" "}
                     {formatTimestamp(message.received_at)}
                   </div>
                   {message.message_text && (
                     <div>
-                      <span className="font-medium">Message:</span>{' '}
+                      <span className="font-medium">Message:</span>{" "}
                       <span className="italic">"{message.message_text}"</span>
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
                     onClick={() => handleAcceptMessage(message)}
                     className="flex-1"
                   >
                     Accept & Start Chat
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    disabled
-                  >
+                  <Button variant="outline" className="flex-1" disabled>
                     Decline
                   </Button>
                 </div>
@@ -175,7 +177,12 @@ export function InboxView() {
         </div>
       )}
 
-      <Dialog open={acceptDialog.open} onOpenChange={(open) => !open && setAcceptDialog({ open: false, alias: '' })}>
+      <Dialog
+        open={acceptDialog.open}
+        onOpenChange={(open) =>
+          !open && setAcceptDialog({ open: false, alias: "" })
+        }
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Accept Message</DialogTitle>
@@ -183,26 +190,32 @@ export function InboxView() {
               Accept this POD message and start a chat with the sender.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="chat-alias">Chat Name</Label>
               <Input
                 id="chat-alias"
                 value={acceptDialog.alias}
-                onChange={(e) => setAcceptDialog(prev => ({ ...prev, alias: e.target.value }))}
+                onChange={(e) =>
+                  setAcceptDialog((prev) => ({
+                    ...prev,
+                    alias: e.target.value
+                  }))
+                }
                 placeholder="Enter a name for this chat"
               />
             </div>
           </div>
-          
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAcceptDialog({ open: false, alias: '' })}>
+            <Button
+              variant="outline"
+              onClick={() => setAcceptDialog({ open: false, alias: "" })}
+            >
               Cancel
             </Button>
-            <Button onClick={confirmAcceptMessage}>
-              Accept & Start Chat
-            </Button>
+            <Button onClick={confirmAcceptMessage}>Accept & Start Chat</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
