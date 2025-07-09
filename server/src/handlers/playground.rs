@@ -1,11 +1,10 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, LazyLock},
 };
 
 use anyhow::Result;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use hex::ToHex;
 use log::info;
 use num::BigUint;
 use pod2::{
@@ -13,22 +12,17 @@ use pod2::{
         mainpod::Prover, mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey,
         signedpod::Signer,
     },
-    frontend::{MainPod, MainPodBuilder, SerializedSignedPod, SignedPod, SignedPodBuilder},
+    examples::zu_kyc_sign_pod_builders,
+    frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::{self, parser, LangError},
-    middleware::{
-        containers::Set, Params, PodId, PodProver, PodType, VDSet, Value as PodValue,
-        DEFAULT_VD_SET,
-    },
+    middleware::{Params, PodId, PodProver, PodType, VDSet, DEFAULT_VD_SET},
 };
+use pod2_db::{store, store::PodData, Db};
 use pod2_solver::{self, db::IndexablePod, error::SolverError, metrics::MetricsLevel};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    api_types::{
-        Diagnostic, DiagnosticSeverity, ExecuteCodeRequest, PodData, ValidateCodeRequest,
-        ValidateCodeResponse,
-    },
-    db::{store, Db},
+use crate::api_types::{
+    Diagnostic, DiagnosticSeverity, ExecuteCodeRequest, ValidateCodeRequest, ValidateCodeResponse,
 };
 
 #[allow(clippy::declare_interior_mutable_const)]
@@ -336,6 +330,25 @@ impl From<anyhow::Error> for PlaygroundApiError {
     }
 }
 
+pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
+    let params_for_test = Params::default();
+    let mut gov_signer = Signer(SecretKey(BigUint::from(1u32)));
+    let mut pay_signer = Signer(SecretKey(BigUint::from(2u32)));
+    let mut sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
+
+    let (gov_id_builder, pay_stub_builder, sanction_list_builder) =
+        zu_kyc_sign_pod_builders(&params_for_test);
+
+    let sign_results = [
+        gov_id_builder.sign(&mut gov_signer),
+        pay_stub_builder.sign(&mut pay_signer),
+        sanction_list_builder.sign(&mut sanction_signer),
+    ];
+
+    let all_signed: Result<Vec<_>, _> = sign_results.into_iter().collect();
+    all_signed.map_err(|e| anyhow::anyhow!("Failed to sign Zukyc pods: {}", e))
+}
+
 pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
     let space_id = "zukyc";
 
@@ -347,121 +360,22 @@ pub async fn setup_zukyc_space(db: &Db) -> anyhow::Result<()> {
     info!("Setting up space '{}' with Zukyc sample pods...", space_id);
     store::create_space(db, space_id).await?;
 
-    let params_for_test = Params::default();
-    let mut gov_signer = Signer(SecretKey(BigUint::from(1u32)));
-    let mut pay_signer = Signer(SecretKey(BigUint::from(2u32)));
-    let mut sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
+    match sign_zukyc_pods() {
+        Ok(pods) => {
+            info!("All pods signed successfully, importing to DB...");
+            let pod_names = ["Gov ID", "Pay Stub", "Sanctions List"];
 
-    let mut gov_id_builder = SignedPodBuilder::new(&params_for_test);
-    gov_id_builder.insert("idNumber", "4242424242");
-    gov_id_builder.insert("dateOfBirth", 1169909384);
-    gov_id_builder.insert("socialSecurityNumber", "G2121210");
-
-    match gov_id_builder.sign(&mut gov_signer) {
-        Ok(gov_id_pod_signed) => {
-            let gov_id_helper: SerializedSignedPod = gov_id_pod_signed.clone().into();
-            let gov_pod_id_str: String = gov_id_pod_signed.id().0.encode_hex();
-            let pod_data = PodData::Signed(gov_id_helper);
-            if let Err(e) = store::import_pod(
-                db,
-                &gov_pod_id_str,
-                "signed",
-                &pod_data,
-                Some("Gov ID"),
-                space_id,
-            )
-            .await
-            {
-                log::error!(
-                    "Failed to insert Gov ID pod into Zukyc space '{}': {}",
-                    space_id,
-                    e
-                );
+            for (pod, name) in pods.into_iter().zip(pod_names) {
+                let pod_data = PodData::from(pod);
+                store::import_pod(db, &pod_data, Some(name), space_id).await?;
             }
+            info!("Successfully set up Zukyc space.");
         }
         Err(e) => {
-            log::error!("Failed to sign Gov ID pod for Zukyc setup: {}", e);
+            log::error!("Failed to sign one or more pods for Zukyc setup: {}", e);
         }
     }
 
-    let mut pay_stub_builder = SignedPodBuilder::new(&params_for_test);
-    pay_stub_builder.insert("socialSecurityNumber", "G2121210");
-    pay_stub_builder.insert("startDate", 1706367566);
-    match pay_stub_builder.sign(&mut pay_signer) {
-        Ok(pay_stub_pod_signed) => {
-            let pay_stub_helper: SerializedSignedPod = pay_stub_pod_signed.clone().into();
-            let pay_pod_id_str: String = pay_stub_pod_signed.id().0.encode_hex();
-            let pod_data = PodData::Signed(pay_stub_helper);
-            if let Err(e) = store::import_pod(
-                db,
-                &pay_pod_id_str,
-                "signed",
-                &pod_data,
-                Some("Pay Stub"),
-                space_id,
-            )
-            .await
-            {
-                log::error!(
-                    "Failed to insert Pay Stub pod into Zukyc space '{}': {}",
-                    space_id,
-                    e
-                );
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to sign Pay Stub pod for Zukyc setup: {}", e);
-        }
-    }
-
-    let sanctions_values_set: HashSet<PodValue> =
-        ["A343434340"].iter().map(|s| PodValue::from(*s)).collect();
-
-    match Set::new(
-        params_for_test.max_depth_mt_containers,
-        sanctions_values_set,
-    ) {
-        Ok(sanction_set_typed) => {
-            let sanction_set_val = PodValue::from(sanction_set_typed);
-            let mut sanction_list_builder = SignedPodBuilder::new(&params_for_test);
-            sanction_list_builder.insert("sanctionList", sanction_set_val);
-            match sanction_list_builder.sign(&mut sanction_signer) {
-                Ok(sanction_list_pod_signed) => {
-                    let sanction_list_helper: SerializedSignedPod =
-                        sanction_list_pod_signed.clone().into();
-                    let sanction_pod_id_str: String = sanction_list_pod_signed.id().0.encode_hex();
-                    let pod_data = PodData::Signed(sanction_list_helper);
-                    if let Err(e) = store::import_pod(
-                        db,
-                        &sanction_pod_id_str,
-                        "signed",
-                        &pod_data,
-                        Some("Sanctions List"),
-                        space_id,
-                    )
-                    .await
-                    {
-                        log::error!(
-                            "Failed to insert Sanctions List pod into Zukyc space '{}': {}",
-                            space_id,
-                            e
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("Failed to sign Sanctions List pod for Zukyc setup: {}", e);
-                }
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to create sanction set for Zukyc setup: {}", e);
-        }
-    }
-
-    info!(
-        "Zukyc space setup attempt complete for space '{}'. Check logs for any errors.",
-        space_id
-    );
     Ok(())
 }
 
@@ -471,11 +385,10 @@ mod tests {
 
     use axum_test::TestServer;
     use env_logger::Builder;
-    use pod2::backends::plonky2::mock::signedpod::MockSigner;
     use serde_json::json;
 
     use super::*; // Imports handlers, PlaygroundApiError, etc.
-    use crate::{db, routes::create_router};
+    use crate::routes::create_router;
 
     static INIT: Once = Once::new();
     fn setup_test_logging() {
@@ -498,7 +411,7 @@ mod tests {
     async fn create_playground_server() -> TestServer {
         setup_test_logging();
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );
@@ -509,7 +422,7 @@ mod tests {
     async fn create_playground_server_with_db() -> (TestServer, Arc<Db>) {
         setup_test_logging();
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );
@@ -528,79 +441,13 @@ mod tests {
             .await
             .expect("Failed to create space for test");
 
-        let params_for_test = Params::default();
-        let mut gov_signer = MockSigner { pk: "gov".into() };
-        let mut pay_signer = MockSigner { pk: "pay".into() };
-        let mut sanction_signer = MockSigner {
-            pk: "sanction".into(),
-        };
-
-        let mut gov_id_builder = SignedPodBuilder::new(&params_for_test);
-        gov_id_builder.insert("idNumber", "4242424242");
-        gov_id_builder.insert("dateOfBirth", 1169909384);
-        gov_id_builder.insert("socialSecurityNumber", "G2121210");
-        let gov_id_pod_signed = gov_id_builder.sign(&mut gov_signer).unwrap();
-        let gov_id_helper: SerializedSignedPod = gov_id_pod_signed.clone().into();
-        let gov_pod_id_str: String = gov_id_pod_signed.id().0.encode_hex();
-
-        // Import pod directly into DB for test setup
-        let pod_data_gov = PodData::Signed(gov_id_helper);
-        store::import_pod(
-            &db,
-            &gov_pod_id_str,
-            "signed",
-            &pod_data_gov,
-            Some("Gov ID"),
-            space_id,
-        )
-        .await
-        .expect("Failed to import Gov ID pod for test");
-
-        let mut pay_stub_builder = SignedPodBuilder::new(&params_for_test);
-        pay_stub_builder.insert("socialSecurityNumber", "G2121210");
-        pay_stub_builder.insert("startDate", 1706367566);
-        let pay_stub_pod_signed = pay_stub_builder.sign(&mut pay_signer).unwrap();
-        let pay_stub_helper: SerializedSignedPod = pay_stub_pod_signed.clone().into();
-        let pay_pod_id_str: String = pay_stub_pod_signed.id().0.encode_hex();
-
-        let pod_data_pay = PodData::Signed(pay_stub_helper);
-        store::import_pod(
-            &db,
-            &pay_pod_id_str,
-            "signed",
-            &pod_data_pay,
-            Some("Pay Stub"),
-            space_id,
-        )
-        .await
-        .expect("Failed to import Pay Stub pod for test");
-
-        let sanctions_values_set: HashSet<PodValue> =
-            ["A343434340"].iter().map(|s| PodValue::from(*s)).collect();
-        let sanction_set_val = PodValue::from(
-            Set::new(
-                params_for_test.max_depth_mt_containers,
-                sanctions_values_set,
-            )
-            .unwrap(),
-        );
-        let mut sanction_list_builder = SignedPodBuilder::new(&params_for_test);
-        sanction_list_builder.insert("sanctionList", sanction_set_val);
-        let sanction_list_pod_signed = sanction_list_builder.sign(&mut sanction_signer).unwrap();
-        let sanction_list_helper: SerializedSignedPod = sanction_list_pod_signed.clone().into();
-        let sanction_pod_id_str: String = sanction_list_pod_signed.id().0.encode_hex();
-
-        let pod_data_sanction = PodData::Signed(sanction_list_helper);
-        store::import_pod(
-            &db,
-            &sanction_pod_id_str,
-            "signed",
-            &pod_data_sanction,
-            Some("Sanctions List"),
-            space_id,
-        )
-        .await
-        .expect("Failed to import Sanctions List pod for test");
+        let pods = sign_zukyc_pods().unwrap();
+        for pod in pods {
+            let pod_data = PodData::from(pod);
+            store::import_pod(&db, &pod_data, None, space_id)
+                .await
+                .expect("Failed to import Zukyc pod for test");
+        }
 
         let const_18y = 1169909388;
         let const_1y = 1706367566;
@@ -619,7 +466,8 @@ mod tests {
 
         let request_payload = json!({
             "code": valid_zukyc_podlog,
-            "space_id": space_id
+            "space_id": space_id,
+            "mock": true
         });
 
         let response = server.post("/api/execute").json(&request_payload).await;

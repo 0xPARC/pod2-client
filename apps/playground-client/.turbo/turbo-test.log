@@ -1,0 +1,38 @@
+
+
+> playground-client@ test /Users/robknight/Projects/0xPARC/client-pod2/web/apps/playground-client
+> vitest run
+
+[?25l
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90m/Users/robknight/Projects/0xPARC/client-pod2/web/apps/playground-client[39m
+
+[?2026h
+[1m[33m ❯ [39m[22msrc/App.tsx[2m [queued][22m
+
+[2m Test Files [22m[1m[32m0 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m[1m[32m0 passed[39m[22m[90m (0)[39m
+[2m   Start at [22m10:35:24
+[2m   Duration [22m100ms
+[?2026l[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/App.tsx[2m [ src/App.tsx ][22m
+[31m[1mError[22m: Cannot find package '@/components/ui/sonner' imported from '/Users/robknight/Projects/0xPARC/client-pod2/web/apps/playground-client/src/App.tsx'[39m
+[36m [2m❯[22m src/App.tsx:[2m1:1[22m[39m
+    [90m  1| [39m[35mimport[39m { [33mToaster[39m } [35mfrom[39m [32m"@/components/ui/sonner"[39m[33m;[39m [90m// Added Toaster import[39m
+    [90m   | [39m[31m^[39m
+    [90m  2| [39m[35mimport[39m [33mReact[39m [35mfrom[39m [32m"react"[39m[33m;[39m
+    [90m  3| [39m[35mimport[39m [33mEditorPane[39m [35mfrom[39m [32m"./components/EditorPane"[39m[33m;[39m [90m// Import the EditorPane component[39m
+
+[31m[1mCaused by: Error[22m: Failed to load url @/components/ui/sonner (resolved id: @/components/ui/sonner) in /Users/robknight/Projects/0xPARC/client-pod2/web/apps/playground-client/src/App.tsx. Does the file exist?[39m
+[90m [2m❯[22m loadAndTransform ../../node_modules/.pnpm/vite@6.3.0_@types+node@22.14.0_jiti@2.4.2_lightningcss@1.30.1_tsx@4.20.3/node_modules/vite/dist/node/chunks/dep-BuM4AdeL.js:[2m35659:17[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [2mno tests[22m
+[2m   Start at [22m 10:35:24
+[2m   Duration [22m 183ms[2m (transform 23ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 43ms)[22m
+
+[?25h[41m[30m ELIFECYCLE [39m[49m [31mTest failed. See above for more details.[39m

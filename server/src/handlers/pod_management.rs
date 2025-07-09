@@ -14,13 +14,13 @@ use pod2::{
     frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
     middleware::{hash_str, Hash, Value as PodValue},
 };
+use pod2_db::{
+    store::{self, PodData, PodInfo},
+    Db,
+};
 use serde::Deserialize;
 
 use super::AppError;
-use crate::{
-    api_types::{PodData, PodInfo},
-    db::{store, Db},
-};
 
 // Request body for the /api/pods/sign endpoint
 #[derive(Deserialize)]
@@ -86,15 +86,7 @@ pub async fn import_pod_to_space(
     let pod_id_string = pod_id_obj.0.encode_hex::<String>();
 
     // Then it calls the generic store function.
-    store::import_pod(
-        &db,
-        &pod_id_string,
-        &payload.pod_type,
-        &pod_data_enum,
-        payload.label.as_deref(),
-        &space_id,
-    )
-    .await?;
+    store::import_pod(&db, &pod_data_enum, payload.label.as_deref(), &space_id).await?;
 
     // Finally, it constructs the response object.
     let created_pod_info = PodInfo {
@@ -196,15 +188,12 @@ mod tests {
         middleware::{self, hash_str, Key, Params as PodParams, PodId, Value as PodValue},
         op,
     };
+    use pod2_db::Db;
     use serde_json::{json, Value};
     use tracing_subscriber::prelude::*;
 
     use super::*; // Imports PodInfo, SignRequest etc. and handlers
-    use crate::{
-        db::{self},
-        handlers::playground::MOCK_VD_SET,
-        routes::create_router,
-    };
+    use crate::{handlers::playground::MOCK_VD_SET, routes::create_router};
 
     // Helper to insert a test space
     async fn insert_test_space(db: &Db, id: &str) {
@@ -217,14 +206,11 @@ mod tests {
     // Helper to insert a test pod (contract for data_payload changes)
     async fn insert_test_pod(
         db: &Db,
-        id: &str,       // This MUST be the hex string of the PodId embedded in data_payload
-        pod_type: &str, // Should be "main" or "signed"
+        pod_type: &str,       // Should be "main" or "signed"
         data_payload: &Value, // MUST be a valid SerializedSignedPod or SerializedMainPod as JSON
         label: Option<&str>,
         space: &str,
     ) {
-        let id_owned = id.to_string();
-        let pod_type_owned = pod_type.to_string();
         let label_owned = label.map(|s| s.to_string());
         let space_owned = space.to_string();
 
@@ -248,8 +234,6 @@ mod tests {
 
         store::import_pod(
             db,
-            &id_owned,
-            &pod_type_owned,
             &pod_data_enum_for_test,
             label_owned.as_deref(),
             &space_owned,
@@ -266,7 +250,7 @@ mod tests {
     // Test server setup specific to these tests
     pub async fn create_test_server_with_db() -> (TestServer, Arc<Db>) {
         let db = Arc::new(
-            db::Db::new(None, &db::MIGRATIONS)
+            Db::new(None, &pod2_db::MIGRATIONS)
                 .await
                 .expect("Failed to init db for test"),
         );
@@ -336,7 +320,6 @@ mod tests {
         let (main_pod1_id_str, main_pod1_data_payload) = create_sample_main_pod_data(&test_params);
         insert_test_pod(
             &db,
-            &main_pod1_id_str,
             "main",
             &main_pod1_data_payload,
             Some("label1"),
@@ -350,21 +333,12 @@ mod tests {
             "list_signed1",
             vec![("value_signed", PodValue::from(2))],
         );
-        insert_test_pod(
-            &db,
-            &signed_pod1_id_str,
-            "signed",
-            &signed_pod1_data_payload,
-            None,
-            "space1",
-        )
-        .await;
+        insert_test_pod(&db, "signed", &signed_pod1_data_payload, None, "space1").await;
 
         // Create and insert another MainPod for space2 using helper
         let (main_pod2_id_str, main_pod2_data_payload) = create_sample_main_pod_data(&test_params);
         insert_test_pod(
             &db,
-            &main_pod2_id_str,
             "main",
             &main_pod2_data_payload,
             Some("label3"),
@@ -422,7 +396,6 @@ mod tests {
         // Fetch created_at after insertion for reliable comparison
         insert_test_pod(
             &db,
-            &main_pod_id_str_for_get,
             "main",
             &main_pod_data_payload_for_get,
             Some("test_label_get"),
@@ -463,7 +436,6 @@ mod tests {
 
         insert_test_pod(
             &db,
-            &pod_id_str,
             "main",
             &pod_data,
             None,
@@ -492,17 +464,9 @@ mod tests {
         insert_test_space(&db, space_name).await;
 
         let test_params = PodParams::default();
-        let (existing_pod_id_str, existing_pod_data) = create_sample_main_pod_data(&test_params);
+        let (_, existing_pod_data) = create_sample_main_pod_data(&test_params);
 
-        insert_test_pod(
-            &db,
-            &existing_pod_id_str,
-            "main",
-            &existing_pod_data,
-            None,
-            space_name,
-        )
-        .await;
+        insert_test_pod(&db, "main", &existing_pod_data, None, space_name).await;
 
         let non_existent_id_str: String = PodId(hash_str("non_existent_pod_id_string_for_test"))
             .0
