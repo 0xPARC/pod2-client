@@ -1,15 +1,28 @@
-use crate::AppState;
-use pod2_db::store;
+use std::collections::HashMap;
+
 use pod2::{
     backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver},
-    frontend::{MainPodBuilder, SerializedMainPod},
-    lang, middleware::{Params, DEFAULT_VD_SET},
     examples::MOCK_VD_SET,
+    frontend::{MainPodBuilder, SerializedMainPod},
+    lang,
+    middleware::{Params, DEFAULT_VD_SET},
 };
+use pod2_db::store;
 use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
-use std::collections::HashMap;
-use tauri::{State, AppHandle};
+use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+
+use crate::{get_feature_config, AppState};
+
+/// Macro to check if integration feature is enabled
+macro_rules! check_feature_enabled {
+    () => {
+        if !get_feature_config().integration {
+            log::warn!("Integration feature is disabled");
+            return Err("Integration feature is disabled".to_string());
+        }
+    };
+}
 
 /// Submit a POD request and get back a MainPod proof
 #[tauri::command]
@@ -17,6 +30,7 @@ pub async fn submit_pod_request(
     state: State<'_, Mutex<AppState>>,
     request: String,
 ) -> Result<SerializedMainPod, String> {
+    check_feature_enabled!();
     log::info!("request: {}", request);
     let params = Params::default();
     let pod_request = lang::parse(request.as_str(), &params, &[]).unwrap();
@@ -47,23 +61,27 @@ pub async fn submit_pod_request(
             pod2_db::store::PodData::Signed(helper) => {
                 owned_signed_pods.push(pod2::frontend::SignedPod::try_from(helper).unwrap());
             }
-            pod2_db::store::PodData::Main(helper) => match pod2::frontend::MainPod::try_from(helper) {
-                Ok(main_pod) => {
-                    owned_main_pods.push(main_pod);
+            pod2_db::store::PodData::Main(helper) => {
+                match pod2::frontend::MainPod::try_from(helper) {
+                    Ok(main_pod) => {
+                        owned_main_pods.push(main_pod);
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
+                            pod_info.id,
+                            crate::DEFAULT_SPACE_ID,
+                            e
+                        );
+                        return Err(format!(
+                            "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
+                            pod_info.id,
+                            crate::DEFAULT_SPACE_ID,
+                            e
+                        ));
+                    }
                 }
-                Err(e) => {
-                    log::error!(
-                        "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
-                        pod_info.id,
-                        crate::DEFAULT_SPACE_ID,
-                        e
-                    );
-                    return Err(format!(
-                        "Failed to convert MainPodHelper to MainPod (id: {}, space: {}): {:?}",
-                        pod_info.id, crate::DEFAULT_SPACE_ID, e
-                    ));
-                }
-            },
+            }
         }
     }
 
@@ -148,9 +166,5 @@ pub async fn submit_pod_request(
 
 /// Generate handler for integration commands
 pub fn integration_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    |builder| {
-        builder.invoke_handler(tauri::generate_handler![
-            submit_pod_request
-        ])
-    }
+    |builder| builder.invoke_handler(tauri::generate_handler![submit_pod_request])
 }

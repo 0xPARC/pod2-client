@@ -1,19 +1,32 @@
-use crate::AppState;
-use pod2_db::store;
+use std::collections::HashMap;
+
 use pod2::{
     backends::plonky2::signedpod::Signer,
     frontend::SignedPodBuilder,
     middleware::{Params, Value as PodValue},
 };
-use std::collections::HashMap;
-use tauri::{State, AppHandle};
+use pod2_db::store;
+use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+
+use crate::{get_feature_config, AppState};
+
+/// Macro to check if authoring feature is enabled
+macro_rules! check_feature_enabled {
+    () => {
+        if !get_feature_config().authoring {
+            log::warn!("Authoring feature is disabled");
+            return Err("Authoring feature is disabled".to_string());
+        }
+    };
+}
 
 /// Get information about the default private key
 #[tauri::command]
 pub async fn get_private_key_info(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<serde_json::Value, String> {
+    check_feature_enabled!();
     let app_state = state.lock().await;
 
     store::get_default_private_key_info(&app_state.db)
@@ -54,10 +67,5 @@ pub async fn sign_pod(
 
 /// Generate handler for authoring commands
 pub fn authoring_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    |builder| {
-        builder.invoke_handler(tauri::generate_handler![
-            get_private_key_info,
-            sign_pod
-        ])
-    }
+    |builder| builder.invoke_handler(tauri::generate_handler![get_private_key_info, sign_pod])
 }

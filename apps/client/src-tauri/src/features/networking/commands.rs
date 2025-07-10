@@ -1,18 +1,30 @@
-use crate::{AppState, DEFAULT_SPACE_ID, p2p};
-use pod2_db::store::{self, PodData};
-use pod2::{
-    backends::plonky2::signedpod::Signer,
-    frontend::{SignedPodBuilder, SerializedSignedPod},
-    middleware::{Params, Value as PodValue},
-};
 use chrono::Utc;
 use hex::ToHex;
-use tauri::{State, AppHandle};
+use pod2::{
+    backends::plonky2::signedpod::Signer,
+    frontend::{SerializedSignedPod, SignedPodBuilder},
+    middleware::{Params, Value as PodValue},
+};
+use pod2_db::store::{self, PodData};
+use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+
+use crate::{get_feature_config, p2p, AppState, DEFAULT_SPACE_ID};
+
+/// Macro to check if networking feature is enabled
+macro_rules! check_feature_enabled {
+    () => {
+        if !get_feature_config().networking {
+            log::warn!("Networking feature is disabled");
+            return Err("Networking feature is disabled".to_string());
+        }
+    };
+}
 
 /// Start the P2P node
 #[tauri::command]
 pub async fn start_p2p_node(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    check_feature_enabled!();
     let mut app_state = state.lock().await;
 
     if app_state.p2p_node.is_some() {
@@ -226,7 +238,9 @@ pub async fn accept_inbox_message(
 
 /// Get all chats
 #[tauri::command]
-pub async fn get_chats(state: State<'_, Mutex<AppState>>) -> Result<Vec<serde_json::Value>, String> {
+pub async fn get_chats(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<serde_json::Value>, String> {
     let app_state = state.lock().await;
 
     store::get_chats(&app_state.db)

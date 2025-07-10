@@ -202,6 +202,55 @@ Based on the Cursor rules in `.cursor/rules/`:
 4. **Prefer direct imports** - Import specific items rather than entire modules
 5. **Use composable functions** - Break down complex operations into smaller, focused functions
 
+## Feature Flags
+
+The application supports environment variable-based feature flags for development, testing, and deployment flexibility.
+
+### Environment Variables
+
+Control features using these environment variables:
+
+- `FEATURE_POD_MANAGEMENT=true|false` - Core POD collection management (default: true)
+- `FEATURE_NETWORKING=true|false` - P2P communication and messaging (default: true)  
+- `FEATURE_AUTHORING=true|false` - Creating and signing new PODs (default: true)
+- `FEATURE_INTEGRATION=true|false` - External POD Request handling (default: true)
+
+### Usage Examples
+
+**Development - Focus on specific features:**
+```bash
+# Work on core functionality without networking distractions
+FEATURE_NETWORKING=false FEATURE_INTEGRATION=false cargo run
+
+# Focus on networking features only
+FEATURE_POD_MANAGEMENT=false FEATURE_AUTHORING=false cargo run
+```
+
+**Testing - Minimal builds:**
+```bash
+# Test core functionality only
+FEATURE_NETWORKING=false FEATURE_INTEGRATION=false pnpm tauri dev
+
+# Test networking in isolation
+FEATURE_POD_MANAGEMENT=false FEATURE_AUTHORING=false pnpm tauri dev
+```
+
+**Deployment - Build variants:**
+```bash
+# Viewer-only client (no authoring or networking)
+FEATURE_AUTHORING=false FEATURE_NETWORKING=false pnpm tauri build
+
+# No external integrations
+FEATURE_INTEGRATION=false pnpm tauri build
+```
+
+### How It Works
+
+- **Backend**: Environment variables are read at startup and control command availability
+- **Frontend**: Queries backend for feature configuration and conditionally renders UI components
+- **Single Source of Truth**: All feature flags are controlled by backend environment variables
+- **Error Handling**: Disabled features log warnings and return errors when called
+
 ## Configuration
 
 ### Rust Toolchain

@@ -17,7 +17,7 @@ impl Default for FeatureConfig {
     fn default() -> Self {
         Self {
             pod_management: true,
-            networking: true,
+            networking: false,
             authoring: true,
             integration: true,
         }
@@ -25,23 +25,47 @@ impl Default for FeatureConfig {
 }
 
 impl FeatureConfig {
-    /// Load feature configuration from environment variables or config file
-    /// For now, all features are enabled by default
+    /// Load feature configuration from environment variables
+    /// Falls back to defaults if environment variables are not set
     pub fn load() -> Self {
-        // TODO: In the future, this could read from:
-        // - Environment variables (POD2_FEATURE_NETWORKING=false)
-        // - Config file (config.toml)
-        // - Command line arguments
-        // - Build-time feature flags
-        
-        Self::default()
+        log::info!("Loading feature configuration from environment variables");
+
+        let config = Self {
+            pod_management: Self::get_env_bool("FEATURE_POD_MANAGEMENT", true),
+            networking: Self::get_env_bool("FEATURE_NETWORKING", false),
+            authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
+            integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
+        };
+
+        log::info!("Feature configuration loaded: {:?}", config);
+        config
     }
-    
+
+    /// Helper to parse boolean from environment variable
+    fn get_env_bool(key: &str, default: bool) -> bool {
+        match std::env::var(key) {
+            Ok(value) => match value.to_lowercase().as_str() {
+                "true" | "1" | "yes" | "on" => true,
+                "false" | "0" | "no" | "off" => false,
+                _ => {
+                    log::warn!(
+                        "Invalid boolean value '{}' for {}, using default: {}",
+                        value,
+                        key,
+                        default
+                    );
+                    default
+                }
+            },
+            Err(_) => default,
+        }
+    }
+
     /// Check if any features are enabled
     pub fn has_any_enabled(&self) -> bool {
         self.pod_management || self.networking || self.authoring || self.integration
     }
-    
+
     /// Get a list of enabled feature names
     pub fn enabled_features(&self) -> Vec<&'static str> {
         let mut features = Vec::new();

@@ -1,4 +1,6 @@
 use anyhow::Context;
+use config::FeatureConfig;
+use features::*;
 use num::BigUint;
 use pod2::{
     backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
@@ -16,8 +18,6 @@ use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
 pub(crate) mod frog;
-use config::FeatureConfig;
-use features::*;
 
 mod config;
 mod features;
@@ -25,16 +25,15 @@ mod p2p;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
-/// Get the feature configuration
-fn get_feature_config() -> FeatureConfig {
-    // For now, enable all features by default
-    // TODO: Load from configuration file or environment
-    FeatureConfig {
-        pod_management: true,
-        networking: true,
-        authoring: true,
-        integration: true,
-    }
+/// Get the feature configuration from environment variables
+pub fn get_feature_config() -> FeatureConfig {
+    FeatureConfig::load()
+}
+
+/// Tauri command to get the current feature configuration
+#[tauri::command]
+async fn get_feature_config_command() -> Result<FeatureConfig, String> {
+    Ok(get_feature_config())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -317,6 +316,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             frog::request_frog,
+            // Configuration commands
+            get_feature_config_command,
             // POD management commands
             pod_management::get_app_state,
             pod_management::trigger_sync,

@@ -1,56 +1,43 @@
-import { MainPod, SignedPod, Value, PodInfo } from "@pod2/pod2js";
+// =============================================================================
+// Feature-based RPC API
+// =============================================================================
+//
+// This file provides backward compatibility while delegating to the new
+// feature-based organization. New code should import from specific features.
 
-// Re-export PodInfo for use in other files
-export type { PodInfo };
-
-/**
- * Space/Folder information
- */
-export interface SpaceInfo {
-  id: string;
-  created_at: string;
-}
-
-/**
- * Private key information (without the secret key)
- */
-export interface PrivateKeyInfo {
-  id: string;
-  public_key: string; // Base58-encoded public key
-  alias: string | null;
-  created_at: string;
-  is_default: boolean;
-}
 import { invoke } from "@tauri-apps/api/core";
 
+// Import from feature modules
+import * as podManagementFeature from "./features/pod-management";
+import * as networkingFeature from "./features/networking";
+import * as authoringFeature from "./features/authoring";
+import * as integrationFeature from "./features/integration";
+
 // =============================================================================
-// App-Specific Types (complementing pod2js types)
+// Configuration Types
 // =============================================================================
 
 /**
- * Statistics about PODs in the application
+ * Feature configuration for the application
+ * This matches the Rust FeatureConfig struct
  */
-export interface PodStats {
-  total_pods: number;
-  signed_pods: number;
-  main_pods: number;
+export interface FeatureConfig {
+  pod_management: boolean;
+  networking: boolean;
+  authoring: boolean;
+  integration: boolean;
 }
 
-/**
- * Lists of PODs organized by type
- */
-export interface PodLists {
-  signed_pods: PodInfo[];
-  main_pods: PodInfo[];
-}
+// Re-export types from feature modules
+export type {
+  PodInfo,
+  SpaceInfo,
+  PodStats,
+  PodLists,
+  AppStateData
+} from "./features/pod-management";
 
-/**
- * Complete application state data
- */
-export interface AppStateData {
-  pod_stats: PodStats;
-  pod_lists: PodLists;
-}
+export type { PrivateKeyInfo } from "./features/authoring";
 
 /**
  * Error type for RPC operations
@@ -67,30 +54,60 @@ export interface RpcError {
 export type RpcResult<T> = Promise<T>;
 
 // =============================================================================
-// Type Guards and Validation
+// Configuration Operations
 // =============================================================================
 
 /**
- * Type guard for AppStateData
+ * Get the current feature configuration from the backend
+ * @returns The feature configuration loaded from environment variables
  */
-function isAppStateData(obj: any): obj is AppStateData {
-  return (
-    obj &&
-    typeof obj === "object" &&
-    obj.pod_stats &&
-    typeof obj.pod_stats.total_pods === "number" &&
-    typeof obj.pod_stats.signed_pods === "number" &&
-    typeof obj.pod_stats.main_pods === "number" &&
-    obj.pod_lists &&
-    Array.isArray(obj.pod_lists.signed_pods) &&
-    Array.isArray(obj.pod_lists.main_pods)
-  );
+export async function getFeatureConfig(): Promise<FeatureConfig> {
+  try {
+    return await invoke("get_feature_config_command");
+  } catch (error) {
+    console.error("Failed to get feature configuration:", error);
+    // Return default configuration as fallback
+    return {
+      pod_management: true,
+      networking: true,
+      authoring: true,
+      integration: true
+    };
+  }
 }
+
+// =============================================================================
+// Re-export functions for backward compatibility
+// =============================================================================
+
+// Pod Management operations
+export const getAppState = podManagementFeature.getAppState;
+export const triggerSync = podManagementFeature.triggerSync;
+export const importPod = podManagementFeature.importPod;
+export const setPodPinned = podManagementFeature.setPodPinned;
+export const listSpaces = podManagementFeature.listSpaces;
+export const insertZuKycPods = podManagementFeature.insertZuKycPods;
+
+// Networking operations
+export const startP2pNode = networkingFeature.startP2pNode;
+export const sendPodToPeer = networkingFeature.sendPodToPeer;
+export const sendMessageAsPod = networkingFeature.sendMessageAsPod;
+export const getInboxMessages = networkingFeature.getInboxMessages;
+export const acceptInboxMessage = networkingFeature.acceptInboxMessage;
+export const getChats = networkingFeature.getChats;
+export const getChatMessages = networkingFeature.getChatMessages;
+
+// Authoring operations
+export const signPod = authoringFeature.signPod;
+export const getPrivateKeyInfo = authoringFeature.getPrivateKeyInfo;
+
+// Integration operations
+export const submitPodRequest = integrationFeature.submitPodRequest;
 
 /**
  * Handle and format RPC errors consistently
  */
-function handleRpcError(error: any): never {
+export function handleRpcError(error: any): never {
   if (typeof error === "string") {
     throw new Error(error);
   }
@@ -103,7 +120,7 @@ function handleRpcError(error: any): never {
 /**
  * Wrapper for Tauri invoke that handles errors consistently
  */
-async function invokeCommand<T>(
+export async function invokeCommand<T>(
   command: string,
   args?: Record<string, any>
 ): Promise<T> {
@@ -112,222 +129,6 @@ async function invokeCommand<T>(
   } catch (error) {
     handleRpcError(error);
   }
-}
-
-// =============================================================================
-// Pod Operations
-// =============================================================================
-
-/**
- * Sign a POD with the given key-value pairs
- * @param values - The key-value pairs to include in the POD
- * @returns The signed POD
- */
-export async function signPod(
-  values: Record<string, Value>
-): RpcResult<SignedPod> {
-  const serializedPod = await invokeCommand<string>("sign_pod", {
-    serializedPodValues: JSON.stringify(values)
-  });
-  return JSON.parse(serializedPod);
-}
-
-/**
- * Import a POD into the application
- * @param pod - The POD to import (SignedPod or MainPod)
- * @param label - Optional label for the POD
- */
-export async function importPod(
-  pod: SignedPod | MainPod,
-  label?: string
-): RpcResult<void> {
-  const podType = pod.podType[1]; // Extract the string type from the tuple
-  return invokeCommand("import_pod", {
-    serializedPod: JSON.stringify(pod),
-    podType,
-    label
-  });
-}
-
-/**
- * Submit a POD request and get back a MainPod proof
- * @param request - The POD request string
- * @returns The resulting MainPod
- */
-export async function submitPodRequest(request: string): RpcResult<MainPod> {
-  return invokeCommand<MainPod>("submit_pod_request", { request });
-}
-
-// =============================================================================
-// P2P Communications
-// =============================================================================
-
-/**
- * Start the P2P node
- * @returns The node ID as a string
- */
-export async function startP2pNode(): RpcResult<string> {
-  return invokeCommand<string>("start_p2p_node");
-}
-
-/**
- * Send a POD to a peer
- * @param peerNodeId - The peer's node ID
- * @param podId - The ID of the POD to send
- * @param messageText - Optional message text
- * @param senderAlias - Optional sender alias
- */
-export async function sendPodToPeer(
-  peerNodeId: string,
-  podId: string,
-  messageText?: string,
-  senderAlias?: string
-): RpcResult<void> {
-  return invokeCommand("send_pod_to_peer", {
-    peerNodeId,
-    podId,
-    messageText,
-    senderAlias
-  });
-}
-
-/**
- * Send a message as a POD to a peer
- * @param peerNodeId - The peer's node ID
- * @param messageText - The message text
- * @param senderAlias - Optional sender alias
- */
-export async function sendMessageAsPod(
-  peerNodeId: string,
-  messageText: string,
-  senderAlias?: string
-): RpcResult<void> {
-  return invokeCommand("send_message_as_pod", {
-    peerNodeId,
-    messageText,
-    senderAlias
-  });
-}
-
-// =============================================================================
-// Messaging
-// =============================================================================
-
-/**
- * Get inbox messages
- * @returns Array of inbox messages
- */
-export async function getInboxMessages(): RpcResult<any[]> {
-  return invokeCommand<any[]>("get_inbox_messages");
-}
-
-/**
- * Accept an inbox message
- * @param messageId - The message ID to accept
- * @param chatAlias - Optional chat alias
- * @returns The chat ID
- */
-export async function acceptInboxMessage(
-  messageId: string,
-  chatAlias?: string
-): RpcResult<string> {
-  return invokeCommand<string>("accept_inbox_message", {
-    messageId,
-    chatAlias
-  });
-}
-
-/**
- * Get all chats
- * @returns Array of chat information
- */
-export async function getChats(): RpcResult<any[]> {
-  return invokeCommand<any[]>("get_chats");
-}
-
-/**
- * Get messages for a specific chat
- * @param chatId - The chat ID
- * @returns Array of chat messages
- */
-export async function getChatMessages(chatId: string): RpcResult<any[]> {
-  return invokeCommand<any[]>("get_chat_messages", { chatId });
-}
-
-// =============================================================================
-// Key Management
-// =============================================================================
-
-/**
- * Get information about the default private key
- * Note: A default key is automatically created if none exists
- * @returns Private key information (without the secret key)
- */
-export async function getPrivateKeyInfo(): RpcResult<PrivateKeyInfo> {
-  return invokeCommand<PrivateKeyInfo>("get_private_key_info");
-}
-
-// =============================================================================
-// State Management
-// =============================================================================
-
-/**
- * Get the current application state
- * @returns The application state data
- */
-export async function getAppState(): RpcResult<AppStateData> {
-  const result = await invokeCommand<any>("get_app_state");
-
-  if (!isAppStateData(result)) {
-    throw new Error("Invalid app state data received from backend");
-  }
-
-  return result;
-}
-
-/**
- * Trigger a state synchronization
- */
-export async function triggerSync(): RpcResult<void> {
-  return invokeCommand("trigger_sync");
-}
-
-// =============================================================================
-// Folder Management
-// =============================================================================
-
-/**
- * Set the pinned status of a POD
- * @param spaceId - The space/folder ID
- * @param podId - The POD ID
- * @param pinned - Whether the POD should be pinned
- */
-export async function setPodPinned(
-  spaceId: string,
-  podId: string,
-  pinned: boolean
-): RpcResult<void> {
-  return invokeCommand("set_pod_pinned", {
-    spaceId,
-    podId,
-    pinned
-  });
-}
-
-/**
- * List all spaces/folders
- * @returns Array of space information
- */
-export async function listSpaces(): RpcResult<SpaceInfo[]> {
-  return invokeCommand<SpaceInfo[]>("list_spaces");
-}
-
-/**
- * Insert ZuKYC sample pods to the default space
- * @returns Promise that resolves when pods are inserted
- */
-export async function insertZuKycPods(): RpcResult<void> {
-  return invokeCommand<void>("insert_zukyc_pods");
 }
 
 /**
@@ -344,3 +145,14 @@ export async function requestFrog(): RpcResult<void> {
 
 // Re-export the existing functions with their original names
 export { signPod as signPodLegacy, importPod as importPodLegacy };
+
+// =============================================================================
+// Feature modules for direct import
+// =============================================================================
+
+export {
+  podManagementFeature,
+  networkingFeature,
+  authoringFeature,
+  integrationFeature
+};
