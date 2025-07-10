@@ -19,7 +19,7 @@ export type { AppStateData, PodStats, PodLists, SpaceInfo };
 export type { PodInfo } from "./rpc";
 
 export type PodFilter = "all" | "signed" | "main" | "pinned";
-export type AppView = "pods" | "inbox" | "chats";
+export type AppView = "pods" | "inbox" | "chats" | "frogs";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
 interface AppStoreState {
@@ -53,6 +53,7 @@ interface AppStoreState {
 
   // Derived getters
   getFilteredPods: () => PodInfo[];
+  getFilteredPodsBy: (podType: String, folder: String) => PodInfo[];
   getSelectedPod: () => PodInfo | null;
 }
 
@@ -174,12 +175,12 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
   },
 
-  getFilteredPods: () => {
-    const { appState, selectedFilter, selectedFolderFilter } = get();
+  getFilteredPodsBy: (podType: String, folder: String) => {
+    const { appState } = get();
 
     // Get all pods or filter by type
     let pods: PodInfo[] = [];
-    switch (selectedFilter) {
+    switch (podType) {
       case "signed":
         pods = appState.pod_lists.signed_pods;
         break;
@@ -202,8 +203,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
 
     // Apply folder filter
-    if (selectedFolderFilter !== "all") {
-      pods = pods.filter((p) => p.space === selectedFolderFilter);
+    if (folder !== "all") {
+      pods = pods.filter((p) => p.space === folder);
     }
 
     // Sort: pinned first, then by creation date (newest first)
@@ -214,6 +215,11 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     });
+  },
+
+  getFilteredPods: () => {
+    const { selectedFilter, selectedFolderFilter } = get();
+    return get().getFilteredPodsBy(selectedFilter, selectedFolderFilter);
   },
 
   getSelectedPod: () => {
