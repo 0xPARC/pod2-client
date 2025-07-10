@@ -13,6 +13,7 @@ import { Separator } from "./ui/separator";
 import { StarIcon, FolderIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import { requestFrog } from "@/lib/rpc";
+import { useEffect, useState } from "react";
 
 export function FrogViewer() {
   const {
@@ -20,8 +21,19 @@ export function FrogViewer() {
     getSelectedPod,
     setSelectedPodId,
     selectedPodId,
-    togglePodPinned
+    togglePodPinned,
+    setFrogTimeout,
+    frogTimeout
   } = useAppStore();
+
+  const [time, setTime] = useState(new Date().getTime());
+
+  useEffect(() => {
+    const interval = setInterval(() => setTime(new Date().getTime()), 1000);
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   const filteredPods = getFilteredPodsBy("signed", "frogs");
   const selectedPod = getSelectedPod();
@@ -39,6 +51,20 @@ export function FrogViewer() {
     togglePodPinned(pod.id, pod.space);
   };
 
+  const requestFrogAndUpdateTimeout = async () => {
+    await requestFrog();
+    setFrogTimeout(new Date().getTime() + 900000);
+  };
+
+  const timeRemaining =
+    frogTimeout === null || time >= frogTimeout
+      ? 0
+      : Math.ceil(0.001 * (frogTimeout - time));
+  const searchDisabled = timeRemaining > 0;
+  const searchButtonWaitText = searchDisabled
+    ? ` (wait ${timeRemaining}s)`
+    : "";
+
   return (
     <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* Left panel - POD list */}
@@ -48,8 +74,12 @@ export function FrogViewer() {
             <h3 className="font-semibold text-lg">FROGCRYPTO</h3>
           </div>
           <div className="p-4 border-b border-border">
-            <Button variant="outline" onClick={() => requestFrog()}>
-              Search SWAMP
+            <Button
+              variant="outline"
+              onClick={() => requestFrogAndUpdateTimeout()}
+              disabled={searchDisabled}
+            >
+              Search SWAMP {searchButtonWaitText}
             </Button>
           </div>
           <div className="p-4 border-b border-border">

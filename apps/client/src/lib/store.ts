@@ -34,6 +34,7 @@ interface AppStoreState {
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
   chatEnabled: boolean;
+  frogTimeout: number | null;
 
   // Folder State
   folders: SpaceInfo[];
@@ -50,6 +51,7 @@ interface AppStoreState {
   setExternalPodRequest: (request: string | undefined) => void;
   loadFolders: () => Promise<void>;
   togglePodPinned: (podId: string, spaceId: string) => Promise<void>;
+  setFrogTimeout: (timeout: number | null) => void;
 
   // Derived getters
   getFilteredPods: () => PodInfo[];
@@ -79,6 +81,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   externalPodRequest: undefined,
   folders: [],
   foldersLoading: false,
+  frogTimeout: null,
 
   initialize: async () => {
     try {
@@ -141,6 +144,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setExternalPodRequest: (request: string | undefined) => {
     set({ externalPodRequest: request });
+  },
+
+  setFrogTimeout: (timeout: number | null) => {
+    set({ frogTimeout: timeout });
   },
 
   loadFolders: async () => {
