@@ -49,6 +49,7 @@ import {
   DropdownMenuTrigger
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
+import { FeatureGate } from "@/lib/features/config";
 
 export function AppSidebar() {
   const {
@@ -183,6 +184,69 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader></SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>PODs</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setCurrentView("pods");
+                    setSelectedFilter("pinned");
+                  }}
+                  isActive={
+                    currentView === "pods" && selectedFilter === "pinned"
+                  }
+                >
+                  <StarIcon />
+                  Pinned
+                </SidebarMenuButton>
+                <SidebarMenuBadge>
+                  {
+                    [
+                      ...appState.pod_lists.signed_pods,
+                      ...appState.pod_lists.main_pods
+                    ].filter((p) => p.pinned).length
+                  }
+                </SidebarMenuBadge>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setCurrentView("pods");
+                    setSelectedFilter("signed");
+                  }}
+                  isActive={
+                    currentView === "pods" && selectedFilter === "signed"
+                  }
+                >
+                  <FilePenLineIcon />
+                  Signed
+                </SidebarMenuButton>
+                <SidebarMenuBadge>
+                  {appState.pod_stats.signed_pods}
+                </SidebarMenuBadge>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setCurrentView("pods");
+                    setSelectedFilter("main");
+                  }}
+                  isActive={currentView === "pods" && selectedFilter === "main"}
+                >
+                  <FileCheck2Icon />
+                  Main
+                </SidebarMenuButton>
+                <SidebarMenuBadge>
+                  {appState.pod_stats.main_pods}
+                </SidebarMenuBadge>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <Collapsible open={foldersExpanded} onOpenChange={setFoldersExpanded}>
             <CollapsibleTrigger asChild>
@@ -321,32 +385,34 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Messages</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setCurrentView("inbox")}
-                  isActive={currentView === "inbox"}
-                >
-                  <InboxIcon />
-                  Inbox
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+        <FeatureGate feature="networking">
+          <SidebarGroup>
+            <SidebarGroupLabel>Messages</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setCurrentView("inbox")}
+                    isActive={currentView === "inbox"}
+                  >
+                    <InboxIcon />
+                    Inbox
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setCurrentView("chats")}
-                  isActive={currentView === "chats"}
-                >
-                  <MessageSquareIcon />
-                  Chats
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setCurrentView("chats")}
+                    isActive={currentView === "chats"}
+                  >
+                    <MessageSquareIcon />
+                    Chats
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </FeatureGate>
         <SidebarGroup>
           <SidebarGroupLabel>Actions</SidebarGroupLabel>
           <SidebarGroupContent>

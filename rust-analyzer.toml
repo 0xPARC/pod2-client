@@ -1,2 +1,1 @@
 imports.prefix = "crate"
-cargo.targetDir = "target-analyzer"

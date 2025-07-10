@@ -17,6 +17,7 @@ import {
 } from "./components/ui/dialog";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Textarea } from "./components/ui/textarea";
+import { Toaster } from "./components/ui/sonner";
 import { useAppStore } from "./lib/store";
 import { FeatureConfigProvider } from "./lib/features/config";
 
@@ -121,6 +122,7 @@ function App() {
           <MainContent />
           <PodRequestDialog />
         </SidebarProvider>
+        <Toaster />
       </div>
     </FeatureConfigProvider>
   );
