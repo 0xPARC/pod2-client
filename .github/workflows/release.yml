@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run without creating release (test mode)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # Require all existing CI workflows to pass before release
+  check-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflows = ['Clippy Check', 'Rust Tests', 'JS Tests', 'Rustfmt Check'];
+            const ref = context.ref;
+            
+            for (const workflow of workflows) {
+              const runs = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: `${workflow.toLowerCase().replace(/ /g, '_')}.yml`,
+                head_sha: context.sha,
+                status: 'completed'
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              if (!latestRun || latestRun.conclusion !== 'success') {
+                core.setFailed(`Workflow "${workflow}" has not passed for this commit`);
+                return;
+              }
+            }
+
+  release:
+    needs: check-ci
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest" 
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-latest"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly-2025-01-20
+
+      - name: Add Rust target (macOS only)
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.8.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build Tauri application
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/client
+          tagName: ${{ github.ref_name }}
+          releaseName: "POD Client v${{ github.ref_name }}"
+          releaseBody: "Release ${{ github.ref_name }} - See the assets below to download this version and install."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          dryRun: ${{ inputs.dry_run }}
