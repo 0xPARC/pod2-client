@@ -253,6 +253,8 @@ async fn get_private_key(db: &Db) -> Result<SecretKey, String> {
 pub fn run() {
     env_logger::init();
     let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build());

@@ -9,7 +9,7 @@ use pod2::{
 };
 use pod2_db::store;
 use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
-use tauri::{AppHandle, State};
+use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::{get_feature_config, AppState};
@@ -162,9 +162,4 @@ pub async fn submit_pod_request(
     app_state.trigger_state_sync().await?;
 
     Ok(serialized_pod)
-}
-
-/// Generate handler for integration commands
-pub fn integration_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    |builder| builder.invoke_handler(tauri::generate_handler![submit_pod_request])
 }

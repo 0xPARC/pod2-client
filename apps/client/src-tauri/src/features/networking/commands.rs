@@ -6,7 +6,7 @@ use pod2::{
     middleware::{Params, Value as PodValue},
 };
 use pod2_db::store::{self, PodData};
-use tauri::{AppHandle, State};
+use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::{get_feature_config, p2p, AppState, DEFAULT_SPACE_ID};
@@ -259,19 +259,4 @@ pub async fn get_chat_messages(
     store::get_chat_messages(&app_state.db, &chat_id)
         .await
         .map_err(|e| format!("Failed to get chat messages: {}", e))
-}
-
-/// Generate handler for networking commands
-pub fn networking_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    |builder| {
-        builder.invoke_handler(tauri::generate_handler![
-            start_p2p_node,
-            send_pod_to_peer,
-            send_message_as_pod,
-            get_inbox_messages,
-            accept_inbox_message,
-            get_chats,
-            get_chat_messages
-        ])
-    }
 }

@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 
 /// Configuration for enabling/disabling application features
@@ -24,21 +26,28 @@ impl Default for FeatureConfig {
     }
 }
 
+/// Global cache for feature configuration
+static FEATURE_CONFIG: OnceLock<FeatureConfig> = OnceLock::new();
+
 impl FeatureConfig {
-    /// Load feature configuration from environment variables
+    /// Load feature configuration from environment variables (cached)
     /// Falls back to defaults if environment variables are not set
     pub fn load() -> Self {
-        log::info!("Loading feature configuration from environment variables");
+        FEATURE_CONFIG
+            .get_or_init(|| {
+                log::info!("Loading feature configuration from environment variables");
 
-        let config = Self {
-            pod_management: Self::get_env_bool("FEATURE_POD_MANAGEMENT", true),
-            networking: Self::get_env_bool("FEATURE_NETWORKING", false),
-            authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
-            integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
-        };
+                let config = Self {
+                    pod_management: Self::get_env_bool("FEATURE_POD_MANAGEMENT", true),
+                    networking: Self::get_env_bool("FEATURE_NETWORKING", false),
+                    authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
+                    integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
+                };
 
-        log::info!("Feature configuration loaded: {:?}", config);
-        config
+                log::info!("Feature configuration loaded: {:?}", config);
+                config
+            })
+            .clone()
     }
 
     /// Helper to parse boolean from environment variable

@@ -1,5 +1,5 @@
 use pod2_db::store;
-use tauri::{AppHandle, State};
+use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::{get_feature_config, AppState, AppStateData};
@@ -117,19 +117,4 @@ pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), 
     app_state.trigger_state_sync().await?;
 
     Ok(())
-}
-
-/// Generate handler for pod management commands
-pub fn pod_management_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry>
-{
-    |builder| {
-        builder.invoke_handler(tauri::generate_handler![
-            get_app_state,
-            trigger_sync,
-            set_pod_pinned,
-            list_spaces,
-            import_pod,
-            insert_zukyc_pods
-        ])
-    }
 }

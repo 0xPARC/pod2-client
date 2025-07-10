@@ -6,7 +6,7 @@ use pod2::{
     middleware::{Params, Value as PodValue},
 };
 use pod2_db::store;
-use tauri::{AppHandle, State};
+use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::{get_feature_config, AppState};
@@ -63,9 +63,4 @@ pub async fn sign_pod(
         .map_err(|e| format!("Failed to sign pod: {}", e))?;
 
     Ok(serde_json::to_string(&signed_pod).unwrap())
-}
-
-/// Generate handler for authoring commands
-pub fn authoring_commands() -> impl Fn(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    |builder| builder.invoke_handler(tauri::generate_handler![get_private_key_info, sign_pod])
 }

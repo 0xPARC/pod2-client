@@ -33,7 +33,6 @@ interface AppStoreState {
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
-  chatEnabled: boolean;
   frogTimeout: number | null;
 
   // Folder State
@@ -71,7 +70,6 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       main_pods: []
     }
   },
-  chatEnabled: true,
   isLoading: false,
   error: null,
   currentView: "pods",
@@ -131,11 +129,19 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   setSelectedFilter: (filter: PodFilter) => {
-    set({ selectedFilter: filter, selectedPodId: null }); // Clear selected pod when changing filter
+    set({
+      selectedFilter: filter,
+      selectedFolderFilter: "all",
+      selectedPodId: null
+    }); // Clear folder filter and selected pod when changing type filter
   },
 
   setSelectedFolderFilter: (filter: FolderFilter) => {
-    set({ selectedFolderFilter: filter, selectedPodId: null }); // Clear selected pod when changing folder
+    set({
+      selectedFolderFilter: filter,
+      selectedFilter: "all",
+      selectedPodId: null
+    }); // Clear type filter and selected pod when changing folder
   },
 
   setSelectedPodId: (podId: string | null) => {

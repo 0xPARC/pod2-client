@@ -62,8 +62,7 @@ export function AppSidebar() {
     setCurrentView,
     setSelectedFilter,
     setSelectedFolderFilter,
-    setExternalPodRequest,
-    chatEnabled
+    setExternalPodRequest
   } = useAppStore();
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [p2pLoading, setP2pLoading] = useState(false);
@@ -322,34 +321,32 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {chatEnabled && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Messages</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setCurrentView("inbox")}
-                    isActive={currentView === "inbox"}
-                  >
-                    <InboxIcon />
-                    Inbox
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+        <SidebarGroup>
+          <SidebarGroupLabel>Messages</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("inbox")}
+                  isActive={currentView === "inbox"}
+                >
+                  <InboxIcon />
+                  Inbox
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setCurrentView("chats")}
-                    isActive={currentView === "chats"}
-                  >
-                    <MessageSquareIcon />
-                    Chats
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("chats")}
+                  isActive={currentView === "chats"}
+                >
+                  <MessageSquareIcon />
+                  Chats
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Actions</SidebarGroupLabel>
           <SidebarGroupContent>

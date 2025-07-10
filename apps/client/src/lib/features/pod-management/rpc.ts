@@ -76,6 +76,24 @@ export async function importPod(
 }
 
 /**
+ * Import a POD from raw JSON content
+ * @param serializedPod - JSON string containing the POD data
+ * @param podType - Type of the POD ("Signed", "Main", etc.)
+ * @param label - Optional label for the POD
+ */
+export async function importPodFromJson(
+  serializedPod: string,
+  podType: string,
+  label?: string
+): Promise<void> {
+  return invokeCommand("import_pod", {
+    serializedPod,
+    podType,
+    label
+  });
+}
+
+/**
  * Set the pinned status of a POD
  * @param spaceId - The space/folder ID
  * @param podId - The POD ID
