@@ -18,7 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
-import { fetchDocument, Document, DocumentMetadata } from "../../lib/documentApi";
+import {
+  fetchDocument,
+  Document,
+  verifyDocumentPod,
+  DocumentVerificationResult
+} from "../../lib/documentApi";
 
 interface DocumentDetailViewProps {
   documentId: number;
@@ -32,17 +37,12 @@ export function DocumentDetailView({
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<{
-    publishVerified: boolean;
-    timestampVerified: boolean;
-    upvoteCountVerified: boolean;
-    isVerifying: boolean;
-  }>({
-    publishVerified: false,
-    timestampVerified: false,
-    upvoteCountVerified: false,
-    isVerifying: false
-  });
+  const [verificationResult, setVerificationResult] =
+    useState<DocumentVerificationResult | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(
+    null
+  );
 
   const loadDocument = async () => {
     try {
@@ -50,9 +50,6 @@ export function DocumentDetailView({
       setError(null);
       const doc = await fetchDocument(documentId);
       setDocument(doc);
-
-      // Start verification process
-      verifyDocument(doc);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
@@ -60,19 +57,21 @@ export function DocumentDetailView({
     }
   };
 
-  const verifyDocument = async (doc: Document) => {
-    setVerificationStatus((prev) => ({ ...prev, isVerifying: true }));
+  const handleVerifyDocument = async () => {
+    if (!document) return;
 
-    // TODO: Implement actual verification calls to Tauri commands
-    // For now, simulate verification with a delay
-    setTimeout(() => {
-      setVerificationStatus({
-        publishVerified: true,
-        timestampVerified: true,
-        upvoteCountVerified: true,
-        isVerifying: false
-      });
-    }, 1500);
+    try {
+      setIsVerifying(true);
+      setVerificationError(null);
+      const result = await verifyDocumentPod(document);
+      setVerificationResult(result);
+    } catch (err) {
+      setVerificationError(
+        err instanceof Error ? err.message : "Failed to verify document"
+      );
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   useEffect(() => {
@@ -194,7 +193,10 @@ export function DocumentDetailView({
       console.log("📁 File detected as markdown:", file.name);
       console.log("📁 File MIME type:", file.mime_type);
       console.log("📁 File content length:", file.content.length);
-      console.log("📁 File content preview:", fileContent.substring(0, 100) + "...");
+      console.log(
+        "📁 File content preview:",
+        fileContent.substring(0, 100) + "..."
+      );
       console.log("📁 isMarkdown flag:", isMarkdown);
       console.log("📁 isText flag:", isText);
 
@@ -430,28 +432,30 @@ export function DocumentDetailView({
               </div>
 
               <div className="flex items-center gap-2">
-                {verificationStatus.isVerifying ? (
-                  <Badge variant="outline">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                    Verifying...
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant={
-                      verificationStatus.publishVerified &&
-                      verificationStatus.timestampVerified &&
-                      verificationStatus.upvoteCountVerified
-                        ? "default"
-                        : "destructive"
-                    }
-                  >
-                    <CheckCircleIcon className="h-3 w-3 mr-1" />
-                    {verificationStatus.publishVerified &&
-                    verificationStatus.timestampVerified &&
-                    verificationStatus.upvoteCountVerified
-                      ? "Verified"
-                      : "Verification Failed"}
-                  </Badge>
+                <Button
+                  onClick={handleVerifyDocument}
+                  disabled={isVerifying}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isVerifying ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                      Verify POD
+                    </>
+                  )}
+                </Button>
+
+                {verificationResult && 
+                 verificationResult.publish_verified &&
+                 verificationResult.timestamp_verified &&
+                 verificationResult.upvote_count_verified && (
+                  <CheckCircleIcon className="h-5 w-5 text-green-600" />
                 )}
 
                 {document.metadata.upvote_count > 0 && (
@@ -528,6 +532,18 @@ export function DocumentDetailView({
           </CardContent>
         </Card>
 
+        {/* Show verification error if it exists */}
+        {verificationError && (
+          <Card className="mb-6 border-destructive">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircleIcon className="h-4 w-4" />
+                <span className="font-medium">Verification failed: {verificationError}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Document Content */}
         <Card>
           <CardHeader>
@@ -565,4 +581,3 @@ export function DocumentDetailView({
     </div>
   );
 }
-

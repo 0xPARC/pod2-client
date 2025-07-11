@@ -1,4 +1,5 @@
 import { MainPod, SignedPod } from "@pod2/pod2js";
+import { invoke } from '@tauri-apps/api/core';
 
 // =============================================================================
 // Document Server API Types (PodNet)
@@ -54,18 +55,19 @@ export interface Document {
  * Verification result for a document
  */
 export interface DocumentVerificationResult {
-  isValid: boolean;
-  publishVerified: boolean;
-  timestampVerified: boolean;
-  upvoteCountVerified: boolean;
-  errors: string[];
+  publish_verified: boolean;
+  timestamp_verified: boolean;
+  upvote_count_verified: boolean;
+  verification_details: Record<string, string>;
+  verification_errors: string[];
 }
 
 // =============================================================================
 // Document Server API Client
 // =============================================================================
 
-const DEFAULT_SERVER_URL = 'http://localhost:3000';
+const DEFAULT_SERVER_URL = import.meta.env.VITE_DOCUMENT_SERVER_URL || 
+  (import.meta.env.MODE === 'production' ? 'https://document-server-as95.onrender.com' : 'http://localhost:3000');
 
 /**
  * Fetch all documents from the PodNet server
@@ -119,4 +121,23 @@ export async function fetchPosts(serverUrl: string = DEFAULT_SERVER_URL): Promis
     throw new Error(`Failed to fetch posts: ${response.statusText}`);
   }
   return response.json();
+}
+
+/**
+ * Verify a document's POD proofs using the Tauri backend
+ * @param document - The complete document to verify
+ * @returns Verification result with detailed status
+ */
+export async function verifyDocumentPod(document: Document): Promise<DocumentVerificationResult> {
+  try {
+    console.log('Calling verifyDocumentPod with:', document);
+    const result = await invoke<DocumentVerificationResult>('verify_document_pod', {
+      document: document
+    });
+    return result;
+  } catch (error) {
+    console.error('Failed to verify document POD:', error);
+    console.error('Document passed:', document);
+    throw new Error(`Failed to verify document POD: ${error}`);
+  }
 }

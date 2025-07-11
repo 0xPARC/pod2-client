@@ -115,10 +115,6 @@ export function DocumentsView() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline">
-                        <CheckCircleIcon className="h-3 w-3 mr-1" />
-                        Verified
-                      </Badge>
                       {doc.upvote_count > 0 && (
                         <Badge variant="secondary">
                           {doc.upvote_count} upvote{doc.upvote_count !== 1 ? 's' : ''}
