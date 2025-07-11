@@ -32,6 +32,7 @@ import {
   FileCheck2Icon,
   FileIcon,
   FilePenLineIcon,
+  FileTextIcon,
   FolderIcon,
   InboxIcon,
   MessageSquareIcon,
@@ -318,6 +319,23 @@ export function AppSidebar() {
                 <SidebarMenuBadge>
                   {appState.pod_stats.main_pods}
                 </SidebarMenuBadge>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("documents")}
+                  isActive={currentView === "documents"}
+                >
+                  <FileTextIcon />
+                  Documents
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

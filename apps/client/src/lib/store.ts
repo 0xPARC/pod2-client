@@ -19,7 +19,7 @@ export type { AppStateData, PodStats, PodLists, SpaceInfo };
 export type { PodInfo } from "./rpc";
 
 export type PodFilter = "all" | "signed" | "main" | "pinned";
-export type AppView = "pods" | "inbox" | "chats";
+export type AppView = "pods" | "documents" | "inbox" | "chats";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
 interface AppStoreState {

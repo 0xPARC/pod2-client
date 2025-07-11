@@ -2,6 +2,7 @@ import { useAppStore } from "../lib/store";
 import { PodViewer } from "./PodViewer";
 import { InboxView } from "./InboxView";
 import { ChatView } from "./ChatView";
+import { DocumentsView } from "./documents/DocumentsView";
 
 export function MainContent() {
   const { currentView } = useAppStore();
@@ -9,6 +10,8 @@ export function MainContent() {
   switch (currentView) {
     case "pods":
       return <PodViewer />;
+    case "documents":
+      return <DocumentsView />;
     case "inbox":
       return <InboxView />;
     case "chats":
