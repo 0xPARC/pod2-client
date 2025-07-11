@@ -2,6 +2,7 @@ import { useAppStore } from "../lib/store";
 import { PodViewer } from "./PodViewer";
 import { InboxView } from "./InboxView";
 import { ChatView } from "./ChatView";
+import { FrogViewer } from "./FrogViewer";
 
 export function MainContent() {
   const { currentView } = useAppStore();
@@ -13,6 +14,8 @@ export function MainContent() {
       return <InboxView />;
     case "chats":
       return <ChatView />;
+    case "frogs":
+      return <FrogViewer />;
     default:
       return <PodViewer />;
   }

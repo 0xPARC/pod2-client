@@ -27,9 +27,16 @@ use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
+pub(crate) mod frog;
 mod p2p;
 
 const DEFAULT_SPACE_ID: &str = "default";
+
+async fn get_private_key(db: &Db) -> Result<SecretKey, String> {
+    store::get_default_private_key(db)
+        .await
+        .map_err(|e| format!("Failed to get private key: {}", e))
+}
 
 #[tauri::command]
 async fn submit_pod_request(
@@ -333,9 +340,7 @@ async fn send_message_as_pod(
         .ok_or("P2P node not started. Please start the P2P node first.")?;
 
     // Get default private key (auto-created if needed)
-    let private_key = store::get_default_private_key(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?;
+    let private_key = get_private_key(&app_state.db).await?;
 
     // Create a SignedPod containing the message text
     let params = Params::default();
@@ -422,9 +427,7 @@ async fn sign_pod(
     }
 
     // Get default private key (auto-created if needed)
-    let private_key = store::get_default_private_key(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?;
+    let private_key = get_private_key(&app_state.db).await?;
 
     let mut signer = Signer(private_key);
 
@@ -816,7 +819,8 @@ pub fn run() {
             import_pod,
             set_pod_pinned,
             list_spaces,
-            insert_zukyc_pods
+            insert_zukyc_pods,
+            frog::request_frog
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

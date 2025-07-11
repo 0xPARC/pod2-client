@@ -330,6 +330,14 @@ export async function insertZuKycPods(): RpcResult<void> {
   return invokeCommand<void>("insert_zukyc_pods");
 }
 
+/**
+ * Get a frog from the server
+ * @returns Promise that resolves when the frog is retrieved
+ */
+export async function requestFrog(): RpcResult<void> {
+  return invokeCommand<void>("request_frog");
+}
+
 // =============================================================================
 // Exports for backward compatibility
 // =============================================================================
