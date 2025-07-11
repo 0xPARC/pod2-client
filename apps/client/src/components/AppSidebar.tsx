@@ -33,6 +33,7 @@ import {
   FileCheck2Icon,
   FileIcon,
   FilePenLineIcon,
+  FileTextIcon,
   FolderIcon,
   Github,
   InboxIcon,
@@ -325,6 +326,23 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("documents")}
+                  isActive={currentView === "documents"}
+                >
+                  <FileTextIcon />
+                  Documents
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
 
         <FeatureGate feature="networking">

@@ -83,11 +83,25 @@ fn run_solve<M: MetricsSink>(
 pub fn value_to_podlang_literal(value: Value) -> String {
     match value.typed() {
         TypedValue::Int(i) => i.to_string(),
-        TypedValue::String(s) => s.clone(),
+        TypedValue::String(s) => format!("\"{}\"", s.clone()),
         TypedValue::Bool(b) => b.to_string(),
         TypedValue::Array(_a) => todo!(),
-        TypedValue::Dictionary(_d) => todo!(),
-        TypedValue::Set(_s) => todo!(),
+        TypedValue::Dictionary(_d) => format!(
+            "{{ {} }}",
+            _d.kvs()
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, value_to_podlang_literal(v.clone())))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TypedValue::Set(s) => format!(
+            "#[{}]",
+            s.set()
+                .iter()
+                .map(|v| value_to_podlang_literal(v.clone()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         TypedValue::PublicKey(p) => format!("PublicKey({})", p),
         TypedValue::PodId(p) => format!("0x{}", p.0.encode_hex::<String>()),
         TypedValue::Raw(r) => format!("Raw(0x{})", r.encode_hex::<String>()),
