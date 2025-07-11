@@ -451,12 +451,12 @@ export function DocumentDetailView({
                   )}
                 </Button>
 
-                {verificationResult && 
-                 verificationResult.publish_verified &&
-                 verificationResult.timestamp_verified &&
-                 verificationResult.upvote_count_verified && (
-                  <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                )}
+                {verificationResult &&
+                  verificationResult.publish_verified &&
+                  verificationResult.timestamp_verified &&
+                  verificationResult.upvote_count_verified && (
+                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                  )}
 
                 {document.metadata.upvote_count > 0 && (
                   <Badge variant="secondary">
@@ -538,7 +538,9 @@ export function DocumentDetailView({
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircleIcon className="h-4 w-4" />
-                <span className="font-medium">Verification failed: {verificationError}</span>
+                <span className="font-medium">
+                  Verification failed: {verificationError}
+                </span>
               </div>
             </CardContent>
           </Card>

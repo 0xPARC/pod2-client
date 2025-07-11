@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use podnet_models::Document;
 use serde::{Deserialize, Serialize};
 
@@ -12,9 +13,7 @@ pub struct DocumentVerificationResult {
 }
 
 #[tauri::command]
-pub async fn verify_document_pod(
-    document: Document,
-) -> Result<DocumentVerificationResult, String> {
+pub async fn verify_document_pod(document: Document) -> Result<DocumentVerificationResult, String> {
     let mut verification_result = DocumentVerificationResult {
         publish_verified: false,
         timestamp_verified: false,
@@ -34,7 +33,7 @@ pub async fn verify_document_pod(
             verification_result.publish_verified = true;
             verification_result.timestamp_verified = true;
             verification_result.upvote_count_verified = true;
-            
+
             verification_result.verification_details.insert(
                 "publish_verification".to_string(),
                 "Identity, document, and content hash verification passed".to_string(),
@@ -49,7 +48,9 @@ pub async fn verify_document_pod(
             );
         }
         Err(e) => {
-            verification_result.verification_errors.push(format!("Document verification failed: {}", e));
+            verification_result
+                .verification_errors
+                .push(format!("Document verification failed: {}", e));
         }
     }
 

@@ -36,8 +36,6 @@ async fn get_feature_config_command() -> Result<FeatureConfig, String> {
     Ok(get_feature_config())
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppStateData {
     pub pod_stats: PodStats,
