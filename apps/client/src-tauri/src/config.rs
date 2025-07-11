@@ -13,6 +13,8 @@ pub struct FeatureConfig {
     pub authoring: bool,
     /// External POD Request handling and protocol integration
     pub integration: bool,
+    /// FrogCrypto experimental features
+    pub frogcrypto: bool,
 }
 
 impl Default for FeatureConfig {
@@ -22,6 +24,7 @@ impl Default for FeatureConfig {
             networking: false,
             authoring: true,
             integration: true,
+            frogcrypto: false,
         }
     }
 }
@@ -42,6 +45,7 @@ impl FeatureConfig {
                     networking: Self::get_env_bool("FEATURE_NETWORKING", false),
                     authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
                     integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
+                    frogcrypto: Self::get_env_bool("FEATURE_FROGCRYPTO", false),
                 };
 
                 log::info!("Feature configuration loaded: {:?}", config);
@@ -72,7 +76,7 @@ impl FeatureConfig {
 
     /// Check if any features are enabled
     pub fn has_any_enabled(&self) -> bool {
-        self.pod_management || self.networking || self.authoring || self.integration
+        self.pod_management || self.networking || self.authoring || self.integration || self.frogcrypto
     }
 
     /// Get a list of enabled feature names
@@ -89,6 +93,9 @@ impl FeatureConfig {
         }
         if self.integration {
             features.push("integration");
+        }
+        if self.frogcrypto {
+            features.push("frogcrypto");
         }
         features
     }

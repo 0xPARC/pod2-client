@@ -315,18 +315,20 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </FeatureGate>
-        <SidebarGroup>
-          <SidebarGroupLabel>Extras</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setCurrentView("frogs")}>
-                  FrogCrypto
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <FeatureGate feature="frogcrypto">
+          <SidebarGroup>
+            <SidebarGroupLabel>Extras</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={() => setCurrentView("frogs")}>
+                    FrogCrypto
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </FeatureGate>
 
         <FeatureGate feature="networking">
           <SidebarGroup>

@@ -34,7 +34,8 @@ export function FeatureConfigProvider({
           pod_management: true,
           networking: true,
           authoring: true,
-          integration: true
+          integration: true,
+          frogcrypto: false
         });
       })
       .finally(() => {
