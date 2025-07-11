@@ -202,6 +202,10 @@ pub async fn execute_code_command(
         }
     };
 
+    if processed_output.request_templates.is_empty() {
+        return Err("Program does not contain a POD Request".to_string());
+    }
+
     // Get all PODs from all spaces
     let all_pod_infos = store::list_all_pods(&app_state.db)
         .await

@@ -4,8 +4,8 @@ import { Play, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
-import { 
-  hasValidationErrors, 
+import {
+  hasValidationErrors,
   getFirstErrorMessage,
   saveLastMockSetting,
   loadLastMockSetting
@@ -22,14 +22,14 @@ export function EditorControls({ className }: EditorControlsProps) {
   const isExecuting = useAppStore((state) => state.isExecuting);
   const isValidating = useAppStore((state) => state.isValidating);
   const executeEditorCode = useAppStore((state) => state.executeEditorCode);
-  
+
   // Local mock setting state
   const [mock, setMock] = useState(() => loadLastMockSetting());
-  
+
   // Validation state
   const hasErrors = hasValidationErrors(editorDiagnostics);
   const firstErrorMessage = getFirstErrorMessage(editorDiagnostics);
-  
+
   // Save mock setting when it changes
   useEffect(() => {
     saveLastMockSetting(mock);
@@ -65,7 +65,9 @@ export function EditorControls({ className }: EditorControlsProps) {
   }
 
   return (
-    <div className={`flex items-center justify-between bg-sidebar border-b border-sidebar-border ${className || ""}`}>
+    <div
+      className={`flex items-center justify-between bg-sidebar border-b border-sidebar-border ${className || ""}`}
+    >
       <div className="p-2 flex items-center space-x-4">
         {/* Execute Button */}
         <Button
@@ -86,8 +88,8 @@ export function EditorControls({ className }: EditorControlsProps) {
             onCheckedChange={setMock}
             disabled={isExecuting}
           />
-          <Label 
-            htmlFor="mock-mode" 
+          <Label
+            htmlFor="mock-mode"
             className="text-sm font-medium cursor-pointer select-none"
           >
             Mock Mode
@@ -96,9 +98,12 @@ export function EditorControls({ className }: EditorControlsProps) {
       </div>
 
       {/* Validation Status */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 pr-4">
         {statusIcon}
-        <span className={`text-sm ${statusColor} max-w-md truncate`} title={statusText}>
+        <span
+          className={`text-sm ${statusColor} max-w-md truncate`}
+          title={statusText}
+        >
           {statusText}
         </span>
       </div>
