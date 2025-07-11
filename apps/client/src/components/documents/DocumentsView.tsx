@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { FileTextIcon, RefreshCwIcon, AlertCircleIcon, CheckCircleIcon, ClockIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  RefreshCwIcon,
+  AlertCircleIcon,
+  ClockIcon
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -10,7 +15,9 @@ export function DocumentsView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(
+    null
+  );
 
   const loadDocuments = async () => {
     try {
@@ -19,7 +26,7 @@ export function DocumentsView() {
       const docs = await fetchDocuments();
       setDocuments(docs);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load documents');
+      setError(err instanceof Error ? err.message : "Failed to load documents");
     } finally {
       setLoading(false);
     }
@@ -30,22 +37,22 @@ export function DocumentsView() {
   }, []);
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Unknown';
+    if (!dateString) return "Unknown";
     return new Date(dateString).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     });
   };
 
   // If a document is selected, show the detail view
   if (selectedDocumentId !== null) {
     return (
-      <DocumentDetailView 
-        documentId={selectedDocumentId} 
-        onBack={() => setSelectedDocumentId(null)} 
+      <DocumentDetailView
+        documentId={selectedDocumentId}
+        onBack={() => setSelectedDocumentId(null)}
       />
     );
   }
@@ -61,7 +68,9 @@ export function DocumentsView() {
             </p>
           </div>
           <Button onClick={loadDocuments} disabled={loading} variant="outline">
-            <RefreshCwIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon
+              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
@@ -98,9 +107,9 @@ export function DocumentsView() {
         ) : (
           <div className="grid gap-4">
             {documents.map((doc) => (
-              <Card 
-                key={doc.id} 
-                className="hover:shadow-md transition-shadow cursor-pointer" 
+              <Card
+                key={doc.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedDocumentId(doc.id!)}
               >
                 <CardHeader>
@@ -117,7 +126,8 @@ export function DocumentsView() {
                     <div className="flex items-center gap-2">
                       {doc.upvote_count > 0 && (
                         <Badge variant="secondary">
-                          {doc.upvote_count} upvote{doc.upvote_count !== 1 ? 's' : ''}
+                          {doc.upvote_count} upvote
+                          {doc.upvote_count !== 1 ? "s" : ""}
                         </Badge>
                       )}
                     </div>
@@ -127,21 +137,24 @@ export function DocumentsView() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="font-medium">Uploader:</span> {doc.uploader_id}
+                        <span className="font-medium">Uploader:</span>{" "}
+                        {doc.uploader_id}
                       </div>
                       <div className="flex items-center gap-1">
                         <ClockIcon className="h-3 w-3" />
-                        <span className="font-medium">Created:</span> {formatDate(doc.created_at)}
+                        <span className="font-medium">Created:</span>{" "}
+                        {formatDate(doc.created_at)}
                       </div>
                       <div>
-                        <span className="font-medium">Content ID:</span> 
+                        <span className="font-medium">Content ID:</span>
                         <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">
                           {doc.content_id.slice(0, 16)}...
                         </code>
                       </div>
                       {doc.reply_to && (
                         <div>
-                          <span className="font-medium">Reply to:</span> Document #{doc.reply_to}
+                          <span className="font-medium">Reply to:</span>{" "}
+                          Document #{doc.reply_to}
                         </div>
                       )}
                     </div>
@@ -151,7 +164,11 @@ export function DocumentsView() {
                         <span className="font-medium text-sm">Tags:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {doc.tags.map((tag, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className="text-xs"
+                            >
                               {tag}
                             </Badge>
                           ))}
@@ -164,7 +181,11 @@ export function DocumentsView() {
                         <span className="font-medium text-sm">Authors:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {doc.authors.map((author, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="text-xs"
+                            >
                               {author}
                             </Badge>
                           ))}
@@ -181,3 +202,4 @@ export function DocumentsView() {
     </div>
   );
 }
+
