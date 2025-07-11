@@ -2,13 +2,10 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle,
-  AlertTriangle,
-  Copy
+  AlertTriangle
 } from "lucide-react";
 
 import { Button } from "../ui/button";
-import { ScrollArea } from "../ui/scroll-area";
-import { formatExecutionResult } from "../../lib/features/authoring/editor";
 import { useAppStore } from "../../lib/store";
 import MainPodCard from "../MainPodCard";
 
@@ -27,19 +24,6 @@ export function EditorResults({
   const executionResult = useAppStore((state) => state.executionResult);
   const executionError = useAppStore((state) => state.executionError);
   const isExecuting = useAppStore((state) => state.isExecuting);
-
-  // Copy result to clipboard
-  const handleCopyResult = async () => {
-    if (!executionResult) return;
-
-    try {
-      const formattedResult = formatExecutionResult(executionResult);
-      await navigator.clipboard.writeText(formattedResult);
-      // Could add a toast notification here
-    } catch (error) {
-      console.error("Failed to copy result:", error);
-    }
-  };
 
   // Determine what to display
   let content;
