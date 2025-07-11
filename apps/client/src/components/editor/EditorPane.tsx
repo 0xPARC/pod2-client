@@ -7,8 +7,8 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { useCallback, useEffect, useRef } from "react";
 import { useTheme } from "../theme-provider";
 
-import { 
-  setupMonacoEditor, 
+import {
+  setupMonacoEditor,
   updateEditorMarkers
 } from "../../lib/features/authoring/monaco";
 import { createDebouncedValidator } from "../../lib/features/authoring/editor";
@@ -25,17 +25,17 @@ interface EditorPaneProps {
 
 export function EditorPane({ className }: EditorPaneProps) {
   const { theme } = useTheme();
-  
+
   // Editor state from store
   const editorContent = useAppStore((state) => state.editorContent);
   const setEditorContent = useAppStore((state) => state.setEditorContent);
   const editorDiagnostics = useAppStore((state) => state.editorDiagnostics);
   const validateEditorCode = useAppStore((state) => state.validateEditorCode);
-  
+
   // Editor refs
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
-  
+
   // Create debounced validator
   const debouncedValidate = useCallback(
     createDebouncedValidator(validateEditorCode, VALIDATION_DEBOUNCE_MS),
@@ -43,16 +43,23 @@ export function EditorPane({ className }: EditorPaneProps) {
   );
 
   // Handle editor content changes
-  const handleEditorChange: OnChange = useCallback((value) => {
-    const newContent = value || "";
-    setEditorContent(newContent);
-    debouncedValidate();
-  }, [setEditorContent, debouncedValidate]);
+  const handleEditorChange: OnChange = useCallback(
+    (value) => {
+      const newContent = value || "";
+      setEditorContent(newContent);
+      debouncedValidate();
+    },
+    [setEditorContent, debouncedValidate]
+  );
 
   // Update markers when diagnostics change
   useEffect(() => {
     if (editorRef.current && monacoRef.current) {
-      updateEditorMarkers(editorRef.current, monacoRef.current, editorDiagnostics);
+      updateEditorMarkers(
+        editorRef.current,
+        monacoRef.current,
+        editorDiagnostics
+      );
     }
   }, [editorDiagnostics]);
 
@@ -65,25 +72,28 @@ export function EditorPane({ className }: EditorPaneProps) {
   }, [theme]);
 
   // Handle editor mount
-  const handleEditorDidMount = useCallback((
-    mountedEditor: monaco.editor.IStandaloneCodeEditor,
-    mountedMonaco: Monaco
-  ) => {
-    editorRef.current = mountedEditor;
-    monacoRef.current = mountedMonaco;
-    
-    // Setup Podlog language support
-    setupMonacoEditor(mountedEditor, mountedMonaco);
-    
-    // Force theme update after language setup
-    const currentTheme = theme === "dark" ? "vs-dark" : "vs-light";
-    mountedMonaco.editor.setTheme(currentTheme);
-    
-    // Initial validation
-    if (editorContent.trim()) {
-      validateEditorCode();
-    }
-  }, [editorContent, validateEditorCode, theme]);
+  const handleEditorDidMount = useCallback(
+    (
+      mountedEditor: monaco.editor.IStandaloneCodeEditor,
+      mountedMonaco: Monaco
+    ) => {
+      editorRef.current = mountedEditor;
+      monacoRef.current = mountedMonaco;
+
+      // Setup Podlang language support
+      setupMonacoEditor(mountedEditor, mountedMonaco);
+
+      // Force theme update after language setup
+      const currentTheme = theme === "dark" ? "vs-dark" : "vs-light";
+      mountedMonaco.editor.setTheme(currentTheme);
+
+      // Initial validation
+      if (editorContent.trim()) {
+        validateEditorCode();
+      }
+    },
+    [editorContent, validateEditorCode, theme]
+  );
 
   // Determine Monaco theme based on resolved theme
   const editorTheme = theme === "dark" ? "vs-dark" : "vs-light";
@@ -92,11 +102,13 @@ export function EditorPane({ className }: EditorPaneProps) {
   console.log("Current theme:", theme, "Monaco theme:", editorTheme);
 
   return (
-    <div className={`h-full w-full bg-gray-100 dark:bg-[#1e1e1e] px-1 py-2 ${className || ""}`}>
+    <div
+      className={`h-full w-full bg-gray-100 dark:bg-[#1e1e1e] px-1 py-2 ${className || ""}`}
+    >
       <Editor
         height="100%"
         width="100%"
-        language="podlog"
+        language="Podlang"
         theme={editorTheme}
         value={editorContent}
         onChange={handleEditorChange}

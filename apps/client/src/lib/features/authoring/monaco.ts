@@ -1,7 +1,7 @@
 // Monaco Editor Setup and Language Configuration
 //
 // This module configures Monaco editor for POD development including:
-// - Custom Podlog language syntax highlighting
+// - Custom Podlang language syntax highlighting
 // - Diagnostic marker conversion
 // - Editor setup utilities
 
@@ -10,10 +10,10 @@ import * as monaco from "monaco-editor";
 import type { Diagnostic } from "./types";
 
 /**
- * Podlog language definition for Monaco editor syntax highlighting
+ * Podlang language definition for Monaco editor syntax highlighting
  * Based on the Monarch tokenizer system
  */
-export const podlogMonarchLanguage: languages.IMonarchLanguage = {
+export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
   // Set defaultToken to invalid to see if you do not cover all cases
   defaultToken: "invalid",
 
@@ -25,7 +25,7 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
     "Equal",
     "NotEqual",
     "Gt",
-    "GtEq", 
+    "GtEq",
     "Lt",
     "LtEq",
     "Contains",
@@ -41,9 +41,7 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
     "SetNotContains"
   ],
 
-  operators: [
-    "="
-  ],
+  operators: ["="],
 
   symbols: /[=,:(){}\\[\\]#?]+/, // Includes '?' for variables and '#'
 
@@ -60,17 +58,17 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
 
       // --- Literals ---
       // Boolean Literals (placed before general identifiers)
-      [/\\b(true|false)\\b/, "constant.language.boolean.podlog"],
+      [/\\b(true|false)\\b/, "constant.language.boolean.Podlang"],
 
       // Number Literals
-      [/0[xX][0-9a-fA-F]+/, "constant.numeric.hex.podlog"], // Hex
-      [/-?\\d+/, "constant.numeric.integer.podlog"], // Integer
+      [/0[xX][0-9a-fA-F]+/, "constant.numeric.hex.Podlang"], // Hex
+      [/-?\\d+/, "constant.numeric.integer.Podlang"], // Integer
 
       // String Literals
       [
         /"/,
         {
-          token: "string.quoted.double.podlog",
+          token: "string.quoted.double.Podlang",
           bracket: "@open",
           next: "@string_double"
         }
@@ -78,52 +76,52 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
       [
         /'/,
         {
-          token: "string.quoted.single.podlog",
+          token: "string.quoted.single.Podlang",
           bracket: "@open",
           next: "@string_single"
         }
       ],
 
       // Variables: start with '?', use explicit char class
-      [/\\?[a-zA-Z_][a-zA-Z0-9_]*/, "variable.name.podlog"],
+      [/\\?[a-zA-Z_][a-zA-Z0-9_]*/, "variable.name.Podlang"],
 
       // Identifiers and keywords: general case
       [
         /[a-zA-Z_][a-zA-Z0-9_]*/,
         {
           cases: {
-            "@keywords": "keyword.control.podlog",
-            "@default": "identifier.podlog"
+            "@keywords": "keyword.control.Podlang",
+            "@default": "identifier.Podlang"
           }
         }
       ],
 
       // Delimiters and brackets
-      [/[\\[\\]]/, "delimiter.square.podlog"], // For arrays/sets
-      [/[\\{\\}]/, "delimiter.curly.podlog"], // For dictionaries
-      [/[()]/, "delimiter.parenthesis.podlog"],
-      [/,/, "delimiter.comma.podlog"],
-      [/:/, "delimiter.colon.podlog"],
+      [/[\\[\\]]/, "delimiter.square.Podlang"], // For arrays/sets
+      [/[\\{\\}]/, "delimiter.curly.Podlang"], // For dictionaries
+      [/[()]/, "delimiter.parenthesis.Podlang"],
+      [/,/, "delimiter.comma.Podlang"],
+      [/:/, "delimiter.colon.Podlang"],
 
       // Other symbols treated as operators if not covered above
-      [/[=><!~?&|+*/%#^\\-]+/, "operator.podlog"]
+      [/[=><!~?&|+*/%#^\\-]+/, "operator.Podlang"]
     ],
 
     comment: [
-      [/[^\\/*]+/, "comment.block.podlog"],
-      [/\/\*/, "comment.block.podlog", "@push"],
-      ["\\\\*/", "comment.block.podlog", "@pop"],
-      [/[/*]/, "comment.block.podlog"]
+      [/[^\\/*]+/, "comment.block.Podlang"],
+      [/\/\*/, "comment.block.Podlang", "@push"],
+      ["\\\\*/", "comment.block.Podlang", "@pop"],
+      [/[/*]/, "comment.block.Podlang"]
     ],
 
     string_double: [
-      [/[^\\\\"]+/, "string.quoted.double.podlog"],
-      [/@escapes/, "string.escape.char.podlog"],
-      [/\\\\./, "string.escape.invalid.podlog"],
+      [/[^\\\\"]+/, "string.quoted.double.Podlang"],
+      [/@escapes/, "string.escape.char.Podlang"],
+      [/\\\\./, "string.escape.invalid.Podlang"],
       [
         /"/,
         {
-          token: "string.quoted.double.podlog",
+          token: "string.quoted.double.Podlang",
           bracket: "@close",
           next: "@pop"
         }
@@ -131,13 +129,13 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
     ],
 
     string_single: [
-      [/[^\\\\']+/, "string.quoted.single.podlog"],
-      [/@escapes/, "string.escape.char.podlog"],
-      [/\\\\./, "string.escape.invalid.podlog"],
+      [/[^\\\\']+/, "string.quoted.single.Podlang"],
+      [/@escapes/, "string.escape.char.Podlang"],
+      [/\\\\./, "string.escape.invalid.Podlang"],
       [
         /'/,
         {
-          token: "string.quoted.single.podlog",
+          token: "string.quoted.single.Podlang",
           bracket: "@close",
           next: "@pop"
         }
@@ -146,12 +144,10 @@ export const podlogMonarchLanguage: languages.IMonarchLanguage = {
 
     whitespace: [
       [/[ \\t\\r\\n]+/, "white"],
-      [/\/\//, "comment.line.podlog", "@commentLine"]
+      [/\/\//, "comment.line.Podlang", "@commentLine"]
     ],
 
-    commentLine: [
-      [/.*/, "comment.line.podlog", "@pop"]
-    ]
+    commentLine: [[/.*/, "comment.line.Podlang", "@pop"]]
   }
 };
 
@@ -162,7 +158,7 @@ export function convertDiagnosticToMarker(
   diagnostic: Diagnostic
 ): monaco.editor.IMarkerData {
   let severity: monaco.MarkerSeverity;
-  
+
   switch (diagnostic.severity) {
     case "Error":
       severity = monaco.MarkerSeverity.Error;
@@ -200,19 +196,22 @@ export function convertDiagnosticsToMarkers(
 }
 
 /**
- * Setup Monaco editor with Podlog language support
+ * Setup Monaco editor with Podlang language support
  */
 export function setupMonacoEditor(
   _editor: monaco.editor.IStandaloneCodeEditor,
   monacoInstance: typeof import("monaco-editor")
 ): void {
-  // Register the Podlog language
-  monacoInstance.languages.register({ id: "podlog" });
-  
+  // Register the Podlang language
+  monacoInstance.languages.register({ id: "Podlang" });
+
   // Set up syntax highlighting
-  monacoInstance.languages.setMonarchTokensProvider("podlog", podlogMonarchLanguage);
-  
-  console.log("Podlog language registered and Monarch tokens set");
+  monacoInstance.languages.setMonarchTokensProvider(
+    "Podlang",
+    PodlangMonarchLanguage
+  );
+
+  console.log("Podlang language registered and Monarch tokens set");
 }
 
 /**
@@ -230,7 +229,7 @@ export function updateEditorMarkers(
   }
 
   const markers = convertDiagnosticsToMarkers(diagnostics);
-  monacoInstance.editor.setModelMarkers(model, "podlog-validator", markers);
+  monacoInstance.editor.setModelMarkers(model, "Podlang-validator", markers);
 }
 
 /**
@@ -242,8 +241,8 @@ export function clearEditorMarkers(
 ): void {
   const model = editor.getModel();
   if (!model) return;
-  
-  monacoInstance.editor.setModelMarkers(model, "podlog-validator", []);
+
+  monacoInstance.editor.setModelMarkers(model, "Podlang-validator", []);
 }
 
 /**
@@ -251,7 +250,7 @@ export function clearEditorMarkers(
  */
 export function getDefaultEditorContent(): string {
   return `// Welcome to the POD Editor!
-// Write your Podlog queries here to create and test PODs.
+// Write your Podlang queries here to create and test PODs.
 //
 // Example:
 // REQUEST(

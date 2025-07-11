@@ -1,4 +1,10 @@
-import { ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Copy } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  AlertTriangle,
+  Copy
+} from "lucide-react";
 
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
@@ -11,16 +17,20 @@ interface EditorResultsProps {
   className?: string;
 }
 
-export function EditorResults({ isOpen, onToggle, className }: EditorResultsProps) {
+export function EditorResults({
+  isOpen,
+  onToggle,
+  className
+}: EditorResultsProps) {
   // Results state from store
   const executionResult = useAppStore((state) => state.executionResult);
   const executionError = useAppStore((state) => state.executionError);
   const isExecuting = useAppStore((state) => state.isExecuting);
-  
+
   // Copy result to clipboard
   const handleCopyResult = async () => {
     if (!executionResult) return;
-    
+
     try {
       const formattedResult = formatExecutionResult(executionResult);
       await navigator.clipboard.writeText(formattedResult);
@@ -36,13 +46,15 @@ export function EditorResults({ isOpen, onToggle, className }: EditorResultsProp
   let statusText;
 
   if (isExecuting) {
-    statusIcon = <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />;
+    statusIcon = (
+      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+    );
     statusText = "Executing...";
     content = (
       <div className="flex items-center justify-center p-8 text-gray-500">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2" />
-          <p>Executing Podlog code...</p>
+          <p>Executing Podlang code...</p>
         </div>
       </div>
     );
@@ -104,22 +116,24 @@ export function EditorResults({ isOpen, onToggle, className }: EditorResultsProp
     statusText = "No results";
     content = (
       <div className="flex items-center justify-center p-8 text-gray-500">
-        <p>Click Execute to run your Podlog code</p>
+        <p>Click Execute to run your Podlang code</p>
       </div>
     );
   }
 
   return (
-    <div className={`bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 ${className || ""}`}>
+    <div
+      className={`bg-sidebar border-t border-sidebar-border ${className || ""}`}
+    >
       {/* Results Header */}
-      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between p-3 bg-sidebar border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           {statusIcon}
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span className="text-sm font-medium text-sidebar-foreground">
             Results
           </span>
           {statusText && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-sidebar-foreground/70">
               • {statusText}
             </span>
           )}
@@ -139,11 +153,7 @@ export function EditorResults({ isOpen, onToggle, className }: EditorResultsProp
       </div>
 
       {/* Results Content */}
-      {isOpen && (
-        <div className="max-h-96 overflow-hidden">
-          {content}
-        </div>
-      )}
+      {isOpen && <div className="max-h-96 overflow-hidden">{content}</div>}
     </div>
   );
 }

@@ -53,8 +53,8 @@ export async function getPrivateKeyInfo(): Promise<PrivateKeyInfo> {
 // =============================================================================
 
 /**
- * Validate Podlog code for syntax and semantic errors
- * @param code - The Podlog code to validate
+ * Validate Podlang code for syntax and semantic errors
+ * @param code - The Podlang code to validate
  * @returns Validation response with diagnostics
  */
 export async function validateCode(code: string): Promise<Diagnostic[]> {
@@ -68,8 +68,8 @@ export async function validateCode(code: string): Promise<Diagnostic[]> {
 }
 
 /**
- * Execute Podlog code against all available PODs
- * @param code - The Podlog code to execute
+ * Execute Podlang code against all available PODs
+ * @param code - The Podlang code to execute
  * @param mock - Whether to use mock mode for faster execution
  * @returns Execution response with results
  */

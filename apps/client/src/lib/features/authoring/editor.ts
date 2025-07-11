@@ -30,7 +30,9 @@ export function createInitialEditorState(): EditorState {
  * Check if editor has validation errors
  */
 export function hasValidationErrors(diagnostics: Diagnostic[]): boolean {
-  return diagnostics.some(diagnostic => diagnostic.severity === DiagnosticSeverity.Error);
+  return diagnostics.some(
+    (diagnostic) => diagnostic.severity === DiagnosticSeverity.Error
+  );
 }
 
 /**
@@ -39,10 +41,10 @@ export function hasValidationErrors(diagnostics: Diagnostic[]): boolean {
 export function isEditorContentEmpty(content: string): boolean {
   // Remove comments and whitespace
   const cleanContent = content
-    .replace(/\/\/.*$/gm, '') // Remove line comments
-    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+    .replace(/\/\/.*$/gm, "") // Remove line comments
+    .replace(/\/\*[\s\S]*?\*\//g, "") // Remove block comments
     .trim();
-  
+
   return cleanContent.length === 0;
 }
 
@@ -50,7 +52,9 @@ export function isEditorContentEmpty(content: string): boolean {
  * Get first error message from diagnostics
  */
 export function getFirstErrorMessage(diagnostics: Diagnostic[]): string | null {
-  const firstError = diagnostics.find(d => d.severity === DiagnosticSeverity.Error);
+  const firstError = diagnostics.find(
+    (d) => d.severity === DiagnosticSeverity.Error
+  );
   return firstError ? firstError.message : null;
 }
 
@@ -84,14 +88,14 @@ export function createEditorActions(
     },
 
     setExecutionResult: (result: ExecuteCodeResponse | null) => {
-      setState({ 
+      setState({
         executionResult: result,
         executionError: null // Clear error when setting result
       });
     },
 
     setExecutionError: (error: string | null) => {
-      setState({ 
+      setState({
         executionError: error,
         executionResult: null // Clear result when setting error
       });
@@ -107,7 +111,7 @@ export function createEditorActions(
 
     validateEditorCode: async () => {
       const { fileContent } = getState();
-      
+
       if (isEditorContentEmpty(fileContent)) {
         setState({ diagnostics: [] });
         return;
@@ -119,15 +123,18 @@ export function createEditorActions(
         setState({ diagnostics, isValidating: false });
       } catch (error) {
         console.error("Validation failed:", error);
-        setState({ 
-          diagnostics: [{
-            message: error instanceof Error ? error.message : "Validation failed",
-            severity: DiagnosticSeverity.Error,
-            start_line: 1,
-            start_column: 1,
-            end_line: 1,
-            end_column: 1
-          }],
+        setState({
+          diagnostics: [
+            {
+              message:
+                error instanceof Error ? error.message : "Validation failed",
+              severity: DiagnosticSeverity.Error,
+              start_line: 1,
+              start_column: 1,
+              end_line: 1,
+              end_column: 1
+            }
+          ],
           isValidating: false
         });
       }
@@ -135,10 +142,11 @@ export function createEditorActions(
 
     executeEditorCode: async (mock = false) => {
       const { fileContent, diagnostics } = getState();
-      
+
       // Check for validation errors
       if (hasValidationErrors(diagnostics)) {
-        const errorMessage = getFirstErrorMessage(diagnostics) || "Code has validation errors";
+        const errorMessage =
+          getFirstErrorMessage(diagnostics) || "Code has validation errors";
         setState({ executionError: `Cannot execute: ${errorMessage}` });
         return;
       }
@@ -148,31 +156,32 @@ export function createEditorActions(
         return;
       }
 
-      setState({ 
-        isExecuting: true, 
-        executionError: null, 
-        executionResult: null 
+      setState({
+        isExecuting: true,
+        executionError: null,
+        executionResult: null
       });
 
       try {
         const result = await executeCode(fileContent, mock);
-        setState({ 
-          executionResult: result, 
-          isExecuting: false 
+        setState({
+          executionResult: result,
+          isExecuting: false
         });
       } catch (error) {
         console.error("Execution failed:", error);
-        setState({ 
-          executionError: error instanceof Error ? error.message : "Execution failed",
-          isExecuting: false 
+        setState({
+          executionError:
+            error instanceof Error ? error.message : "Execution failed",
+          isExecuting: false
         });
       }
     },
 
     clearExecutionResults: () => {
-      setState({ 
-        executionResult: null, 
-        executionError: null 
+      setState({
+        executionResult: null,
+        executionError: null
       });
     }
   };
@@ -186,12 +195,12 @@ export function createDebouncedValidator(
   delay: number = 300
 ): () => void {
   let timeoutId: number | null = null;
-  
+
   return () => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
     }
-    
+
     timeoutId = window.setTimeout(() => {
       validateFn();
       timeoutId = null;
@@ -203,8 +212,8 @@ export function createDebouncedValidator(
  * Storage keys for persisting editor state
  */
 export const EDITOR_STORAGE_KEYS = {
-  FILE_CONTENT: "podlog_editor_content",
-  LAST_EXECUTION_MOCK: "podlog_editor_last_mock"
+  FILE_CONTENT: "Podlang_editor_content",
+  LAST_EXECUTION_MOCK: "Podlang_editor_last_mock"
 } as const;
 
 /**

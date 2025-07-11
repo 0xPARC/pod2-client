@@ -5,6 +5,7 @@ import {
   triggerSync,
   listSpaces,
   setPodPinned,
+  deletePod,
   type AppStateData,
   type PodStats,
   type PodLists,
@@ -70,6 +71,7 @@ interface AppStoreState {
   loadFolders: () => Promise<void>;
   togglePodPinned: (podId: string, spaceId: string) => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
+  deletePod: (podId: string, spaceId: string) => Promise<void>;
 
   // Editor Actions
   setEditorContent: (content: string) => void;
@@ -224,6 +226,29 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       }
     } catch (error) {
       set({ error: `Failed to toggle pod pinned status: ${error}` });
+    }
+  },
+
+  deletePod: async (podId: string, spaceId: string) => {
+    try {
+      const { appState } = get();
+      const allPods = [
+        ...appState.pod_lists.signed_pods,
+        ...appState.pod_lists.main_pods
+      ];
+      const pod = allPods.find((p) => p.id === podId);
+
+      if (pod) {
+        await deletePod(spaceId, podId);
+        // Trigger sync to update the UI
+        await get().triggerSync();
+        // Clear selected pod if it was the one being deleted
+        if (get().selectedPodId === podId) {
+          set({ selectedPodId: null });
+        }
+      }
+    } catch (error) {
+      set({ error: `Failed to delete pod: ${error}` });
     }
   },
 

@@ -1,6 +1,8 @@
+import { useState, useEffect } from "react";
 import { useAppStore } from "../lib/store";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
+import { DeletePodDialog } from "./DeletePodDialog";
 import { Badge } from "./ui/badge";
 import { Card, CardContent } from "./ui/card";
 import {
@@ -10,8 +12,14 @@ import {
 } from "./ui/resizable";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
-import { StarIcon, FolderIcon } from "lucide-react";
+import { StarIcon, FolderIcon, Trash2, MoreHorizontal } from "lucide-react";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "./ui/dropdown-menu";
 
 export function PodViewer() {
   const {
@@ -24,6 +32,10 @@ export function PodViewer() {
 
   const filteredPods = getFilteredPods();
   const selectedPod = getSelectedPod();
+
+  // Delete dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [podToDelete, setPodToDelete] = useState<any>(null);
 
   const formatLabel = (pod: any) => {
     return pod.label || `${pod.pod_type} POD`;
@@ -38,7 +50,57 @@ export function PodViewer() {
     togglePodPinned(pod.id, pod.space);
   };
 
+  const handleDeleteClick = (e: React.MouseEvent, pod: any) => {
+    e.stopPropagation(); // Prevent card selection
+    setPodToDelete(pod);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteFromHeader = () => {
+    if (selectedPod) {
+      setPodToDelete(selectedPod);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  // Keyboard shortcut support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle Delete key when a POD is selected and no dialogs are open
+      if (
+        e.key === "Delete" &&
+        selectedPod &&
+        !isDeleteDialogOpen &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
+        // Make sure we're not in an input field or text area
+        const activeElement = document.activeElement;
+        if (
+          activeElement &&
+          (activeElement.tagName === "INPUT" ||
+            activeElement.tagName === "TEXTAREA" ||
+            activeElement.isContentEditable)
+        ) {
+          return;
+        }
+
+        e.preventDefault();
+        setPodToDelete(selectedPod);
+        setIsDeleteDialogOpen(true);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedPod, isDeleteDialogOpen]);
+
   return (
+    <>
     <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* Left panel - POD list */}
       <ResizablePanel defaultSize={35} minSize={25} maxSize={60}>
@@ -87,12 +149,35 @@ export function PodViewer() {
                               {formatLabel(pod)}
                             </span>
                           </div>
-                          <Badge
-                            variant="secondary"
-                            className="text-xs shrink-0"
-                          >
-                            {pod.pod_type}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge
+                              variant="secondary"
+                              className="text-xs shrink-0"
+                            >
+                              {pod.pod_type}
+                            </Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="p-0 h-4 w-4 hover:bg-transparent text-muted-foreground hover:text-foreground"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={(e) => handleDeleteClick(e, pod)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-2" />
+                                  Delete POD
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-muted-foreground font-mono">
@@ -129,7 +214,18 @@ export function PodViewer() {
                 <h3 className="font-semibold text-lg">
                   {formatLabel(selectedPod)}
                 </h3>
-                <Badge variant="outline">{selectedPod.pod_type}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{selectedPod.pod_type}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteFromHeader}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </Button>
+                </div>
               </div>
             </div>
             <ScrollArea className="flex-1 min-h-0">
@@ -205,5 +301,18 @@ export function PodViewer() {
         )}
       </ResizablePanel>
     </ResizablePanelGroup>
+    
+    {/* Delete confirmation dialog */}
+    <DeletePodDialog
+      pod={podToDelete}
+      isOpen={isDeleteDialogOpen}
+      onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) {
+          setPodToDelete(null);
+        }
+      }}
+    />
+    </>
   );
 }

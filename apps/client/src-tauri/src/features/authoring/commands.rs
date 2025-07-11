@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 
 use pod2::{
-    backends::plonky2::{
-        mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer,
-    },
-    frontend::{MainPod, MainPodBuilder, SignedPodBuilder},
+    backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer},
+    examples::MOCK_VD_SET,
+    frontend::{MainPod, MainPodBuilder, SignedPod, SignedPodBuilder},
     lang::{self, parser, LangError},
-    middleware::{Params, PodId, PodProver, PodType, Value as PodValue, VDSet, DEFAULT_VD_SET},
+    middleware::{Params, PodProver, PodType, Value as PodValue, DEFAULT_VD_SET},
 };
 use pod2_db::{store, store::PodData};
-use pod2_solver::{self, db::IndexablePod, error::SolverError, metrics::MetricsLevel};
+use pod2_solver::{self, db::IndexablePod, metrics::MetricsLevel};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
@@ -149,16 +148,19 @@ pub async fn sign_pod(
 // Editor Commands
 // =============================================================================
 
-/// Validate Podlog code for syntax and semantic errors
+/// Validate Podlang code for syntax and semantic errors
 #[tauri::command]
 pub async fn validate_code_command(code: String) -> Result<ValidateCodeResponse, String> {
     check_feature_enabled!();
-    
-    log::debug!("Validating code: {:?}", code.chars().take(50).collect::<String>());
+
+    log::debug!(
+        "Validating code: {:?}",
+        code.chars().take(50).collect::<String>()
+    );
 
     let params = Params::default();
     pest::set_error_detail(true);
-    
+
     match lang::parse(&code, &params, &[]) {
         Ok(_) => Ok(ValidateCodeResponse {
             diagnostics: vec![],
@@ -171,7 +173,7 @@ pub async fn validate_code_command(code: String) -> Result<ValidateCodeResponse,
     }
 }
 
-/// Execute Podlog code against all available PODs
+/// Execute Podlang code against all available PODs
 #[tauri::command]
 pub async fn execute_code_command(
     state: State<'_, Mutex<AppState>>,
@@ -179,11 +181,15 @@ pub async fn execute_code_command(
     mock: bool,
 ) -> Result<ExecuteCodeResponse, String> {
     check_feature_enabled!();
-    
-    log::debug!("Executing code (mock: {}): {:?}", mock, code.chars().take(50).collect::<String>());
+
+    log::debug!(
+        "Executing code (mock: {}): {:?}",
+        mock,
+        code.chars().take(50).collect::<String>()
+    );
 
     let app_state = state.lock().await;
-    
+
     pest::set_error_detail(true);
     let params = Params::default();
 
@@ -191,7 +197,7 @@ pub async fn execute_code_command(
     let processed_output = match lang::parse(&code, &params, &[]) {
         Ok(output) => output,
         Err(e) => {
-            log::error!("Failed to parse Podlog code: {:?}", e);
+            log::error!("Failed to parse Podlang code: {:?}", e);
             return Err(format!("Parse error: {}", e));
         }
     };
@@ -205,7 +211,7 @@ pub async fn execute_code_command(
         log::warn!("No PODs found for execution. Proceeding with empty facts.");
     }
 
-    let mut owned_signed_pods: Vec<pod2::frontend::SignedPod> = Vec::new();
+    let mut owned_signed_pods: Vec<SignedPod> = Vec::new();
     let mut owned_main_pods: Vec<MainPod> = Vec::new();
 
     // Convert stored PODs to runtime PODs
@@ -220,7 +226,7 @@ pub async fn execute_code_command(
 
         match pod_info.data {
             PodData::Signed(helper) => {
-                owned_signed_pods.push(pod2::frontend::SignedPod::try_from(helper).unwrap());
+                owned_signed_pods.push(SignedPod::try_from(helper).unwrap());
             }
             PodData::Main(helper) => match MainPod::try_from(helper) {
                 Ok(main_pod) => {
@@ -263,23 +269,21 @@ pub async fn execute_code_command(
     let request_templates = processed_output.request_templates;
 
     // Solve the query
-    let (proof, _) = match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
-        Ok(solution) => solution,
-        Err(e) => {
-            log::error!("Solver error: {:?}", e);
-            return Err(format!("Solver error: {}", e));
-        }
-    };
+    let (proof, _) =
+        match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
+            Ok(solution) => solution,
+            Err(e) => {
+                log::error!("Solver error: {:?}", e);
+                return Err(format!("Solver error: {}", e));
+            }
+        };
+
+    log::info!("{:?}", proof);
 
     let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
-    let vd_set = if mock {
-        // Create a mock VD set for faster execution
-        &VDSet::new(6, &[]).unwrap()
-    } else {
-        &*DEFAULT_VD_SET
-    };
+    let vd_set = if mock { &MOCK_VD_SET } else { &*DEFAULT_VD_SET };
 
     let mut builder = MainPodBuilder::new(&params, vd_set);
     for (operation, public) in ops {
@@ -303,14 +307,14 @@ pub async fn execute_code_command(
             }
         }
     }
-    
+
     // Create prover based on mock mode
     let prover: Box<dyn PodProver> = if mock {
         Box::new(MockProver {})
     } else {
         Box::new(Prover {})
     };
-    
+
     let result_main_pod = builder.prove(&*prover, &params).unwrap();
 
     let result = ExecuteCodeResponse {

@@ -65,8 +65,8 @@ export function EditorControls({ className }: EditorControlsProps) {
   }
 
   return (
-    <div className={`flex items-center justify-between bg-gray-200 dark:bg-gray-800 ${className || ""}`}>
-      <div className="p-2 bg-gray-200 dark:bg-gray-800 flex items-center space-x-4">
+    <div className={`flex items-center justify-between bg-sidebar border-b border-sidebar-border ${className || ""}`}>
+      <div className="p-2 flex items-center space-x-4">
         {/* Execute Button */}
         <Button
           onClick={handleExecute}

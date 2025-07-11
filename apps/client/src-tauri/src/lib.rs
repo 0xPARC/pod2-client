@@ -324,6 +324,7 @@ pub fn run() {
             pod_management::get_app_state,
             pod_management::trigger_sync,
             pod_management::set_pod_pinned,
+            pod_management::delete_pod,
             pod_management::list_spaces,
             pod_management::import_pod,
             pod_management::insert_zukyc_pods,

@@ -4,7 +4,7 @@
 // - Creating and signing new PODs
 // - Private key management
 // - POD authoring workflows
-// - Podlog editor functionality
+// - Podlang editor functionality
 
 export * from "./rpc";
 export * from "./types";
