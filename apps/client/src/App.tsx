@@ -17,7 +17,10 @@ import {
 } from "./components/ui/dialog";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Textarea } from "./components/ui/textarea";
+import { Toaster } from "./components/ui/sonner";
 import { useAppStore } from "./lib/store";
+import { FeatureConfigProvider } from "./lib/features/config";
+import { ThemeProvider } from "./components/theme-provider";
 
 type ResultStatus = "success" | "error" | "pending";
 
@@ -105,21 +108,26 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen overflow-hidden overscroll-none">
-      {/* TODO: Maybe make this MacOS-only? */}
-      <div
-        data-tauri-drag-region
-        className="fixed top-0 left-0 right-0 z-50 h-[20px]"
-        onDoubleClick={() => {
-          getCurrentWindow().maximize();
-        }}
-      ></div>
-      <SidebarProvider className="h-screen">
-        <AppSidebar />
-        <MainContent />
-        <PodRequestDialog />
-      </SidebarProvider>
-    </div>
+    <ThemeProvider>
+      <FeatureConfigProvider>
+        <div className="h-screen overflow-hidden overscroll-none">
+          {/* TODO: Maybe make this MacOS-only? */}
+          <div
+            data-tauri-drag-region
+            className="fixed top-0 left-0 right-0 z-50 h-[20px]"
+            onDoubleClick={() => {
+              getCurrentWindow().maximize();
+            }}
+          ></div>
+          <SidebarProvider className="h-screen">
+            <AppSidebar />
+            <MainContent />
+            <PodRequestDialog />
+          </SidebarProvider>
+          <Toaster />
+        </div>
+      </FeatureConfigProvider>
+    </ThemeProvider>
   );
 }
 

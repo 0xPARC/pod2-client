@@ -31,6 +31,8 @@ tokio = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 num = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-store = "2"
@@ -43,6 +45,9 @@ rand = "0.8"
 tracing = "0.1"
 hex = "0.4"
 tauri-plugin-http = "2"
+reqwest = { version = "0.12.22", features = ["json"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }

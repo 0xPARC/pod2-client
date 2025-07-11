@@ -5,12 +5,24 @@ import {
   triggerSync,
   listSpaces,
   setPodPinned,
+  deletePod,
   type AppStateData,
   type PodStats,
   type PodLists,
   type PodInfo,
   type SpaceInfo
 } from "./rpc";
+import { validateCode, executeCode } from "./features/authoring/rpc";
+import { DiagnosticSeverity } from "./features/authoring/types";
+import type {
+  Diagnostic,
+  ExecuteCodeResponse
+} from "./features/authoring/types";
+import {
+  loadEditorContent,
+  saveEditorContent
+} from "./features/authoring/editor";
+import { loadCurrentView, saveCurrentView } from "./persistence";
 
 // Re-export types for backward compatibility
 export type { AppStateData, PodStats, PodLists, SpaceInfo };
@@ -19,7 +31,7 @@ export type { AppStateData, PodStats, PodLists, SpaceInfo };
 export type { PodInfo } from "./rpc";
 
 export type PodFilter = "all" | "signed" | "main" | "pinned";
-export type AppView = "pods" | "documents" | "inbox" | "chats";
+export type AppView = "pods" | "documents" | "inbox" | "chats" | "frogs" | "editor";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
 interface AppStoreState {
@@ -33,11 +45,19 @@ interface AppStoreState {
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
-  chatEnabled: boolean;
+  frogTimeout: number | null;
 
   // Folder State
   folders: SpaceInfo[];
   foldersLoading: boolean;
+
+  // Editor State
+  editorContent: string;
+  editorDiagnostics: Diagnostic[];
+  executionResult: ExecuteCodeResponse | null;
+  executionError: string | null;
+  isExecuting: boolean;
+  isValidating: boolean;
 
   // Actions
   initialize: () => Promise<void>;
@@ -50,9 +70,23 @@ interface AppStoreState {
   setExternalPodRequest: (request: string | undefined) => void;
   loadFolders: () => Promise<void>;
   togglePodPinned: (podId: string, spaceId: string) => Promise<void>;
+  setFrogTimeout: (timeout: number | null) => void;
+  deletePod: (podId: string, spaceId: string) => Promise<void>;
+
+  // Editor Actions
+  setEditorContent: (content: string) => void;
+  setEditorDiagnostics: (diagnostics: Diagnostic[]) => void;
+  setExecutionResult: (result: ExecuteCodeResponse | null) => void;
+  setExecutionError: (error: string | null) => void;
+  setIsExecuting: (executing: boolean) => void;
+  setIsValidating: (validating: boolean) => void;
+  validateEditorCode: () => Promise<void>;
+  executeEditorCode: (mock?: boolean) => Promise<void>;
+  clearExecutionResults: () => void;
 
   // Derived getters
   getFilteredPods: () => PodInfo[];
+  getFilteredPodsBy: (podType: String, folder: String) => PodInfo[];
   getSelectedPod: () => PodInfo | null;
 }
 
@@ -68,16 +102,24 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       main_pods: []
     }
   },
-  chatEnabled: true,
   isLoading: false,
   error: null,
-  currentView: "pods",
+  currentView: loadCurrentView(),
   selectedFilter: "all",
   selectedFolderFilter: "all",
   selectedPodId: null,
   externalPodRequest: undefined,
   folders: [],
   foldersLoading: false,
+  frogTimeout: null,
+
+  // Editor initial state
+  editorContent: loadEditorContent(),
+  editorDiagnostics: [],
+  executionResult: null,
+  executionError: null,
+  isExecuting: false,
+  isValidating: false,
 
   initialize: async () => {
     try {
@@ -124,14 +166,23 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setCurrentView: (view: AppView) => {
     set({ currentView: view, selectedPodId: null }); // Clear selected pod when changing view
+    saveCurrentView(view); // Persist the view selection
   },
 
   setSelectedFilter: (filter: PodFilter) => {
-    set({ selectedFilter: filter, selectedPodId: null }); // Clear selected pod when changing filter
+    set({
+      selectedFilter: filter,
+      selectedFolderFilter: "all",
+      selectedPodId: null
+    }); // Clear folder filter and selected pod when changing type filter
   },
 
   setSelectedFolderFilter: (filter: FolderFilter) => {
-    set({ selectedFolderFilter: filter, selectedPodId: null }); // Clear selected pod when changing folder
+    set({
+      selectedFolderFilter: filter,
+      selectedFilter: "all",
+      selectedPodId: null
+    }); // Clear type filter and selected pod when changing folder
   },
 
   setSelectedPodId: (podId: string | null) => {
@@ -140,6 +191,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setExternalPodRequest: (request: string | undefined) => {
     set({ externalPodRequest: request });
+  },
+
+  setFrogTimeout: (timeout: number | null) => {
+    set({ frogTimeout: timeout });
   },
 
   loadFolders: async () => {
@@ -174,12 +229,35 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
   },
 
-  getFilteredPods: () => {
-    const { appState, selectedFilter, selectedFolderFilter } = get();
+  deletePod: async (podId: string, spaceId: string) => {
+    try {
+      const { appState } = get();
+      const allPods = [
+        ...appState.pod_lists.signed_pods,
+        ...appState.pod_lists.main_pods
+      ];
+      const pod = allPods.find((p) => p.id === podId);
+
+      if (pod) {
+        await deletePod(spaceId, podId);
+        // Trigger sync to update the UI
+        await get().triggerSync();
+        // Clear selected pod if it was the one being deleted
+        if (get().selectedPodId === podId) {
+          set({ selectedPodId: null });
+        }
+      }
+    } catch (error) {
+      set({ error: `Failed to delete pod: ${error}` });
+    }
+  },
+
+  getFilteredPodsBy: (podType: String, folder: String) => {
+    const { appState } = get();
 
     // Get all pods or filter by type
     let pods: PodInfo[] = [];
-    switch (selectedFilter) {
+    switch (podType) {
       case "signed":
         pods = appState.pod_lists.signed_pods;
         break;
@@ -202,8 +280,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
 
     // Apply folder filter
-    if (selectedFolderFilter !== "all") {
-      pods = pods.filter((p) => p.space === selectedFolderFilter);
+    if (folder !== "all") {
+      pods = pods.filter((p) => p.space === folder);
     }
 
     // Sort: pinned first, then by creation date (newest first)
@@ -216,11 +294,131 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     });
   },
 
+  getFilteredPods: () => {
+    const { selectedFilter, selectedFolderFilter } = get();
+    return get().getFilteredPodsBy(selectedFilter, selectedFolderFilter);
+  },
+
   getSelectedPod: () => {
     const { selectedPodId } = get();
     if (!selectedPodId) return null;
 
     const filteredPods = get().getFilteredPods();
     return filteredPods.find((pod) => pod.id === selectedPodId) || null;
+  },
+
+  // Editor Actions
+  setEditorContent: (content: string) => {
+    set({ editorContent: content });
+    saveEditorContent(content);
+  },
+
+  setEditorDiagnostics: (diagnostics: Diagnostic[]) => {
+    set({ editorDiagnostics: diagnostics });
+  },
+
+  setExecutionResult: (result: ExecuteCodeResponse | null) => {
+    set({
+      executionResult: result,
+      executionError: null // Clear error when setting result
+    });
+  },
+
+  setExecutionError: (error: string | null) => {
+    set({
+      executionError: error,
+      executionResult: null // Clear result when setting error
+    });
+  },
+
+  setIsExecuting: (executing: boolean) => {
+    set({ isExecuting: executing });
+  },
+
+  setIsValidating: (validating: boolean) => {
+    set({ isValidating: validating });
+  },
+
+  validateEditorCode: async () => {
+    const { editorContent } = get();
+
+    if (!editorContent.trim()) {
+      set({ editorDiagnostics: [] });
+      return;
+    }
+
+    set({ isValidating: true });
+    try {
+      const diagnostics = await validateCode(editorContent);
+      set({ editorDiagnostics: diagnostics, isValidating: false });
+    } catch (error) {
+      console.error("Validation failed:", error);
+      set({
+        editorDiagnostics: [
+          {
+            message:
+              error instanceof Error ? error.message : "Validation failed",
+            severity: DiagnosticSeverity.Error,
+            start_line: 1,
+            start_column: 1,
+            end_line: 1,
+            end_column: 1
+          }
+        ],
+        isValidating: false
+      });
+    }
+  },
+
+  executeEditorCode: async (mock = false) => {
+    const { editorContent, editorDiagnostics } = get();
+
+    // Check for validation errors
+    const hasErrors = editorDiagnostics.some(
+      (d) => d.severity === DiagnosticSeverity.Error
+    );
+    if (hasErrors) {
+      const firstError = editorDiagnostics.find(
+        (d) => d.severity === DiagnosticSeverity.Error
+      );
+      const errorMessage = firstError
+        ? firstError.message
+        : "Code has validation errors";
+      set({ executionError: `Cannot execute: ${errorMessage}` });
+      return;
+    }
+
+    if (!editorContent.trim()) {
+      set({ executionError: "Cannot execute empty code" });
+      return;
+    }
+
+    set({
+      isExecuting: true,
+      executionError: null,
+      executionResult: null
+    });
+
+    try {
+      const result = await executeCode(editorContent, mock);
+      set({
+        executionResult: result,
+        isExecuting: false
+      });
+    } catch (error) {
+      console.error("Execution failed:", error);
+      set({
+        executionError:
+          error instanceof Error ? error.message : "Execution failed",
+        isExecuting: false
+      });
+    }
+  },
+
+  clearExecutionResults: () => {
+    set({
+      executionResult: null,
+      executionError: null
+    });
   }
 }));
