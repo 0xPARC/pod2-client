@@ -338,6 +338,8 @@ pub fn run() {
             // Authoring commands
             authoring::get_private_key_info,
             authoring::sign_pod,
+            authoring::validate_code_command,
+            authoring::execute_code_command,
             // Integration commands
             integration::submit_pod_request
         ])

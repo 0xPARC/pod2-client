@@ -30,6 +30,8 @@ tokio = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 num = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-store = "2"

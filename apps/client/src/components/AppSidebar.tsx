@@ -29,6 +29,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CodeIcon,
+  EditIcon,
   FileCheck2Icon,
   FileIcon,
   FilePenLineIcon,
@@ -36,10 +37,12 @@ import {
   InboxIcon,
   MessageSquareIcon,
   SettingsIcon,
-  StarIcon
+  StarIcon,
+  UploadIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
+import { FeatureGate } from "../lib/features/config";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { Button } from "./ui/button";
 import {
@@ -49,7 +52,7 @@ import {
   DropdownMenuTrigger
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
-import { FeatureGate } from "@/lib/features/config";
+import { ImportPodDialog } from "./ImportPodDialog";
 
 export function AppSidebar() {
   const {
@@ -322,69 +325,6 @@ export function AppSidebar() {
           </Collapsible>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Filters</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("pinned");
-                  }}
-                  isActive={
-                    currentView === "pods" && selectedFilter === "pinned"
-                  }
-                >
-                  <StarIcon />
-                  Pinned
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {
-                    [
-                      ...appState.pod_lists.signed_pods,
-                      ...appState.pod_lists.main_pods
-                    ].filter((p) => p.pinned).length
-                  }
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("signed");
-                  }}
-                  isActive={
-                    currentView === "pods" && selectedFilter === "signed"
-                  }
-                >
-                  <FilePenLineIcon />
-                  Signed
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {appState.pod_stats.signed_pods}
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("main");
-                  }}
-                  isActive={currentView === "pods" && selectedFilter === "main"}
-                >
-                  <FileCheck2Icon />
-                  Main
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {appState.pod_stats.main_pods}
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
         <FeatureGate feature="networking">
           <SidebarGroup>
             <SidebarGroupLabel>Messages</SidebarGroupLabel>
@@ -408,6 +348,47 @@ export function AppSidebar() {
                     <MessageSquareIcon />
                     Chats
                   </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </FeatureGate>
+
+        <FeatureGate feature="authoring">
+          <SidebarGroup>
+            <SidebarGroupLabel>Development</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setCurrentView("editor")}
+                    isActive={currentView === "editor"}
+                  >
+                    <EditIcon />
+                    Podlang Editor
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <ImportPodDialog
+                    trigger={
+                      <SidebarMenuButton>
+                        <UploadIcon />
+                        Import POD
+                      </SidebarMenuButton>
+                    }
+                  />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setIsCreateSignedPodDialogOpen(true)}
+                  >
+                    <FilePenLineIcon />
+                    Sign POD
+                  </SidebarMenuButton>
+                  <CreateSignedPodDialog
+                    isOpen={isCreateSignedPodDialogOpen}
+                    onOpenChange={setIsCreateSignedPodDialogOpen}
+                  />
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -450,6 +431,22 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <FeatureGate feature="networking">
+          <SidebarGroup>
+            <SidebarGroupLabel>Actions</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>
+                    <CodeIcon />
+                    POD Request
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </FeatureGate>
       </SidebarContent>
       <SidebarFooter>
         {/* Public Key Display */}
