@@ -282,8 +282,6 @@ pub async fn execute_code_command(
             }
         };
 
-    log::info!("{:?}", proof);
-
     let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
