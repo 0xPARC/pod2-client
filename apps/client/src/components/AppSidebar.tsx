@@ -356,7 +356,7 @@ export function AppSidebar() {
 
         <FeatureGate feature="authoring">
           <SidebarGroup>
-            <SidebarGroupLabel>Development</SidebarGroupLabel>
+            <SidebarGroupLabel>Authoring</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -394,31 +394,6 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </FeatureGate>
-        <SidebarGroup>
-          <SidebarGroupLabel>Actions</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <CodeIcon />
-                  POD Request
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setIsCreateSignedPodDialogOpen(true)}
-                >
-                  <FilePenLineIcon />
-                  Sign POD
-                </SidebarMenuButton>
-                <CreateSignedPodDialog
-                  isOpen={isCreateSignedPodDialogOpen}
-                  onOpenChange={setIsCreateSignedPodDialogOpen}
-                />
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Extras</SidebarGroupLabel>
           <SidebarGroupContent>
