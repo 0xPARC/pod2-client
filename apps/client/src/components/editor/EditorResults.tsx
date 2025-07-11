@@ -10,6 +10,7 @@ import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { formatExecutionResult } from "../../lib/features/authoring/editor";
 import { useAppStore } from "../../lib/store";
+import MainPodCard from "../MainPodCard";
 
 interface EditorResultsProps {
   isOpen: boolean;
@@ -83,7 +84,7 @@ export function EditorResults({
     statusText = "Execution successful";
     content = (
       <div className="p-4">
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+        {/* <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <div className="flex items-center justify-between p-4 border-b border-green-200 dark:border-green-800">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
@@ -103,12 +104,16 @@ export function EditorResults({
           </div>
           <div className="p-4">
             <ScrollArea className="h-80 w-full">
-              <pre className="text-sm text-green-800 dark:text-green-100 whitespace-pre-wrap">
+               <pre className="text-sm text-green-800 dark:text-green-100 whitespace-pre-wrap">
                 {formatExecutionResult(executionResult)}
               </pre>
             </ScrollArea>
           </div>
-        </div>
+        </div> */}
+        <MainPodCard
+          mainPod={executionResult.main_pod}
+          podId={executionResult.main_pod.id}
+        />
       </div>
     );
   } else {
@@ -153,7 +158,7 @@ export function EditorResults({
       </div>
 
       {/* Results Content */}
-      {isOpen && <div className="max-h-96 overflow-hidden">{content}</div>}
+      {isOpen && <div className="max-h-96 overflow-scroll">{content}</div>}
     </div>
   );
 }

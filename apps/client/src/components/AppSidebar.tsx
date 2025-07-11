@@ -34,6 +34,7 @@ import {
   FileIcon,
   FilePenLineIcon,
   FolderIcon,
+  Github,
   InboxIcon,
   MessageSquareIcon,
   SettingsIcon,
@@ -53,6 +54,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { ImportPodDialog } from "./ImportPodDialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 export function AppSidebar() {
   const {
@@ -431,12 +433,29 @@ export function AppSidebar() {
             className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer hover:bg-accent rounded transition-colors break-all"
             title={`Click to copy: ${privateKeyInfo.public_key}`}
           >
-            🔑{" "}
-            {
-              /*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key
-            }
+            Your public key:
+            <span className="text-xs text-accent-foreground">
+              {
+                /*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key
+              }
+            </span>
           </div>
         )}
+
+        {/* GitHub Link */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={() => {
+            // Use Tauri's opener plugin to open external URL
+            openUrl("https://github.com/0xPARC/pod2-client");
+          }}
+        >
+          <Github className="mr-2 h-4 w-4" />
+          View on GitHub
+        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">

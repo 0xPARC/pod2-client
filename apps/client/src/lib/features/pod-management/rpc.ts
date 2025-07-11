@@ -116,10 +116,7 @@ export async function setPodPinned(
  * @param spaceId - The space/folder ID
  * @param podId - The POD ID
  */
-export async function deletePod(
-  spaceId: string,
-  podId: string
-): Promise<void> {
+export async function deletePod(spaceId: string, podId: string): Promise<void> {
   return invokeCommand("delete_pod", {
     spaceId,
     podId

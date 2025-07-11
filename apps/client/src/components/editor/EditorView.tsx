@@ -17,7 +17,8 @@ const MAX_RESULTS_SIZE = 70; // Maximum percentage for results panel
 export function EditorView() {
   // Results panel state
   const [isResultsOpen, setIsResultsOpen] = useState(false);
-  const [resultsPanelSize, setResultsPanelSize] = useState(DEFAULT_RESULTS_SIZE);
+  const [resultsPanelSize, setResultsPanelSize] =
+    useState(DEFAULT_RESULTS_SIZE);
 
   // Handle results toggle
   const handleResultsToggle = () => {
@@ -25,19 +26,17 @@ export function EditorView() {
   };
 
   // Calculate panel sizes
-  const editorSize = isResultsOpen 
-    ? 100 - resultsPanelSize 
+  const editorSize = isResultsOpen
+    ? 100 - resultsPanelSize
     : 100 - COLLAPSED_RESULTS_SIZE;
-  
-  const resultsSize = isResultsOpen 
-    ? resultsPanelSize 
-    : COLLAPSED_RESULTS_SIZE;
+
+  const resultsSize = isResultsOpen ? resultsPanelSize : COLLAPSED_RESULTS_SIZE;
 
   return (
     <div className="h-full w-full flex flex-col">
       {/* Editor Controls */}
       <EditorControls />
-      
+
       {/* Main Editor Area with Resizable Panels */}
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup
@@ -64,13 +63,14 @@ export function EditorView() {
           </ResizablePanel>
 
           {/* Resizable Handle */}
-          <ResizableHandle 
-            withHandle 
+          <ResizableHandle
+            withHandle
             className="bg-gray-200 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 data-[resize-handle-state=drag]:bg-blue-500"
           />
 
           {/* Results Panel */}
           <ResizablePanel
+            className="overflow-scroll"
             defaultSize={resultsSize}
             minSize={COLLAPSED_RESULTS_SIZE}
             maxSize={MAX_RESULTS_SIZE}

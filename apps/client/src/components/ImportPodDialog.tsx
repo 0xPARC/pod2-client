@@ -6,7 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,9 +34,9 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
         filters: [
           {
             name: "POD Files",
-            extensions: ["pod"],
-          },
-        ],
+            extensions: ["pod"]
+          }
+        ]
       });
 
       if (file && typeof file === "string") {
@@ -48,6 +48,7 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
         setPodContent(content);
       }
     } catch (error) {
+      console.error(error);
       toast.error("Failed to select file");
     }
   };
@@ -55,18 +56,17 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
   const detectPodType = (content: string): string => {
     try {
       const pod = JSON.parse(content);
-      
-      // Try to detect POD type from structure
-      if (pod.signature || pod.signer_public_key) {
+
+      const podTypeString = pod.podType[1]; // Extract the string type from the tuple
+      if (podTypeString === "Signed") {
         return "Signed";
-      } else if (pod.proof || pod.statement) {
+      } else if (podTypeString === "Main") {
         return "Main";
       }
-      
-      // Default fallback
-      return "Signed";
-    } catch {
-      return "Signed";
+      throw new Error("Invalid POD type");
+    } catch (error) {
+      console.error(error);
+      throw new Error("Failed to detect POD type");
     }
   };
 
@@ -83,7 +83,7 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
       JSON.parse(podContent);
 
       const podType = detectPodType(podContent);
-      
+
       await importPodFromJson(podContent, podType, label || undefined);
 
       toast.success("POD imported successfully");
@@ -94,7 +94,9 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
       setSelectedFile(null);
       setIsOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to import POD");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to import POD"
+      );
     } finally {
       setIsImporting(false);
     }
@@ -110,7 +112,7 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
     e.stopPropagation();
 
     const files = Array.from(e.dataTransfer.files);
-    const podFile = files.find(f => f.name.endsWith('.pod'));
+    const podFile = files.find((f) => f.name.endsWith(".pod"));
 
     if (podFile) {
       try {
@@ -213,7 +215,10 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleImport} disabled={isImporting || !podContent.trim()}>
+            <Button
+              onClick={handleImport}
+              disabled={isImporting || !podContent.trim()}
+            >
               {isImporting ? "Importing..." : "Import POD"}
             </Button>
           </div>
