@@ -287,6 +287,7 @@ pub async fn execute_code_command(
     let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
+    #[allow(clippy::borrow_interior_mutable_const)]
     let vd_set = if mock { &MOCK_VD_SET } else { &*DEFAULT_VD_SET };
 
     let mut builder = MainPodBuilder::new(&params, vd_set);
