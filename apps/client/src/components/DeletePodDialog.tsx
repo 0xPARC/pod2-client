@@ -75,10 +75,12 @@ export function DeletePodDialog({
                 {pod.id.slice(0, 12)}...
               </code>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Type</span>
-              <Badge variant={pod.pod_type === "signed" ? "default" : "secondary"}>
+              <Badge
+                variant={pod.pod_type === "signed" ? "default" : "secondary"}
+              >
                 {pod.pod_type === "signed" ? "Signed" : "Main"}
               </Badge>
             </div>
@@ -111,7 +113,8 @@ export function DeletePodDialog({
           <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-red-700 dark:text-red-300">
-              <strong>Warning:</strong> This POD will be permanently deleted and cannot be recovered.
+              <strong>Warning:</strong> This POD will be permanently deleted and
+              cannot be recovered.
             </div>
           </div>
         </div>

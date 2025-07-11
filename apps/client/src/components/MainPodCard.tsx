@@ -38,16 +38,16 @@ function ViewStatementArg({ arg }: { arg: ValueRef }) {
 
 const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
   const statementCount = mainPod.publicStatements?.length || 0;
-  
+
   // Get all PODs to check if this one already exists
   const { appState } = useAppStore();
   const allPods = [
     ...appState.pod_lists.signed_pods,
     ...appState.pod_lists.main_pods
   ];
-  
+
   // Check if a POD with this ID already exists
-  const podExists = podId ? allPods.some(pod => pod.id === podId) : false;
+  const podExists = podId ? allPods.some((pod) => pod.id === podId) : false;
 
   const handleExport = async () => {
     try {

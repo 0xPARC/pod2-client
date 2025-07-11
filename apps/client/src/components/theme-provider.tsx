@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode
+} from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type Theme = "dark" | "light";
@@ -39,10 +45,12 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     // Listen for theme changes
     const setupThemeListener = async () => {
       try {
-        const unlisten = await getCurrentWindow().onThemeChanged(({ payload: newTheme }) => {
-          setTheme(newTheme);
-        });
-        
+        const unlisten = await getCurrentWindow().onThemeChanged(
+          ({ payload: newTheme }) => {
+            setTheme(newTheme);
+          }
+        );
+
         return unlisten;
       } catch (error) {
         console.warn("Failed to setup theme listener:", error);
@@ -53,7 +61,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     let unlistenPromise = setupThemeListener();
 
     return () => {
-      unlistenPromise.then(unlisten => unlisten());
+      unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -61,15 +69,15 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   useEffect(() => {
     const root = window.document.documentElement;
     const body = window.document.body;
-    
+
     // Remove existing theme classes
     root.classList.remove("light", "dark");
     body.classList.remove("light", "dark");
-    
+
     // Add current theme class to both root and body
     root.classList.add(theme);
     body.classList.add(theme);
-    
+
     // For Tailwind CSS dark mode, ensure 'dark' class is on root
     if (theme === "dark") {
       root.classList.add("dark");

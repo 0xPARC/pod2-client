@@ -8,7 +8,7 @@
  */
 export enum DiagnosticSeverity {
   Error = "Error",
-  Warning = "Warning", 
+  Warning = "Warning",
   Information = "Information",
   Hint = "Hint"
 }
