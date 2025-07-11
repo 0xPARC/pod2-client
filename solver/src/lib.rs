@@ -90,7 +90,7 @@ pub fn value_to_podlang_literal(value: Value) -> String {
             "{{ {} }}",
             _d.kvs()
                 .iter()
-                .map(|(k, v)| format!("{}: {}", k.to_string(), value_to_podlang_literal(v.clone())))
+                .map(|(k, v)| format!("{}: {}", k, value_to_podlang_literal(v.clone())))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),

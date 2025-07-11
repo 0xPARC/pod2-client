@@ -12,9 +12,6 @@ use pod2_db::{
     store::{self, PodData, PodInfo},
     Db,
 };
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
-use podnet_models::Document;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
