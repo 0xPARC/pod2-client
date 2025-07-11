@@ -101,6 +101,30 @@ pub async fn import_pod(
     Ok(())
 }
 
+/// Delete a POD from the database
+#[tauri::command]
+pub async fn delete_pod(
+    state: State<'_, Mutex<AppState>>,
+    space_id: String,
+    pod_id: String,
+) -> Result<(), String> {
+    check_feature_enabled!();
+    let mut app_state = state.lock().await;
+
+    let rows_deleted = store::delete_pod(&app_state.db, &space_id, &pod_id)
+        .await
+        .map_err(|e| format!("Failed to delete POD: {}", e))?;
+
+    if rows_deleted == 0 {
+        return Err("POD not found or already deleted".to_string());
+    }
+
+    // Trigger state sync to update frontend
+    app_state.trigger_state_sync().await?;
+
+    Ok(())
+}
+
 /// Debug command to insert ZuKYC sample pods
 #[tauri::command]
 pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {

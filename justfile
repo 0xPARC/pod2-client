@@ -10,3 +10,6 @@ format:
 # Run client in development mode
 client-dev:
     cd apps/client && pnpm tauri dev
+
+client-build:
+    cd apps/client && pnpm tauri build
