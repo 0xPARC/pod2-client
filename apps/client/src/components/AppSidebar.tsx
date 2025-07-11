@@ -11,20 +11,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar";
-import {
-  getPrivateKeyInfo,
-  insertZuKycPods,
-  PrivateKeyInfo,
-  sendMessageAsPod,
-  sendPodToPeer,
-  startP2pNode
-} from "@/lib/rpc";
+import { getPrivateKeyInfo, PrivateKeyInfo } from "@/lib/rpc";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
-import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -38,7 +31,6 @@ import {
   Github,
   InboxIcon,
   MessageSquareIcon,
-  SettingsIcon,
   StarIcon,
   UploadIcon
 } from "lucide-react";
@@ -47,13 +39,6 @@ import { useAppStore } from "../lib/store";
 import { FeatureGate } from "../lib/features/config";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "./ui/dropdown-menu";
-import { Input } from "./ui/input";
 import { ImportPodDialog } from "./ImportPodDialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -68,89 +53,14 @@ export function AppSidebar() {
     foldersLoading,
     setCurrentView,
     setSelectedFilter,
-    setSelectedFolderFilter,
-    setExternalPodRequest
+    setSelectedFolderFilter
   } = useAppStore();
-  const [nodeId, setNodeId] = useState<string | null>(null);
-  const [p2pLoading, setP2pLoading] = useState(false);
-  const [sendPodForm, setSendPodForm] = useState({
-    peerNodeId: "",
-    podId: "",
-    messageText: "",
-    senderAlias: ""
-  });
-  const [sendMode, setSendMode] = useState<"pod" | "message">("pod");
   const [privateKeyInfo, setPrivateKeyInfo] = useState<PrivateKeyInfo | null>(
     null
   );
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [foldersExpanded, setFoldersExpanded] = useState(true);
-
-  const handlePodRequestFromClipboard = async () => {
-    try {
-      const clipboardText = await readText();
-      setExternalPodRequest(clipboardText);
-    } catch (error) {
-      console.error("Failed to read from clipboard:", error);
-    }
-  };
-
-  const handleStartP2P = async () => {
-    try {
-      setP2pLoading(true);
-      const nodeIdResult = await startP2pNode();
-      setNodeId(nodeIdResult);
-    } catch (error) {
-      console.error("Failed to start P2P node:", error);
-    } finally {
-      setP2pLoading(false);
-    }
-  };
-
-  const handleSendPod = async () => {
-    try {
-      if (sendMode === "pod") {
-        // Send existing POD
-        await sendPodToPeer(
-          sendPodForm.peerNodeId,
-          sendPodForm.podId,
-          undefined, // No message when sending existing POD
-          sendPodForm.senderAlias || undefined
-        );
-        console.log("POD sent successfully");
-      } else {
-        // Send message as POD (create new POD)
-        await sendMessageAsPod(
-          sendPodForm.peerNodeId,
-          sendPodForm.messageText,
-          sendPodForm.senderAlias || undefined
-        );
-        console.log("Message POD sent successfully");
-      }
-
-      // Reset form
-      setSendPodForm({
-        peerNodeId: "",
-        podId: "",
-        messageText: "",
-        senderAlias: ""
-      });
-    } catch (error) {
-      console.error("Failed to send:", error);
-    }
-  };
-
-  const handleCopyNodeId = async () => {
-    if (nodeId) {
-      try {
-        await writeText(nodeId);
-        console.log("Node ID copied to clipboard");
-      } catch (error) {
-        console.error("Failed to copy Node ID:", error);
-      }
-    }
-  };
 
   const loadPrivateKeyInfo = async () => {
     try {
@@ -169,15 +79,6 @@ export function AppSidebar() {
       } catch (error) {
         console.error("Failed to copy public key:", error);
       }
-    }
-  };
-
-  const handleInsertZuKycPods = async () => {
-    try {
-      await insertZuKycPods();
-      console.log("ZuKYC pods inserted successfully");
-    } catch (error) {
-      console.error("Failed to insert ZuKYC pods:", error);
     }
   };
 
@@ -473,125 +374,6 @@ export function AppSidebar() {
           <Github className="mr-2 h-4 w-4" />
           View on GitHub
         </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <SettingsIcon /> Debug
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuItem onClick={handlePodRequestFromClipboard}>
-              POD Request from Clipboard
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleStartP2P} disabled={p2pLoading}>
-              {p2pLoading ? "Starting P2P..." : "Start P2P Node"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleInsertZuKycPods}>
-              Insert ZuKYC PODs
-            </DropdownMenuItem>
-            {/* Private key is automatically created when needed */}
-            {privateKeyInfo && (
-              <DropdownMenuItem disabled>
-                Key: {privateKeyInfo.alias || "Default"} (
-                {privateKeyInfo.public_key.substring(0, 8)}...)
-              </DropdownMenuItem>
-            )}
-            {nodeId && (
-              <DropdownMenuItem onClick={handleCopyNodeId}>
-                NodeID: {nodeId.slice(0, 16)}... (click to copy)
-              </DropdownMenuItem>
-            )}
-            {nodeId && (
-              <>
-                <div className="p-2 space-y-2">
-                  <div className="flex gap-2">
-                    <Button
-                      variant={sendMode === "pod" ? "default" : "outline"}
-                      onClick={() => setSendMode("pod")}
-                      className="flex-1"
-                    >
-                      Send POD
-                    </Button>
-                    <Button
-                      variant={sendMode === "message" ? "default" : "outline"}
-                      onClick={() => setSendMode("message")}
-                      className="flex-1"
-                    >
-                      Send Message
-                    </Button>
-                  </div>
-
-                  <Input
-                    placeholder="Peer Node ID"
-                    value={sendPodForm.peerNodeId}
-                    onChange={(e) =>
-                      setSendPodForm((prev) => ({
-                        ...prev,
-                        peerNodeId: e.target.value
-                      }))
-                    }
-                  />
-
-                  {sendMode === "pod" && (
-                    <Input
-                      placeholder="POD ID"
-                      value={sendPodForm.podId}
-                      onChange={(e) =>
-                        setSendPodForm((prev) => ({
-                          ...prev,
-                          podId: e.target.value
-                        }))
-                      }
-                    />
-                  )}
-
-                  {sendMode === "message" && (
-                    <Input
-                      placeholder="Message text"
-                      value={sendPodForm.messageText}
-                      onChange={(e) =>
-                        setSendPodForm((prev) => ({
-                          ...prev,
-                          messageText: e.target.value
-                        }))
-                      }
-                    />
-                  )}
-
-                  <Input
-                    placeholder="Your alias (optional)"
-                    value={sendPodForm.senderAlias}
-                    onChange={(e) =>
-                      setSendPodForm((prev) => ({
-                        ...prev,
-                        senderAlias: e.target.value
-                      }))
-                    }
-                  />
-
-                  <Button
-                    onClick={handleSendPod}
-                    disabled={
-                      !sendPodForm.peerNodeId ||
-                      (sendMode === "pod" && !sendPodForm.podId) ||
-                      (sendMode === "message" && !sendPodForm.messageText)
-                    }
-                    className="w-full"
-                  >
-                    {sendMode === "pod" ? "Send POD" : "Send Message as POD"}
-                  </Button>
-
-                  {sendMode === "message" && !privateKeyInfo && (
-                    <div className="text-xs text-muted-foreground">
-                      💡 Private key will be auto-created when sending
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   );
