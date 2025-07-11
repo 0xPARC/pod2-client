@@ -163,6 +163,13 @@ pnpm tauri        # Tauri CLI commands
 pnpm dlx shadcn@latest # For handling shadcn components
 ```
 
+### Convenient Commands (justfile)
+```bash
+just js-build     # Build all JavaScript/TypeScript components (pnpm build)
+just format       # Format all code (pnpm format + cargo fmt) 
+just client-dev   # Run Tauri client in development mode
+```
+
 ## Key Technical Details
 
 ### Solver Architecture
@@ -201,6 +208,66 @@ Based on the Cursor rules in `.cursor/rules/`:
 3. **No unhelpful comments** - Avoid comments that describe what code does rather than why
 4. **Prefer direct imports** - Import specific items rather than entire modules
 5. **Use composable functions** - Break down complex operations into smaller, focused functions
+
+### Rust-Specific Guidelines
+
+6. **Avoid compiler warnings** - Keep the codebase warning-free to make real issues visible
+   - Remove unused imports, functions, and structs during development
+   - Run `cargo check` frequently and address warnings immediately
+   - Use explicit `#[allow(dead_code)]` only when intentionally keeping placeholder code
+7. **Explicit imports over wildcards** - Prefer `use tauri::{State, Manager}` over `use tauri::*`
+8. **Module documentation over marker structs** - Use `//!` module comments instead of empty documentation structs
+9. **Clean re-exports** - Only re-export (`pub use`) items that are actually consumed elsewhere
+
+## Feature Flags
+
+The application supports environment variable-based feature flags for development, testing, and deployment flexibility.
+
+### Environment Variables
+
+Control features using these environment variables:
+
+- `FEATURE_POD_MANAGEMENT=true|false` - Core POD collection management (default: true)
+- `FEATURE_NETWORKING=true|false` - P2P communication and messaging (default: false)  
+- `FEATURE_AUTHORING=true|false` - Creating and signing new PODs (default: true)
+- `FEATURE_INTEGRATION=true|false` - External POD Request handling (default: true)
+
+### Usage Examples
+
+**Development - Focus on specific features:**
+```bash
+# Work on core functionality without networking distractions
+FEATURE_NETWORKING=false FEATURE_INTEGRATION=false cargo run
+
+# Focus on networking features only
+FEATURE_POD_MANAGEMENT=false FEATURE_AUTHORING=false cargo run
+```
+
+**Testing - Minimal builds:**
+```bash
+# Test core functionality only
+FEATURE_NETWORKING=false FEATURE_INTEGRATION=false pnpm tauri dev
+
+# Test networking in isolation
+FEATURE_POD_MANAGEMENT=false FEATURE_AUTHORING=false pnpm tauri dev
+```
+
+**Deployment - Build variants:**
+```bash
+# Viewer-only client (no authoring or networking)
+FEATURE_AUTHORING=false FEATURE_NETWORKING=false pnpm tauri build
+
+# No external integrations
+FEATURE_INTEGRATION=false pnpm tauri build
+```
+
+### How It Works
+
+- **Backend**: Environment variables are read once at startup and cached for performance
+- **Frontend**: Queries backend for feature configuration and uses `<FeatureGate>` components to conditionally render UI
+- **Single Source of Truth**: All feature flags are controlled by backend environment variables
+- **Caching**: Configuration is loaded once and cached using `std::sync::OnceLock` to avoid repeated environment variable parsing
+- **Error Handling**: Disabled features log warnings and return errors when called
 
 ## Configuration
 

@@ -1,5 +1,5 @@
 import type { MainPod, ValueRef } from "@pod2/pod2js";
-import { ClipboardCopy, FileCheck2 } from "lucide-react";
+import { ClipboardCopy, FileCheck2, Plus } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -11,6 +11,8 @@ import {
   CardTitle
 } from "./ui/card";
 import ValueRenderer from "./ValueRenderer";
+import { useAppStore } from "../lib/store";
+import { importPod } from "../lib/rpc";
 
 interface MainPodCardProps {
   mainPod: MainPod;
@@ -37,6 +39,16 @@ function ViewStatementArg({ arg }: { arg: ValueRef }) {
 const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
   const statementCount = mainPod.publicStatements?.length || 0;
 
+  // Get all PODs to check if this one already exists
+  const { appState } = useAppStore();
+  const allPods = [
+    ...appState.pod_lists.signed_pods,
+    ...appState.pod_lists.main_pods
+  ];
+
+  // Check if a POD with this ID already exists
+  const podExists = podId ? allPods.some((pod) => pod.id === podId) : false;
+
   const handleExport = async () => {
     try {
       const jsonString = JSON.stringify(mainPod, null, 2);
@@ -45,6 +57,16 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
     } catch (err) {
       console.error("Failed to copy to clipboard:", err);
       toast.error("Failed to copy POD payload to clipboard.");
+    }
+  };
+
+  const handleAdd = async () => {
+    try {
+      await importPod(mainPod, label || undefined);
+      toast.success("POD added to collection successfully.");
+    } catch (err) {
+      console.error("Failed to add POD:", err);
+      toast.error("Failed to add POD to collection.");
     }
   };
 
@@ -60,10 +82,18 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
             </span>{" "}
             Main POD Details
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <ClipboardCopy className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2">
+            {!podExists && podId && (
+              <Button variant="outline" size="sm" onClick={handleAdd}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleExport}>
+              <ClipboardCopy className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
         </div>
         <CardDescription className="mt-2">
           {podId && (
