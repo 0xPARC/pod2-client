@@ -76,7 +76,11 @@ impl FeatureConfig {
 
     /// Check if any features are enabled
     pub fn has_any_enabled(&self) -> bool {
-        self.pod_management || self.networking || self.authoring || self.integration || self.frogcrypto
+        self.pod_management
+            || self.networking
+            || self.authoring
+            || self.integration
+            || self.frogcrypto
     }
 
     /// Get a list of enabled feature names
