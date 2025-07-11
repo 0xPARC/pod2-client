@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::AppState;
 
-const SERVER_URL: &str = "http://localhost:3000";
+const SERVER_URL: &str = "https://frog-server-q36c.onrender.com";
 
 fn server_url(path: &str) -> String {
     let domain = std::env::var("FROG_SERVER_URL").unwrap_or_else(|_| SERVER_URL.to_string());
