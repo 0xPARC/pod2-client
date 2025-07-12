@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use hex::ToHex;
+use itertools::Itertools;
 use pod2::middleware::{StatementTmpl, TypedValue, Value};
 
 use crate::{
@@ -85,11 +86,19 @@ pub fn value_to_podlang_literal(value: Value) -> String {
         TypedValue::Int(i) => i.to_string(),
         TypedValue::String(s) => format!("\"{}\"", s.clone()),
         TypedValue::Bool(b) => b.to_string(),
-        TypedValue::Array(_a) => todo!(),
-        TypedValue::Dictionary(_d) => format!(
-            "{{ {} }}",
-            _d.kvs()
+        TypedValue::Array(a) => format!(
+            "[{}]",
+            a.array()
                 .iter()
+                .map(|v| value_to_podlang_literal(v.clone()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TypedValue::Dictionary(d) => format!(
+            "{{ {} }}",
+            d.kvs()
+                .iter()
+                .sorted_by_key(|(k, _)| k.name())
                 .map(|(k, v)| format!("{}: {}", k, value_to_podlang_literal(v.clone())))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -98,6 +107,7 @@ pub fn value_to_podlang_literal(value: Value) -> String {
             "#[{}]",
             s.set()
                 .iter()
+                .sorted() // Ensure deterministic output
                 .map(|v| value_to_podlang_literal(v.clone()))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -147,7 +157,7 @@ mod tests {
         let req1 = format!(
             r#"
       use _, _, _, eth_dos from 0x{}
-      
+
       REQUEST(
           eth_dos({}, {}, ?Distance)
       )
