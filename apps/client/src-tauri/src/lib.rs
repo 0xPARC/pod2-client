@@ -340,6 +340,8 @@ pub fn run() {
             authoring::sign_pod,
             authoring::validate_code_command,
             authoring::execute_code_command,
+            // Document commands
+            documents::verify_document_pod,
             // Integration commands
             integration::submit_pod_request
         ])

@@ -26,6 +26,7 @@ export interface FeatureConfig {
   networking: boolean;
   authoring: boolean;
   integration: boolean;
+  frogcrypto: boolean;
 }
 
 // Re-export types from feature modules
@@ -71,7 +72,8 @@ export async function getFeatureConfig(): Promise<FeatureConfig> {
       pod_management: true,
       networking: true,
       authoring: true,
-      integration: true
+      integration: true,
+      frogcrypto: false
     };
   }
 }
