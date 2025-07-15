@@ -138,16 +138,16 @@ export async function invokeCommand<T>(
  * Get a frog from the server
  * @returns Promise that resolves when the frog is retrieved
  */
-export async function requestFrog(): RpcResult<void> {
-  return invokeCommand<void>("request_frog");
+export async function requestFrog(): RpcResult<number> {
+  return invokeCommand<number>("request_frog");
 }
 
 /**
- * Get a frog from the server
- * @returns Promise that resolves when the frog is retrieved
+ * Get the user's FrogCrypto score from the server
+ * @returns Promise that resolves to the score
  */
-export async function requestFrog(): RpcResult<void> {
-  return invokeCommand<void>("request_frog");
+export async function requestScore(): RpcResult<number> {
+  return invokeCommand<number>("request_score");
 }
 
 // =============================================================================

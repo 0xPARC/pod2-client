@@ -317,6 +317,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             frog::request_frog,
+            frog::request_score,
             // Configuration commands
             get_feature_config_command,
             // POD management commands
