@@ -31,9 +31,6 @@ pub mod semantics;
 pub mod trace;
 pub mod vis;
 
-#[cfg(test)]
-mod test_upvote_fix;
-
 /// The main entry point for the solver.
 ///
 /// Takes a proof request, a set of pods containing asserted facts, and runtime
