@@ -256,7 +256,11 @@ impl<'a> Materializer {
                 let handler = PredicateHandler::for_native_predicate(native_pred);
 
                 for candidate_args in candidate_args_iter {
-                    println!("Materializing {:?} for {:?}", candidate_args, native_pred);
+                    log::info!(
+                        "Materializing {} for {:?}",
+                        crate::pretty_print::PrettyValueRefVec(&candidate_args),
+                        native_pred
+                    );
                     let new_rel = handler.materialize(&candidate_args, &self.db);
                     rel.extend(new_rel);
                 }

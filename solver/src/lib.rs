@@ -10,6 +10,7 @@ use crate::{
     error::SolverError,
     metrics::{
         CounterMetrics, DebugMetrics, MetricsLevel, MetricsReport, MetricsSink, NoOpMetrics,
+        TraceMetrics,
     },
     planner::{Planner, QueryPlan},
     proof::Proof,
@@ -24,9 +25,14 @@ pub mod explainer;
 pub mod ir;
 pub mod metrics;
 pub mod planner;
+pub mod pretty_print;
 pub mod proof;
 pub mod semantics;
+pub mod trace;
 pub mod vis;
+
+#[cfg(test)]
+mod test_upvote_fix;
 
 /// The main entry point for the solver.
 ///
@@ -42,7 +48,6 @@ pub fn solve(
     let db = Arc::new(FactDB::build(pods).unwrap());
     let materializer = Materializer::new(db.clone());
     let planner = Planner::new();
-    let plan = planner.create_plan(request).unwrap();
 
     // Dispatch to the appropriate generic implementation based on the desired
     // metrics level. This allows the compiler to monomorphize the engine's
@@ -50,16 +55,25 @@ pub fn solve(
     // is not needed.
     match metrics_level {
         MetricsLevel::None => {
+            let plan = planner.create_plan(request).unwrap();
             let (proof, _) = run_solve(plan, materializer, NoOpMetrics)?;
             Ok((proof, MetricsReport::None))
         }
         MetricsLevel::Counters => {
+            let plan = planner.create_plan(request).unwrap();
             let (proof, metrics) = run_solve(plan, materializer, CounterMetrics::default())?;
             Ok((proof, MetricsReport::Counters(metrics)))
         }
         MetricsLevel::Debug => {
+            let plan = planner.create_plan(request).unwrap();
             let (proof, metrics) = run_solve(plan, materializer, DebugMetrics::default())?;
             Ok((proof, MetricsReport::Debug(metrics)))
+        }
+        MetricsLevel::Trace => {
+            let mut metrics = TraceMetrics::default();
+            let plan = planner.create_plan_with_metrics(request, &mut metrics)?;
+            let (proof, metrics) = run_solve(plan, materializer, metrics)?;
+            Ok((proof, MetricsReport::Trace(metrics)))
         }
     }
 }
@@ -79,6 +93,24 @@ fn run_solve<M: MetricsSink>(
     let proof = engine.reconstruct_proof(&all_facts, &provenance, &materializer)?;
 
     Ok((proof, engine.into_metrics()))
+}
+
+/// Solve with custom trace configuration.
+pub fn solve_with_tracing(
+    request: &[StatementTmpl],
+    pods: &[IndexablePod],
+    trace_config: crate::trace::TraceConfig,
+) -> Result<(Proof, MetricsReport), SolverError> {
+    // Common setup logic that is independent of the metrics level.
+    let db = Arc::new(FactDB::build(pods).unwrap());
+    let materializer = Materializer::new(db.clone());
+    let planner = Planner::new();
+
+    // Use TraceMetrics with the custom configuration
+    let mut metrics = TraceMetrics::new(trace_config);
+    let plan = planner.create_plan_with_metrics(request, &mut metrics)?;
+    let (proof, metrics) = run_solve(plan, materializer, metrics)?;
+    Ok((proof, MetricsReport::Trace(metrics)))
 }
 
 pub fn value_to_podlang_literal(value: Value) -> String {
