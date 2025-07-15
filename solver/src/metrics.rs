@@ -1,6 +1,10 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::{engine::semi_naive::FactStore, ir::PredicateIdentifier};
+use crate::{
+    engine::semi_naive::FactStore,
+    ir::PredicateIdentifier,
+    trace::{TraceCollection, TraceConfig, TraceEvent},
+};
 
 pub struct SolverMetrics {
     pub total_solve_time: Option<Duration>,
@@ -34,6 +38,8 @@ pub enum MetricsLevel {
     Counters,
     /// Detailed, potentially expensive debug information is collected.
     Debug,
+    /// Detailed tracing with structured event collection.
+    Trace,
 }
 
 /// A trait for collecting metrics during the solving process.
@@ -46,6 +52,9 @@ pub trait MetricsSink: Default + Send + Sync {
     /// Records a delta.
     #[allow(unused_variables)]
     fn record_delta(&mut self, delta: FactStore) {}
+    /// Records a trace event (no-op for non-tracing sinks).
+    #[allow(unused_variables)]
+    fn record_trace_event(&mut self, event: TraceEvent) {}
 }
 
 // --- Sink Implementations ---
@@ -99,10 +108,48 @@ impl MetricsSink for DebugMetrics {
     }
 }
 
+/// A metrics sink that collects detailed tracing information.
+#[derive(Debug)]
+pub struct TraceMetrics {
+    pub debug: DebugMetrics,
+    pub trace_collection: TraceCollection,
+}
+
+impl TraceMetrics {
+    pub fn new(trace_config: TraceConfig) -> Self {
+        Self {
+            debug: DebugMetrics::default(),
+            trace_collection: TraceCollection::new(trace_config),
+        }
+    }
+}
+
+impl Default for TraceMetrics {
+    fn default() -> Self {
+        Self::new(TraceConfig::default())
+    }
+}
+
+impl MetricsSink for TraceMetrics {
+    fn increment_iterations(&mut self) {
+        self.debug.increment_iterations();
+    }
+    fn record_delta_size(&mut self, num_facts: usize) {
+        self.debug.record_delta_size(num_facts);
+    }
+    fn record_delta(&mut self, delta: FactStore) {
+        self.debug.record_delta(delta);
+    }
+    fn record_trace_event(&mut self, event: TraceEvent) {
+        self.trace_collection.add_event(event);
+    }
+}
+
 /// The final report returned to the user, containing the collected metrics.
 #[derive(Debug)]
 pub enum MetricsReport {
     None,
     Counters(CounterMetrics),
     Debug(DebugMetrics),
+    Trace(TraceMetrics),
 }

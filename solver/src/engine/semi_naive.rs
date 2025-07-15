@@ -186,8 +186,16 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
             delta_facts = initial_delta;
         }
 
+        let mut iteration_count = 0;
         loop {
+            iteration_count += 1;
             self.metrics.increment_iterations();
+
+            log::debug!("=== ITERATION {} ===", iteration_count);
+            log::debug!(
+                "Delta facts going into iteration: {}",
+                crate::pretty_print::PrettyFactStore(&delta_facts)
+            );
 
             let new_delta = self.perform_iteration(
                 rules,
@@ -201,17 +209,39 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
 
             let num_new_facts = new_delta.values().map(|rel| rel.len()).sum();
             self.metrics.record_delta_size(num_new_facts);
-            trace!(
-                "Iteration complete. New facts this iteration: {}",
+
+            log::debug!(
+                "New delta facts: {}",
+                crate::pretty_print::PrettyFactStore(&new_delta)
+            );
+            log::debug!(
+                "Iteration {} complete. New facts this iteration: {}",
+                iteration_count,
                 num_new_facts
             );
 
             if new_delta.values().all(|rel| rel.is_empty()) {
-                debug!("Fixpoint reached.");
+                debug!("Fixpoint reached after {} iterations.", iteration_count);
                 break; // Fixpoint reached.
             }
 
-            trace!("Delta for next iteration: {:?}", new_delta);
+            // Safety check for infinite loops
+            if iteration_count > 100 {
+                log::error!(
+                    "Stopping after {} iterations to prevent infinite loop",
+                    iteration_count
+                );
+                log::error!(
+                    "Current delta: {}",
+                    crate::pretty_print::PrettyFactStore(&new_delta)
+                );
+                return Err(SolverError::Internal("Infinite loop detected".to_string()));
+            }
+
+            trace!(
+                "Delta for next iteration: {}",
+                crate::pretty_print::PrettyFactStore(&new_delta)
+            );
             delta_facts = new_delta;
         }
 
@@ -320,13 +350,27 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                 continue; // Seed facts are not re-evaluated.
             }
 
-            trace!("Evaluating rule: {:?}", rule);
+            log::debug!("Evaluating rule: {}", crate::pretty_print::PrettyRule(rule));
 
             for new_bindings in self.join_rule_body(rule, all_facts, delta_facts, materializer)? {
+                log::debug!(
+                    "Found bindings for rule: {}",
+                    crate::pretty_print::PrettyBindings(&new_bindings)
+                );
                 let head_fact_tuple = self.project_head_fact(&rule.head, &new_bindings)?;
                 let pred_id = rule.head.predicate.clone();
 
-                trace!("Delta {:?} {:?}", pred_id, head_fact_tuple);
+                trace!(
+                    "Delta {} {}",
+                    crate::pretty_print::format_predicate_identifier(&pred_id),
+                    crate::pretty_print::format_value_ref_vec(
+                        &head_fact_tuple
+                            .iter()
+                            .cloned()
+                            .map(Some)
+                            .collect::<Vec<_>>()
+                    )
+                );
 
                 // A fact is "new" if its tuple has not been seen before for this predicate.
                 if !all_facts
