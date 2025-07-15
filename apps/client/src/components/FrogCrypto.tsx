@@ -22,14 +22,14 @@ export function FrogCrypto() {
       <p>SCORE: {score}</p>
       <div className="flex">
         <Button
-          className="max-w-48"
+          className={`max-w-48 ${!frogedexView ? "bg-accent" : ""}`}
           variant="outline"
           onClick={() => setFrogedexView(false)}
         >
           get frogs
         </Button>
         <Button
-          className="max-w-48"
+          className={`max-w-48 ${frogedexView ? "bg-accent" : ""}`}
           variant="outline"
           onClick={() => setFrogedexView(true)}
         >

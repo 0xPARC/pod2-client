@@ -81,9 +81,9 @@ function FrogCard(pod: PodInfo) {
   return (
     <Card
       key={pod.id}
-      className="py-0 cursor-pointer transition-colors hover:bg-accent/50"
+      className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm"
     >
-      <CardContent className="p-3">
+      <CardContent className="p-3 flex flex-col text-center justify-center items-center">
         <div className="space-y-2">
           <img
             src={
