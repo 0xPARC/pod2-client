@@ -103,13 +103,11 @@ fn propagate_arithmetic_constraints(
 
                 if bound_count >= 2 {
                     // Find the unbound wildcard
-                    for opt_w in &arg_wildcards {
-                        if let Some(w) = opt_w {
-                            if !bound_vars.contains(w) {
-                                log::debug!("SumOf binding new variable: {:?}", w);
-                                newly_bound.insert(w.clone());
-                                break;
-                            }
+                    for w in arg_wildcards.iter().flatten() {
+                        if !bound_vars.contains(w) {
+                            log::debug!("SumOf binding new variable: {:?}", w);
+                            newly_bound.insert(w.clone());
+                            break;
                         }
                     }
                 }
@@ -134,29 +132,14 @@ fn propagate_arithmetic_constraints(
 
                 if bound_count >= 2 {
                     // Find the unbound wildcard
-                    for opt_w in &arg_wildcards {
-                        if let Some(w) = opt_w {
-                            if !bound_vars.contains(w) {
-                                newly_bound.insert(w.clone());
-                                break;
-                            }
+                    for w in arg_wildcards.iter().flatten() {
+                        if !bound_vars.contains(w) {
+                            newly_bound.insert(w.clone());
+                            break;
                         }
                     }
                 }
             }
-        }
-
-        NativePredicate::Lt
-        | NativePredicate::Gt
-        | NativePredicate::LtEq
-        | NativePredicate::GtEq => {
-            // Comparison predicates don't bind new variables
-            // They only constrain existing bindings
-        }
-
-        NativePredicate::Contains => {
-            // Contains(?collection, ?element): doesn't bind new variables
-            // It only checks membership
         }
 
         _ => {
