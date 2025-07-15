@@ -9,7 +9,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
-import type { SignedPod } from "@pod2/pod2js";
+import type { SignedPod, Value } from "@pod2/pod2js";
 import type { PodInfo } from "@/lib/rpc";
 
 interface FrogViewerProps {
@@ -45,7 +45,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     : "";
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden">
       <div className="p-4 border-b border-border">
         <Button
           variant="outline"
@@ -55,15 +55,28 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
           Search SWAMP {searchButtonWaitText}
         </Button>
       </div>
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-2 space-y-2">{filteredPods.map(FrogCard)}</div>
-      </ScrollArea>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div>{filteredPods.map(FrogCard)}</div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
 
+function intEntry(value: Value): string {
+  const entry = (value as { Int: string })?.Int;
+  if (entry === undefined) {
+    return "";
+  } else {
+    return entry;
+  }
+}
+
 function FrogCard(pod: PodInfo) {
   const [expanded, setExpanded] = useState(false);
+
+  const entries = (pod.data.pod_data_payload as SignedPod).entries;
 
   return (
     <Card
@@ -79,11 +92,27 @@ function FrogCard(pod: PodInfo) {
             }
             className="max-w-xs"
           ></img>
-          <span className="font-medium text-sm truncate">
-            {(
-              (pod.data.pod_data_payload as SignedPod).entries.name as string
-            ).toUpperCase()}
-          </span>
+          <h2>{(entries.name as string).toUpperCase()}</h2>
+        </div>
+        <div>
+          <table className="[&_th]:px-4 text-center">
+            <thead>
+              <tr>
+                <th>JMP</th>
+                <th>SPD</th>
+                <th>INT</th>
+                <th>BTY</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{intEntry(entries.jump)}</td>
+                <td>{intEntry(entries.speed)}</td>
+                <td>{intEntry(entries.intelligence)}</td>
+                <td>{intEntry(entries.beauty)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <Collapsible open={expanded} onOpenChange={setExpanded}>
           <CollapsibleTrigger asChild>
