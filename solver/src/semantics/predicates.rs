@@ -266,7 +266,11 @@ impl BasePredicateHandler for EqualHandler {
     fn check_values(&self, args: &[Value]) -> bool {
         let is_equal = args[0] == args[1];
         if is_equal {
-            trace!("EqualHandler: {} == {}", args[0], args[1]);
+            trace!(
+                "EqualHandler: {} == {}",
+                crate::pretty_print::format_value(&args[0]),
+                crate::pretty_print::format_value(&args[1])
+            );
         }
         is_equal
     }
@@ -316,7 +320,6 @@ impl BasePredicateHandler for EqualHandler {
             if let (Some(ValueRef::Key(key0)), Some(ValueRef::Key(key1))) = (&args[0], &args[1]) {
                 if let Some(path) = db.find_path_and_nodes(key0, key1) {
                     if path.len() > 2 {
-                        println!("Equality path: {:?}", path);
                         // If the path length is 2 (A and B), we don't need transitive equality.
                         return Some(Fact {
                             source: FactSource::Special,

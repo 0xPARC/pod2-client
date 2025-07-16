@@ -3,6 +3,35 @@
 //! This module provides human-readable formatting for internal solver data structures
 //! that are frequently logged during debugging. The goal is to preserve all essential
 //! debugging information while making logs readable and concise.
+//!
+//! ## Usage Guidelines
+//!
+//! ### In Log Statements
+//! Use the wrapper structs for Display trait implementations:
+//! ```text
+//! use crate::pretty_print::*;
+//!
+//! // Good - using pretty-print wrapper
+//! log::debug!("Rule: {}", PrettyRule(rule));
+//! log::debug!("Bindings: {}", PrettyBindings(&bindings));
+//!
+//! // Avoid - using raw Debug formatting
+//! log::debug!("Rule: {:?}", rule);
+//! ```
+//!
+//! ### Format Functions
+//! For inline formatting within larger strings, use the format functions:
+//! ```text
+//! log::debug!("Processing {} with {} facts",
+//!            format_predicate_identifier(&pred_id),
+//!            facts.len());
+//! ```
+//!
+//! ### Consistency
+//! - Always use pretty-printing for complex data structures in logs
+//! - Use consistent formatting across all log levels (debug, info, trace, etc.)
+//! - Prefer wrapper structs over format functions when possible
+//! - Use meaningful prefixes in log messages to provide context
 
 use std::{
     collections::HashMap,
@@ -251,6 +280,140 @@ impl Display for PrettyValueRefVec<'_> {
     }
 }
 
+/// Wrapper struct for pretty-printing a single Value
+pub struct PrettyValue<'a>(pub &'a Value);
+
+impl Display for PrettyValue<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", format_value(self.0))
+    }
+}
+
+/// Wrapper struct for pretty-printing a single Wildcard
+pub struct PrettyWildcard<'a>(pub &'a Wildcard);
+
+impl Display for PrettyWildcard<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", format_wildcard(self.0))
+    }
+}
+
+/// Wrapper struct for pretty-printing a StatementTmplArg
+pub struct PrettyStatementTmplArg<'a>(pub &'a StatementTmplArg);
+
+impl Display for PrettyStatementTmplArg<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", format_statement_arg(self.0))
+    }
+}
+
+/// Wrapper struct for pretty-printing a PredicateIdentifier
+pub struct PrettyPredicateIdentifier<'a>(pub &'a PredicateIdentifier);
+
+impl Display for PrettyPredicateIdentifier<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", format_predicate_identifier(self.0))
+    }
+}
+
+/// Wrapper struct for pretty-printing iteration summary information
+pub struct PrettyIterationSummary {
+    pub iteration: usize,
+    pub new_facts: usize,
+    pub total_facts: usize,
+}
+
+impl Display for PrettyIterationSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "Iteration {} complete. New facts: {}, Total facts: {}",
+            self.iteration, self.new_facts, self.total_facts
+        )
+    }
+}
+
+/// Wrapper struct for pretty-printing rule evaluation context
+pub struct PrettyRuleEvaluation<'a> {
+    pub rule: &'a Rule,
+    pub bindings_count: usize,
+    pub new_facts_count: usize,
+}
+
+impl Display for PrettyRuleEvaluation<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "Rule {} produced {} new facts from {} bindings",
+            format_rule(self.rule),
+            self.new_facts_count,
+            self.bindings_count
+        )
+    }
+}
+
+/// Wrapper struct for pretty-printing materialization results
+pub struct PrettyMaterializationResult<'a> {
+    pub predicate: &'a PredicateIdentifier,
+    pub bindings: &'a HashMap<Wildcard, Value>,
+    pub result_count: usize,
+}
+
+impl Display for PrettyMaterializationResult<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "Materialized {} with {} -> {} facts",
+            format_predicate_identifier(self.predicate),
+            format_bindings(self.bindings),
+            self.result_count
+        )
+    }
+}
+
+/// Wrapper struct for pretty-printing database queries
+pub struct PrettyDatabaseQuery<'a> {
+    pub batch_id: &'a pod2::middleware::Hash,
+    pub pred_idx: usize,
+    pub binding_vector: &'a [Option<Value>],
+}
+
+impl Display for PrettyDatabaseQuery<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "Query {}[{}] with bindings [{}]",
+            format_hash(self.batch_id),
+            self.pred_idx,
+            self.binding_vector
+                .iter()
+                .map(|opt_val| match opt_val {
+                    Some(val) => format_value(val),
+                    None => "?".to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+/// Wrapper struct for pretty-printing join failure details
+pub struct PrettyJoinFailure<'a> {
+    pub literal: &'a Atom,
+    pub reason: &'a str,
+}
+
+impl Display for PrettyJoinFailure<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "Join failed on {} ({})",
+            format_atom(self.literal),
+            self.reason
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pod2::middleware::Value;
@@ -285,5 +448,36 @@ mod tests {
         // Should be sorted by key for consistent output
         assert!(formatted.contains("?count: 42"));
         assert!(formatted.contains("?name: \"alice\""));
+    }
+
+    #[test]
+    fn test_pretty_value_wrapper() {
+        let value = Value::from(42i64);
+        let pretty_value = PrettyValue(&value);
+        assert_eq!(pretty_value.to_string(), "42");
+
+        let string_value = Value::from("hello");
+        let pretty_string = PrettyValue(&string_value);
+        assert_eq!(pretty_string.to_string(), "\"hello\"");
+    }
+
+    #[test]
+    fn test_pretty_wildcard_wrapper() {
+        let wildcard = Wildcard::new("test_var".to_string(), 0);
+        let pretty_wildcard = PrettyWildcard(&wildcard);
+        assert_eq!(pretty_wildcard.to_string(), "?test_var");
+    }
+
+    #[test]
+    fn test_pretty_iteration_summary() {
+        let summary = PrettyIterationSummary {
+            iteration: 5,
+            new_facts: 10,
+            total_facts: 42,
+        };
+        assert_eq!(
+            summary.to_string(),
+            "Iteration 5 complete. New facts: 10, Total facts: 42"
+        );
     }
 }

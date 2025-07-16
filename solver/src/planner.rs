@@ -95,9 +95,18 @@ fn propagate_arithmetic_constraints(
                     .count();
 
                 log::debug!(
-                    "SumOf constraint: args={:?}, bound_vars={:?}, bound_count={}",
-                    arg_wildcards,
-                    bound_vars,
+                    "SumOf constraint: args=[{}], bound_vars=[{}], bound_count={}",
+                    arg_wildcards
+                        .iter()
+                        .flatten()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    bound_vars
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     bound_count
                 );
 
@@ -105,7 +114,10 @@ fn propagate_arithmetic_constraints(
                     // Find the unbound wildcard
                     for w in arg_wildcards.iter().flatten() {
                         if !bound_vars.contains(w) {
-                            log::debug!("SumOf binding new variable: {:?}", w);
+                            log::debug!(
+                                "SumOf binding new variable: {}",
+                                crate::pretty_print::format_wildcard(w)
+                            );
                             newly_bound.insert(w.clone());
                             break;
                         }
@@ -430,10 +442,18 @@ impl Planner {
                     &best_literal.terms,
                 );
                 log::debug!(
-                    "SIPS constraint propagation for {:?}: {:?} -> {:?}",
+                    "SIPS constraint propagation for {:?}: [{}] -> [{}]",
                     native_pred,
-                    currently_bound,
+                    currently_bound
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     propagated_vars
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 );
                 currently_bound.extend(propagated_vars);
             }
@@ -545,10 +565,18 @@ impl Planner {
                             &literal.terms,
                         );
                         log::debug!(
-                            "Constraint propagation for {:?}: bound vars {:?} -> newly bound {:?}",
+                            "Constraint propagation for {:?}: bound vars [{}] -> newly bound [{}]",
                             native_pred,
-                            accumulated_bindings,
+                            accumulated_bindings
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", "),
                             propagated_vars
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         );
 
                         // Record trace event for constraint propagation
@@ -607,16 +635,28 @@ impl Planner {
                         let body_pred_name = &cpr.predicate().name;
 
                         log::debug!(
-                            "Processing custom predicate '{}' with accumulated bindings: {:?}",
+                            "Processing custom predicate '{}' with accumulated bindings: [{}]",
                             body_pred_name,
                             accumulated_bindings
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         );
                         log::debug!(
                             "Computed adornment for '{}': {:?}",
                             body_pred_name,
                             body_literal_adornment
                         );
-                        log::debug!("Literal terms: {:?}", literal.terms);
+                        log::debug!(
+                            "Literal terms: [{}]",
+                            literal
+                                .terms
+                                .iter()
+                                .map(crate::pretty_print::format_statement_arg)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
 
                         if adorned_predicates
                             .insert((body_pred_name.clone(), body_literal_adornment.clone()))

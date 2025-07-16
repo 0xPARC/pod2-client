@@ -177,7 +177,11 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
             delta_facts.len()
         );
         for (pred, rel) in &delta_facts {
-            trace!("  Initial facts for {:?}: {:?}", pred, rel);
+            trace!(
+                "  Initial facts for {}: {} facts",
+                crate::pretty_print::format_predicate_identifier(pred),
+                rel.len()
+            );
         }
 
         // Seed with facts from body-less rules. This becomes the first delta if non-empty.
@@ -377,7 +381,16 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                     .get(&pred_id)
                     .is_some_and(|r| r.iter().any(|f| f.args == head_fact_tuple))
                 {
-                    trace!("New fact derived for {:?}: {:?}", pred_id, head_fact_tuple);
+                    trace!(
+                        "New fact derived for {}: {}",
+                        crate::pretty_print::format_predicate_identifier(&pred_id),
+                        crate::pretty_print::format_value_ref_vec(
+                            &head_fact_tuple
+                                .iter()
+                                .map(|vr| Some(vr.clone()))
+                                .collect::<Vec<_>>()
+                        )
+                    );
                     let new_fact = Fact {
                         source: FactSource::Custom,
                         args: head_fact_tuple.clone(),
@@ -465,7 +478,10 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
         materializer: &'a Materializer,
     ) -> Result<Vec<Bindings>, SolverError> {
         let mut all_new_bindings = Vec::new();
-        trace!("Joining body for rule: {:?}", rule.head);
+        trace!(
+            "Joining body for rule: {}",
+            crate::pretty_print::format_predicate_identifier(&rule.head.predicate)
+        );
 
         // Helper to map a literal to the predicate identifier actually used
         // for fact storage (i.e. after resolving BatchSelf references).
@@ -503,8 +519,8 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
             .collect();
 
         trace!(
-            "  Processing rule for {:?}. Delta-eligible literal indices: {:?}",
-            rule.head.predicate,
+            "  Processing rule for {}. Delta-eligible literal indices: {:?}",
+            crate::pretty_print::format_predicate_identifier(&rule.head.predicate),
             delta_positions
         );
 
@@ -522,14 +538,14 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
 
             if !all_edb {
                 trace!(
-                    "  No delta-eligible predicates for rule {:?}, skipping delta joins for this rule.",
-                    rule.head.predicate
+                    "  No delta-eligible predicates for rule {}, skipping delta joins for this rule.",
+                    crate::pretty_print::format_predicate_identifier(&rule.head.predicate)
                 );
                 return Ok(Vec::new());
             } else {
                 trace!(
-                    "  Rule {:?} contains only EDB predicates - performing one full join despite empty Δ.",
-                    rule.head.predicate
+                    "  Rule {} contains only EDB predicates - performing one full join despite empty Δ.",
+                    crate::pretty_print::format_predicate_identifier(&rule.head.predicate)
                 );
                 let fake_delta_idx = rule.body.len(); // ensures `is_delta` is false for every atom
                 let new_bindings = self.perform_join(
@@ -577,9 +593,15 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
 
         for (idx, atom) in body.iter().enumerate() {
             let is_delta = idx == delta_idx;
-            trace!("    Joining with atom {:?} (is_delta: {})", atom, is_delta);
+            trace!(
+                "    Joining with atom {} (is_delta: {})",
+                crate::pretty_print::format_atom(atom),
+                is_delta
+            );
 
             let mut next_bindings = Vec::new();
+            let mut total_facts = 0;
+            let bindings_before_join = current_bindings.len();
 
             for binding in current_bindings.into_iter() {
                 let relation = self.get_relation(
@@ -591,6 +613,8 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                     &binding,
                     rule,
                 )?;
+
+                total_facts += relation.len();
 
                 for fact in relation.iter() {
                     if let Some(unified) = self.unify(&binding, atom, &fact.args)? {
@@ -606,11 +630,26 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
 
             // If this literal produced no compatible bindings, the rule fails early.
             if next_bindings.is_empty() {
+                let failure_reason = if total_facts == 0 {
+                    "no facts found"
+                } else {
+                    "unification failed"
+                };
+
                 trace!(
-                    "Rule {:?} – join failed at literal index {} ({:?}). No compatible bindings left after this literal.",
-                    rule.head.predicate,
+                    "{}",
+                    crate::pretty_print::PrettyJoinFailure {
+                        literal: atom,
+                        reason: failure_reason,
+                    }
+                );
+
+                trace!(
+                    "Rule {} failed at literal index {} - {} total facts available, {} bindings before join",
+                    crate::pretty_print::format_predicate_identifier(&rule.head.predicate),
                     idx,
-                    atom.predicate
+                    total_facts,
+                    bindings_before_join
                 );
                 return Ok(Vec::new());
             }
@@ -675,43 +714,34 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                         // ValueRef is not a Literal. This is a mismatch (can't bind an anchored
                         // key to a plain wildcard).
                         _ => {
-                            return Err(SolverError::Internal(format!(
-                                "Wildcard value_ref should be a ValueRef::Literal: {:?}",
-                                value_ref
-                            )));
+                            return Ok(None);
                         }
                     }
                 }
                 StatementTmplArg::AnchoredKey(pod_wc, key) => {
-                    if let ValueRef::Key(ak) = value_ref {
-                        // The statement template argument is an AnchoredKey, and the fact is
-                        // also an AnchoredKey. We need to check that the key names match.
-                        if &ak.key != key {
-                            return Ok(None);
-                        }
-
-                        let pod_id_value = Value::from(ak.pod_id.0);
-
-                        match new_bindings.get(pod_wc) {
-                            // If the wildcard is already bound to a value, and it does not
-                            // match the value in the fact, then the unification fails.
-                            Some(existing_val) if existing_val.raw() != pod_id_value.raw() => {
-                                println!(
-                                    "Unification failed: {:?} != {:?}",
-                                    existing_val.raw(),
-                                    pod_id_value.raw()
-                                );
+                    match value_ref {
+                        ValueRef::Key(ak) => {
+                            if &ak.key != key {
                                 return Ok(None);
                             }
-                            Some(_) => { /* already bound consistently, nothing to do */ }
-                            None => {
-                                // No existing binding for this wildcard, so we can bind it to
-                                // the pod id value.
-                                new_bindings.insert(pod_wc.clone(), pod_id_value);
+                            let pod_id_value = Value::from(ak.pod_id.0);
+                            match new_bindings.get(pod_wc) {
+                                // If the wildcard is already bound to a value, and it does not
+                                // match the value in the fact, then the unification fails.
+                                Some(existing_val) if existing_val.raw() != pod_id_value.raw() => {
+                                    return Ok(None);
+                                }
+                                Some(_) => { /* already bound consistently, nothing to do */ }
+                                None => {
+                                    // No existing binding for this wildcard, so we can bind it to
+                                    // the pod id value.
+                                    new_bindings.insert(pod_wc.clone(), pod_id_value);
+                                }
                             }
                         }
-                    } else {
-                        return Ok(None); // Term is AnchoredKey, but fact is a Literal – mismatch.
+                        _ => {
+                            return Ok(None); // Term is AnchoredKey, but fact is a Literal – mismatch.
+                        }
                     }
                 }
                 StatementTmplArg::None => {
@@ -751,11 +781,8 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                     body_pred_cpr,
                 )))
             }
-            ir::PredicateIdentifier::Normal(Predicate::Custom(cpr)) => Some(
-                ir::PredicateIdentifier::Normal(Predicate::Custom(cpr.clone())),
-            ),
-            id @ ir::PredicateIdentifier::Magic { .. } => Some(id.clone()),
-            _ => None,
+            // All other predicate types (Custom, Native, Magic) can be looked up directly.
+            other => Some(other.clone()),
         };
 
         if let Some(pred_id) = pred_id_to_lookup {
@@ -804,9 +831,6 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
     /// Retrieves the relation (set of facts) for a given literal, considering the
     /// current bindings and whether to use the delta or full set of facts.
     ///
-    /// This is a crucial function that bridges the abstract Datalog IR with the
-    /// concrete data in the `FactDB` (EDB) and derived facts in the `FactStore` (IDB).
-    ///
     /// It first queries for derived (IDB) facts from the current `fact_source`
     /// (`delta_facts` or `all_facts`). If the query is not a delta-join (i.e., it
     /// uses `all_facts`), it will also query for base (EDB) facts from the
@@ -823,10 +847,10 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
         rule: &'a Rule,
     ) -> Result<std::borrow::Cow<'a, Relation>, SolverError> {
         trace!(
-            "Getting relation for literal: {:?}, is_delta: {}, bindings: {:?}",
-            literal,
+            "Getting relation for literal: {}, is_delta: {}, bindings: {}",
+            crate::pretty_print::format_atom(literal),
             is_delta,
-            bindings
+            crate::pretty_print::format_bindings(bindings)
         );
 
         // 1. Get facts from the Intensional Database (derived facts) and own them
@@ -844,18 +868,35 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
         // 3. If not a delta join, we also need facts from the Extensional Database.
         let edb_rel = self.get_edb_relation(materializer, literal, bindings, all_facts)?;
 
+        // Log result breakdown before merging
+        let idb_count = idb_owned.len();
+        let edb_count = edb_rel.len();
+
         // 4. Merge EDB and IDB facts as needed.
-        match (idb_owned.is_empty(), edb_rel.is_empty()) {
-            (true, true) => Ok(std::borrow::Cow::Owned(HashSet::new())),
-            (false, true) => Ok(std::borrow::Cow::Owned(idb_owned)),
-            (true, false) => Ok(std::borrow::Cow::Owned(edb_rel)),
-            (false, false) => {
-                // Both have facts, so we must merge them into a new owned relation.
-                let mut merged_rel = edb_rel;
-                merged_rel.extend(idb_owned);
-                Ok(std::borrow::Cow::Owned(merged_rel))
-            }
+        let result: Result<std::borrow::Cow<'_, Relation>, SolverError> =
+            match (idb_owned.is_empty(), edb_rel.is_empty()) {
+                (true, true) => Ok(std::borrow::Cow::Owned(HashSet::new())),
+                (false, true) => Ok(std::borrow::Cow::Owned(idb_owned)),
+                (true, false) => Ok(std::borrow::Cow::Owned(edb_rel)),
+                (false, false) => {
+                    // Both have facts, so we must merge them into a new owned relation.
+                    let mut merged_rel = edb_rel;
+                    merged_rel.extend(idb_owned);
+                    Ok(std::borrow::Cow::Owned(merged_rel))
+                }
+            };
+
+        // Enhanced logging to show result breakdown
+        if let Ok(ref facts) = result {
+            trace!(
+                "  -> IDB: {} facts, EDB: {} facts, Total: {} facts",
+                idb_count,
+                edb_count,
+                facts.len()
+            );
         }
+
+        result
     }
 }
 
