@@ -57,7 +57,11 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full">
-          <div>{filteredPods.map(FrogCard)}</div>
+          <div>
+            {filteredPods.map((pod) => (
+              <FrogCard pod={pod} key={pod.id} />
+            ))}
+          </div>
         </ScrollArea>
       </div>
     </div>
@@ -73,7 +77,11 @@ function intEntry(value: Value): string {
   }
 }
 
-function FrogCard(pod: PodInfo) {
+interface FrogCardProps {
+  pod: PodInfo;
+}
+
+function FrogCard({ pod }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const entries = (pod.data.pod_data_payload as SignedPod).entries;

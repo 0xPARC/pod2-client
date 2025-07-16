@@ -101,7 +101,7 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
 }
 
 #[tauri::command]
-pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
+pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
     let mut client = Client::new();
     let mut app_state = state.lock().await;
     let pod = process_challenge(&mut client, &mut app_state).await?;

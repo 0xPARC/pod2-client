@@ -7,11 +7,12 @@ import { useEffect } from "react";
 
 export function FrogCrypto() {
   const [frogedexView, setFrogedexView] = useState(false);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(5);
   useEffect(() => {
     async function updateScore() {
       try {
-        setScore(await requestScore());
+        const scoreResponse = await requestScore();
+        setScore(scoreResponse.score);
       } catch (e) {}
     }
     updateScore();

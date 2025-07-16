@@ -142,12 +142,17 @@ export async function requestFrog(): RpcResult<number> {
   return invokeCommand<number>("request_frog");
 }
 
+export interface ScoreResponse {
+  score: number;
+  timeout: number;
+}
+
 /**
  * Get the user's FrogCrypto score from the server
  * @returns Promise that resolves to the score
  */
-export async function requestScore(): RpcResult<number> {
-  return invokeCommand<number>("request_score");
+export async function requestScore(): RpcResult<ScoreResponse> {
+  return invokeCommand<ScoreResponse>("request_score");
 }
 
 // =============================================================================
