@@ -200,19 +200,79 @@ mod tests {
             .unwrap()
             .request_templates;
 
-        let (result, metrics) = solve(
+        let (result, _metrics) = solve(
+            &request,
+            &[IndexablePod::signed_pod(&alice_attestation)],
+            MetricsLevel::Counters,
+        )
+        .unwrap();
+
+        let prover = MockProver {};
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
+
+        let (_pod_ids, ops) = result.to_inputs();
+
+        for (op, public) in ops {
+            if public {
+                builder.pub_op(op).unwrap();
+            } else {
+                builder.priv_op(op).unwrap();
+            }
+        }
+
+        builder.add_signed_pod(&alice_attestation);
+
+        let alice_bob_pod = builder.prove(&prover, &params).unwrap();
+        println!("{}", alice_bob_pod);
+
+        let req2 = format!(
+            r#"
+      use _, _, _, eth_dos from 0x{}
+
+      REQUEST(
+          eth_dos({}, {}, ?Distance)
+      )
+      "#,
+            batch.id().encode_hex::<String>(),
+            value_to_podlang_literal(alice.public_key()),
+            value_to_podlang_literal(charlie.public_key())
+        );
+
+        let request = parse(&req2, &params, &[batch.clone()])
+            .unwrap()
+            .request_templates;
+
+        let (result, _metrics) = solve(
             &request,
             &[
-                IndexablePod::signed_pod(&alice_attestation),
+                IndexablePod::main_pod(&alice_bob_pod),
                 IndexablePod::signed_pod(&bob_attestation),
             ],
             MetricsLevel::Counters,
         )
         .unwrap();
 
-        println!("Result: {:?}", result);
-        println!("Metrics: {:?}", metrics);
-        //println!("Proof tree: {}", result);
+        let prover = MockProver {};
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
+
+        let (_pod_ids, ops) = result.to_inputs();
+        println!("{}", result);
+
+        for (op, public) in ops {
+            if public {
+                builder.pub_op(op).unwrap();
+            } else {
+                builder.priv_op(op).unwrap();
+            }
+        }
+
+        builder.add_signed_pod(&bob_attestation);
+        builder.add_recursive_pod(alice_bob_pod);
+
+        let bob_charlie_pod = builder.prove(&prover, &params).unwrap();
+        println!("{}", bob_charlie_pod);
     }
 
     #[test]

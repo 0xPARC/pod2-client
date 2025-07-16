@@ -130,7 +130,8 @@ impl<'a> Materializer {
         cpr: &'a CustomPredicateRef,
         binding_vector: &'a [Option<Value>],
     ) -> impl Iterator<Item = (Vec<Value>, FactSource)> + 'a {
-        self.db
+        let all_statements: Vec<_> = self
+            .db
             .statement_index
             .custom
             .iter()
@@ -138,12 +139,39 @@ impl<'a> Materializer {
                 *batch_id == cpr.batch.id() && *pred_idx == cpr.index
             })
             .map(|((_, _, values), _)| values.clone())
+            .collect();
+
+        // Log when we have statements for the predicate but they don't match bindings
+        if !all_statements.is_empty() {
+            let matching_statements: Vec<_> = all_statements
+                .iter()
+                .filter(|values| {
+                    binding_vector
+                        .iter()
+                        .zip(values.iter())
+                        .all(|(filter, value)| filter.as_ref().is_none_or(|f| f == value))
+                })
+                .collect();
+
+            if matching_statements.is_empty() {
+                log::trace!(
+                    "{} - found {} statements but none match bindings",
+                    crate::pretty_print::PrettyDatabaseQuery {
+                        batch_id: &cpr.batch.id(),
+                        pred_idx: cpr.index,
+                        binding_vector,
+                    },
+                    all_statements.len()
+                );
+            }
+        }
+
+        all_statements
+            .into_iter()
             .filter(move |values| {
                 binding_vector
                     .iter()
                     .zip(values.iter())
-                    // If we have a binding, it must match the value. If we don't,
-                    // then any value is acceptable.
                     .all(|(filter, value)| filter.as_ref().is_none_or(|f| f == value))
             })
             .map(|vals| (vals, FactSource::Copy))
@@ -216,13 +244,13 @@ impl<'a> Materializer {
             return Ok(Relation::new());
         }
 
-        let rel: Relation = match predicate {
+        let rel: Relation = match &predicate {
             Predicate::Custom(cpr) => {
                 let binding_vector: Vec<Option<Value>> = args
                     .iter()
                     .map(|arg| self.resolve_term(arg, bindings))
                     .collect();
-                self.iter_custom_statements(&cpr, &binding_vector)
+                self.iter_custom_statements(cpr, &binding_vector)
                     .map(|(fact_values, source)| Fact {
                         source,
                         args: fact_values.into_iter().map(ValueRef::Literal).collect(),
@@ -253,7 +281,7 @@ impl<'a> Materializer {
                     self.candidate_statement_args_from_bindings(&args, bindings);
 
                 // Ok, now we have our candidate args. We need to dispatch to the handler.
-                let handler = PredicateHandler::for_native_predicate(native_pred);
+                let handler = PredicateHandler::for_native_predicate(*native_pred);
 
                 for candidate_args in candidate_args_iter {
                     log::info!(
@@ -271,6 +299,18 @@ impl<'a> Materializer {
                 unimplemented!("BatchSelf is not implemented")
             }
         };
+
+        // Conditional DEBUG log for empty results to help debug materialization failures
+        if let Predicate::Custom(_cpr) = &predicate {
+            log::debug!(
+                "{}",
+                crate::pretty_print::PrettyMaterializationResult {
+                    predicate: &crate::ir::PredicateIdentifier::Normal(predicate.clone()),
+                    bindings,
+                    result_count: rel.len(),
+                }
+            );
+        }
 
         Ok(rel)
     }

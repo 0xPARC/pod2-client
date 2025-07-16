@@ -79,9 +79,9 @@ impl<'a> MissingFactFinder<'a> {
         for atom in &rule.body {
             // If atom uses an invalidated wildcard, treat as failed immediately
             if self.atom_mentions_invalid(atom, &invalid) {
-                if !matches!(
+                if matches!(
                     atom.predicate,
-                    PredicateIdentifier::Normal(Predicate::Custom(_))
+                    PredicateIdentifier::Normal(Predicate::Native(_))
                 ) && !self.is_impossible_native(atom, &current[0])
                 {
                     out.push(self.partial_instantiate(atom, &current[0], externals));
@@ -103,9 +103,9 @@ impl<'a> MissingFactFinder<'a> {
 
             if next.is_empty() {
                 // Atom truly fails under current bindings
-                if !matches!(
+                if matches!(
                     atom.predicate,
-                    PredicateIdentifier::Normal(Predicate::Custom(_))
+                    PredicateIdentifier::Normal(Predicate::Native(_))
                 ) && !self.is_impossible_native(atom, &current[0])
                 {
                     out.push(self.partial_instantiate(atom, &current[0], externals));
