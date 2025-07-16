@@ -94,7 +94,7 @@ function PodRequestDialog() {
 }
 
 function App() {
-  const { setExternalPodRequest } = useAppStore((state) => state);
+  const { setExternalPodRequest, initialize } = useAppStore((state) => state);
   const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(
     null
   );
@@ -126,6 +126,13 @@ function App() {
 
     checkSetupStatus();
   }, []);
+
+  // Initialize the app store when setup is completed
+  useEffect(() => {
+    if (isSetupCompleted === true) {
+      initialize();
+    }
+  }, [isSetupCompleted, initialize]);
 
   const handleSetupComplete = () => {
     setIsSetupCompleted(true);
