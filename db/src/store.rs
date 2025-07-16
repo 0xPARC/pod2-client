@@ -333,18 +333,19 @@ pub async fn delete_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<usize> 
     let rows_deleted = conn
         .interact(move |conn| {
             // Check if the pod is mandatory before attempting to delete
-            let mut check_stmt = conn.prepare("SELECT is_mandatory FROM pods WHERE space = ?1 AND id = ?2")?;
+            let mut check_stmt =
+                conn.prepare("SELECT is_mandatory FROM pods WHERE space = ?1 AND id = ?2")?;
             let is_mandatory = check_stmt.query_row([&space_id_clone, &pod_id_clone], |row| {
                 Ok(row.get::<_, bool>(0).unwrap_or(false))
             });
-            
+
             match is_mandatory {
                 Ok(true) => {
                     // Pod is mandatory, cannot be deleted
-                    return Err(rusqlite::Error::SqliteFailure(
+                    Err(rusqlite::Error::SqliteFailure(
                         rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
                         Some("Cannot delete mandatory POD".to_string()),
-                    ));
+                    ))
                 }
                 Ok(false) => {
                     // Pod is not mandatory, proceed with deletion
@@ -643,60 +644,13 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
     Ok(())
 }
 
-/// Helper function to ensure a default private key exists
-async fn ensure_default_private_key(db: &Db) -> Result<()> {
-    let conn = db
-        .pool()
-        .get()
-        .await
-        .context("Failed to get DB connection")?;
-
-    // Check if a default key already exists
-    let has_default = conn
-        .interact(|conn| {
-            let mut stmt =
-                conn.prepare("SELECT 1 FROM private_keys WHERE is_default = TRUE LIMIT 1")?;
-            stmt.exists([])
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-        .context("DB interaction failed checking for default key")??;
-
-    if !has_default {
-        // Create a new default key
-        let private_key = SecretKey::new_rand();
-        let private_key_hex = hex::encode(private_key.0.to_bytes_be());
-        let public_key_base58 = private_key.public_key().to_string();
-
-        conn.interact(move |conn| {
-            conn.execute(
-                "INSERT INTO private_keys (private_key, key_type, public_key, alias, is_default) VALUES (?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![
-                    private_key_hex,
-                    "Plonky2",
-                    public_key_base58,
-                    None::<String>, // No alias for auto-created key
-                    true            // Set as default
-                ],
-            )
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-        .context("DB interaction failed for ensure_default_private_key")??;
-
-        log::info!("Auto-created default private key");
-    }
-
-    Ok(())
-}
-
-// Note: Removed create_private_key_internal - we now use ensure_default_private_key for single-key model
-
 /// Get the default private key, returns error if none exists (no auto-generation)
 pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
     // Check if setup is completed first
     if !is_setup_completed(db).await? {
-        return Err(anyhow::anyhow!("Identity setup not completed. Please complete the mandatory identity setup first."));
+        return Err(anyhow::anyhow!(
+            "Identity setup not completed. Please complete the mandatory identity setup first."
+        ));
     }
 
     let conn = db
@@ -732,7 +686,9 @@ pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
 pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> {
     // Check if setup is completed first
     if !is_setup_completed(db).await? {
-        return Err(anyhow::anyhow!("Identity setup not completed. Please complete the mandatory identity setup first."));
+        return Err(anyhow::anyhow!(
+            "Identity setup not completed. Please complete the mandatory identity setup first."
+        ));
     }
 
     let conn = db
@@ -1071,11 +1027,10 @@ pub async fn is_setup_completed(db: &Db) -> Result<bool> {
 
     let setup_completed = conn
         .interact(|conn| {
-            let mut stmt = conn.prepare("SELECT setup_completed FROM app_setup_state WHERE id = 1")?;
-            let result = stmt.query_row([], |row| {
-                Ok(row.get::<_, bool>(0)?)
-            });
-            
+            let mut stmt =
+                conn.prepare("SELECT setup_completed FROM app_setup_state WHERE id = 1")?;
+            let result = stmt.query_row([], |row| row.get::<_, bool>(0));
+
             match result {
                 Ok(completed) => Ok(completed),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // No setup record means not completed
@@ -1114,7 +1069,7 @@ pub async fn get_app_setup_state(db: &Db) -> Result<AppSetupState> {
                     created_at: row.get(7)?,
                 })
             });
-            
+
             match result {
                 Ok(state) => Ok(state),
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -1171,11 +1126,7 @@ pub async fn update_identity_server_info(
 }
 
 /// Update username and identity pod info in the setup state
-pub async fn update_identity_info(
-    db: &Db,
-    username: &str,
-    identity_pod_id: &str,
-) -> Result<()> {
+pub async fn update_identity_info(db: &Db, username: &str, identity_pod_id: &str) -> Result<()> {
     let conn = db
         .pool()
         .get()
@@ -1309,7 +1260,7 @@ pub async fn create_default_private_key(db: &Db) -> Result<SecretKey> {
         // First check if a default key already exists
         let mut check_stmt = conn.prepare("SELECT COUNT(*) FROM private_keys WHERE is_default = TRUE")?;
         let count: i64 = check_stmt.query_row([], |row| row.get(0))?;
-        
+
         if count > 0 {
             return Err(rusqlite::Error::SqliteFailure(
                 rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),

@@ -6,11 +6,17 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "./ui/card";
 import { Separator } from "./ui/separator";
 import { CheckCircle, Loader2, Server, User, Shield } from "lucide-react";
 import { useAppStore } from "../lib/store";
@@ -26,13 +32,21 @@ enum SetupStep {
   SETUP_COMPLETE = "setup_complete"
 }
 
-export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps) {
+export function IdentitySetupModal({
+  open,
+  onComplete
+}: IdentitySetupModalProps) {
   const { loadPrivateKeyInfo } = useAppStore();
-  const [currentStep, setCurrentStep] = useState<SetupStep>(SetupStep.SERVER_SETUP);
+  const [currentStep, setCurrentStep] = useState<SetupStep>(
+    SetupStep.SERVER_SETUP
+  );
   const [serverUrl, setServerUrl] = useState("http://localhost:3001");
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [serverInfo, setServerInfo] = useState<{ server_id: string; public_key: any } | null>(null);
+  const [serverInfo, setServerInfo] = useState<{
+    server_id: string;
+    public_key: any;
+  } | null>(null);
 
   const handleServerSetup = async () => {
     if (!serverUrl.trim()) {
@@ -45,7 +59,7 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
       // Call the Tauri command to setup identity server
       const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke("setup_identity_server", { serverUrl });
-      
+
       const serverResult = result as { server_id: string; public_key: any };
       setServerInfo(serverResult);
       setCurrentStep(SetupStep.USERNAME_REGISTRATION);
@@ -69,7 +83,7 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
       // Call the Tauri command to register username
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("register_username", { username, serverUrl });
-      
+
       setCurrentStep(SetupStep.SETUP_COMPLETE);
       toast.success(`Successfully registered username: ${username}`);
     } catch (error) {
@@ -86,10 +100,10 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
       // Call the Tauri command to complete setup
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("complete_identity_setup");
-      
+
       // Refresh the private key info in the store
       await loadPrivateKeyInfo();
-      
+
       toast.success("Identity setup completed successfully!");
       onComplete();
     } catch (error) {
@@ -107,9 +121,11 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-blue-600">
               <Server className="h-5 w-5" />
-              <span className="font-medium">Step 1: Connect to Identity Server</span>
+              <span className="font-medium">
+                Step 1: Connect to Identity Server
+              </span>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <Label htmlFor="server-url">Identity Server URL</Label>
@@ -121,12 +137,13 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enter the URL of your identity server. This server will verify your identity and issue cryptographic certificates.
+                  Enter the URL of your identity server. This server will verify
+                  your identity and issue cryptographic certificates.
                 </p>
               </div>
-              
-              <Button 
-                onClick={handleServerSetup} 
+
+              <Button
+                onClick={handleServerSetup}
                 disabled={isLoading}
                 className="w-full"
               >
@@ -150,7 +167,7 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
               <User className="h-5 w-5" />
               <span className="font-medium">Step 2: Register Username</span>
             </div>
-            
+
             {serverInfo && (
               <Card>
                 <CardHeader>
@@ -161,12 +178,15 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">
-                    Server ID: <code className="bg-muted px-1 py-0.5 rounded">{serverInfo.server_id}</code>
+                    Server ID:{" "}
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      {serverInfo.server_id}
+                    </code>
                   </p>
                 </CardContent>
               </Card>
             )}
-            
+
             <div className="space-y-4">
               <div>
                 <Label htmlFor="username">Username</Label>
@@ -178,12 +198,13 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Choose a unique username that will be associated with your identity.
+                  Choose a unique username that will be associated with your
+                  identity.
                 </p>
               </div>
-              
-              <Button 
-                onClick={handleUsernameRegistration} 
+
+              <Button
+                onClick={handleUsernameRegistration}
                 disabled={isLoading}
                 className="w-full"
               >
@@ -207,7 +228,7 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
               <Shield className="h-5 w-5" />
               <span className="font-medium">Step 3: Setup Complete</span>
             </div>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -223,23 +244,26 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
                   <p className="text-sm font-medium">Username:</p>
                   <code className="bg-muted px-2 py-1 rounded">{username}</code>
                 </div>
-                
+
                 <div>
                   <p className="text-sm font-medium">Identity Server:</p>
-                  <code className="bg-muted px-2 py-1 rounded">{serverInfo?.server_id}</code>
+                  <code className="bg-muted px-2 py-1 rounded">
+                    {serverInfo?.server_id}
+                  </code>
                 </div>
-                
+
                 <Separator />
-                
+
                 <p className="text-sm text-muted-foreground">
-                  Your identity POD has been stored securely and marked as mandatory. 
-                  You can now use the application with your verified identity.
+                  Your identity POD has been stored securely and marked as
+                  mandatory. You can now use the application with your verified
+                  identity.
                 </p>
               </CardContent>
             </Card>
-            
-            <Button 
-              onClick={handleCompleteSetup} 
+
+            <Button
+              onClick={handleCompleteSetup}
               disabled={isLoading}
               className="w-full"
             >
@@ -262,18 +286,20 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        className="sm:max-w-[500px]"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Identity Setup Required</DialogTitle>
           <DialogDescription>
-            Complete the mandatory identity setup to use the application.
-            This process will create your cryptographic identity and register it with an identity server.
+            Complete the mandatory identity setup to use the application. This
+            process will create your cryptographic identity and register it with
+            an identity server.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="py-4">
-          {renderStepContent()}
-        </div>
+
+        <div className="py-4">{renderStepContent()}</div>
       </DialogContent>
     </Dialog>
   );

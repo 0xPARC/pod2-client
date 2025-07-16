@@ -45,14 +45,12 @@ import { PublicKeyAvatar } from "./PublicKeyAvatar";
 export function AppSidebar() {
   const {
     appState,
-    initialize,
     currentView,
     selectedFilter,
     selectedFolderFilter,
     folders,
     foldersLoading,
     privateKeyInfo,
-    loadPrivateKeyInfo,
     setCurrentView,
     setSelectedFilter,
     setSelectedFolderFilter

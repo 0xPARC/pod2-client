@@ -124,7 +124,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   folders: [],
   foldersLoading: false,
   frogTimeout: null,
-  
+
   // Private key initial state
   privateKeyInfo: null,
 
@@ -148,7 +148,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
       // Load folders
       await get().loadFolders();
-      
+
       // Load private key info
       await get().loadPrivateKeyInfo();
 

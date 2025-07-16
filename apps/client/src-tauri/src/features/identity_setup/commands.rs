@@ -191,7 +191,7 @@ pub async fn register_username(
     // Step 3: Submit challenge response to get identity POD
     let identity_request = IdentityRequest {
         server_challenge_pod: challenge_pod,
-        user_response_pod: user_response_pod,
+        user_response_pod,
     };
 
     let identity_response = client
