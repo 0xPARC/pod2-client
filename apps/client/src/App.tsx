@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { AppSidebar } from "./components/AppSidebar";
 import { MainContent } from "./components/MainContent";
+import { IdentitySetupModal } from "./components/IdentitySetupModal";
 import { Button } from "./components/ui/button";
 import {
   Dialog,
@@ -94,6 +95,7 @@ function PodRequestDialog() {
 
 function App() {
   const { setExternalPodRequest } = useAppStore((state) => state);
+  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
     onOpenUrl((urls) => {
@@ -106,6 +108,40 @@ function App() {
       }
     });
   }, []);
+
+  // Check if setup is completed on app load
+  useEffect(() => {
+    const checkSetupStatus = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const completed = await invoke("is_setup_completed");
+        setIsSetupCompleted(completed as boolean);
+      } catch (error) {
+        console.error("Failed to check setup status:", error);
+        setIsSetupCompleted(false);
+      }
+    };
+    
+    checkSetupStatus();
+  }, []);
+
+  const handleSetupComplete = () => {
+    setIsSetupCompleted(true);
+  };
+
+  // Show loading state while checking setup status
+  if (isSetupCompleted === null) {
+    return (
+      <ThemeProvider>
+        <div className="h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider>
@@ -125,6 +161,12 @@ function App() {
             <PodRequestDialog />
           </SidebarProvider>
           <Toaster />
+          
+          {/* Identity Setup Modal */}
+          <IdentitySetupModal 
+            open={!isSetupCompleted}
+            onComplete={handleSetupComplete}
+          />
         </div>
       </FeatureConfigProvider>
     </ThemeProvider>

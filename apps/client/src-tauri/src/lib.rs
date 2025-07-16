@@ -343,6 +343,12 @@ pub fn run() {
             authoring::execute_code_command,
             // Document commands
             documents::verify_document_pod,
+            // Identity setup commands
+            identity_setup::setup_identity_server,
+            identity_setup::register_username,
+            identity_setup::complete_identity_setup,
+            identity_setup::is_setup_completed,
+            identity_setup::get_app_setup_state,
             // Integration commands
             integration::submit_pod_request
         ])
