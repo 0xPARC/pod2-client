@@ -11,7 +11,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from "@/components/ui/sidebar";
-import { getPrivateKeyInfo, PrivateKeyInfo } from "@/lib/rpc";
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,13 +33,14 @@ import {
   StarIcon,
   UploadIcon
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAppStore } from "../lib/store";
 import { FeatureGate } from "../lib/features/config";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { Button } from "./ui/button";
 import { ImportPodDialog } from "./ImportPodDialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { PublicKeyAvatar } from "./PublicKeyAvatar";
 
 export function AppSidebar() {
   const {
@@ -51,25 +51,15 @@ export function AppSidebar() {
     selectedFolderFilter,
     folders,
     foldersLoading,
+    privateKeyInfo,
+    loadPrivateKeyInfo,
     setCurrentView,
     setSelectedFilter,
     setSelectedFolderFilter
   } = useAppStore();
-  const [privateKeyInfo, setPrivateKeyInfo] = useState<PrivateKeyInfo | null>(
-    null
-  );
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [foldersExpanded, setFoldersExpanded] = useState(true);
-
-  const loadPrivateKeyInfo = async () => {
-    try {
-      const keyInfo = await getPrivateKeyInfo();
-      setPrivateKeyInfo(keyInfo);
-    } catch (error) {
-      console.error("Failed to load private key info:", error);
-    }
-  };
 
   const handleCopyPublicKey = async () => {
     if (privateKeyInfo?.public_key) {
@@ -81,11 +71,6 @@ export function AppSidebar() {
       }
     }
   };
-
-  useEffect(() => {
-    initialize();
-    loadPrivateKeyInfo();
-  }, [initialize]);
 
   return (
     <Sidebar>
@@ -351,15 +336,21 @@ export function AppSidebar() {
         {privateKeyInfo && (
           <div
             onClick={handleCopyPublicKey}
-            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer hover:bg-accent rounded transition-colors break-all"
+            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer hover:bg-accent rounded transition-colors"
             title={`Click to copy: ${privateKeyInfo.public_key}`}
           >
-            Your public key:
-            <span className="text-xs text-accent-foreground">
-              {
-                /*privateKeyInfo.public_key.substring(0, 12)}...{privateKeyInfo.public_key.slice(-8)*/ privateKeyInfo.public_key
-              }
-            </span>
+            <div className="flex items-center gap-2">
+              <PublicKeyAvatar
+                publicKey={privateKeyInfo.public_key}
+                size={32}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs">Your public key:</div>
+                <div className="text-xs text-accent-foreground truncate">
+                  {privateKeyInfo.public_key}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

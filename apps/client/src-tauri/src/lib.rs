@@ -1,6 +1,6 @@
 use anyhow::Context;
 use config::FeatureConfig;
-use features::*;
+use features::{blockies, *};
 use num::BigUint;
 use pod2::{
     backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
@@ -328,6 +328,9 @@ pub fn run() {
             pod_management::list_spaces,
             pod_management::import_pod,
             pod_management::insert_zukyc_pods,
+            // Blockies commands
+            blockies::commands::generate_blockies,
+            blockies::commands::get_blockies_data,
             // Networking commands
             networking::start_p2p_node,
             networking::send_pod_to_peer,

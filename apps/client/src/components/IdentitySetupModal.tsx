@@ -13,6 +13,7 @@ import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Separator } from "./ui/separator";
 import { CheckCircle, Loader2, Server, User, Shield } from "lucide-react";
+import { useAppStore } from "../lib/store";
 
 interface IdentitySetupModalProps {
   open: boolean;
@@ -26,6 +27,7 @@ enum SetupStep {
 }
 
 export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps) {
+  const { loadPrivateKeyInfo } = useAppStore();
   const [currentStep, setCurrentStep] = useState<SetupStep>(SetupStep.SERVER_SETUP);
   const [serverUrl, setServerUrl] = useState("http://localhost:3001");
   const [username, setUsername] = useState("");
@@ -84,6 +86,9 @@ export function IdentitySetupModal({ open, onComplete }: IdentitySetupModalProps
       // Call the Tauri command to complete setup
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("complete_identity_setup");
+      
+      // Refresh the private key info in the store
+      await loadPrivateKeyInfo();
       
       toast.success("Identity setup completed successfully!");
       onComplete();

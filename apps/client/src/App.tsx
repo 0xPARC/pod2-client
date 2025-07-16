@@ -95,7 +95,9 @@ function PodRequestDialog() {
 
 function App() {
   const { setExternalPodRequest } = useAppStore((state) => state);
-  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(null);
+  const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(
+    null
+  );
 
   useEffect(() => {
     onOpenUrl((urls) => {
@@ -121,7 +123,7 @@ function App() {
         setIsSetupCompleted(false);
       }
     };
-    
+
     checkSetupStatus();
   }, []);
 
@@ -150,7 +152,7 @@ function App() {
           {/* TODO: Maybe make this MacOS-only? */}
           <div
             data-tauri-drag-region
-            className="fixed top-0 left-0 right-0 z-50 h-[20px]"
+            className="fixed top-0 left-0 right-0 z-[100]! h-[20px]"
             onDoubleClick={() => {
               getCurrentWindow().maximize();
             }}
@@ -161,9 +163,9 @@ function App() {
             <PodRequestDialog />
           </SidebarProvider>
           <Toaster />
-          
+
           {/* Identity Setup Modal */}
-          <IdentitySetupModal 
+          <IdentitySetupModal
             open={!isSetupCompleted}
             onComplete={handleSetupComplete}
           />
