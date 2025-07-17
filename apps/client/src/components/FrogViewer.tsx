@@ -43,8 +43,10 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     try {
       setScore(await requestFrog());
       setFrogTimeout(new Date().getTime() + 900000);
-    } catch(e) {
-      toast.error(e.toString());
+    } catch (e) {
+      if (e instanceof Error) {
+        toast.error(e.toString());
+      }
     }
   };
 
@@ -56,7 +58,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
         if (scoreResponse.timeout > 0) {
           setFrogTimeout(new Date().getTime() + 1000 * scoreResponse.timeout);
         }
-      } catch(e) {
+      } catch (e) {
         console.log(e);
       }
     }
@@ -68,9 +70,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
       ? 0
       : Math.ceil(0.001 * (frogTimeout - time));
   const searchDisabled = timeRemaining > 0;
-  const searchButtonWaitText = searchDisabled
-    ? waitText(timeRemaining)
-    : "";
+  const searchButtonWaitText = searchDisabled ? waitText(timeRemaining) : "";
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
