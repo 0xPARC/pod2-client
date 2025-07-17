@@ -2,8 +2,9 @@ import { useAppStore } from "../lib/store";
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { requestFrog } from "@/lib/rpc";
+import { requestFrog, requestScore } from "@/lib/rpc";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Collapsible,
   CollapsibleContent,
@@ -14,6 +15,14 @@ import type { PodInfo } from "@/lib/rpc";
 
 interface FrogViewerProps {
   setScore: (score: number) => void;
+}
+
+function waitText(timeRemaining: number) {
+  const mins = Math.floor(timeRemaining / 60);
+  const secs = timeRemaining % 60;
+  const minsText = mins == 0 ? "" : ` ${mins}m`;
+  const secsText = secs == 0 ? "" : ` ${secs}s`;
+  return ` (wait ${minsText}${secsText})`;
 }
 
 export function FrogViewer({ setScore }: FrogViewerProps) {
@@ -31,9 +40,28 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   const filteredPods = getFilteredPodsBy("signed", "frogs");
 
   const requestFrogAndUpdateTimeout = async () => {
-    setScore(await requestFrog());
-    setFrogTimeout(new Date().getTime() + 900000);
+    try {
+      setScore(await requestFrog());
+      setFrogTimeout(new Date().getTime() + 900000);
+    } catch(e) {
+      toast.error(e.toString());
+    }
   };
+
+  useEffect(() => {
+    async function updateTimeout() {
+      try {
+        const scoreResponse = await requestScore();
+        console.log(scoreResponse);
+        if (scoreResponse.timeout > 0) {
+          setFrogTimeout(new Date().getTime() + 1000 * scoreResponse.timeout);
+        }
+      } catch(e) {
+        console.log(e);
+      }
+    }
+    updateTimeout();
+  }, []);
 
   const timeRemaining =
     frogTimeout === null || time >= frogTimeout
@@ -41,7 +69,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
       : Math.ceil(0.001 * (frogTimeout - time));
   const searchDisabled = timeRemaining > 0;
   const searchButtonWaitText = searchDisabled
-    ? ` (wait ${timeRemaining}s)`
+    ? waitText(timeRemaining)
     : "";
 
   return (
