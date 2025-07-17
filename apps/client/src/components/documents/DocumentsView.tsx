@@ -53,7 +53,7 @@ export function DocumentsView() {
   // If publish form is shown, show the publish page
   if (showPublishForm) {
     return (
-      <PublishDemoPage 
+      <PublishDemoPage
         onBack={() => setShowPublishForm(false)}
         onPublishSuccess={(documentId) => {
           console.log("Document published with ID:", documentId);
@@ -85,14 +85,18 @@ export function DocumentsView() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              onClick={() => setShowPublishForm(true)} 
+            <Button
+              onClick={() => setShowPublishForm(true)}
               className="bg-primary hover:bg-primary/90"
             >
               <PlusIcon className="h-4 w-4 mr-2" />
               Publish Document
             </Button>
-            <Button onClick={loadDocuments} disabled={loading} variant="outline">
+            <Button
+              onClick={loadDocuments}
+              disabled={loading}
+              variant="outline"
+            >
               <RefreshCwIcon
                 className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
               />

@@ -140,9 +140,7 @@ export function PublishButton({
       className={`flex items-center gap-2 ${className}`}
     >
       <SendIcon className={`h-4 w-4 ${isLoading ? "opacity-50" : ""}`} />
-      <span>
-        {isLoading ? "Publishing..." : "Publish Document"}
-      </span>
+      <span>{isLoading ? "Publishing..." : "Publish Document"}</span>
     </Button>
   );
 }

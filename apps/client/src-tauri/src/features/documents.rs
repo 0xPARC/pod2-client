@@ -5,7 +5,10 @@ use hex::FromHex;
 use pod2::{
     backends::plonky2::signedpod::Signer,
     frontend::SignedPodBuilder,
-    middleware::{hash_values, containers::{Dictionary, Set}, Key, Params, Value, Hash},
+    middleware::{
+        containers::{Dictionary, Set},
+        hash_values, Hash, Key, Params, Value,
+    },
 };
 use pod2_db::store::PodData;
 use podnet_models::{Document, DocumentContent, DocumentFile, PublishRequest, UpvoteRequest};
@@ -391,7 +394,10 @@ pub async fn publish_document(
     let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "default", &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to get identity pod: {}", e))?
-        .ok_or(format!("Identity pod not found in database with ID: {}", identity_pod_id))?;
+        .ok_or(format!(
+            "Identity pod not found in database with ID: {}",
+            identity_pod_id
+        ))?;
 
     let identity_pod: pod2::frontend::SignedPod = match identity_pod_info.data {
         PodData::Signed(pod) => pod

@@ -7,7 +7,10 @@ interface PublishDemoPageProps {
   onPublishSuccess?: (documentId: number) => void;
 }
 
-export function PublishDemoPage({ onBack, onPublishSuccess }: PublishDemoPageProps) {
+export function PublishDemoPage({
+  onBack,
+  onPublishSuccess
+}: PublishDemoPageProps) {
   const handlePublishSuccess = (documentId: number) => {
     console.log("Document published successfully with ID:", documentId);
     if (onPublishSuccess) {
@@ -24,16 +27,17 @@ export function PublishDemoPage({ onBack, onPublishSuccess }: PublishDemoPagePro
             Back
           </Button>
         )}
-        
+
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold">Publish Document</h1>
             <p className="text-muted-foreground mt-2">
-              Create and publish a new document to the POD2 network with cryptographic verification.
+              Create and publish a new document to the POD2 network with
+              cryptographic verification.
             </p>
           </div>
 
-          <PublishForm 
+          <PublishForm
             onPublishSuccess={handlePublishSuccess}
             onCancel={onBack}
           />

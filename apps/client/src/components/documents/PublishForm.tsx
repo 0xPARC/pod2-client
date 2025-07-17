@@ -1,4 +1,10 @@
-import { FileIcon, LinkIcon, MessageSquareIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+  FileIcon,
+  LinkIcon,
+  MessageSquareIcon,
+  PlusIcon,
+  XIcon
+} from "lucide-react";
 import { useCallback, useState } from "react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -15,8 +21,14 @@ interface PublishFormProps {
   replyTo?: number;
 }
 
-export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishFormProps) {
-  const [activeTab, setActiveTab] = useState<"message" | "file" | "url">("message");
+export function PublishForm({
+  onPublishSuccess,
+  onCancel,
+  replyTo
+}: PublishFormProps) {
+  const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
+    "message"
+  );
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -35,7 +47,7 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
   };
 
   const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+    setTags(tags.filter((tag) => tag !== tagToRemove));
   };
 
   const addAuthor = () => {
@@ -47,7 +59,7 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
   };
 
   const removeAuthor = (authorToRemove: string) => {
-    setAuthors(authors.filter(author => author !== authorToRemove));
+    setAuthors(authors.filter((author) => author !== authorToRemove));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent, action: () => void) => {
@@ -70,7 +82,7 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       setFile(files[0]);
@@ -148,12 +160,16 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
           )}
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         {/* Content Input */}
         <div>
           <Label className="text-base font-medium">Content</Label>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="mt-2">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as any)}
+            className="mt-2"
+          >
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="message" className="flex items-center gap-2">
                 <MessageSquareIcon className="h-4 w-4" />
@@ -177,7 +193,8 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
                 className="min-h-[200px] resize-none"
               />
               <p className="text-sm text-muted-foreground mt-2">
-                Supports Markdown formatting including **bold**, *italic*, `code`, and more.
+                Supports Markdown formatting including **bold**, *italic*,
+                `code`, and more.
               </p>
             </TabsContent>
 
@@ -199,7 +216,8 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
                       <div className="text-left">
                         <p className="font-medium">{file.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} • {file.type || "Unknown type"}
+                          {formatFileSize(file.size)} •{" "}
+                          {file.type || "Unknown type"}
                         </p>
                       </div>
                     </div>
@@ -223,7 +241,9 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
                     <FileIcon className="h-12 w-12 mx-auto text-muted-foreground" />
                     <div>
                       <p className="text-lg font-medium">Drop a file here</p>
-                      <p className="text-muted-foreground">or click to browse</p>
+                      <p className="text-muted-foreground">
+                        or click to browse
+                      </p>
                     </div>
                     <label htmlFor="file-input">
                       <Button variant="outline" asChild>
@@ -273,7 +293,11 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="flex items-center gap-1"
+                >
                   {tag}
                   <button
                     onClick={() => removeTag(tag)}
@@ -299,14 +323,23 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
               autoComplete="off"
               className="flex-1"
             />
-            <Button type="button" variant="outline" size="sm" onClick={addAuthor}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addAuthor}
+            >
               <PlusIcon className="h-4 w-4" />
             </Button>
           </div>
           {authors.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {authors.map((author) => (
-                <Badge key={author} variant="outline" className="flex items-center gap-1">
+                <Badge
+                  key={author}
+                  variant="outline"
+                  className="flex items-center gap-1"
+                >
                   {author}
                   <button
                     onClick={() => removeAuthor(author)}
@@ -319,7 +352,8 @@ export function PublishForm({ onPublishSuccess, onCancel, replyTo }: PublishForm
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            If no authors are specified, you will be listed as the default author.
+            If no authors are specified, you will be listed as the default
+            author.
           </p>
         </div>
 
