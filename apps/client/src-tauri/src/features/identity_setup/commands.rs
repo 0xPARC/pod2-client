@@ -216,15 +216,15 @@ pub async fn register_username(
     let identity_pod = identity_data.identity_pod;
 
     // Step 4: Store identity POD in database as mandatory
-    let identity_pod_id = "identity_pod"; // TODO: Generate proper ID from POD
     let pod_data = pod2_db::store::PodData::Signed(identity_pod.clone().into());
+    let identity_pod_id = pod_data.id(); // Get the actual pod ID from the hash
 
     pod2_db::store::store_identity_pod(&app_state.db, &pod_data, "default", Some("Identity POD"))
         .await
         .map_err(|e| format!("Failed to store identity POD: {}", e))?;
 
     // Step 5: Update setup state with username and identity POD ID
-    pod2_db::store::update_identity_info(&app_state.db, &username, identity_pod_id)
+    pod2_db::store::update_identity_info(&app_state.db, &username, &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to update identity info: {}", e))?;
 

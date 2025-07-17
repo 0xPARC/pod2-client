@@ -1,29 +1,31 @@
-import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 import {
-  ArrowLeftIcon,
-  FileTextIcon,
-  CheckCircleIcon,
   AlertCircleIcon,
+  ArrowLeftIcon,
+  CheckCircleIcon,
   ClockIcon,
-  UserIcon,
-  TagIcon,
+  DownloadIcon,
   ExternalLinkIcon,
-  DownloadIcon
+  FileTextIcon,
+  TagIcon,
+  UserIcon,
+  VoteIcon
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Separator } from "../ui/separator";
+import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
 import {
-  fetchDocument,
   Document,
-  verifyDocumentPod,
-  DocumentVerificationResult
+  DocumentVerificationResult,
+  fetchDocument,
+  verifyDocumentPod
 } from "../../lib/documentApi";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Separator } from "../ui/separator";
+import { UpvoteButton } from "./UpvoteButton";
 
 interface DocumentDetailViewProps {
   documentId: number;
@@ -43,6 +45,7 @@ export function DocumentDetailView({
   const [verificationError, setVerificationError] = useState<string | null>(
     null
   );
+  const [upvoteCount, setUpvoteCount] = useState<number>(0);
 
   const loadDocument = async () => {
     try {
@@ -50,6 +53,7 @@ export function DocumentDetailView({
       setError(null);
       const doc = await fetchDocument(documentId);
       setDocument(doc);
+      setUpvoteCount(doc.metadata.upvote_count);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
@@ -458,18 +462,17 @@ export function DocumentDetailView({
                     <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   )}
 
-                {document.metadata.upvote_count > 0 && (
-                  <Badge variant="secondary">
-                    {document.metadata.upvote_count} upvote
-                    {document.metadata.upvote_count !== 1 ? "s" : ""}
-                  </Badge>
-                )}
+                <UpvoteButton
+                  documentId={document.metadata.id || 0}
+                  currentUpvotes={upvoteCount}
+                  onUpvoteSuccess={setUpvoteCount}
+                />
               </div>
             </div>
           </CardHeader>
 
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <UserIcon className="h-4 w-4" />
                 <span className="font-medium">Uploader:</span>
@@ -486,6 +489,14 @@ export function DocumentDetailView({
                 <span className="font-medium">Content ID:</span>
                 <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
                   {document.metadata.content_id.slice(0, 16)}...
+                </code>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <VoteIcon className="h-4 w-4" />
+                <span className="font-medium">Upvote Count:</span>
+                <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
+                  {document.metadata.upvote_count}
                 </code>
               </div>
             </div>
