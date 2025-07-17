@@ -347,6 +347,7 @@ pub fn run() {
             // Document commands
             documents::verify_document_pod,
             documents::upvote_document,
+            documents::publish_document,
             // Identity setup commands
             identity_setup::setup_identity_server,
             identity_setup::register_username,
