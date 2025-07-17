@@ -241,7 +241,8 @@ export function IdentitySetupModal({
                   Identity Verified
                 </CardTitle>
                 <CardDescription>
-                  Your identity has been successfully registered with the identity server.
+                  Your identity has been successfully registered with the
+                  identity server.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -260,8 +261,8 @@ export function IdentitySetupModal({
                 <Separator />
 
                 <p className="text-sm text-muted-foreground">
-                  Your identity POD has been stored securely. You can now use the application with your registered
-                  identity.
+                  Your identity POD has been stored securely. You can now use
+                  the application with your registered identity.
                 </p>
               </CardContent>
             </Card>
@@ -297,9 +298,9 @@ export function IdentitySetupModal({
         <DialogHeader>
           <DialogTitle>Identity Setup Required</DialogTitle>
           <DialogDescription>
-            Complete the identity setup to use the application. This
-            process will create your identity POD and register it with
-            an identity server.
+            Complete the identity setup to use the application. This process
+            will create your identity POD and register it with an identity
+            server.
           </DialogDescription>
         </DialogHeader>
 
