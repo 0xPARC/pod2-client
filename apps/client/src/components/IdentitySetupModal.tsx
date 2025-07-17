@@ -1,6 +1,15 @@
+import { CheckCircle, Loader2, Server, Shield, User } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useAppStore } from "../lib/store";
 import { Button } from "./ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "./ui/card";
 import {
   Dialog,
   DialogContent,
@@ -10,16 +19,7 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "./ui/card";
 import { Separator } from "./ui/separator";
-import { CheckCircle, Loader2, Server, User, Shield } from "lucide-react";
-import { useAppStore } from "../lib/store";
 
 interface IdentitySetupModalProps {
   open: boolean;
@@ -32,6 +32,12 @@ enum SetupStep {
   SETUP_COMPLETE = "setup_complete"
 }
 
+const DEFAULT_IDENTITY_SERVER_URL =
+  import.meta.env.VITE_IDENTITY_SERVER_URL ||
+  (import.meta.env.MODE === "production"
+    ? "https://pod-server.ghost-spica.ts.net/identity"
+    : "http://localhost:3000");
+
 export function IdentitySetupModal({
   open,
   onComplete
@@ -40,7 +46,7 @@ export function IdentitySetupModal({
   const [currentStep, setCurrentStep] = useState<SetupStep>(
     SetupStep.SERVER_SETUP
   );
-  const [serverUrl, setServerUrl] = useState("http://localhost:3001");
+  const [serverUrl, setServerUrl] = useState(DEFAULT_IDENTITY_SERVER_URL);
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [serverInfo, setServerInfo] = useState<{
@@ -56,7 +62,6 @@ export function IdentitySetupModal({
 
     setIsLoading(true);
     try {
-      // Call the Tauri command to setup identity server
       const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke("setup_identity_server", { serverUrl });
 
@@ -133,12 +138,12 @@ export function IdentitySetupModal({
                   id="server-url"
                   value={serverUrl}
                   onChange={(e) => setServerUrl(e.target.value)}
-                  placeholder="http://localhost:3001"
+                  placeholder={DEFAULT_IDENTITY_SERVER_URL}
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
                   Enter the URL of your identity server. This server will verify
-                  your identity and issue cryptographic certificates.
+                  your identity and issue your identity POD.
                 </p>
               </div>
 
@@ -236,7 +241,7 @@ export function IdentitySetupModal({
                   Identity Verified
                 </CardTitle>
                 <CardDescription>
-                  Your identity has been successfully verified and registered.
+                  Your identity has been successfully registered with the identity server.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -255,8 +260,7 @@ export function IdentitySetupModal({
                 <Separator />
 
                 <p className="text-sm text-muted-foreground">
-                  Your identity POD has been stored securely and marked as
-                  mandatory. You can now use the application with your verified
+                  Your identity POD has been stored securely. You can now use the application with your registered
                   identity.
                 </p>
               </CardContent>
@@ -293,8 +297,8 @@ export function IdentitySetupModal({
         <DialogHeader>
           <DialogTitle>Identity Setup Required</DialogTitle>
           <DialogDescription>
-            Complete the mandatory identity setup to use the application. This
-            process will create your cryptographic identity and register it with
+            Complete the identity setup to use the application. This
+            process will create your identity POD and register it with
             an identity server.
           </DialogDescription>
         </DialogHeader>
