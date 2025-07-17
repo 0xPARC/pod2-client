@@ -15,13 +15,15 @@ use std::{
 };
 
 use pod2::middleware::{
-    CustomPredicate, CustomPredicateBatch, CustomPredicateRef, Params, Predicate, StatementTmpl,
-    StatementTmplArg, Wildcard,
+    CustomPredicate, CustomPredicateBatch, CustomPredicateRef, NativePredicate, Params, Predicate,
+    StatementTmpl, StatementTmplArg, Wildcard,
 };
 
 use crate::{
     error::SolverError,
     ir::{self, Rule},
+    metrics::MetricsSink,
+    trace::{PredicateIdentifier, TraceContext, TraceEvent, TraceEventType},
 };
 
 /// The bound/free status of a single argument in a predicate.
@@ -43,6 +45,123 @@ pub struct QueryPlan {
     pub guarded_rules: Vec<Rule>,
 }
 
+/// Analyzes arithmetic predicates to determine constraint propagation.
+/// Returns additional variables that become bound when the given predicate
+/// is evaluated with the current set of bound variables.
+fn propagate_arithmetic_constraints(
+    predicate: &NativePredicate,
+    bound_vars: &HashSet<Wildcard>,
+    args: &[StatementTmplArg],
+) -> HashSet<Wildcard> {
+    let mut newly_bound = HashSet::new();
+
+    // Extract wildcards from arguments
+    let arg_wildcards: Vec<Option<Wildcard>> = args
+        .iter()
+        .map(|arg| match arg {
+            StatementTmplArg::Wildcard(w) => Some(w.clone()),
+            _ => None,
+        })
+        .collect();
+
+    match predicate {
+        NativePredicate::Equal => {
+            // Equal(?a, ?b): if one is bound, the other becomes bound
+            if args.len() == 2 {
+                if let (Some(w1), Some(w2)) = (&arg_wildcards[0], &arg_wildcards[1]) {
+                    if bound_vars.contains(w1) && !bound_vars.contains(w2) {
+                        newly_bound.insert(w2.clone());
+                    } else if bound_vars.contains(w2) && !bound_vars.contains(w1) {
+                        newly_bound.insert(w1.clone());
+                    }
+                }
+            }
+        }
+
+        NativePredicate::SumOf => {
+            // SumOf(?sum, ?a, ?b): if any two are bound, the third becomes bound
+            if args.len() == 3 {
+                // Count bound arguments (wildcards that are bound + literals)
+                let bound_count = args
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, arg)| {
+                        match arg {
+                            StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
+                            StatementTmplArg::Literal(_) => true, // literals are always "bound"
+                            _ => false,
+                        }
+                    })
+                    .count();
+
+                log::debug!(
+                    "SumOf constraint: args=[{}], bound_vars=[{}], bound_count={}",
+                    arg_wildcards
+                        .iter()
+                        .flatten()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    bound_vars
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    bound_count
+                );
+
+                if bound_count >= 2 {
+                    // Find the unbound wildcard
+                    for w in arg_wildcards.iter().flatten() {
+                        if !bound_vars.contains(w) {
+                            log::debug!(
+                                "SumOf binding new variable: {}",
+                                crate::pretty_print::format_wildcard(w)
+                            );
+                            newly_bound.insert(w.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        NativePredicate::ProductOf => {
+            // ProductOf(?product, ?a, ?b): if any two are bound, the third becomes bound
+            if args.len() == 3 {
+                // Count bound arguments (wildcards that are bound + literals)
+                let bound_count = args
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, arg)| {
+                        match arg {
+                            StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
+                            StatementTmplArg::Literal(_) => true, // literals are always "bound"
+                            _ => false,
+                        }
+                    })
+                    .count();
+
+                if bound_count >= 2 {
+                    // Find the unbound wildcard
+                    for w in arg_wildcards.iter().flatten() {
+                        if !bound_vars.contains(w) {
+                            newly_bound.insert(w.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        _ => {
+            // For other predicates, no constraint propagation
+        }
+    }
+
+    newly_bound
+}
+
 pub struct Planner;
 
 impl Planner {
@@ -50,9 +169,91 @@ impl Planner {
         Self {}
     }
 
+    /// Creates an enhanced magic rule body that includes guard constraints
+    /// from later in the rule body to prevent infinite recursion.
+    fn create_enhanced_magic_rule_body(
+        &self,
+        accumulated_guards: &[ir::Atom],
+        reordered_body: &[ir::Atom],
+        current_literal: &ir::Atom,
+        accumulated_bindings: &HashSet<Wildcard>,
+    ) -> Vec<ir::Atom> {
+        let mut magic_rule_body = accumulated_guards.to_vec();
+
+        // Find the position of the current literal in the reordered body
+        let current_pos = reordered_body.iter().position(|lit| lit == current_literal);
+
+        if let Some(pos) = current_pos {
+            // Look for guard constraints that come after the current literal
+            // but that involve variables that are already bound
+            for later_literal in &reordered_body[pos + 1..] {
+                if self.is_guard_constraint(later_literal, accumulated_bindings) {
+                    log::debug!(
+                        "Adding guard constraint to magic rule: {}",
+                        crate::pretty_print::PrettyAtom(later_literal)
+                    );
+                    magic_rule_body.push(later_literal.clone());
+                }
+            }
+        }
+
+        magic_rule_body
+    }
+
+    /// Determines if a literal is a guard constraint that should be included
+    /// in magic rules to prevent infinite recursion.
+    fn is_guard_constraint(&self, literal: &ir::Atom, bound_vars: &HashSet<Wildcard>) -> bool {
+        // Check if this is a native predicate that acts as a guard
+        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) = &literal.predicate
+        {
+            match native_pred {
+                NativePredicate::Lt
+                | NativePredicate::Gt
+                | NativePredicate::LtEq
+                | NativePredicate::GtEq => {
+                    // These are comparison predicates that can act as guards
+                    // Include them if their variables are already bound
+                    self.all_variables_bound(literal, bound_vars)
+                }
+                NativePredicate::Equal => {
+                    // Equal can act as a guard if it's a simple equality check
+                    // (not involving anchored keys) and variables are bound
+                    self.is_simple_equality_guard(literal, bound_vars)
+                }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Checks if all variables in a literal are already bound.
+    fn all_variables_bound(&self, literal: &ir::Atom, bound_vars: &HashSet<Wildcard>) -> bool {
+        literal.terms.iter().all(|term| match term {
+            StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
+            StatementTmplArg::Literal(_) => true,
+            StatementTmplArg::AnchoredKey(pod_var, _) => bound_vars.contains(pod_var),
+            StatementTmplArg::None => true,
+        })
+    }
+
+    /// Checks if this is a simple equality guard (not involving anchored keys).
+    fn is_simple_equality_guard(&self, literal: &ir::Atom, bound_vars: &HashSet<Wildcard>) -> bool {
+        // Simple equality: Equal(?var, literal) or Equal(?var1, ?var2)
+        // Not involving anchored keys like Equal(?pod["key"], ?value)
+        let has_anchored_keys = literal
+            .terms
+            .iter()
+            .any(|term| matches!(term, StatementTmplArg::AnchoredKey(_, _)));
+
+        !has_anchored_keys && self.all_variables_bound(literal, bound_vars)
+    }
+
     /// Computes the adornment for a literal given a set of bound variables.
+    /// This version considers constraint propagation through arithmetic predicates.
     fn get_adornment(&self, literal: &ir::Atom, bound_vars: &HashSet<Wildcard>) -> Adornment {
-        literal
+        // Start with basic adornment based on currently bound variables
+        let basic_adornment: Adornment = literal
             .terms
             .iter()
             .map(|term| match term {
@@ -73,7 +274,44 @@ impl Planner {
                 }
                 StatementTmplArg::None => Binding::Free, // Should be caught later
             })
-            .collect()
+            .collect();
+
+        // For arithmetic predicates, consider constraint propagation
+        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) = &literal.predicate
+        {
+            let newly_bound =
+                propagate_arithmetic_constraints(native_pred, bound_vars, &literal.terms);
+
+            // If constraint propagation would bind additional variables, update the adornment
+            if !newly_bound.is_empty() {
+                let extended_bound: HashSet<Wildcard> =
+                    bound_vars.union(&newly_bound).cloned().collect();
+                return literal
+                    .terms
+                    .iter()
+                    .map(|term| match term {
+                        StatementTmplArg::Literal(_) => Binding::Bound,
+                        StatementTmplArg::Wildcard(w) => {
+                            if extended_bound.contains(w) {
+                                Binding::Bound
+                            } else {
+                                Binding::Free
+                            }
+                        }
+                        StatementTmplArg::AnchoredKey(w, _) => {
+                            if extended_bound.contains(w) {
+                                Binding::Bound
+                            } else {
+                                Binding::Free
+                            }
+                        }
+                        StatementTmplArg::None => Binding::Free,
+                    })
+                    .collect();
+            }
+        }
+
+        basic_adornment
     }
 
     /// Reorders the literals in a rule body based on a "most-bound-first" SIPS.
@@ -87,10 +325,11 @@ impl Planner {
         let mut currently_bound = initial_bound.clone();
 
         // Two-phase selection: first exhaust all non-native literals, then the native ones.
+        // Exception: arithmetic predicates that can bind new variables get highest priority
         let mut picking_native_phase = false;
 
         while !remaining_literals.is_empty() {
-            // Helper: skip natives in the first phase
+            // Helper: prioritize arithmetic predicates that can propagate constraints
             let best_literal_index = remaining_literals
                 .iter()
                 .enumerate()
@@ -98,17 +337,61 @@ impl Planner {
                     if picking_native_phase {
                         true // take everything in second phase
                     } else {
-                        !matches!(
-                            lit.predicate,
-                            ir::PredicateIdentifier::Normal(Predicate::Native(_))
-                        )
+                        // In first phase, skip native predicates UNLESS they can bind new variables
+                        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                            &lit.predicate
+                        {
+                            let propagated_vars = propagate_arithmetic_constraints(
+                                native_pred,
+                                &currently_bound,
+                                &lit.terms,
+                            );
+                            !propagated_vars.is_empty() // only include if it can bind new variables
+                        } else {
+                            true // include non-native predicates
+                        }
                     }
                 })
                 .max_by_key(|(_, literal)| {
-                    self.get_adornment(literal, &currently_bound)
+                    let bound_args = self
+                        .get_adornment(literal, &currently_bound)
                         .iter()
                         .filter(|&&b| b == Binding::Bound)
-                        .count()
+                        .count();
+
+                    // Give extra priority to arithmetic predicates that can propagate constraints
+                    if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                        &literal.predicate
+                    {
+                        let propagated_vars = propagate_arithmetic_constraints(
+                            native_pred,
+                            &currently_bound,
+                            &literal.terms,
+                        );
+                        if !propagated_vars.is_empty() {
+                            // High priority for arithmetic predicates that can bind new variables
+                            return 1000 + bound_args;
+                        }
+                    }
+
+                    // Also prioritize during the native phase
+                    if picking_native_phase {
+                        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                            &literal.predicate
+                        {
+                            let propagated_vars = propagate_arithmetic_constraints(
+                                native_pred,
+                                &currently_bound,
+                                &literal.terms,
+                            );
+                            if !propagated_vars.is_empty() {
+                                // High priority for arithmetic predicates that can bind new variables
+                                return 1000 + bound_args;
+                            }
+                        }
+                    }
+
+                    bound_args
                 })
                 .map(|(i, _)| i);
 
@@ -127,6 +410,16 @@ impl Planner {
 
             let best_literal = remaining_literals.remove(index);
 
+            log::debug!(
+                "SIPS selected literal: {} with currently_bound: {}",
+                crate::pretty_print::format_predicate_identifier(&best_literal.predicate),
+                currently_bound
+                    .iter()
+                    .map(crate::pretty_print::format_wildcard)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+
             // Only wildcards that are *already bound* in this literal become available
             // to later literals.  Otherwise we would mistakenly count variables in
             // still-free positions as bound and distort the heuristic.
@@ -139,16 +432,43 @@ impl Planner {
                 }
             }
 
+            // Handle constraint propagation for arithmetic predicates
+            if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                &best_literal.predicate
+            {
+                let propagated_vars = propagate_arithmetic_constraints(
+                    native_pred,
+                    &currently_bound,
+                    &best_literal.terms,
+                );
+                log::debug!(
+                    "SIPS constraint propagation for {:?}: [{}] -> [{}]",
+                    native_pred,
+                    currently_bound
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    propagated_vars
+                        .iter()
+                        .map(crate::pretty_print::format_wildcard)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                currently_bound.extend(propagated_vars);
+            }
+
             reordered_body.push(best_literal);
         }
         reordered_body
     }
 
     /// Performs the Magic Set transformation on a set of Datalog rules.
-    fn magic_set_transform(
+    fn magic_set_transform<M: MetricsSink>(
         &self,
         program: &[ir::Rule],
         request: &[StatementTmpl],
+        metrics: &mut M,
     ) -> Result<QueryPlan, SolverError> {
         let mut magic_rules = Vec::new();
         let mut guarded_rules = Vec::new();
@@ -234,6 +554,57 @@ impl Planner {
                 let mut accumulated_bindings = bound_in_body.clone();
 
                 for literal in &reordered_body {
+                    // First, apply constraint propagation for arithmetic predicates
+                    // This must happen BEFORE computing adornments for custom predicates
+                    if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                        &literal.predicate
+                    {
+                        let propagated_vars = propagate_arithmetic_constraints(
+                            native_pred,
+                            &accumulated_bindings,
+                            &literal.terms,
+                        );
+                        log::debug!(
+                            "Constraint propagation for {:?}: bound vars [{}] -> newly bound [{}]",
+                            native_pred,
+                            accumulated_bindings
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            propagated_vars
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+
+                        // Record trace event for constraint propagation
+                        if !propagated_vars.is_empty() {
+                            let trace_event = TraceEvent {
+                                timestamp: std::time::Instant::now(),
+                                event_type: TraceEventType::ConstraintPropagated {
+                                    bound_vars: accumulated_bindings
+                                        .iter()
+                                        .map(|w| w.name.clone())
+                                        .collect(),
+                                    newly_bound: propagated_vars
+                                        .iter()
+                                        .map(|w| w.name.clone())
+                                        .collect(),
+                                },
+                                predicate_id: format!("native::{:?}", native_pred),
+                                context: TraceContext {
+                                    iteration: 0,
+                                    rule_index: 0,
+                                },
+                            };
+                            metrics.record_trace_event(trace_event);
+                        }
+
+                        accumulated_bindings.extend(propagated_vars);
+                    }
+
                     // If this literal is a fully-bound native predicate, its constraint
                     // should already apply to **this** propagation step.  Push it into
                     // the guards *before* emitting any magic rule so its bindings are
@@ -257,9 +628,35 @@ impl Planner {
                     };
 
                     if let Some(cpr) = literal_cpr {
+                        // For custom predicates, use the current accumulated bindings
+                        // This ensures constraint propagation from previous literals is considered
                         let body_literal_adornment =
                             self.get_adornment(literal, &accumulated_bindings);
                         let body_pred_name = &cpr.predicate().name;
+
+                        log::debug!(
+                            "Processing custom predicate '{}' with accumulated bindings: [{}]",
+                            body_pred_name,
+                            accumulated_bindings
+                                .iter()
+                                .map(crate::pretty_print::format_wildcard)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                        log::debug!(
+                            "Computed adornment for '{}': {:?}",
+                            body_pred_name,
+                            body_literal_adornment
+                        );
+                        log::debug!(
+                            "Literal terms: [{}]",
+                            literal
+                                .terms
+                                .iter()
+                                .map(crate::pretty_print::format_statement_arg)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
 
                         if adorned_predicates
                             .insert((body_pred_name.clone(), body_literal_adornment.clone()))
@@ -281,14 +678,42 @@ impl Planner {
                             .map(|(t, _)| t.clone())
                             .collect();
 
+                        // Enhanced magic rule body with guard constraints
+                        let magic_rule_body = self.create_enhanced_magic_rule_body(
+                            &accumulated_guards,
+                            &reordered_body,
+                            literal,
+                            &accumulated_bindings,
+                        );
+
                         magic_rules.push(ir::Rule {
                             head: ir::Atom {
                                 predicate: magic_head_id,
                                 terms: magic_head_terms,
                                 order: usize::MAX,
                             },
-                            body: accumulated_guards.clone(),
+                            body: magic_rule_body,
                         });
+
+                        // Record trace event for magic rule generation
+                        let trace_event = TraceEvent {
+                            timestamp: std::time::Instant::now(),
+                            event_type: TraceEventType::MagicRuleGenerated {
+                                bound_indices: body_literal_adornment
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, &b)| b == Binding::Bound)
+                                    .map(|(i, _)| i)
+                                    .collect(),
+                                rule_body_size: accumulated_guards.len(),
+                            },
+                            predicate_id: cpr.unique_identifier(),
+                            context: TraceContext {
+                                iteration: 0, // Will be updated later when we have iteration info
+                                rule_index: magic_rules.len() - 1,
+                            },
+                        };
+                        metrics.record_trace_event(trace_event);
                     }
 
                     // Add the current literal to the set of guards for the *next* magic rule
@@ -297,7 +722,7 @@ impl Planner {
                         accumulated_guards.push(literal.clone());
                     }
 
-                    // Update bindings for the next literal in the chain.
+                    // Finally, add variables from the literal itself
                     if let Ok(newly_bound) = collect_wildcards(&literal.terms) {
                         accumulated_bindings.extend(newly_bound);
                     }
@@ -402,6 +827,16 @@ impl Planner {
     }
 
     pub fn create_plan(&self, request: &[StatementTmpl]) -> Result<QueryPlan, SolverError> {
+        // Default version without metrics
+        self.create_plan_with_metrics(request, &mut crate::metrics::NoOpMetrics)
+    }
+
+    /// Create a plan with metrics collection
+    pub fn create_plan_with_metrics<M: MetricsSink>(
+        &self,
+        request: &[StatementTmpl],
+        metrics: &mut M,
+    ) -> Result<QueryPlan, SolverError> {
         let mut all_rules = self.collect_and_flatten_rules(request)?;
         let mut final_request = request.to_vec();
 
@@ -484,7 +919,36 @@ impl Planner {
             }];
         }
 
-        self.magic_set_transform(&all_rules, &final_request)
+        let plan = self.magic_set_transform(&all_rules, &final_request, metrics)?;
+
+        log::debug!("=== MAGIC SET TRANSFORMATION DEBUG ===");
+        log::debug!(
+            "Original request: [{}]",
+            final_request
+                .iter()
+                .map(crate::pretty_print::format_statement_template)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        log::debug!("Magic rules ({}):", plan.magic_rules.len());
+        for (i, rule) in plan.magic_rules.iter().enumerate() {
+            log::debug!(
+                "  Magic rule {}: {}",
+                i,
+                crate::pretty_print::PrettyRule(rule)
+            );
+        }
+        log::debug!("Guarded rules ({}):", plan.guarded_rules.len());
+        for (i, rule) in plan.guarded_rules.iter().enumerate() {
+            log::debug!(
+                "  Guarded rule {}: {}",
+                i,
+                crate::pretty_print::PrettyRule(rule)
+            );
+        }
+        log::debug!("=== END MAGIC SET DEBUG ===");
+
+        Ok(plan)
     }
 
     /// Same as `create_plan` but skips the Magic-Set transformation.
@@ -888,7 +1352,7 @@ mod tests {
                 edge(?X, ?Y)
                 path_rec(?X, ?Y)
             )
-            
+
             path_rec(X, Y, private: Z) = AND(
                 path(?X, ?Z)
                 edge(?Z, ?Y)
