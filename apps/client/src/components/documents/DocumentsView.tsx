@@ -147,10 +147,11 @@ export function DocumentsView() {
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <FileTextIcon className="h-5 w-5" />
-                        Document #{doc.id}
+                        <span className="truncate">{doc.title}</span>
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Post {doc.post_id} • Revision {doc.revision}
+                        Document #{doc.id} • Post {doc.post_id} • Revision{" "}
+                        {doc.revision}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

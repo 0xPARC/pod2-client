@@ -28,6 +28,7 @@ function PublishLoadingToast() {
 }
 
 interface PublishData {
+  title: string;
   message?: string;
   file?: File;
   url?: string;
@@ -57,6 +58,12 @@ export function PublishButton({
 
   const handlePublish = async () => {
     if (isLoading || disabled) return;
+
+    // Validate that we have a title
+    if (!data.title || data.title.trim().length === 0) {
+      toast.error("Please provide a title for your document");
+      return;
+    }
 
     // Validate that we have at least one content type
     if (!data.message && !data.file && !data.url) {
@@ -96,6 +103,7 @@ export function PublishButton({
         document_id: number | null;
         error_message: string | null;
       }>("publish_document", {
+        title: data.title.trim(),
         message: data.message || null,
         file: fileData,
         url: data.url || null,

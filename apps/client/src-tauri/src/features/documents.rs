@@ -334,6 +334,7 @@ pub struct PublishResult {
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn publish_document(
+    title: String,
     message: Option<String>,
     file: Option<DocumentFile>,
     url: Option<String>,
@@ -344,6 +345,14 @@ pub async fn publish_document(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<PublishResult, String> {
     log::info!("Publishing document to server {}", server_url);
+
+    // Validate title
+    if title.trim().is_empty() {
+        return Err("Title cannot be empty".to_string());
+    }
+    if title.len() > 200 {
+        return Err("Title cannot exceed 200 characters".to_string());
+    }
 
     // Step 1: Build DocumentContent from provided inputs
     let mut document_content = DocumentContent {
@@ -564,6 +573,7 @@ pub async fn publish_document(
 
     // Step 8: Create the publish request
     let publish_request = PublishRequest {
+        title: title.trim().to_string(),
         content: document_content,
         tags: document_tags,
         authors: document_authors,

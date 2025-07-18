@@ -577,10 +577,11 @@ export function DocumentDetailView({
               <div>
                 <CardTitle className="text-2xl flex items-center gap-2">
                   <FileTextIcon className="h-6 w-6" />
-                  Document #{document.metadata.id}
+                  <span className="truncate">{document.metadata.title}</span>
                 </CardTitle>
                 <p className="text-muted-foreground mt-1">
-                  Post {document.metadata.post_id} • Revision{" "}
+                  Document #{document.metadata.id} • Post{" "}
+                  {document.metadata.post_id} • Revision{" "}
                   {document.metadata.revision}
                 </p>
               </div>
