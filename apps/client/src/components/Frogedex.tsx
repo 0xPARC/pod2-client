@@ -118,9 +118,9 @@ function frogCount(frogId: string, frogData: Map<string, SignedPod[]>): string {
 }
 
 export function Frogedex() {
-  const { getFilteredPodsBy } = useAppStore();
+  const { getPodsInFolder } = useAppStore();
 
-  const frogPods = getFilteredPodsBy("signed", "frogs");
+  const frogPods = getPodsInFolder("frogs");
   let frogData = new Map<string, SignedPod[]>();
   for (const pod of frogPods) {
     const signedPod = pod.data.pod_data_payload as SignedPod;

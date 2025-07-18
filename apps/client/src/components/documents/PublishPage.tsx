@@ -7,10 +7,7 @@ interface PublishPageProps {
   onPublishSuccess?: (documentId: number) => void;
 }
 
-export function PublishPage({
-  onBack,
-  onPublishSuccess
-}: PublishPageProps) {
+export function PublishPage({ onBack, onPublishSuccess }: PublishPageProps) {
   const handlePublishSuccess = (documentId: number) => {
     console.log("Document published successfully with ID:", documentId);
     if (onPublishSuccess) {

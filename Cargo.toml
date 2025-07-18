@@ -8,7 +8,7 @@ pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", f
 ] }
 pod2_solver = { path = "solver" }
 pod2_server = { path = "server" }
-podnet-models = { git = "ssh://git@github.com/0xPARC/podnet.git", branch = "upvote-fixes" }
+podnet-models = { git = "https://github.com/0xPARC/podnet", branch = "upvote-fixes" }
 pod2_db = { path = "db" }
 hex = "0.4.3"
 itertools = "0.14.0"

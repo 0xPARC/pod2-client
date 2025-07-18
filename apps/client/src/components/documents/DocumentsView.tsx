@@ -53,7 +53,7 @@ export function DocumentsView() {
   // If publish form is shown, show the publish page
   if (showPublishForm) {
     return (
-      <PublishDemoPage
+      <PublishPage
         onBack={() => setShowPublishForm(false)}
         onPublishSuccess={(documentId) => {
           console.log("Document published with ID:", documentId);
