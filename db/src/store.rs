@@ -62,7 +62,6 @@ pub struct PodInfo {
     pub label: Option<String>,
     pub created_at: String,
     pub space: String,
-    pub pinned: bool,
 }
 
 pub async fn create_space(db: &Db, id: &str) -> Result<()> {
@@ -203,7 +202,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
     let pod_info_result = conn
         .interact(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1 AND id = ?2",
+                "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1 AND id = ?2",
             )?;
             let result = stmt.query_row([&space_id_clone, &pod_id_clone], |row| {
                 let data_blob: Vec<u8> = row.get(2)?;
@@ -222,7 +221,6 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
                     label: row.get(3)?,
                     created_at: row.get(4)?,
                     space: row.get(5)?,
-                    pinned: row.get(6).unwrap_or(false),
                 })
             });
 
@@ -265,7 +263,7 @@ async fn list_pods_filtered(
             match pod_type_filter_clone {
                 Some(pod_type) => {
                     let mut stmt = conn.prepare(
-                        "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1 AND pod_type = ?2"
+                        "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1 AND pod_type = ?2"
                     )?;
                     let pod_iter = stmt.query_map([&space_id_clone, &pod_type], |row| {
                         let data_blob: Vec<u8> = row.get(2)?;
@@ -283,14 +281,13 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
-                            pinned: row.get(6).unwrap_or(false),
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
                 },
                 None => {
                     let mut stmt = conn.prepare(
-                        "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods WHERE space = ?1"
+                        "SELECT id, pod_type, data, label, created_at, space FROM pods WHERE space = ?1"
                     )?;
                     let pod_iter = stmt.query_map([&space_id_clone], |row| {
                         let data_blob: Vec<u8> = row.get(2)?;
@@ -308,7 +305,6 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
-                            pinned: row.get(6).unwrap_or(false),
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
@@ -938,30 +934,6 @@ pub async fn import_pod_and_add_to_inbox(
     Ok(message_id)
 }
 
-/// Update the pinned status of a POD
-pub async fn set_pod_pinned(db: &Db, space_id: &str, pod_id: &str, pinned: bool) -> Result<()> {
-    let conn = db
-        .pool()
-        .get()
-        .await
-        .context("Failed to get DB connection")?;
-    let space_id_clone = space_id.to_string();
-    let pod_id_clone = pod_id.to_string();
-
-    conn.interact(move |conn| -> Result<(), rusqlite::Error> {
-        conn.execute(
-            "UPDATE pods SET pinned = ?1 WHERE space = ?2 AND id = ?3",
-            rusqlite::params![pinned, &space_id_clone, &pod_id_clone],
-        )?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-    .context("DB interaction failed for set_pod_pinned")??;
-
-    Ok(())
-}
-
 /// List all pods across all spaces (for solver)
 pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
     let conn = db
@@ -973,7 +945,7 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
     let pods = conn
         .interact(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, pod_type, data, label, created_at, space, pinned FROM pods ORDER BY created_at DESC"
+                "SELECT id, pod_type, data, label, created_at, space FROM pods ORDER BY created_at DESC"
             )?;
             let pod_iter = stmt.query_map([], |row| {
                 let data_blob: Vec<u8> = row.get(2)?;
@@ -991,7 +963,6 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
                     label: row.get(3)?,
                     created_at: row.get(4)?,
                     space: row.get(5)?,
-                    pinned: row.get(6).unwrap_or(false),
                 })
             })?;
             pod_iter.collect::<Result<Vec<_>, _>>()

@@ -1,38 +1,36 @@
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import {
-  getAppState,
-  triggerSync,
-  listSpaces,
-  setPodPinned,
-  deletePod,
-  getPrivateKeyInfo,
-  type AppStateData,
-  type PodStats,
-  type PodLists,
-  type PodInfo,
-  type SpaceInfo,
-  type PrivateKeyInfo
-} from "./rpc";
-import { validateCode, executeCode } from "./features/authoring/rpc";
-import { DiagnosticSeverity } from "./features/authoring/types";
+  loadEditorContent,
+  saveEditorContent
+} from "./features/authoring/editor";
+import { executeCode, validateCode } from "./features/authoring/rpc";
 import type {
   Diagnostic,
   ExecuteCodeResponse
 } from "./features/authoring/types";
-import {
-  loadEditorContent,
-  saveEditorContent
-} from "./features/authoring/editor";
+import { DiagnosticSeverity } from "./features/authoring/types";
 import { loadCurrentView, saveCurrentView } from "./persistence";
+import {
+  deletePod,
+  getAppState,
+  getPrivateKeyInfo,
+  listSpaces,
+  triggerSync,
+  type AppStateData,
+  type PodInfo,
+  type PodLists,
+  type PodStats,
+  type PrivateKeyInfo,
+  type SpaceInfo
+} from "./rpc";
 
 // Re-export types for backward compatibility
-export type { AppStateData, PodStats, PodLists, SpaceInfo, PrivateKeyInfo };
+export type { AppStateData, PodLists, PodStats, PrivateKeyInfo, SpaceInfo };
 
 // Use the PodInfo from rpc.ts which matches the actual API
 export type { PodInfo } from "./rpc";
 
-export type PodFilter = "all" | "signed" | "main" | "pinned";
 export type AppView =
   | "pods"
   | "documents"
@@ -49,7 +47,6 @@ interface AppStoreState {
 
   // UI State
   currentView: AppView;
-  selectedFilter: PodFilter;
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
@@ -75,12 +72,10 @@ interface AppStoreState {
   triggerSync: () => Promise<void>;
   setError: (error: string | null) => void;
   setCurrentView: (view: AppView) => void;
-  setSelectedFilter: (filter: PodFilter) => void;
   setSelectedFolderFilter: (filter: FolderFilter) => void;
   setSelectedPodId: (podId: string | null) => void;
   setExternalPodRequest: (request: string | undefined) => void;
   loadFolders: () => Promise<void>;
-  togglePodPinned: (podId: string, spaceId: string) => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
   loadPrivateKeyInfo: () => Promise<void>;
@@ -98,7 +93,7 @@ interface AppStoreState {
 
   // Derived getters
   getFilteredPods: () => PodInfo[];
-  getFilteredPodsBy: (podType: String, folder: String) => PodInfo[];
+  getPodsInFolder: (folder: String) => PodInfo[];
   getSelectedPod: () => PodInfo | null;
 }
 
@@ -187,18 +182,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     saveCurrentView(view); // Persist the view selection
   },
 
-  setSelectedFilter: (filter: PodFilter) => {
-    set({
-      selectedFilter: filter,
-      selectedFolderFilter: "all",
-      selectedPodId: null
-    }); // Clear folder filter and selected pod when changing type filter
-  },
-
   setSelectedFolderFilter: (filter: FolderFilter) => {
     set({
       selectedFolderFilter: filter,
-      selectedFilter: "all",
       selectedPodId: null
     }); // Clear type filter and selected pod when changing folder
   },
@@ -238,25 +224,6 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
   },
 
-  togglePodPinned: async (podId: string, spaceId: string) => {
-    try {
-      const { appState } = get();
-      const allPods = [
-        ...appState.pod_lists.signed_pods,
-        ...appState.pod_lists.main_pods
-      ];
-      const pod = allPods.find((p) => p.id === podId);
-
-      if (pod) {
-        await setPodPinned(spaceId, podId, !pod.pinned);
-        // Trigger sync to update the UI
-        await get().triggerSync();
-      }
-    } catch (error) {
-      set({ error: `Failed to toggle pod pinned status: ${error}` });
-    }
-  },
-
   deletePod: async (podId: string, spaceId: string) => {
     try {
       const { appState } = get();
@@ -280,59 +247,32 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     }
   },
 
-  getFilteredPodsBy: (podType: String, folder: String) => {
+  getPodsInFolder: (folder: String) => {
     const { appState } = get();
 
-    // Get all pods or filter by type
-    let pods: PodInfo[] = [];
-    switch (podType) {
-      case "signed":
-        pods = appState.pod_lists.signed_pods;
-        break;
-      case "main":
-        pods = appState.pod_lists.main_pods;
-        break;
-      case "pinned":
-        pods = [
-          ...appState.pod_lists.signed_pods,
-          ...appState.pod_lists.main_pods
-        ].filter((p) => p.pinned);
-        break;
-      case "all":
-      default:
-        pods = [
-          ...appState.pod_lists.signed_pods,
-          ...appState.pod_lists.main_pods
-        ];
-        break;
-    }
+    const pods = [
+      ...appState.pod_lists.signed_pods,
+      ...appState.pod_lists.main_pods
+    ].filter((p) => p.space === folder);
 
-    // Apply folder filter
-    if (folder !== "all") {
-      pods = pods.filter((p) => p.space === folder);
-    }
-
-    // Sort: pinned first, then by creation date (newest first)
-    return pods.sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      return (
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    });
+    return pods;
   },
 
   getFilteredPods: () => {
-    const { selectedFilter, selectedFolderFilter } = get();
-    return get().getFilteredPodsBy(selectedFilter, selectedFolderFilter);
+    const { selectedFolderFilter } = get();
+    return get().getPodsInFolder(selectedFolderFilter);
   },
 
   getSelectedPod: () => {
     const { selectedPodId } = get();
     if (!selectedPodId) return null;
 
-    const filteredPods = get().getFilteredPods();
-    return filteredPods.find((pod) => pod.id === selectedPodId) || null;
+    const { appState } = get();
+    const allPods = [
+      ...appState.pod_lists.signed_pods,
+      ...appState.pod_lists.main_pods
+    ];
+    return allPods.find((pod) => pod.id === selectedPodId) || null;
   },
 
   // Editor Actions

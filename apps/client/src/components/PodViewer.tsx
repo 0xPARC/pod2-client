@@ -1,18 +1,9 @@
-import { useState, useEffect } from "react";
+import { FileCheck, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
+import { DeletePodDialog } from "./DeletePodDialog";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
-import { DeletePodDialog } from "./DeletePodDialog";
-import { Badge } from "./ui/badge";
-import { Card, CardContent } from "./ui/card";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup
-} from "./ui/resizable";
-import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
-import { StarIcon, FolderIcon, Trash2, MoreHorizontal } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -20,15 +11,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "./ui/dropdown-menu";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup
+} from "./ui/resizable";
+import { ScrollArea } from "./ui/scroll-area";
 
 export function PodViewer() {
-  const {
-    getFilteredPods,
-    getSelectedPod,
-    setSelectedPodId,
-    selectedPodId,
-    togglePodPinned
-  } = useAppStore();
+  const { getFilteredPods, getSelectedPod, setSelectedPodId, selectedPodId } =
+    useAppStore();
 
   const filteredPods = getFilteredPods();
   const selectedPod = getSelectedPod();
@@ -39,21 +31,6 @@ export function PodViewer() {
 
   const formatLabel = (pod: any) => {
     return pod.label || `${pod.pod_type} POD`;
-  };
-
-  const formatId = (id: string) => {
-    return `${id.slice(0, 8)}...${id.slice(-4)}`;
-  };
-
-  const handleStarClick = (e: React.MouseEvent, pod: any) => {
-    e.stopPropagation(); // Prevent card selection
-    togglePodPinned(pod.id, pod.space);
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, pod: any) => {
-    e.stopPropagation(); // Prevent card selection
-    setPodToDelete(pod);
-    setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteFromHeader = () => {
@@ -110,91 +87,31 @@ export function PodViewer() {
               </h3>
             </div>
             <ScrollArea className="flex-1 min-h-0">
-              <div className="p-2 space-y-2">
+              <div className="p-0">
                 {filteredPods.length === 0 ? (
                   <div className="text-center text-muted-foreground py-8">
                     No PODs found
                   </div>
                 ) : (
                   filteredPods.map((pod) => (
-                    <Card
+                    <div
                       key={pod.id}
-                      className={`py-0 cursor-pointer transition-colors hover:bg-accent/50 ${
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors hover:bg-accent/50 ${
                         selectedPodId === pod.id
-                          ? "bg-accent border-accent-foreground/20"
+                          ? "bg-accent text-accent-foreground"
                           : ""
-                      } ${pod.pinned ? "ring-1 ring-amber-200 bg-amber-50/30" : ""}`}
+                      }`}
                       onClick={() => setSelectedPodId(pod.id)}
                     >
-                      <CardContent className="p-3">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={`p-0 h-4 w-4 hover:bg-transparent ${
-                                  pod.pinned
-                                    ? "text-amber-500 hover:text-amber-600"
-                                    : "text-muted-foreground hover:text-amber-500"
-                                }`}
-                                onClick={(e) => handleStarClick(e, pod)}
-                              >
-                                <StarIcon
-                                  className={`h-3 w-3 ${pod.pinned ? "fill-current" : ""}`}
-                                />
-                              </Button>
-                              <span className="font-medium text-sm truncate">
-                                {formatLabel(pod)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Badge
-                                variant="secondary"
-                                className="text-xs shrink-0"
-                              >
-                                {pod.pod_type}
-                              </Badge>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="p-0 h-4 w-4 hover:bg-transparent text-muted-foreground hover:text-foreground"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <MoreHorizontal className="h-3 w-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={(e) => handleDeleteClick(e, pod)}
-                                    className="text-red-600 focus:text-red-600"
-                                  >
-                                    <Trash2 className="h-3 w-3 mr-2" />
-                                    Delete POD
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs text-muted-foreground font-mono">
-                              {formatId(pod.id)}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <FolderIcon className="h-3 w-3" />
-                              <span
-                                className="truncate max-w-[60px]"
-                                title={pod.space}
-                              >
-                                {pod.space}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                      {pod.pod_type === "signed" ? (
+                        <FilePen className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <FileCheck className="h-4 w-4 shrink-0 text-fuchsia-600 dark:text-fuchsia-400" />
+                      )}
+                      <span className="font-base text-sm truncate">
+                        {formatLabel(pod)}
+                      </span>
+                    </div>
                   ))
                 )}
               </div>
@@ -210,64 +127,44 @@ export function PodViewer() {
             <div className="h-full flex flex-col">
               <div className="p-4 border-b border-border flex-shrink-0">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-lg">
-                    {formatLabel(selectedPod)}
-                  </h3>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{selectedPod.pod_type}</Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDeleteFromHeader}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
+                    <div>
+                      {selectedPod.pod_type === "signed" ? (
+                        <FilePen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <FileCheck className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />
+                      )}
+                    </div>
+                    <h3 className="font-semibold text-lg">
+                      {formatLabel(selectedPod)}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="default"
+                          className="h-6  px-2"
+                        >
+                          <MoreHorizontal className="h-6 w-6" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={handleDeleteFromHeader}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </div>
               <ScrollArea className="flex-1 min-h-0">
                 <div className="p-4 space-y-6">
-                  {/* Basic Info */}
-                  <div>
-                    <h4 className="font-medium mb-3">Basic Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">ID:</span>
-                        <span className="font-mono text-xs">
-                          {selectedPod.id}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Label:</span>
-                        <span>{selectedPod.label || "None"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Created:</span>
-                        <span>
-                          {new Date(selectedPod.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Folder:</span>
-                        <span>{selectedPod.space}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Pinned:</span>
-                        <span className="flex items-center gap-1">
-                          <StarIcon
-                            className={`h-3 w-3 ${selectedPod.pinned ? "fill-current text-amber-500" : "text-muted-foreground"}`}
-                          />
-                          {selectedPod.pinned ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* POD Data */}
                   <div>
                     {selectedPod.data.pod_data_variant === "Main" && (
                       <MainPodCard

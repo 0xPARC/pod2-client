@@ -17,12 +17,12 @@ import {
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
   CodeIcon,
   EditIcon,
-  FileCheck2Icon,
   FileIcon,
   FilePenLineIcon,
   FileTextIcon,
@@ -30,29 +30,25 @@ import {
   Github,
   InboxIcon,
   MessageSquareIcon,
-  StarIcon,
   UploadIcon
 } from "lucide-react";
 import { useState } from "react";
-import { useAppStore } from "../lib/store";
 import { FeatureGate } from "../lib/features/config";
+import { useAppStore } from "../lib/store";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
-import { Button } from "./ui/button";
 import { ImportPodDialog } from "./ImportPodDialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
+import { Button } from "./ui/button";
 
 export function AppSidebar() {
   const {
     appState,
     currentView,
-    selectedFilter,
     selectedFolderFilter,
     folders,
     foldersLoading,
     privateKeyInfo,
     setCurrentView,
-    setSelectedFilter,
     setSelectedFolderFilter
   } = useAppStore();
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
@@ -75,69 +71,6 @@ export function AppSidebar() {
       <SidebarHeader></SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>PODs</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("pinned");
-                  }}
-                  isActive={
-                    currentView === "pods" && selectedFilter === "pinned"
-                  }
-                >
-                  <StarIcon />
-                  Pinned
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {
-                    [
-                      ...appState.pod_lists.signed_pods,
-                      ...appState.pod_lists.main_pods
-                    ].filter((p) => p.pinned).length
-                  }
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("signed");
-                  }}
-                  isActive={
-                    currentView === "pods" && selectedFilter === "signed"
-                  }
-                >
-                  <FilePenLineIcon />
-                  Signed
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {appState.pod_stats.signed_pods}
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setCurrentView("pods");
-                    setSelectedFilter("main");
-                  }}
-                  isActive={currentView === "pods" && selectedFilter === "main"}
-                >
-                  <FileCheck2Icon />
-                  Main
-                </SidebarMenuButton>
-                <SidebarMenuBadge>
-                  {appState.pod_stats.main_pods}
-                </SidebarMenuBadge>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
           <Collapsible open={foldersExpanded} onOpenChange={setFoldersExpanded}>
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="cursor-pointer hover:bg-accent hover:text-accent-foreground rounded px-2 py-1 flex items-center gap-2">
@@ -146,7 +79,7 @@ export function AppSidebar() {
                 ) : (
                   <ChevronRightIcon size={16} />
                 )}
-                Folders
+                My PODs
               </SidebarGroupLabel>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -157,7 +90,6 @@ export function AppSidebar() {
                       onClick={() => {
                         setCurrentView("pods");
                         setSelectedFolderFilter("all");
-                        setSelectedFilter("all");
                       }}
                       isActive={
                         currentView === "pods" && selectedFolderFilter === "all"
@@ -191,7 +123,6 @@ export function AppSidebar() {
                             onClick={() => {
                               setCurrentView("pods");
                               setSelectedFolderFilter(folder.id);
-                              setSelectedFilter("all");
                             }}
                             isActive={
                               currentView === "pods" &&
@@ -213,7 +144,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupLabel>Podnet</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -269,7 +200,7 @@ export function AppSidebar() {
                     isActive={currentView === "editor"}
                   >
                     <EditIcon />
-                    Podlang Editor
+                    POD Request
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

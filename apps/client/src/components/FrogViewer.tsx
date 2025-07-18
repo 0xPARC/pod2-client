@@ -1,7 +1,11 @@
+import { requestFrog } from "@/lib/rpc";
+import { FolderIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import {
   ResizableHandle,
@@ -10,18 +14,13 @@ import {
 } from "./ui/resizable";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
-import { StarIcon, FolderIcon } from "lucide-react";
-import { Button } from "./ui/button";
-import { requestFrog } from "@/lib/rpc";
-import { useEffect, useState } from "react";
 
 export function FrogViewer() {
   const {
-    getFilteredPodsBy,
+    getPodsInFolder: getFilteredPodsBy,
     getSelectedPod,
     setSelectedPodId,
     selectedPodId,
-    togglePodPinned,
     setFrogTimeout,
     frogTimeout
   } = useAppStore();
@@ -35,7 +34,7 @@ export function FrogViewer() {
     };
   }, []);
 
-  const filteredPods = getFilteredPodsBy("signed", "frogs");
+  const filteredPods = getFilteredPodsBy("frogs");
   const selectedPod = getSelectedPod();
 
   const formatLabel = (pod: any) => {
@@ -44,11 +43,6 @@ export function FrogViewer() {
 
   const formatId = (id: string) => {
     return `${id.slice(0, 8)}...${id.slice(-4)}`;
-  };
-
-  const handleStarClick = (e: React.MouseEvent, pod: any) => {
-    e.stopPropagation(); // Prevent card selection
-    togglePodPinned(pod.id, pod.space);
   };
 
   const requestFrogAndUpdateTimeout = async () => {
@@ -101,27 +95,13 @@ export function FrogViewer() {
                       selectedPodId === pod.id
                         ? "bg-accent border-accent-foreground/20"
                         : ""
-                    } ${pod.pinned ? "ring-1 ring-amber-200 bg-amber-50/30" : ""}`}
+                    }`}
                     onClick={() => setSelectedPodId(pod.id)}
                   >
                     <CardContent className="p-3">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={`p-0 h-4 w-4 hover:bg-transparent ${
-                                pod.pinned
-                                  ? "text-amber-500 hover:text-amber-600"
-                                  : "text-muted-foreground hover:text-amber-500"
-                              }`}
-                              onClick={(e) => handleStarClick(e, pod)}
-                            >
-                              <StarIcon
-                                className={`h-3 w-3 ${pod.pinned ? "fill-current" : ""}`}
-                              />
-                            </Button>
                             <span className="font-medium text-sm truncate">
                               {formatLabel(pod)}
                             </span>
@@ -200,15 +180,6 @@ export function FrogViewer() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Space:</span>
                       <span>{selectedPod.space}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Pinned:</span>
-                      <span className="flex items-center gap-1">
-                        <StarIcon
-                          className={`h-3 w-3 ${selectedPod.pinned ? "fill-current text-amber-500" : "text-muted-foreground"}`}
-                        />
-                        {selectedPod.pinned ? "Yes" : "No"}
-                      </span>
                     </div>
                   </div>
                 </div>
