@@ -25,16 +25,16 @@ function waitText(timeRemaining: number) {
   return ` (wait ${minsText}${secsText})`;
 }
 
-const temperaments = {
-  "1": "N/A",
-  "2": "ANGY",
-  "3": "BORD",
-  "4": "CALM",
-  "7": "DARK",
-  "10": "HNGY",
-  "16": "SADG",
-  "18": "SLPY"
-};
+const temperaments = new Map<string, string>([
+  ["1", "N/A"],
+  ["2", "ANGY"],
+  ["3", "BORD"],
+  ["4", "CALM"],
+  ["7", "DARK"],
+  ["10", "HNGY"],
+  ["16", "SADG"],
+  ["18", "SLPY"]
+]);
 
 export function FrogViewer({ setScore }: FrogViewerProps) {
   const { getPodsInFolder, setFrogTimeout, frogTimeout } = useAppStore();
@@ -118,11 +118,7 @@ function vibeEntry(value: Value): string {
   if (entry === undefined) {
     return "";
   } else {
-    if (entry in temperaments) {
-      return temperaments[entry as keyof typeof temperaments];
-    } else {
-      return "";
-    }
+    return temperaments.get(entry) || "";
   }
 }
 

@@ -1,13 +1,23 @@
 import { useState } from "react";
 import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
+import { Leaderboard } from "./Leaderboard";
 import { Button } from "./ui/button";
 import { requestScore } from "@/lib/rpc";
 import { useEffect } from "react";
 
+enum View {
+  Frogs,
+  Frogedex,
+  Leaderboard
+}
+
 export function FrogCrypto() {
-  const [frogedexView, setFrogedexView] = useState(false);
+  const [view, setView] = useState(View.Frogs);
   const [score, setScore] = useState(0);
+  const frogView = view == View.Frogs;
+  const frogedexView = view == View.Frogedex;
+  const leaderboardView = view == View.Leaderboard;
   useEffect(() => {
     async function updateScore() {
       try {
@@ -23,22 +33,30 @@ export function FrogCrypto() {
       <p>SCORE: {score}</p>
       <div className="flex">
         <Button
-          className={`max-w-48 ${!frogedexView ? "bg-accent" : ""}`}
+          className={`max-w-48 ${frogView ? "bg-accent" : ""}`}
           variant="outline"
-          onClick={() => setFrogedexView(false)}
+          onClick={() => setView(View.Frogs)}
         >
           get frogs
         </Button>
         <Button
           className={`max-w-48 ${frogedexView ? "bg-accent" : ""}`}
           variant="outline"
-          onClick={() => setFrogedexView(true)}
+          onClick={() => setView(View.Frogedex)}
         >
           frogedex
         </Button>
+        <Button
+          className={`max-w-48 ${leaderboardView ? "bg-accent" : ""}`}
+          variant="outline"
+          onClick={() => setView(View.Leaderboard)}
+        >
+          leaderboard
+        </Button>
       </div>
-      {!frogedexView && <FrogViewer setScore={setScore} />}
+      {frogView && <FrogViewer setScore={setScore} />}
       {frogedexView && <Frogedex />}
+      {leaderboardView && <Leaderboard />}
     </div>
   );
 }

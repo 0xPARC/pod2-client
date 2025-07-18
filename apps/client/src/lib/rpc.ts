@@ -166,6 +166,19 @@ export async function requestScore(): RpcResult<ScoreResponse> {
   return invokeCommand<ScoreResponse>("request_score");
 }
 
+export interface LeaderboardItem {
+  username: string;
+  score: number;
+}
+
+/**
+ * Get the FrogCrypto leaderboard from the server
+ * @returns Promise that resolves to the leaderboard
+ */
+export async function requestLeaderboard(): RpcResult<LeaderboardItem[]> {
+  return invokeCommand<LeaderboardItem[]>("request_leaderboard");
+}
+
 // =============================================================================
 // Exports for backward compatibility
 // =============================================================================

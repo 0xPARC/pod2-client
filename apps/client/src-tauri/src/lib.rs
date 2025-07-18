@@ -344,6 +344,7 @@ pub fn run() {
             // Frog commands
             frog::request_frog,
             frog::request_score,
+            frog::request_leaderboard,
             // Configuration commands
             get_feature_config_command,
             // POD management commands

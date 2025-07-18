@@ -5,7 +5,7 @@ use pod2::{
 };
 use pod2_db::store::{self, create_space, space_exists, PodData};
 use reqwest::{Client, Response};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -34,10 +34,7 @@ struct FrogResponse {
     score: i64,
 }
 
-async fn process_challenge(
-    client: &mut Client,
-    private_key: SecretKey,
-) -> Result<SignedPod, String> {
+async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedPod, String> {
     let challenge_url = server_url("auth");
     let challenge: Challenge = client
         .get(&challenge_url)
@@ -56,7 +53,7 @@ async fn process_challenge(
         .map_err(|_| "failed to sign pod".to_string())
 }
 
-async fn download_frog(client: &mut Client, private_key: SecretKey) -> Result<Response, String> {
+async fn download_frog(client: &Client, private_key: SecretKey) -> Result<Response, String> {
     let pod = process_challenge(client, private_key).await?;
     let frog_url = server_url("frog");
     client
@@ -115,6 +112,27 @@ pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_js
     client
         .post(&score_url)
         .json(&pod)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LeaderboardRow {
+    username: String,
+    score: i64,
+}
+
+#[tauri::command]
+pub async fn request_leaderboard(
+    _state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<LeaderboardRow>, String> {
+    let client = Client::new();
+    client
+        .get(&server_url("leaderboard"))
         .send()
         .await
         .map_err(|e| e.to_string())?
