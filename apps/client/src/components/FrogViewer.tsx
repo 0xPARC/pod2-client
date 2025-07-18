@@ -1,3 +1,6 @@
+import { requestFrog } from "@/lib/rpc";
+import { FolderIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -38,6 +41,16 @@ const temperaments = {
 export function FrogViewer({ setScore }: FrogViewerProps) {
   const { getFilteredPodsBy, setFrogTimeout, frogTimeout } = useAppStore();
 
+export function FrogViewer() {
+  const {
+    getPodsInFolder: getFilteredPodsBy,
+    getSelectedPod,
+    setSelectedPodId,
+    selectedPodId,
+    setFrogTimeout,
+    frogTimeout
+  } = useAppStore();
+
   const [time, setTime] = useState(new Date().getTime());
 
   useEffect(() => {
@@ -47,7 +60,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     };
   }, []);
 
-  const filteredPods = getFilteredPodsBy("signed", "frogs");
+  const filteredPods = getFilteredPodsBy("frogs");
 
   const requestFrogAndUpdateTimeout = async () => {
     try {

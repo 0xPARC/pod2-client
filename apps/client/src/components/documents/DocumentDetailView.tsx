@@ -15,8 +15,12 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import { toast } from "sonner";
 import {
   Document,
+  DocumentFile,
   DocumentVerificationResult,
   fetchDocument,
   verifyDocumentPod
@@ -32,6 +36,76 @@ interface DocumentDetailViewProps {
   onBack: () => void;
 }
 
+// MIME type to file extension mapping
+const getMimeTypeExtension = (mimeType: string): string => {
+  const mimeToExt: Record<string, string> = {
+    // Text types
+    "text/plain": "txt",
+    "text/markdown": "md",
+    "text/html": "html",
+    "text/css": "css",
+    "text/javascript": "js",
+    "text/csv": "csv",
+
+    // Image types
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+
+    // Document types
+    "application/pdf": "pdf",
+    "application/json": "json",
+    "application/xml": "xml",
+    "application/zip": "zip",
+
+    // Microsoft Office
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+      "pptx",
+
+    // Audio/Video
+    "audio/mpeg": "mp3",
+    "video/mp4": "mp4",
+    "video/webm": "webm"
+  };
+
+  return mimeToExt[mimeType] || "bin";
+};
+
+// Get file filters for save dialog based on MIME type
+const getFileFilters = (mimeType: string) => {
+  const ext = getMimeTypeExtension(mimeType);
+  const baseFilters = [
+    {
+      name: "All Files",
+      extensions: ["*"]
+    }
+  ];
+
+  if (ext !== "bin") {
+    baseFilters.unshift({
+      name: `${ext.toUpperCase()} Files`,
+      extensions: [ext]
+    });
+  }
+
+  return baseFilters;
+};
+
+// Ensure filename has proper extension
+const ensureFileExtension = (filename: string, mimeType: string): string => {
+  const ext = getMimeTypeExtension(mimeType);
+  if (ext === "bin") return filename;
+
+  const hasExtension =
+    filename.includes(".") && filename.split(".").pop()?.toLowerCase() === ext;
+  return hasExtension ? filename : `${filename}.${ext}`;
+};
+
 export function DocumentDetailView({
   documentId,
   onBack
@@ -46,6 +120,9 @@ export function DocumentDetailView({
     null
   );
   const [upvoteCount, setUpvoteCount] = useState<number>(0);
+  const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(
+    new Set()
+  );
 
   const loadDocument = async () => {
     try {
@@ -68,6 +145,7 @@ export function DocumentDetailView({
       setIsVerifying(true);
       setVerificationError(null);
       const result = await verifyDocumentPod(document);
+      console.log("Verification result:", result);
       setVerificationResult(result);
     } catch (err) {
       setVerificationError(
@@ -81,6 +159,51 @@ export function DocumentDetailView({
   useEffect(() => {
     loadDocument();
   }, [documentId]);
+
+  const handleDownloadFile = async (file: DocumentFile) => {
+    const fileKey = `${file.name}_${file.mime_type}`;
+
+    if (downloadingFiles.has(fileKey)) {
+      return; // Already downloading
+    }
+
+    try {
+      setDownloadingFiles((prev) => new Set(prev).add(fileKey));
+
+      // Ensure filename has proper extension
+      const filename = ensureFileExtension(file.name, file.mime_type);
+
+      // Show save dialog
+      const filePath = await save({
+        defaultPath: filename,
+        filters: getFileFilters(file.mime_type)
+      });
+
+      if (!filePath) {
+        // User cancelled the save dialog
+        return;
+      }
+
+      // Convert file content from number array to Uint8Array
+      const fileContent = new Uint8Array(file.content);
+
+      // Write file to chosen location
+      await writeFile(filePath, fileContent);
+
+      toast.success(`File "${filename}" saved successfully!`);
+    } catch (error) {
+      console.error("Download error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to save file: ${errorMessage}`);
+    } finally {
+      setDownloadingFiles((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(fileKey);
+        return newSet;
+      });
+    }
+  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "Unknown";
@@ -215,9 +338,18 @@ export function DocumentDetailView({
               <Badge variant="outline" className="text-xs">
                 {file.mime_type} • {(file.content.length / 1024).toFixed(1)} KB
               </Badge>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDownloadFile(file)}
+                disabled={downloadingFiles.has(
+                  `${file.name}_${file.mime_type}`
+                )}
+              >
                 <DownloadIcon className="h-4 w-4 mr-2" />
-                Download
+                {downloadingFiles.has(`${file.name}_${file.mime_type}`)
+                  ? "Downloading..."
+                  : "Download"}
               </Button>
             </div>
           </div>
@@ -296,9 +428,18 @@ export function DocumentDetailView({
               <Badge variant="outline" className="text-xs">
                 {file.mime_type} • {(file.content.length / 1024).toFixed(1)} KB
               </Badge>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDownloadFile(file)}
+                disabled={downloadingFiles.has(
+                  `${file.name}_${file.mime_type}`
+                )}
+              >
                 <DownloadIcon className="h-4 w-4 mr-2" />
-                Download
+                {downloadingFiles.has(`${file.name}_${file.mime_type}`)
+                  ? "Downloading..."
+                  : "Download"}
               </Button>
             </div>
           </div>
@@ -329,9 +470,18 @@ export function DocumentDetailView({
                 {file.mime_type} • {(file.content.length / 1024).toFixed(1)} KB
               </p>
             </div>
-            <Button variant="outline" size="sm">
-              <DownloadIcon className="h-4 w-4 mr-2" />
-              Download
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDownloadFile(file)}
+              disabled={downloadingFiles.has(`${file.name}_${file.mime_type}`)}
+            >
+              <DownloadIcon
+                className={`h-4 w-4 mr-2 ${downloadingFiles.has(`${file.name}_${file.mime_type}`) ? "animate-spin" : ""}`}
+              />
+              {downloadingFiles.has(`${file.name}_${file.mime_type}`)
+                ? "Downloading..."
+                : "Download"}
             </Button>
           </div>
 

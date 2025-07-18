@@ -9,7 +9,7 @@ use pod2::{
     middleware::Params,
 };
 use pod2_db::{
-    store::{self, PodData, PodInfo},
+    store::{self, PodData, PodInfo, SpaceInfo},
     Db,
 };
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,7 @@ async fn get_feature_config_command() -> Result<FeatureConfig, String> {
 pub struct AppStateData {
     pub pod_stats: PodStats,
     pub pod_lists: PodLists,
+    pub spaces: Vec<SpaceInfo>,
     // Future state can be added here easily
     // pub user_preferences: UserPreferences,
     // pub recent_operations: Vec<Operation>,
@@ -76,6 +77,7 @@ impl Default for AppStateData {
                 signed_pods: Vec::new(),
                 main_pods: Vec::new(),
             },
+            spaces: Vec::new(),
         }
     }
 }
@@ -140,10 +142,20 @@ impl AppState {
         Ok(())
     }
 
+    async fn refresh_spaces(&mut self) -> Result<(), String> {
+        let spaces = store::list_spaces(&self.db)
+            .await
+            .map_err(|e| format!("Failed to list spaces: {}", e))?;
+
+        self.state_data.spaces = spaces;
+        Ok(())
+    }
+
     pub async fn trigger_state_sync(&mut self) -> Result<(), String> {
         // This can be called from anywhere to refresh all state
         self.refresh_pod_stats().await?;
         self.refresh_pod_lists().await?;
+        self.refresh_spaces().await?;
         // Future: refresh other state components here
 
         // Always emit state change after sync
@@ -184,10 +196,10 @@ pub async fn setup_default_space(db: &Db) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
+pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
     // Ensure default space exists
-    if !store::space_exists(db, DEFAULT_SPACE_ID).await? {
-        store::create_space(db, DEFAULT_SPACE_ID).await?;
+    if !store::space_exists(db, "zukyc").await? {
+        store::create_space(db, "zukyc").await?;
     }
 
     log::info!("Inserting ZuKYC sample pods to default space...");
@@ -199,7 +211,7 @@ pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
 
             for (pod, name) in pods.into_iter().zip(pod_names) {
                 let pod_data = PodData::from(pod);
-                store::import_pod(db, &pod_data, Some(name), DEFAULT_SPACE_ID).await?;
+                store::import_pod(db, &pod_data, Some(name), "zukyc").await?;
             }
             log::info!("Successfully inserted ZuKYC pods to default space.");
         }
@@ -329,7 +341,6 @@ pub fn run() {
             // POD management commands
             pod_management::get_app_state,
             pod_management::trigger_sync,
-            pod_management::set_pod_pinned,
             pod_management::delete_pod,
             pod_management::list_spaces,
             pod_management::import_pod,

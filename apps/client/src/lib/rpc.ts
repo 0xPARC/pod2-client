@@ -86,7 +86,6 @@ export async function getFeatureConfig(): Promise<FeatureConfig> {
 export const getAppState = podManagementFeature.getAppState;
 export const triggerSync = podManagementFeature.triggerSync;
 export const importPod = podManagementFeature.importPod;
-export const setPodPinned = podManagementFeature.setPodPinned;
 export const deletePod = podManagementFeature.deletePod;
 export const listSpaces = podManagementFeature.listSpaces;
 export const insertZuKycPods = podManagementFeature.insertZuKycPods;

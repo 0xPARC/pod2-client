@@ -31,27 +31,6 @@ pub async fn trigger_sync(state: State<'_, Mutex<AppState>>) -> Result<(), Strin
     Ok(())
 }
 
-/// Set the pinned status of a POD
-#[tauri::command]
-pub async fn set_pod_pinned(
-    state: State<'_, Mutex<AppState>>,
-    space_id: String,
-    pod_id: String,
-    pinned: bool,
-) -> Result<(), String> {
-    check_feature_enabled!();
-    let mut app_state = state.lock().await;
-
-    store::set_pod_pinned(&app_state.db, &space_id, &pod_id, pinned)
-        .await
-        .map_err(|e| format!("Failed to set pod pinned status: {}", e))?;
-
-    // Trigger state sync to update frontend
-    app_state.trigger_state_sync().await?;
-
-    Ok(())
-}
-
 /// List all spaces/folders
 #[tauri::command]
 pub async fn list_spaces(
@@ -129,11 +108,11 @@ pub async fn delete_pod(
 #[tauri::command]
 pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     check_feature_enabled!();
-    use crate::insert_zukyc_pods_to_default;
+    use crate::insert_zukyc_pods;
 
     let mut app_state = state.lock().await;
 
-    insert_zukyc_pods_to_default(&app_state.db)
+    insert_zukyc_pods(&app_state.db)
         .await
         .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
 

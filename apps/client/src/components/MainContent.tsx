@@ -4,6 +4,7 @@ import { InboxView } from "./InboxView";
 import { ChatView } from "./ChatView";
 import { FrogCrypto } from "./FrogCrypto";
 import { DocumentsView } from "./documents/DocumentsView";
+import { PublishPage } from "./documents/PublishPage";
 import { EditorView } from "./editor/EditorView";
 import { FeatureGate } from "../lib/features/config";
 
@@ -15,6 +16,8 @@ export function MainContent() {
       return <PodViewer />;
     case "documents":
       return <DocumentsView />;
+    case "publish":
+      return <PublishPage />;
     case "inbox":
       return <InboxView />;
     case "chats":

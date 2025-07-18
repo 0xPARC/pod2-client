@@ -160,7 +160,7 @@ pub async fn upvote_document(
     }
 
     // 2. Get the identity pod from the database
-    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "default", &identity_pod_id)
+    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "identity", &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to get identity pod: {}", e))?
         .ok_or(format!(
@@ -225,11 +225,23 @@ pub async fn upvote_document(
     let upvote_pod_data = PodData::Main(upvote_main_pod.clone().into());
     let upvote_label = format!("Upvote for document {}", document_id);
 
+    // Ensure "upvotes" folder exists
+    const UPVOTES_FOLDER: &str = "upvotes";
+    if !pod2_db::store::space_exists(&app_state.db, UPVOTES_FOLDER)
+        .await
+        .unwrap_or(false)
+    {
+        pod2_db::store::create_space(&app_state.db, UPVOTES_FOLDER)
+            .await
+            .map_err(|e| format!("Failed to create upvotes folder: {}", e))?;
+        log::info!("✓ Created upvotes folder");
+    }
+
     pod2_db::store::import_pod(
         &app_state.db,
         &upvote_pod_data,
         Some(&upvote_label),
-        "default",
+        UPVOTES_FOLDER,
     )
     .await
     .map_err(|e| format!("Failed to store upvote pod locally: {}", e))?;
@@ -319,6 +331,7 @@ pub struct PublishResult {
     pub error_message: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn publish_document(
     message: Option<String>,
@@ -391,7 +404,7 @@ pub async fn publish_document(
     log::info!("Looking for identity pod with ID: {}", identity_pod_id);
 
     // Get the identity pod from the database
-    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "default", &identity_pod_id)
+    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "identity", &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to get identity pod: {}", e))?
         .ok_or(format!(
@@ -523,11 +536,23 @@ pub async fn publish_document(
     let publish_pod_data = PodData::Main(publish_main_pod.clone().into());
     let publish_label = format!("Publish document with content hash {}", content_hash);
 
+    // Ensure "published" folder exists
+    const PUBLISHED_FOLDER: &str = "published";
+    if !pod2_db::store::space_exists(&app_state.db, PUBLISHED_FOLDER)
+        .await
+        .unwrap_or(false)
+    {
+        pod2_db::store::create_space(&app_state.db, PUBLISHED_FOLDER)
+            .await
+            .map_err(|e| format!("Failed to create published folder: {}", e))?;
+        log::info!("✓ Created published folder");
+    }
+
     pod2_db::store::import_pod(
         &app_state.db,
         &publish_pod_data,
         Some(&publish_label),
-        "default",
+        PUBLISHED_FOLDER,
     )
     .await
     .map_err(|e| format!("Failed to store publish pod locally: {}", e))?;
@@ -542,7 +567,7 @@ pub async fn publish_document(
         content: document_content,
         tags: document_tags,
         authors: document_authors,
-        reply_to: reply_to,
+        reply_to,
         post_id: None, // Will be assigned by server
         username: username.clone(),
         main_pod: publish_main_pod,

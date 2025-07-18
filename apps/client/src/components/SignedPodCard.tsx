@@ -1,12 +1,6 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SignedPod } from "@pod2/pod2js";
-import { ClipboardCopy, FileSignature } from "lucide-react";
+import { ClipboardCopy } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import ValueRenderer from "./ValueRenderer";
@@ -14,15 +8,9 @@ import { Button } from "./ui/button";
 
 interface SignedPodCardProps {
   signedPod: SignedPod;
-  podId?: string;
-  label?: string | null;
 }
 
-const SignedPodCard: React.FC<SignedPodCardProps> = ({
-  signedPod,
-  podId,
-  label
-}) => {
+const SignedPodCard: React.FC<SignedPodCardProps> = ({ signedPod }) => {
   const handleExport = async () => {
     try {
       const jsonString = JSON.stringify(signedPod, null, 2);
@@ -39,28 +27,18 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center">
-            <span className="mr-2">
-              <FileSignature className="w-4 h-4 text-teal-500 dark:text-teal-400" />
-            </span>{" "}
-            Signed POD Details
+            <span
+              className="font-mono text-sm cursor-pointer"
+              onClick={() => navigator.clipboard.writeText(signedPod.id)}
+            >
+              ID: {signedPod.id.slice(0, 32)}&hellip;
+            </span>
           </CardTitle>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <ClipboardCopy className="w-4 h-4 mr-2" />
             Export
           </Button>
         </div>
-        <CardDescription className="mt-2">
-          {podId && (
-            <div>
-              <span className="font-semibold">ID:</span> {podId}
-            </div>
-          )}
-          {label && (
-            <div>
-              <span className="font-semibold">Label:</span> {label}
-            </div>
-          )}
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <h4 className="font-semibold mb-2 text-sm text-muted-foreground">

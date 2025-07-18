@@ -219,9 +219,26 @@ pub async fn register_username(
     let pod_data = pod2_db::store::PodData::Signed(identity_pod.clone().into());
     let identity_pod_id = pod_data.id(); // Get the actual pod ID from the hash
 
-    pod2_db::store::store_identity_pod(&app_state.db, &pod_data, "default", Some("Identity POD"))
+    // Ensure "identity" folder exists
+    const IDENTITY_FOLDER: &str = "identity";
+    if !pod2_db::store::space_exists(&app_state.db, IDENTITY_FOLDER)
         .await
-        .map_err(|e| format!("Failed to store identity POD: {}", e))?;
+        .unwrap_or(false)
+    {
+        pod2_db::store::create_space(&app_state.db, IDENTITY_FOLDER)
+            .await
+            .map_err(|e| format!("Failed to create identity folder: {}", e))?;
+        log::info!("✓ Created identity folder");
+    }
+
+    pod2_db::store::store_identity_pod(
+        &app_state.db,
+        &pod_data,
+        IDENTITY_FOLDER,
+        Some("Identity POD"),
+    )
+    .await
+    .map_err(|e| format!("Failed to store identity POD: {}", e))?;
 
     // Step 5: Update setup state with username and identity POD ID
     pod2_db::store::update_identity_info(&app_state.db, &username, &identity_pod_id)
