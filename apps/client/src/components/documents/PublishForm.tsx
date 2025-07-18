@@ -30,6 +30,7 @@ export function PublishForm({
     "message"
   );
   const [title, setTitle] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -127,6 +128,10 @@ export function PublishForm({
     return data;
   };
 
+  const handleSubmitAttempt = () => {
+    setTitleTouched(true);
+  };
+
   const isValid = () => {
     // Title is mandatory
     if (title.trim().length === 0) {
@@ -177,11 +182,18 @@ export function PublishForm({
             id="title"
             placeholder="Enter a descriptive title for your document"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+            }}
+            onBlur={() => setTitleTouched(true)}
             maxLength={200}
-            className={title.trim().length === 0 ? "border-destructive" : ""}
+            className={
+              titleTouched && title.trim().length === 0
+                ? "border-destructive"
+                : ""
+            }
           />
-          {title.trim().length === 0 && (
+          {titleTouched && title.trim().length === 0 && (
             <p className="text-sm text-destructive">Title is required</p>
           )}
           <p className="text-sm text-muted-foreground">
@@ -395,6 +407,7 @@ export function PublishForm({
             data={getPublishData()}
             disabled={!isValid()}
             onPublishSuccess={onPublishSuccess}
+            onSubmitAttempt={handleSubmitAttempt}
           />
         </div>
       </CardContent>
