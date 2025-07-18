@@ -14,6 +14,7 @@ import { loadCurrentView, saveCurrentView } from "./persistence";
 import {
   deletePod,
   getAppState,
+  getBuildInfo,
   getPrivateKeyInfo,
   listSpaces,
   triggerSync,
@@ -60,6 +61,9 @@ interface AppStoreState {
   // Private Key State
   privateKeyInfo: PrivateKeyInfo | null;
 
+  // Build Info State
+  buildInfo: string | null;
+
   // Editor State
   editorContent: string;
   editorDiagnostics: Diagnostic[];
@@ -80,6 +84,7 @@ interface AppStoreState {
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
   loadPrivateKeyInfo: () => Promise<void>;
+  loadBuildInfo: () => Promise<void>;
 
   // Editor Actions
   setEditorContent: (content: string) => void;
@@ -125,6 +130,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   // Private key initial state
   privateKeyInfo: null,
 
+  // Build info initial state
+  buildInfo: null,
+
   // Editor initial state
   editorContent: loadEditorContent(),
   editorDiagnostics: [],
@@ -148,6 +156,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
       // Load private key info
       await get().loadPrivateKeyInfo();
+
+      // Load build info
+      await get().loadBuildInfo();
 
       // Listen for state changes from the backend
       await listen<AppStateData>("state-changed", (event) => {
@@ -226,6 +237,16 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     } catch (error) {
       console.error("Failed to load private key info:", error);
       set({ privateKeyInfo: null });
+    }
+  },
+
+  loadBuildInfo: async () => {
+    try {
+      const buildInfo = await getBuildInfo();
+      set({ buildInfo });
+    } catch (error) {
+      console.error("Failed to load build info:", error);
+      set({ buildInfo: null });
     }
   },
 
