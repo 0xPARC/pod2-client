@@ -160,7 +160,7 @@ pub async fn upvote_document(
     }
 
     // 2. Get the identity pod from the database
-    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "default", &identity_pod_id)
+    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "identity", &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to get identity pod: {}", e))?
         .ok_or(format!(
@@ -404,7 +404,7 @@ pub async fn publish_document(
     log::info!("Looking for identity pod with ID: {}", identity_pod_id);
 
     // Get the identity pod from the database
-    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "default", &identity_pod_id)
+    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "identity", &identity_pod_id)
         .await
         .map_err(|e| format!("Failed to get identity pod: {}", e))?
         .ok_or(format!(

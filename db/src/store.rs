@@ -12,7 +12,7 @@ use crate::Db;
 
 // --- General API Data Structures ---
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct SpaceInfo {
     pub id: String,
     pub created_at: String,

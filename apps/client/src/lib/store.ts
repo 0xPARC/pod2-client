@@ -107,7 +107,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     pod_lists: {
       signed_pods: [],
       main_pods: []
-    }
+    },
+    spaces: []
   },
   isLoading: false,
   error: null,
@@ -149,7 +150,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
       // Listen for state changes from the backend
       await listen<AppStateData>("state-changed", (event) => {
-        set({ appState: event.payload });
+        set({
+          appState: event.payload,
+          folders: event.payload.spaces || []
+        });
         console.log("state-changed", event.payload);
       });
     } catch (error) {
@@ -259,7 +263,16 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   getFilteredPods: () => {
-    const { selectedFolderFilter } = get();
+    const { selectedFolderFilter, appState } = get();
+
+    if (selectedFolderFilter === "all") {
+      // Return all pods when "all" is selected
+      return [
+        ...appState.pod_lists.signed_pods,
+        ...appState.pod_lists.main_pods
+      ];
+    }
+
     return get().getPodsInFolder(selectedFolderFilter);
   },
 

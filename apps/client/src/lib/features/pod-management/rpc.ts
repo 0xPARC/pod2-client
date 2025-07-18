@@ -35,6 +35,7 @@ export interface PodLists {
 export interface AppStateData {
   pod_stats: PodStats;
   pod_lists: PodLists;
+  spaces: SpaceInfo[];
 }
 
 /**
@@ -50,7 +51,9 @@ function isAppStateData(obj: any): obj is AppStateData {
     typeof obj.pod_stats.main_pods === "number" &&
     obj.pod_lists &&
     Array.isArray(obj.pod_lists.signed_pods) &&
-    Array.isArray(obj.pod_lists.main_pods)
+    Array.isArray(obj.pod_lists.main_pods) &&
+    obj.spaces &&
+    Array.isArray(obj.spaces)
   );
 }
 
