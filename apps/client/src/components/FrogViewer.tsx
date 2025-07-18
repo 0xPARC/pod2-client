@@ -25,6 +25,16 @@ function waitText(timeRemaining: number) {
   return ` (wait ${minsText}${secsText})`;
 }
 
+const temperaments = {
+  "2": "ANGY",
+  "3": "BORD",
+  "4": "CALM",
+  "7": "DARK",
+  "10": "HNGY",
+  "16": "SADG",
+  "18": "SLPY"
+};
+
 export function FrogViewer({ setScore }: FrogViewerProps) {
   const { getFilteredPodsBy, setFrogTimeout, frogTimeout } = useAppStore();
 
@@ -54,13 +64,10 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     async function updateTimeout() {
       try {
         const scoreResponse = await requestScore();
-        console.log(scoreResponse);
         if (scoreResponse.timeout > 0) {
           setFrogTimeout(new Date().getTime() + 1000 * scoreResponse.timeout);
         }
-      } catch (e) {
-        console.log(e);
-      }
+      } catch (e) {}
     }
     updateTimeout();
   }, []);
@@ -105,6 +112,19 @@ function intEntry(value: Value): string {
   }
 }
 
+function vibeEntry(value: Value): string {
+  const entry = (value as { Int: string })?.Int as string;
+  if (entry === undefined) {
+    return "";
+  } else {
+    if (entry in temperaments) {
+      return temperaments[entry as keyof typeof temperaments];
+    } else {
+      return "";
+    }
+  }
+}
+
 interface FrogCardProps {
   pod: PodInfo;
 }
@@ -135,6 +155,7 @@ function FrogCard({ pod }: FrogCardProps) {
             <thead>
               <tr>
                 <th>JMP</th>
+                <th>VIB</th>
                 <th>SPD</th>
                 <th>INT</th>
                 <th>BTY</th>
@@ -143,6 +164,7 @@ function FrogCard({ pod }: FrogCardProps) {
             <tbody>
               <tr>
                 <td>{intEntry(entries.jump)}</td>
+                <td>{vibeEntry(entries.temperament)}</td>
                 <td>{intEntry(entries.speed)}</td>
                 <td>{intEntry(entries.intelligence)}</td>
                 <td>{intEntry(entries.beauty)}</td>

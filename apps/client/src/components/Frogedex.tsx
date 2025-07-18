@@ -131,18 +131,6 @@ export function Frogedex() {
     frogData.get(frogId)!.push(signedPod);
   }
 
-  /*
-  const frogNames = Object.fromEntries(
-    frogPods.map((pod) => {
-      const entries = (pod.data.pod_data_payload as SignedPod).entries;
-      return [
-        Number((entries.frogId as { Int: string }).Int),
-        entries.name as string
-      ];
-    })
-  );
-  */
-
   const [iconView, setIconView] = useState(false);
 
   return (
