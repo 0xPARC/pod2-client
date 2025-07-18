@@ -5,8 +5,8 @@ import type {
   RawValue,
   Value
 } from "@pod2/pod2js";
-import { KeyRoundIcon } from "lucide-react";
 import React from "react";
+import { PublicKeyAvatar } from "./PublicKeyAvatar";
 
 interface ValueRendererProps {
   value: Value;
@@ -50,7 +50,7 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
     if ("PublicKey" in value) {
       return (
         <span className="font-mono text-blue-600 dark:text-blue-400 flex items-center gap-2">
-          <KeyRoundIcon className="w-4 h-4" />
+          <PublicKeyAvatar publicKey={value.PublicKey} size={32} />
           {value.PublicKey}
         </span>
       );
