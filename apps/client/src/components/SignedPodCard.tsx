@@ -8,15 +8,9 @@ import { Button } from "./ui/button";
 
 interface SignedPodCardProps {
   signedPod: SignedPod;
-  podId?: string;
-  label?: string | null;
 }
 
-const SignedPodCard: React.FC<SignedPodCardProps> = ({
-  signedPod,
-  podId,
-  label
-}) => {
+const SignedPodCard: React.FC<SignedPodCardProps> = ({ signedPod }) => {
   const handleExport = async () => {
     try {
       const jsonString = JSON.stringify(signedPod, null, 2);
