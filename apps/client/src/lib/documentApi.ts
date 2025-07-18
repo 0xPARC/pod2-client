@@ -1,5 +1,6 @@
 import { MainPod, SignedPod } from "@pod2/pod2js";
 import { invoke } from "@tauri-apps/api/core";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 // =============================================================================
 // Document Server API Types (PodNet)
@@ -70,7 +71,7 @@ export interface DocumentVerificationResult {
 const DEFAULT_SERVER_URL =
   import.meta.env.VITE_DOCUMENT_SERVER_URL ||
   (import.meta.env.MODE === "production"
-    ? "https://pod-server.ghost-spica.ts.net" //"https://document-server-as95.onrender.com"
+    ? "https://pod-server.ghost-spica.ts.net/server" //"https://document-server-as95.onrender.com"
     : "http://localhost:3000");
 
 /**
@@ -81,11 +82,22 @@ const DEFAULT_SERVER_URL =
 export async function fetchDocuments(
   serverUrl: string = DEFAULT_SERVER_URL
 ): Promise<DocumentMetadata[]> {
-  const response = await fetch(`${serverUrl}/documents`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch documents: ${response.statusText}`);
+  try {
+    console.log(
+      `[documentApi] Fetching documents from: ${serverUrl}/documents`
+    );
+    const response = await tauriFetch(`${serverUrl}/documents`);
+    console.log(
+      `[documentApi] Response status: ${response.status} ${response.statusText}`
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch documents: ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`[documentApi] Error fetching documents:`, error);
+    throw error;
   }
-  return response.json();
 }
 
 /**
@@ -98,7 +110,7 @@ export async function fetchDocument(
   id: number,
   serverUrl: string = DEFAULT_SERVER_URL
 ): Promise<Document> {
-  const response = await fetch(`${serverUrl}/documents/${id}`);
+  const response = await tauriFetch(`${serverUrl}/documents/${id}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch document ${id}: ${response.statusText}`);
   }
@@ -115,7 +127,7 @@ export async function fetchDocumentReplies(
   id: number,
   serverUrl: string = DEFAULT_SERVER_URL
 ): Promise<DocumentMetadata[]> {
-  const response = await fetch(`${serverUrl}/documents/${id}/replies`);
+  const response = await tauriFetch(`${serverUrl}/documents/${id}/replies`);
   if (!response.ok) {
     throw new Error(
       `Failed to fetch replies for document ${id}: ${response.statusText}`
@@ -132,7 +144,7 @@ export async function fetchDocumentReplies(
 export async function fetchPosts(
   serverUrl: string = DEFAULT_SERVER_URL
 ): Promise<any[]> {
-  const response = await fetch(`${serverUrl}/posts`);
+  const response = await tauriFetch(`${serverUrl}/posts`);
   if (!response.ok) {
     throw new Error(`Failed to fetch posts: ${response.statusText}`);
   }
