@@ -1,10 +1,10 @@
 use pod2::{
-    backends::plonky2::signedpod::Signer,
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
     frontend::{SignedPod, SignedPodBuilder},
     middleware::TypedValue,
 };
 use pod2_db::store::{self, create_space, space_exists, PodData};
-use reqwest::Client;
+use reqwest::{Client, Response};
 use serde::Deserialize;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -36,7 +36,7 @@ struct FrogResponse {
 
 async fn process_challenge(
     client: &mut Client,
-    app_state: &mut AppState,
+    private_key: SecretKey,
 ) -> Result<SignedPod, String> {
     let challenge_url = server_url("auth");
     let challenge: Challenge = client
@@ -50,25 +50,30 @@ async fn process_challenge(
     let mut builder = SignedPodBuilder::new(&Default::default());
     builder.insert("public_key", challenge.public_key);
     builder.insert("time", challenge.time);
-    let private_key = crate::get_private_key(&app_state.db).await?;
     let mut signer = Signer(private_key);
     builder
         .sign(&mut signer)
         .map_err(|_| "failed to sign pod".to_string())
 }
 
-#[tauri::command]
-pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
-    let mut client = Client::new();
-    let mut app_state = state.lock().await;
-    let pod = process_challenge(&mut client, &mut app_state).await?;
+async fn download_frog(client: &mut Client, private_key: SecretKey) -> Result<Response, String> {
+    let pod = process_challenge(client, private_key).await?;
     let frog_url = server_url("frog");
-    let frog_response: FrogResponse = client
+    client
         .post(&frog_url)
         .json(&pod)
         .send()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
+    let mut client = Client::new();
+    let mut app_state = state.lock().await;
+    let private_key = crate::get_private_key(&app_state.db).await?;
+    let frog_response: FrogResponse = download_frog(&mut client, private_key)
+        .await?
         .json()
         .await
         .map_err(|e| e.to_string())?;
@@ -103,8 +108,9 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
 #[tauri::command]
 pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
     let mut client = Client::new();
-    let mut app_state = state.lock().await;
-    let pod = process_challenge(&mut client, &mut app_state).await?;
+    let app_state = state.lock().await;
+    let private_key = crate::get_private_key(&app_state.db).await?;
+    let pod = process_challenge(&mut client, private_key).await?;
     let score_url = server_url("score");
     client
         .post(&score_url)
@@ -115,4 +121,14 @@ pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_js
         .json()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_request_frog() -> Result<(), String> {
+    let mut client = Client::new();
+    let private_key = SecretKey::new_rand();
+    let response = download_frog(&mut client, private_key).await?;
+    println!("{}", response.text().await.unwrap());
+    Ok(())
 }
