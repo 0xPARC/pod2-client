@@ -19,6 +19,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
+import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -300,6 +301,19 @@ export function AppSidebar() {
             </div>
           </div>
         )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={() => {
+            invoke("insert_zukyc_pods").then(() => {
+              console.log("Zukyc PODs inserted");
+            });
+          }}
+        >
+          Zukyc PODs
+        </Button>
 
         {/* GitHub Link */}
         <Button

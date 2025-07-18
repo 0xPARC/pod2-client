@@ -108,11 +108,11 @@ pub async fn delete_pod(
 #[tauri::command]
 pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     check_feature_enabled!();
-    use crate::insert_zukyc_pods_to_default;
+    use crate::insert_zukyc_pods;
 
     let mut app_state = state.lock().await;
 
-    insert_zukyc_pods_to_default(&app_state.db)
+    insert_zukyc_pods(&app_state.db)
         .await
         .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
 

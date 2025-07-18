@@ -197,10 +197,10 @@ pub async fn setup_default_space(db: &Db) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
+pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
     // Ensure default space exists
-    if !store::space_exists(db, DEFAULT_SPACE_ID).await? {
-        store::create_space(db, DEFAULT_SPACE_ID).await?;
+    if !store::space_exists(db, "zukyc").await? {
+        store::create_space(db, "zukyc").await?;
     }
 
     log::info!("Inserting ZuKYC sample pods to default space...");
@@ -212,7 +212,7 @@ pub async fn insert_zukyc_pods_to_default(db: &Db) -> anyhow::Result<()> {
 
             for (pod, name) in pods.into_iter().zip(pod_names) {
                 let pod_data = PodData::from(pod);
-                store::import_pod(db, &pod_data, Some(name), DEFAULT_SPACE_ID).await?;
+                store::import_pod(db, &pod_data, Some(name), "zukyc").await?;
             }
             log::info!("Successfully inserted ZuKYC pods to default space.");
         }
