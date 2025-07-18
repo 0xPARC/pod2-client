@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["solver", "server", "apps/client/src-tauri", "db", "packages/pod2-node"]
+members = ["solver", "apps/client/src-tauri", "db", "packages/pod2-node"]
 
 [workspace.dependencies]
 pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [

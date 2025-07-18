@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
 import {
-  FileTextIcon,
-  RefreshCwIcon,
   AlertCircleIcon,
-  ClockIcon
+  ClockIcon,
+  FileTextIcon,
+  PlusIcon,
+  RefreshCwIcon
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Button } from "../ui/button";
+import { useEffect, useState } from "react";
+import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
-import { fetchDocuments, DocumentMetadata } from "../../lib/documentApi";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { DocumentDetailView } from "./DocumentDetailView";
+import { PublishDemoPage } from "./PublishDemoPage";
 
 export function DocumentsView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
@@ -18,6 +20,7 @@ export function DocumentsView() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(
     null
   );
+  const [showPublishForm, setShowPublishForm] = useState(false);
 
   const loadDocuments = async () => {
     try {
@@ -47,6 +50,20 @@ export function DocumentsView() {
     });
   };
 
+  // If publish form is shown, show the publish page
+  if (showPublishForm) {
+    return (
+      <PublishDemoPage
+        onBack={() => setShowPublishForm(false)}
+        onPublishSuccess={(documentId) => {
+          console.log("Document published with ID:", documentId);
+          setShowPublishForm(false);
+          loadDocuments(); // Refresh the document list
+        }}
+      />
+    );
+  }
+
   // If a document is selected, show the detail view
   if (selectedDocumentId !== null) {
     return (
@@ -67,12 +84,25 @@ export function DocumentsView() {
               Documents from the PodNet server with cryptographic verification.
             </p>
           </div>
-          <Button onClick={loadDocuments} disabled={loading} variant="outline">
-            <RefreshCwIcon
-              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowPublishForm(true)}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Publish Document
+            </Button>
+            <Button
+              onClick={loadDocuments}
+              disabled={loading}
+              variant="outline"
+            >
+              <RefreshCwIcon
+                className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -157,6 +187,13 @@ export function DocumentsView() {
                           Document #{doc.reply_to}
                         </div>
                       )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <span className="font-medium">Upvotes:</span>
+                      <Badge variant="secondary" className="bg-muted">
+                        {doc.upvote_count}
+                      </Badge>
                     </div>
 
                     {doc.tags.length > 0 && (

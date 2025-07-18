@@ -332,10 +332,34 @@ pub async fn delete_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<usize> 
 
     let rows_deleted = conn
         .interact(move |conn| {
-            conn.execute(
-                "DELETE FROM pods WHERE space = ?1 AND id = ?2",
-                [space_id_clone, pod_id_clone],
-            )
+            // Check if the pod is mandatory before attempting to delete
+            let mut check_stmt =
+                conn.prepare("SELECT is_mandatory FROM pods WHERE space = ?1 AND id = ?2")?;
+            let is_mandatory = check_stmt.query_row([&space_id_clone, &pod_id_clone], |row| {
+                Ok(row.get::<_, bool>(0).unwrap_or(false))
+            });
+
+            match is_mandatory {
+                Ok(true) => {
+                    // Pod is mandatory, cannot be deleted
+                    Err(rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                        Some("Cannot delete mandatory POD".to_string()),
+                    ))
+                }
+                Ok(false) => {
+                    // Pod is not mandatory, proceed with deletion
+                    conn.execute(
+                        "DELETE FROM pods WHERE space = ?1 AND id = ?2",
+                        [space_id_clone, pod_id_clone],
+                    )
+                }
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    // Pod doesn't exist, return 0 rows deleted
+                    Ok(0)
+                }
+                Err(e) => Err(e),
+            }
         })
         .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
@@ -620,59 +644,14 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
     Ok(())
 }
 
-/// Helper function to ensure a default private key exists
-async fn ensure_default_private_key(db: &Db) -> Result<()> {
-    let conn = db
-        .pool()
-        .get()
-        .await
-        .context("Failed to get DB connection")?;
-
-    // Check if a default key already exists
-    let has_default = conn
-        .interact(|conn| {
-            let mut stmt =
-                conn.prepare("SELECT 1 FROM private_keys WHERE is_default = TRUE LIMIT 1")?;
-            stmt.exists([])
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-        .context("DB interaction failed checking for default key")??;
-
-    if !has_default {
-        // Create a new default key
-        let private_key = SecretKey::new_rand();
-        let private_key_hex = hex::encode(private_key.0.to_bytes_be());
-        let public_key_base58 = private_key.public_key().to_string();
-
-        conn.interact(move |conn| {
-            conn.execute(
-                "INSERT INTO private_keys (private_key, key_type, public_key, alias, is_default) VALUES (?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![
-                    private_key_hex,
-                    "Plonky2",
-                    public_key_base58,
-                    None::<String>, // No alias for auto-created key
-                    true            // Set as default
-                ],
-            )
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
-        .context("DB interaction failed for ensure_default_private_key")??;
-
-        log::info!("Auto-created default private key");
-    }
-
-    Ok(())
-}
-
-// Note: Removed create_private_key_internal - we now use ensure_default_private_key for single-key model
-
-/// Get the default private key, creating one if it doesn't exist
+/// Get the default private key, returns error if none exists (no auto-generation)
 pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
-    // Ensure a default key exists
-    ensure_default_private_key(db).await?;
+    // Check if setup is completed first
+    if !is_setup_completed(db).await? {
+        return Err(anyhow::anyhow!(
+            "Identity setup not completed. Please complete the mandatory identity setup first."
+        ));
+    }
 
     let conn = db
         .pool()
@@ -705,8 +684,12 @@ pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
 
 /// Get information about the default private key (without exposing the secret key)
 pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> {
-    // Ensure a default key exists
-    ensure_default_private_key(db).await?;
+    // Check if setup is completed first
+    if !is_setup_completed(db).await? {
+        return Err(anyhow::anyhow!(
+            "Identity setup not completed. Please complete the mandatory identity setup first."
+        ));
+    }
 
     let conn = db
         .pool()
@@ -1018,4 +1001,282 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
         .context("DB interaction failed for list_all_pods")??;
 
     Ok(pods)
+}
+
+// --- Identity Setup Functions ---
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+pub struct AppSetupState {
+    pub setup_completed: bool,
+    pub identity_server_url: Option<String>,
+    pub identity_server_id: Option<String>,
+    pub identity_server_public_key: Option<String>,
+    pub username: Option<String>,
+    pub identity_pod_id: Option<String>,
+    pub completed_at: Option<String>,
+    pub created_at: String,
+}
+
+/// Check if the app setup has been completed
+pub async fn is_setup_completed(db: &Db) -> Result<bool> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let setup_completed = conn
+        .interact(|conn| {
+            let mut stmt =
+                conn.prepare("SELECT setup_completed FROM app_setup_state WHERE id = 1")?;
+            let result = stmt.query_row([], |row| row.get::<_, bool>(0));
+
+            match result {
+                Ok(completed) => Ok(completed),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // No setup record means not completed
+                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for is_setup_completed")??;
+
+    Ok(setup_completed)
+}
+
+/// Get the current app setup state
+pub async fn get_app_setup_state(db: &Db) -> Result<AppSetupState> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let setup_state = conn
+        .interact(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT setup_completed, identity_server_url, identity_server_id, identity_server_public_key, username, identity_pod_id, completed_at, created_at FROM app_setup_state WHERE id = 1"
+            )?;
+            let result = stmt.query_row([], |row| {
+                Ok(AppSetupState {
+                    setup_completed: row.get(0)?,
+                    identity_server_url: row.get(1)?,
+                    identity_server_id: row.get(2)?,
+                    identity_server_public_key: row.get(3)?,
+                    username: row.get(4)?,
+                    identity_pod_id: row.get(5)?,
+                    completed_at: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            });
+
+            match result {
+                Ok(state) => Ok(state),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    // Return default state if no record exists
+                    Ok(AppSetupState {
+                        setup_completed: false,
+                        identity_server_url: None,
+                        identity_server_id: None,
+                        identity_server_public_key: None,
+                        username: None,
+                        identity_pod_id: None,
+                        completed_at: None,
+                        created_at: Utc::now().to_rfc3339(),
+                    })
+                }
+                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_app_setup_state")??;
+
+    Ok(setup_state)
+}
+
+/// Update identity server info in the setup state
+pub async fn update_identity_server_info(
+    db: &Db,
+    server_url: &str,
+    server_id: &str,
+    server_public_key: &str,
+) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let server_url_clone = server_url.to_string();
+    let server_id_clone = server_id.to_string();
+    let server_public_key_clone = server_public_key.to_string();
+
+    conn.interact(move |conn| {
+        conn.execute(
+            "UPDATE app_setup_state SET identity_server_url = ?1, identity_server_id = ?2, identity_server_public_key = ?3 WHERE id = 1",
+            rusqlite::params![server_url_clone, server_id_clone, server_public_key_clone],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for update_identity_server_info")??;
+
+    Ok(())
+}
+
+/// Update username and identity pod info in the setup state
+pub async fn update_identity_info(db: &Db, username: &str, identity_pod_id: &str) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let username_clone = username.to_string();
+    let identity_pod_id_clone = identity_pod_id.to_string();
+
+    conn.interact(move |conn| {
+        conn.execute(
+            "UPDATE app_setup_state SET username = ?1, identity_pod_id = ?2 WHERE id = 1",
+            rusqlite::params![username_clone, identity_pod_id_clone],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for update_identity_info")??;
+
+    Ok(())
+}
+
+/// Mark the app setup as completed
+pub async fn complete_app_setup(db: &Db) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    conn.interact(move |conn| {
+        conn.execute(
+            "UPDATE app_setup_state SET setup_completed = TRUE, completed_at = ?1 WHERE id = 1",
+            rusqlite::params![now],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for complete_app_setup")??;
+
+    Ok(())
+}
+
+/// Store an identity POD with mandatory flag
+pub async fn store_identity_pod(
+    db: &Db,
+    pod_data: &PodData,
+    space_id: &str,
+    label: Option<&str>,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    let pod_id = pod_data.id();
+    let data_blob =
+        serde_json::to_vec(pod_data).context("Failed to serialize PodData enum for storage")?;
+
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    // Clone data for move closure
+    let pod_id_clone = pod_id.clone();
+    let data_blob_clone = data_blob;
+    let space_id_clone = space_id.to_string();
+    let label_clone = label.map(|s| s.to_string());
+    let pod_type_clone = pod_data.type_str();
+
+    conn.interact(move |conn| {
+        conn.execute(
+            "INSERT INTO pods (id, data, created_at, space, pod_type, label, is_mandatory) VALUES (?1, ?2, ?3, ?4, ?5, ?6, TRUE)",
+            rusqlite::params![&pod_id_clone, &data_blob_clone, &now, &space_id_clone, &pod_type_clone, &label_clone],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for store_identity_pod")??;
+
+    Ok(())
+}
+
+/// Get the default private key without checking setup completion (for internal use)
+pub async fn get_default_private_key_raw(db: &Db) -> Result<SecretKey> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let key_hex = conn
+        .interact(|conn| {
+            let mut stmt =
+                conn.prepare("SELECT private_key FROM private_keys WHERE is_default = TRUE")?;
+            let result = stmt.query_row([], |row| row.get::<_, String>(0));
+
+            match result {
+                Ok(hex_string) => Ok(hex_string),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    Err(anyhow::anyhow!("No default private key found"))
+                }
+                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_default_private_key_raw")??;
+
+    let bytes = hex::decode(key_hex).context("Failed to decode private key hex")?;
+    let big_uint = num::BigUint::from_bytes_be(&bytes);
+    Ok(SecretKey(big_uint))
+}
+
+/// Create a default private key during the setup process
+pub async fn create_default_private_key(db: &Db) -> Result<SecretKey> {
+    let private_key = SecretKey::new_rand();
+    let private_key_hex = hex::encode(private_key.0.to_bytes_be());
+    let public_key_base58 = private_key.public_key().to_string();
+    let now = Utc::now().to_rfc3339();
+
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let private_key_hex_clone = private_key_hex.clone();
+    let public_key_base58_clone = public_key_base58.clone();
+
+    conn.interact(move |conn| {
+        // First check if a default key already exists
+        let mut check_stmt = conn.prepare("SELECT COUNT(*) FROM private_keys WHERE is_default = TRUE")?;
+        let count: i64 = check_stmt.query_row([], |row| row.get(0))?;
+
+        if count > 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some("Default private key already exists".to_string()),
+            ));
+        }
+
+        conn.execute(
+            "INSERT INTO private_keys (private_key, key_type, public_key, is_default, created_at) VALUES (?1, ?2, ?3, TRUE, ?4)",
+            rusqlite::params![private_key_hex_clone, "Plonky2", public_key_base58_clone, now],
+        )
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for create_default_private_key")??;
+
+    log::info!("Created default private key during setup");
+    Ok(private_key)
 }

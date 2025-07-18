@@ -6,11 +6,13 @@ import {
   listSpaces,
   setPodPinned,
   deletePod,
+  getPrivateKeyInfo,
   type AppStateData,
   type PodStats,
   type PodLists,
   type PodInfo,
-  type SpaceInfo
+  type SpaceInfo,
+  type PrivateKeyInfo
 } from "./rpc";
 import { validateCode, executeCode } from "./features/authoring/rpc";
 import { DiagnosticSeverity } from "./features/authoring/types";
@@ -25,7 +27,7 @@ import {
 import { loadCurrentView, saveCurrentView } from "./persistence";
 
 // Re-export types for backward compatibility
-export type { AppStateData, PodStats, PodLists, SpaceInfo };
+export type { AppStateData, PodStats, PodLists, SpaceInfo, PrivateKeyInfo };
 
 // Use the PodInfo from rpc.ts which matches the actual API
 export type { PodInfo } from "./rpc";
@@ -57,6 +59,9 @@ interface AppStoreState {
   folders: SpaceInfo[];
   foldersLoading: boolean;
 
+  // Private Key State
+  privateKeyInfo: PrivateKeyInfo | null;
+
   // Editor State
   editorContent: string;
   editorDiagnostics: Diagnostic[];
@@ -78,6 +83,7 @@ interface AppStoreState {
   togglePodPinned: (podId: string, spaceId: string) => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
+  loadPrivateKeyInfo: () => Promise<void>;
 
   // Editor Actions
   setEditorContent: (content: string) => void;
@@ -119,6 +125,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   foldersLoading: false,
   frogTimeout: null,
 
+  // Private key initial state
+  privateKeyInfo: null,
+
   // Editor initial state
   editorContent: loadEditorContent(),
   editorDiagnostics: [],
@@ -139,6 +148,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
       // Load folders
       await get().loadFolders();
+
+      // Load private key info
+      await get().loadPrivateKeyInfo();
 
       // Listen for state changes from the backend
       await listen<AppStateData>("state-changed", (event) => {
@@ -213,6 +225,16 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
         error: `Failed to load folders: ${error}`,
         foldersLoading: false
       });
+    }
+  },
+
+  loadPrivateKeyInfo: async () => {
+    try {
+      const privateKeyInfo = await getPrivateKeyInfo();
+      set({ privateKeyInfo });
+    } catch (error) {
+      console.error("Failed to load private key info:", error);
+      set({ privateKeyInfo: null });
     }
   },
 

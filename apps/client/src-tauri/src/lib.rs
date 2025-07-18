@@ -1,6 +1,6 @@
 use anyhow::Context;
 use config::FeatureConfig;
-use features::*;
+use features::{blockies, *};
 use num::BigUint;
 use pod2::{
     backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
@@ -17,6 +17,7 @@ use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
+mod cache;
 mod config;
 mod features;
 pub(crate) mod frog;
@@ -312,6 +313,11 @@ pub fn run() {
                     .await
                     .expect("failed to initialize state");
                 app.manage(Mutex::new(app_state));
+
+                // Spawn cache warming task in background to avoid blocking startup
+                tokio::task::spawn_blocking(|| {
+                    cache::warm_mainpod_cache();
+                });
             });
             Ok(())
         })
@@ -328,6 +334,9 @@ pub fn run() {
             pod_management::list_spaces,
             pod_management::import_pod,
             pod_management::insert_zukyc_pods,
+            // Blockies commands
+            blockies::commands::generate_blockies,
+            blockies::commands::get_blockies_data,
             // Networking commands
             networking::start_p2p_node,
             networking::send_pod_to_peer,
@@ -343,6 +352,14 @@ pub fn run() {
             authoring::execute_code_command,
             // Document commands
             documents::verify_document_pod,
+            documents::upvote_document,
+            documents::publish_document,
+            // Identity setup commands
+            identity_setup::setup_identity_server,
+            identity_setup::register_username,
+            identity_setup::complete_identity_setup,
+            identity_setup::is_setup_completed,
+            identity_setup::get_app_setup_state,
             // Integration commands
             integration::submit_pod_request
         ])
