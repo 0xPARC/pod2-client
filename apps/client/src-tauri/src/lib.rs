@@ -19,6 +19,7 @@ use tokio::sync::Mutex;
 
 pub(crate) mod frog;
 
+mod cache;
 mod config;
 mod features;
 mod p2p;
@@ -313,6 +314,11 @@ pub fn run() {
                     .await
                     .expect("failed to initialize state");
                 app.manage(Mutex::new(app_state));
+
+                // Spawn cache warming task in background to avoid blocking startup
+                tokio::task::spawn_blocking(|| {
+                    cache::warm_mainpod_cache();
+                });
             });
             Ok(())
         })
@@ -347,6 +353,7 @@ pub fn run() {
             // Document commands
             documents::verify_document_pod,
             documents::upvote_document,
+            documents::publish_document,
             // Identity setup commands
             identity_setup::setup_identity_server,
             identity_setup::register_username,
