@@ -66,10 +66,10 @@ async fn download_frog(client: &Client, private_key: SecretKey) -> Result<Respon
 
 #[tauri::command]
 pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
-    let mut client = Client::new();
+    let client = Client::new();
     let mut app_state = state.lock().await;
     let private_key = crate::get_private_key(&app_state.db).await?;
-    let frog_response: FrogResponse = download_frog(&mut client, private_key)
+    let frog_response: FrogResponse = download_frog(&client, private_key)
         .await?
         .json()
         .await
@@ -104,10 +104,10 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
 
 #[tauri::command]
 pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
-    let mut client = Client::new();
+    let client = Client::new();
     let app_state = state.lock().await;
     let private_key = crate::get_private_key(&app_state.db).await?;
-    let pod = process_challenge(&mut client, private_key).await?;
+    let pod = process_challenge(&client, private_key).await?;
     let score_url = server_url("score");
     client
         .post(&score_url)
@@ -132,7 +132,7 @@ pub async fn request_leaderboard(
 ) -> Result<Vec<LeaderboardRow>, String> {
     let client = Client::new();
     client
-        .get(&server_url("leaderboard"))
+        .get(server_url("leaderboard"))
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -144,9 +144,9 @@ pub async fn request_leaderboard(
 #[ignore]
 #[tokio::test]
 async fn test_request_frog() -> Result<(), String> {
-    let mut client = Client::new();
+    let client = Client::new();
     let private_key = SecretKey::new_rand();
-    let response = download_frog(&mut client, private_key).await?;
+    let response = download_frog(&client, private_key).await?;
     println!("{}", response.text().await.unwrap());
     Ok(())
 }
