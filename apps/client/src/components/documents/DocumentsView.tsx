@@ -11,7 +11,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { DocumentDetailView } from "./DocumentDetailView";
-import { PublishDemoPage } from "./PublishDemoPage";
+import { PublishPage } from "./PublishPage";
 
 export function DocumentsView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);

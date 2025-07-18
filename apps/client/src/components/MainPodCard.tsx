@@ -1,18 +1,12 @@
 import type { MainPod, ValueRef } from "@pod2/pod2js";
-import { ClipboardCopy, FileCheck2, Plus } from "lucide-react";
+import { ClipboardCopy, Plus } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
-import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "./ui/card";
-import ValueRenderer from "./ValueRenderer";
-import { useAppStore } from "../lib/store";
 import { importPod } from "../lib/rpc";
+import { useAppStore } from "../lib/store";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import ValueRenderer from "./ValueRenderer";
 
 interface MainPodCardProps {
   mainPod: MainPod;
@@ -77,10 +71,12 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center">
-            <span className="mr-2">
-              <FileCheck2 className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-            </span>{" "}
-            Main POD Details
+            <span
+              className="font-mono text-sm cursor-pointer"
+              onClick={() => navigator.clipboard.writeText(mainPod.id)}
+            >
+              ID: {mainPod.id.slice(0, 32)}&hellip;
+            </span>
           </CardTitle>
           <div className="flex items-center gap-2">
             {!podExists && podId && (
@@ -95,18 +91,6 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
             </Button>
           </div>
         </div>
-        <CardDescription className="mt-2">
-          {podId && (
-            <div>
-              <span className="font-semibold">ID:</span> {podId}
-            </div>
-          )}
-          {label && (
-            <div>
-              <span className="font-semibold">Label:</span> {label}
-            </div>
-          )}
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <h4 className="font-semibold mb-2 text-sm text-muted-foreground">

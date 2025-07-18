@@ -196,6 +196,7 @@ export function IdentitySetupModal({
               <div>
                 <Label htmlFor="username">Username</Label>
                 <Input
+                  autoComplete="off"
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}

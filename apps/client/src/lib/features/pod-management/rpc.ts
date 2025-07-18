@@ -1,5 +1,5 @@
 import { invokeCommand } from "@/lib/rpc";
-import type { MainPod, SignedPod, PodInfo } from "@pod2/pod2js";
+import type { MainPod, PodInfo, SignedPod } from "@pod2/pod2js";
 
 // Re-export types for convenience
 export type { PodInfo };
@@ -35,6 +35,7 @@ export interface PodLists {
 export interface AppStateData {
   pod_stats: PodStats;
   pod_lists: PodLists;
+  spaces: SpaceInfo[];
 }
 
 /**
@@ -50,7 +51,9 @@ function isAppStateData(obj: any): obj is AppStateData {
     typeof obj.pod_stats.main_pods === "number" &&
     obj.pod_lists &&
     Array.isArray(obj.pod_lists.signed_pods) &&
-    Array.isArray(obj.pod_lists.main_pods)
+    Array.isArray(obj.pod_lists.main_pods) &&
+    obj.spaces &&
+    Array.isArray(obj.spaces)
   );
 }
 
@@ -90,24 +93,6 @@ export async function importPodFromJson(
     serializedPod,
     podType,
     label
-  });
-}
-
-/**
- * Set the pinned status of a POD
- * @param spaceId - The space/folder ID
- * @param podId - The POD ID
- * @param pinned - Whether the POD should be pinned
- */
-export async function setPodPinned(
-  spaceId: string,
-  podId: string,
-  pinned: boolean
-): Promise<void> {
-  return invokeCommand("set_pod_pinned", {
-    spaceId,
-    podId,
-    pinned
   });
 }
 

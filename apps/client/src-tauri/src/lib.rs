@@ -9,7 +9,7 @@ use pod2::{
     middleware::Params,
 };
 use pod2_db::{
-    store::{self, PodData, PodInfo},
+    store::{self, PodData, PodInfo, SpaceInfo},
     Db,
 };
 use serde::{Deserialize, Serialize};
@@ -41,6 +41,7 @@ async fn get_feature_config_command() -> Result<FeatureConfig, String> {
 pub struct AppStateData {
     pub pod_stats: PodStats,
     pub pod_lists: PodLists,
+    pub spaces: Vec<SpaceInfo>,
     // Future state can be added here easily
     // pub user_preferences: UserPreferences,
     // pub recent_operations: Vec<Operation>,
@@ -77,6 +78,7 @@ impl Default for AppStateData {
                 signed_pods: Vec::new(),
                 main_pods: Vec::new(),
             },
+            spaces: Vec::new(),
         }
     }
 }
@@ -141,10 +143,20 @@ impl AppState {
         Ok(())
     }
 
+    async fn refresh_spaces(&mut self) -> Result<(), String> {
+        let spaces = store::list_spaces(&self.db)
+            .await
+            .map_err(|e| format!("Failed to list spaces: {}", e))?;
+
+        self.state_data.spaces = spaces;
+        Ok(())
+    }
+
     pub async fn trigger_state_sync(&mut self) -> Result<(), String> {
         // This can be called from anywhere to refresh all state
         self.refresh_pod_stats().await?;
         self.refresh_pod_lists().await?;
+        self.refresh_spaces().await?;
         // Future: refresh other state components here
 
         // Always emit state change after sync
@@ -329,7 +341,6 @@ pub fn run() {
             // POD management commands
             pod_management::get_app_state,
             pod_management::trigger_sync,
-            pod_management::set_pod_pinned,
             pod_management::delete_pod,
             pod_management::list_spaces,
             pod_management::import_pod,
