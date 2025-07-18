@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
 import {
-  FileTextIcon,
-  RefreshCwIcon,
   AlertCircleIcon,
-  ClockIcon
+  ClockIcon,
+  FileTextIcon,
+  RefreshCwIcon
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Button } from "../ui/button";
+import { useEffect, useState } from "react";
+import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
-import { fetchDocuments, DocumentMetadata } from "../../lib/documentApi";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { DocumentDetailView } from "./DocumentDetailView";
 
 export function DocumentsView() {
@@ -157,6 +157,13 @@ export function DocumentsView() {
                           Document #{doc.reply_to}
                         </div>
                       )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <span className="font-medium">Upvotes:</span>
+                      <Badge variant="secondary" className="bg-muted">
+                        {doc.upvote_count}
+                      </Badge>
                     </div>
 
                     {doc.tags.length > 0 && (
