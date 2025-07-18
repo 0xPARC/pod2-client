@@ -164,6 +164,15 @@ export function AppSidebar() {
                   Documents
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("publish")}
+                  isActive={currentView === "publish"}
+                >
+                  <UploadIcon />
+                  Publish
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

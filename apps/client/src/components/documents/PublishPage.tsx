@@ -2,15 +2,15 @@ import { ArrowLeftIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { PublishForm } from "./PublishForm";
 
-interface PublishDemoPageProps {
+interface PublishPageProps {
   onBack?: () => void;
   onPublishSuccess?: (documentId: number) => void;
 }
 
-export function PublishDemoPage({
+export function PublishPage({
   onBack,
   onPublishSuccess
-}: PublishDemoPageProps) {
+}: PublishPageProps) {
   const handlePublishSuccess = (documentId: number) => {
     console.log("Document published successfully with ID:", documentId);
     if (onPublishSuccess) {
