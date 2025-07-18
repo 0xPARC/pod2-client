@@ -1,6 +1,6 @@
 [package]
 name = "pod_client"
-version = "0.1.0"
+version = "0.0.2"
 description = "POD Playground native client"
 authors = ["rob@0xparc.org"]
 edition = "2021"

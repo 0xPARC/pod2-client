@@ -45,7 +45,7 @@ impl FeatureConfig {
                     networking: Self::get_env_bool("FEATURE_NETWORKING", false),
                     authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
                     integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
-                    frogcrypto: Self::get_env_bool("FEATURE_FROGCRYPTO", false),
+                    frogcrypto: Self::get_env_bool("FEATURE_FROGCRYPTO", true),
                 };
 
                 log::info!("Feature configuration loaded: {:?}", config);
