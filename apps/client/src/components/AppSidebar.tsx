@@ -54,6 +54,7 @@ export function AppSidebar() {
     folders,
     foldersLoading,
     privateKeyInfo,
+    buildInfo,
     setCurrentView,
     setSelectedFolderFilter
   } = useAppStore();
@@ -314,18 +315,32 @@ export function AppSidebar() {
           Zukyc PODs
         </Button>
 
-        {/* GitHub Link */}
+        {/* GitHub Link with Commit SHA */}
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          className="w-full justify-center text-muted-foreground hover:text-foreground"
           onClick={() => {
-            // Use Tauri's opener plugin to open external URL
-            openUrl("https://github.com/0xPARC/pod2-client");
+            // If we have build info, link to the specific commit, otherwise to the repo
+            const url = buildInfo
+              ? `https://github.com/0xPARC/pod2-client/commit/${buildInfo}`
+              : "https://github.com/0xPARC/pod2-client";
+            openUrl(url);
           }}
+          title={
+            buildInfo
+              ? `View commit ${buildInfo.slice(0, 7)} on GitHub`
+              : "View on GitHub"
+          }
         >
-          <Github className="mr-2 h-4 w-4" />
-          View on GitHub
+          <div className="flex items-center gap-2">
+            <Github className="h-4 w-4" />
+            {buildInfo && (
+              <span className="font-mono text-[10px] opacity-60">
+                {buildInfo.slice(0, 7)}
+              </span>
+            )}
+          </div>
         </Button>
       </SidebarFooter>
     </Sidebar>

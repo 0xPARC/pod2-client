@@ -41,6 +41,7 @@ export interface DocumentMetadata {
   authors: string[]; // Authors for attribution
   reply_to?: number; // Document ID this replies to
   requested_post_id?: number; // Original post_id from request
+  title: string; // Document title
 }
 
 /**

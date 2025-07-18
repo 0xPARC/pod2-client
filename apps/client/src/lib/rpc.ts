@@ -29,6 +29,18 @@ export interface FeatureConfig {
   frogcrypto: boolean;
 }
 
+// =============================================================================
+// Build Information
+// =============================================================================
+
+/**
+ * Get build information including git commit SHA
+ * @returns Git commit SHA hash
+ */
+export async function getBuildInfo(): Promise<string> {
+  return await invoke<string>("get_build_info");
+}
+
 // Re-export types from feature modules
 export type {
   PodInfo,

@@ -261,6 +261,11 @@ async fn get_private_key(db: &Db) -> Result<SecretKey, String> {
         .map_err(|e| format!("Failed to get private key: {}", e))
 }
 
+#[tauri::command]
+fn get_build_info() -> String {
+    env!("GIT_COMMIT_HASH").to_string()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -334,6 +339,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Build info commands
+            get_build_info,
+            // Frog commands
             frog::request_frog,
             frog::request_score,
             // Configuration commands
