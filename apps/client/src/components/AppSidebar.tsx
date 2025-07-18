@@ -31,6 +31,7 @@ import {
   FolderIcon,
   Folders,
   Github,
+  ImportIcon,
   InboxIcon,
   MessageSquareIcon,
   UploadIcon
@@ -224,7 +225,7 @@ export function AppSidebar() {
                   <ImportPodDialog
                     trigger={
                       <SidebarMenuButton>
-                        <UploadIcon />
+                        <ImportIcon />
                         Import POD
                       </SidebarMenuButton>
                     }
