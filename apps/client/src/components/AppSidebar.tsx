@@ -263,7 +263,6 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </FeatureGate>
-
         <FeatureGate feature="networking">
           <SidebarGroup>
             <SidebarGroupLabel>Actions</SidebarGroupLabel>

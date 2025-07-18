@@ -149,8 +149,34 @@ export async function invokeCommand<T>(
  * Get a frog from the server
  * @returns Promise that resolves when the frog is retrieved
  */
-export async function requestFrog(): RpcResult<void> {
-  return invokeCommand<void>("request_frog");
+export async function requestFrog(): RpcResult<number> {
+  return invokeCommand<number>("request_frog");
+}
+
+export interface ScoreResponse {
+  score: number;
+  timeout: number;
+}
+
+/**
+ * Get the user's FrogCrypto score from the server
+ * @returns Promise that resolves to the score
+ */
+export async function requestScore(): RpcResult<ScoreResponse> {
+  return invokeCommand<ScoreResponse>("request_score");
+}
+
+export interface LeaderboardItem {
+  username: string;
+  score: number;
+}
+
+/**
+ * Get the FrogCrypto leaderboard from the server
+ * @returns Promise that resolves to the leaderboard
+ */
+export async function requestLeaderboard(): RpcResult<LeaderboardItem[]> {
+  return invokeCommand<LeaderboardItem[]>("request_leaderboard");
 }
 
 // =============================================================================

@@ -17,11 +17,10 @@ use tauri::{App, AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 
-pub(crate) mod frog;
-
 mod cache;
 mod config;
 mod features;
+pub(crate) mod frog;
 mod p2p;
 
 const DEFAULT_SPACE_ID: &str = "default";
@@ -344,6 +343,8 @@ pub fn run() {
             get_build_info,
             // Frog commands
             frog::request_frog,
+            frog::request_score,
+            frog::request_leaderboard,
             // Configuration commands
             get_feature_config_command,
             // POD management commands

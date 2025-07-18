@@ -2,9 +2,9 @@ import { useAppStore } from "../lib/store";
 import { PodViewer } from "./PodViewer";
 import { InboxView } from "./InboxView";
 import { ChatView } from "./ChatView";
+import { FrogCrypto } from "./FrogCrypto";
 import { DocumentsView } from "./documents/DocumentsView";
 import { PublishPage } from "./documents/PublishPage";
-import { FrogViewer } from "./FrogViewer";
 import { EditorView } from "./editor/EditorView";
 import { FeatureGate } from "../lib/features/config";
 
@@ -23,7 +23,7 @@ export function MainContent() {
     case "chats":
       return <ChatView />;
     case "frogs":
-      return <FrogViewer />;
+      return <FrogCrypto />;
     case "editor":
       return (
         <FeatureGate feature="authoring">
