@@ -70,7 +70,6 @@ Core libraries that power the client app but are designed for broader ecosystem 
 **Rust Libraries:**
 - **Database Layer**: SQLite-based POD storage with migrations and connection pooling
 - **Solver Engine**: Datalog query processor for evaluating POD Requests
-- **Server Components**: HTTP API framework for POD operations and management
 
 **JavaScript/TypeScript Packages:**
 - **POD2 Client Libraries**: JavaScript/TypeScript packages for POD creation, verification, and management
@@ -82,7 +81,6 @@ Core libraries that power the client app but are designed for broader ecosystem 
 #### 3. Experimental and Demonstration Tools
 Development and research tools including:
 
-- **Playground Client**: Web-based developer sandbox for experimenting with POD operations
 - **Sample Applications**: Reference implementations demonstrating POD2 capabilities
 - **Testing Infrastructure**: Tools for validating POD2 functionality across different scenarios
 
@@ -90,9 +88,9 @@ The client application represents the primary user-facing interface to the POD2 
 
 ## Quick Start
 
-The main entry point is the playground script:
+The main entry point is the client app:
 ```bash
-./playground.sh
+just client-dev
 ```
 
 This runs the full development environment with all components.
@@ -103,45 +101,35 @@ The repository is organized as a multi-crate Rust workspace with web frontend co
 
 ### Core Components
 
-- **`server/`** - DEPRECATED HTTP API server providing POD2 operations and local POD collection management
 - **`solver/`** - Datalog engine for POD Request queries, implements semi-naive evaluation
 - **`db/`** - Database abstraction layer with SQLite connection pooling and migrations
-- **`apps/playground-client/`** - DEPRECATED React developer sandbox for POD management and operations (functionality gradually being ported to the `client` app)
 - **`apps/client/`** - Tauri-based desktop application (primary user-facing client)
 
 ### Key Relationships
 
-1. **Server** uses **Solver** for query processing and **DB** for persistence
-2. **Playground Client** communicates with **Server** via HTTP API (developer sandbox)
-3. **Tauri App** is the primary user-facing client, intended for regular users
-4. **Solver** implements the core POD2 Datalog engine with proof reconstruction
-5. **DB** provides abstracted database operations with connection pooling
-
-### Development Priorities
-
-- **Tauri App** is the main focus for future development as the user-facing client
-- **Playground Client** serves as a developer sandbox for experimentation
-- Plans to factor out reusable components from playground for use in Tauri app
-- Integration of Tauri app into TypeScript monorepo structure for code sharing
-
-## Development Commands
+1. **Client App** is the primary user-facing client, intended for regular users
+2. **Solver** implements the core POD2 Datalog engine with proof reconstruction
+3. **DB** provides abstracted database operations with connection pooling
 
 ### Rust Components
 ```bash
 # Build all Rust components
 cargo build
 
-# Run server in development mode
-RUST_LOG=info cargo run --release --bin pod2-server
-
 # Run tests
 cargo test
 
 # Format code
-cargo fmt
+just format
 
 # Run linter
 cargo clippy
+
+# Run client in dev mode
+just client-dev
+
+# Build client
+just client-build
 ```
 
 ### Web Components
@@ -157,17 +145,10 @@ pnpm format       # Format with prettier
 ### Tauri App
 ```bash
 # From apps/client/ directory
-pnpm dev          # Development mode
+pnpm tauri dev    # Development mode
 pnpm build        # Production build
 pnpm tauri        # Tauri CLI commands
 pnpm dlx shadcn@latest # For handling shadcn components
-```
-
-### Convenient Commands (justfile)
-```bash
-just js-build     # Build all JavaScript/TypeScript components (pnpm build)
-just format       # Format all code (pnpm format + cargo fmt) 
-just client-dev   # Run Tauri client in development mode
 ```
 
 ## Key Technical Details
@@ -184,20 +165,12 @@ just client-dev   # Run Tauri client in development mode
 - Supports both file-based and in-memory databases
 - Migrations are embedded using include_dir
 
-### Server API
-- Built with Axum web framework
-- Provides REST API for POD operations
-- Handles playground operations, POD management, and space management
-- Integrates with solver for query processing
-
 ### Web Frontend
 - React with TypeScript
 - Uses Shadcn for components. Use `pnpm dlx shadcn@latest` to run shadcn commands.
 - Support both light and dark mode, and Shadcn theming by leveraging the CSS variables and utility classes in App.css.
 - Uses Vite for build tooling and development
 - Turbo for monorepo management
-- **Playground Client**: Implements IDE-like layout with resizable panes and Monaco editor
-- **Tauri App**: User-facing desktop application with plans for component reuse from playground
 
 ## Code Style Guidelines
 
@@ -287,15 +260,12 @@ FEATURE_INTEGRATION=false pnpm tauri build
 ```bash
 cargo test                    # All tests
 cargo test -p pod2_solver     # Specific crate tests
-cargo test -p pod2_server     # Server tests
 cargo test -p pod2_db         # Database tests
 ```
 
 ### Web Tests
 ```bash
-# From web/ directory
 pnpm test                     # All web tests
-pnpm test --filter playground-client  # Specific app tests
 ```
 
 ## Database
@@ -306,10 +276,8 @@ pnpm test --filter playground-client  # Specific app tests
 
 ## Key File Locations
 
-- **Server entry point**: `server/src/bin/` (multiple binaries)
 - **Solver entry point**: `solver/src/lib.rs` (main solve function)
 - **Database migrations**: `db/migrations/` and `server/migrations/`
-- **Playground app**: `apps/playground-client/src/App.tsx` (developer sandbox)
 - **Tauri app**: `apps/client/src-tauri/src/main.rs` (primary user client)
 - **Tauri frontend**: `apps/client/src/App.tsx` (React frontend for desktop app)
 
