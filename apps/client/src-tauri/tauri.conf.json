@@ -20,23 +20,7 @@
       }
     ],
     "security": {
-      "csp": {
-        "default-src": ["self", "tauri:"],
-        "script-src": ["self", "unsafe-inline", "tauri:"],
-        "style-src": ["self", "unsafe-inline", "tauri:"],
-        "font-src": ["self", "tauri:"],
-        "img-src": ["self", "data:", "blob:", "tauri:"],
-        "connect-src": [
-          "self",
-          "tauri:",
-          "ipc:",
-          "https://pod-server.ghost-spica.ts.net",
-          "https://document-server-as95.onrender.com",
-          "https://frog-server-q36c.onrender.com",
-          "http://localhost:3000",
-          "http://localhost:3001"
-        ]
-      }
+      "csp": null
     }
   },
   "bundle": {
