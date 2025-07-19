@@ -1,7 +1,8 @@
+import { DEFAULT_SERVER_URL } from "@/lib/documentApi";
+import { invoke } from "@tauri-apps/api/core";
 import { SendIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { invoke } from "@tauri-apps/api/core";
 import { Button } from "../ui/button";
 
 function AnimatedDots() {
@@ -85,11 +86,7 @@ export function PublishButton({
 
     try {
       // Get server URL from environment or use default
-      const serverUrl =
-        import.meta.env.VITE_DOCUMENT_SERVER_URL ||
-        (import.meta.env.MODE === "production"
-          ? "https://document-server-as95.onrender.com"
-          : "http://localhost:3000");
+      const serverUrl = DEFAULT_SERVER_URL;
 
       // Prepare file data if file is provided
       let fileData = null;

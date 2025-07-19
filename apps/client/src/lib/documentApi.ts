@@ -68,10 +68,10 @@ export interface DocumentVerificationResult {
 // Document Server API Client
 // =============================================================================
 
-const DEFAULT_SERVER_URL =
+export const DEFAULT_SERVER_URL =
   import.meta.env.VITE_DOCUMENT_SERVER_URL ||
   (import.meta.env.MODE === "production"
-    ? "https://pod-server.ghost-spica.ts.net/server" //"https://document-server-as95.onrender.com"
+    ? "https://pod-server.ghost-spica.ts.net/server"
     : "http://localhost:3000");
 
 /**

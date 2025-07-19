@@ -20,7 +20,6 @@
       "identifier": "http:allow-fetch",
       "allow": [
         { "url": "https://pod-server.ghost-spica.ts.net/*" },
-        { "url": "https://document-server-as95.onrender.com/*" },
         { "url": "https://frog-server-q36c.onrender.com/*" },
         { "url": "http://localhost:3000/*" },
         { "url": "http://localhost:3001/*" }
