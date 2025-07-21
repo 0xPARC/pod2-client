@@ -92,7 +92,7 @@ pub async fn upvote_document(
     upvote_builder.insert("content_hash", content_hash);
     upvote_builder.insert("timestamp", Utc::now().timestamp());
 
-    let upvote_pod = upvote_builder.sign(&mut Signer(secret_key))?;
+    let upvote_pod = upvote_builder.sign(&Signer(secret_key))?;
     println!("UPVOTE POD: {upvote_pod}");
     println!("✓ Upvote pod signed successfully");
 

@@ -135,10 +135,10 @@ pub async fn sign_pod(
         .await
         .map_err(|e| format!("Failed to get private key: {e}"))?;
 
-    let mut signer = Signer(private_key);
+    let signer = Signer(private_key);
 
     let signed_pod = builder
-        .sign(&mut signer)
+        .sign(&signer)
         .map_err(|e| format!("Failed to sign pod: {e}"))?;
 
     Ok(serde_json::to_string(&signed_pod).unwrap())

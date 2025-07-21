@@ -196,7 +196,7 @@ pub async fn upvote_document(
     upvote_builder.insert("timestamp", Utc::now().timestamp());
 
     let upvote_pod = upvote_builder
-        .sign(&mut Signer(private_key))
+        .sign(&Signer(private_key))
         .map_err(|e| format!("Failed to sign upvote pod: {e}"))?;
 
     log::info!("✓ Upvote pod signed successfully");
@@ -500,7 +500,7 @@ pub async fn publish_document(
     document_builder.insert("data", data_dict.clone());
 
     let document_pod = document_builder
-        .sign(&mut Signer(private_key))
+        .sign(&Signer(private_key))
         .map_err(|e| format!("Failed to sign document pod: {e}"))?;
 
     log::info!("✓ Document pod signed successfully");

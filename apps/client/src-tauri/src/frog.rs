@@ -47,9 +47,9 @@ async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<Si
     let mut builder = SignedPodBuilder::new(&Default::default());
     builder.insert("public_key", challenge.public_key);
     builder.insert("time", challenge.time);
-    let mut signer = Signer(private_key);
+    let signer = Signer(private_key);
     builder
-        .sign(&mut signer)
+        .sign(&signer)
         .map_err(|_| "failed to sign pod".to_string())
 }
 

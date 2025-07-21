@@ -185,8 +185,8 @@ async fn request_user_challenge(
     challenge_builder.insert("username", payload.username.as_str());
 
     // Sign with identity server's private key
-    let mut identity_signer = Signer(SecretKey(state.server_secret_key.0.clone()));
-    let challenge_pod = challenge_builder.sign(&mut identity_signer).map_err(|e| {
+    let identity_signer = Signer(SecretKey(state.server_secret_key.0.clone()));
+    let challenge_pod = challenge_builder.sign(&identity_signer).map_err(|e| {
         tracing::error!("Failed to sign user challenge pod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -339,8 +339,8 @@ async fn issue_identity(
     identity_builder.insert("issued_at", chrono::Utc::now().to_rfc3339().as_str());
 
     // Sign the identity pod with the identity server's key
-    let mut server_signer = Signer(SecretKey(state.server_secret_key.0.clone()));
-    let identity_pod = identity_builder.sign(&mut server_signer).map_err(|e| {
+    let server_signer = Signer(SecretKey(state.server_secret_key.0.clone()));
+    let identity_pod = identity_builder.sign(&server_signer).map_err(|e| {
         tracing::error!("Failed to sign identity pod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -439,8 +439,8 @@ async fn register_with_podnet_server(
     response_builder.insert("server_id", server_id);
 
     // Sign the response with identity server's private key
-    let mut identity_signer = Signer(SecretKey(secret_key.0.clone()));
-    let identity_response_pod = response_builder.sign(&mut identity_signer)?;
+    let identity_signer = Signer(SecretKey(secret_key.0.clone()));
+    let identity_response_pod = response_builder.sign(&identity_signer)?;
 
     tracing::info!("✓ Created identity server response pod");
 

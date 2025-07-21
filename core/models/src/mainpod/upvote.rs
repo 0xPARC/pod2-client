@@ -481,9 +481,9 @@ pub fn prove_upvote_count_base_with_solver(
     // For now, use a dummy secret key for data pod signing
     // In practice, this should be signed by the server
     let dummy_sk = SecretKey(BigUint::from(12345u64));
-    let mut signer = Signer(dummy_sk);
+    let signer = Signer(dummy_sk);
     let data_pod = data_builder
-        .sign(&mut signer)
+        .sign(&signer)
         .map_err(|e| MainPodError::ProofGeneration(format!("Failed to sign data pod: {e:?}")))?;
 
     // First parse the upvote verification predicate batch

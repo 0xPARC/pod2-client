@@ -166,17 +166,17 @@ impl AppState {
 
 pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
     let params_for_test = Params::default();
-    let mut gov_signer = Signer(SecretKey(BigUint::from(1u32)));
-    let mut pay_signer = Signer(SecretKey(BigUint::from(2u32)));
-    let mut sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
+    let gov_signer = Signer(SecretKey(BigUint::from(1u32)));
+    let pay_signer = Signer(SecretKey(BigUint::from(2u32)));
+    let sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
 
     let (gov_id_builder, pay_stub_builder, sanction_list_builder) =
         zu_kyc_sign_pod_builders(&params_for_test);
 
     let sign_results = [
-        gov_id_builder.sign(&mut gov_signer),
-        pay_stub_builder.sign(&mut pay_signer),
-        sanction_list_builder.sign(&mut sanction_signer),
+        gov_id_builder.sign(&gov_signer),
+        pay_stub_builder.sign(&pay_signer),
+        sanction_list_builder.sign(&sanction_signer),
     ];
 
     let all_signed: Result<Vec<_>, _> = sign_results.into_iter().collect();

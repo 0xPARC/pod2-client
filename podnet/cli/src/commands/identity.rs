@@ -102,8 +102,8 @@ pub async fn get_identity(
     challenge_builder.insert("username", username);
 
     // Sign the challenge response
-    let mut user_signer = Signer(secret_key);
-    let challenge_response_pod = challenge_builder.sign(&mut user_signer)?;
+    let user_signer = Signer(secret_key);
+    let challenge_response_pod = challenge_builder.sign(&user_signer)?;
 
     // Extract server_id from challenge pod before moving it
     let server_id = challenge_data

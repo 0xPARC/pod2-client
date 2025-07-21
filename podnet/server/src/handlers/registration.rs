@@ -49,10 +49,10 @@ pub async fn request_identity_challenge(
 
     // Sign with server's private key
     let server_secret_key = crate::pod::get_server_secret_key();
-    let mut server_signer = Signer(pod2::backends::plonky2::primitives::ec::schnorr::SecretKey(
+    let server_signer = Signer(pod2::backends::plonky2::primitives::ec::schnorr::SecretKey(
         server_secret_key.0.clone(),
     ));
-    let challenge_pod = challenge_builder.sign(&mut server_signer).map_err(|e| {
+    let challenge_pod = challenge_builder.sign(&server_signer).map_err(|e| {
         log::error!("Failed to sign challenge pod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;

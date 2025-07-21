@@ -77,8 +77,8 @@ pub fn create_timestamp_pod_for_main_pod(
     timestamp_builder.insert("document-id", document_id);
     timestamp_builder.insert("timestamp", timestamp.as_str());
 
-    let mut server_signer = Signer(SecretKey(server_sk.0.clone()));
-    let timestamp_pod = timestamp_builder.sign(&mut server_signer)?;
+    let server_signer = Signer(SecretKey(server_sk.0.clone()));
+    let timestamp_pod = timestamp_builder.sign(&server_signer)?;
     timestamp_pod.verify()?;
 
     tracing::info!("Timestamp pod for main pod created and verified");
