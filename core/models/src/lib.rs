@@ -247,8 +247,6 @@ impl Document {
         &self,
         server_public_key: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        
-
         println!("Verifying timestamp pod signature...");
 
         let timestamp_pod = self.metadata.timestamp_pod.get()?;

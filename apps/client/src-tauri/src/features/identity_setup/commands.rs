@@ -245,9 +245,7 @@ pub async fn register_username(
     // Step 6: Trigger state sync to refresh UI with new identity POD
     app_state.trigger_state_sync().await?;
 
-    log::info!(
-        "Successfully registered username '{username}' and received identity POD"
-    );
+    log::info!("Successfully registered username '{username}' and received identity POD");
 
     Ok(IdentityPodResult {
         identity_pod: serde_json::to_value(identity_pod)

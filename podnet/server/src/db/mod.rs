@@ -1,10 +1,7 @@
 use std::{collections::HashSet, sync::Mutex};
 
 use hex::{FromHex, ToHex};
-use pod2::{
-    frontend::MainPod,
-    middleware::Hash,
-};
+use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
     Document, DocumentMetadata, IdentityServer, Post, RawDocument, Upvote, lazy_pod::LazyDeser,
 };

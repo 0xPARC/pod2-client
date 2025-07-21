@@ -1,23 +1,15 @@
 //! Publish verification MainPod operations
 
-
 use pod_utils::prover_setup::PodNetProverSetup;
 use pod2::{
     frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::parse,
-    middleware::{
-        KEY_SIGNER, Params, Value,
-        containers::Dictionary,
-    },
+    middleware::{KEY_SIGNER, Params, Value, containers::Dictionary},
 };
 // Import solver dependencies
-use pod2_solver::{
-    db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
-};
+use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
 
-use super::{
-    MainPodError, MainPodResult,
-};
+use super::{MainPodError, MainPodResult};
 use crate::get_publish_verification_predicate;
 // Import the main_pod macro
 
@@ -189,8 +181,7 @@ pub fn prove_publish_verification_with_solver(
     // Format the expected values for the query using value_to_podlang_literal
     let username_literal = value_to_podlang_literal(username.clone());
     let data_literal = value_to_podlang_literal(data.clone());
-    let identity_server_pk_literal =
-        value_to_podlang_literal(identity_server_pk.clone());
+    let identity_server_pk_literal = value_to_podlang_literal(identity_server_pk.clone());
 
     query.push_str(&format!(
         r#"

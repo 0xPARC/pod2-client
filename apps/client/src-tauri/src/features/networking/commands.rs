@@ -192,9 +192,7 @@ pub async fn send_message_as_pod(
     .await
     .map_err(|e| format!("Failed to record sent message: {e}"))?;
 
-    log::info!(
-        "Successfully sent message POD {pod_id} to peer {peer_node_id}"
-    );
+    log::info!("Successfully sent message POD {pod_id} to peer {peer_node_id}");
     Ok(())
 }
 
@@ -226,9 +224,7 @@ pub async fn accept_inbox_message(
     // Trigger state sync to update frontend
     app_state.trigger_state_sync().await?;
 
-    log::info!(
-        "Accepted inbox message {message_id} into chat {chat_id}"
-    );
+    log::info!("Accepted inbox message {message_id} into chat {chat_id}");
     Ok(chat_id)
 }
 

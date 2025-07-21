@@ -229,9 +229,7 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
 
             // Safety check for infinite loops
             if iteration_count > 100 {
-                log::error!(
-                    "Stopping after {iteration_count} iterations to prevent infinite loop"
-                );
+                log::error!("Stopping after {iteration_count} iterations to prevent infinite loop");
                 log::error!(
                     "Current delta: {}",
                     crate::pretty_print::PrettyFactStore(&new_delta)

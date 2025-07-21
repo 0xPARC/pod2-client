@@ -246,9 +246,7 @@ pub async fn upvote_document(
     .await
     .map_err(|e| format!("Failed to store upvote pod locally: {e}"))?;
 
-    log::info!(
-        "✓ Upvote MainPod stored locally with label: {upvote_label}"
-    );
+    log::info!("✓ Upvote MainPod stored locally with label: {upvote_label}");
 
     // 6. Submit UpvoteRequest to server
     let upvote_request = UpvoteRequest {
@@ -308,9 +306,7 @@ pub async fn upvote_document(
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
 
-        log::error!(
-            "Upvote request failed with status {status}: {error_text}"
-        );
+        log::error!("Upvote request failed with status {status}: {error_text}");
 
         Ok(UpvoteResult {
             success: false,
@@ -562,9 +558,7 @@ pub async fn publish_document(
     .await
     .map_err(|e| format!("Failed to store publish pod locally: {e}"))?;
 
-    log::info!(
-        "✓ Publish MainPod stored locally with label: {publish_label}"
-    );
+    log::info!("✓ Publish MainPod stored locally with label: {publish_label}");
 
     // Step 8: Create the publish request
     let publish_request = PublishRequest {
@@ -623,9 +617,7 @@ pub async fn publish_document(
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
 
-        log::error!(
-            "Publish request failed with status {status}: {error_text}"
-        );
+        log::error!("Publish request failed with status {status}: {error_text}");
 
         Ok(PublishResult {
             success: false,

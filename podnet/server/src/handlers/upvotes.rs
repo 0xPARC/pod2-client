@@ -17,7 +17,6 @@ use podnet_models::{
     },
 };
 
-
 pub async fn upvote_document(
     Path(document_id): Path<i64>,
     State(state): State<Arc<crate::AppState>>,

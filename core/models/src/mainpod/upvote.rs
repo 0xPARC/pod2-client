@@ -122,9 +122,7 @@ pub fn prove_upvote_verification_original_fallback(
             (params.identity_pod, "user_public_key"),
             (params.upvote_pod, KEY_SIGNER)
         ))
-        .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final user key check failed: {e}"))
-        })?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Final user key check failed: {e}")))?;
 
     // Parse predicates for final verification
     let predicate_input = get_upvote_verification_predicate();

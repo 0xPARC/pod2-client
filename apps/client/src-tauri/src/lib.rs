@@ -231,9 +231,7 @@ async fn init_db(path: &str) -> Result<Db, anyhow::Error> {
     let path_buf = std::path::Path::new(path);
     if let Some(parent) = path_buf.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to create parent directory for database: {parent:?}"
-            )
+            format!("Failed to create parent directory for database: {parent:?}")
         })?;
     }
 
