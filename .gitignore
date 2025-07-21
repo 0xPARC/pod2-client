@@ -14,3 +14,7 @@ dist
 *.secret
 content
 identity-server-keypair.json
+
+# User-specific configuration files
+user.toml
+apps/client/src-tauri/config/user.toml

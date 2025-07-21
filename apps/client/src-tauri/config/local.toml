@@ -1,0 +1,13 @@
+# Local development configuration
+# Enables development-friendly features and settings
+
+[features]
+networking = true
+frogcrypto = true
+
+[network]
+server = "http://localhost:3000"
+
+[logging]
+level = "debug"
+console_output = true

@@ -1,5 +1,7 @@
+use std::path::PathBuf;
+
 use anyhow::Context;
-use config::FeatureConfig;
+use config::{AppConfig, FeatureConfig};
 use features::{blockies, *};
 use num::BigUint;
 use pod2::{
@@ -13,8 +15,7 @@ use pod2_db::{
     Db,
 };
 use serde::{Deserialize, Serialize};
-use tauri::{App, AppHandle, Emitter, Manager};
-use tauri_plugin_store::StoreExt;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
 mod cache;
@@ -25,15 +26,48 @@ mod p2p;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
-/// Get the feature configuration from environment variables
-pub fn get_feature_config() -> FeatureConfig {
-    FeatureConfig::load()
-}
-
 /// Tauri command to get the current feature configuration
 #[tauri::command]
 async fn get_feature_config_command() -> Result<FeatureConfig, String> {
-    Ok(get_feature_config())
+    Ok(config::config().features.clone())
+}
+
+/// Tauri command to get the full application configuration
+#[tauri::command]
+async fn get_app_config() -> Result<AppConfig, String> {
+    Ok(config::config().clone())
+}
+
+/// Tauri command to get a specific config section
+#[tauri::command]
+async fn get_config_section(section: String) -> Result<serde_json::Value, String> {
+    let config = config::config();
+    match section.as_str() {
+        "features" => serde_json::to_value(&config.features)
+            .map_err(|e| format!("Failed to serialize features: {e}")),
+        "network" => serde_json::to_value(&config.network)
+            .map_err(|e| format!("Failed to serialize network config: {e}")),
+        "database" => serde_json::to_value(&config.database)
+            .map_err(|e| format!("Failed to serialize database config: {e}")),
+        "ui" => serde_json::to_value(&config.ui)
+            .map_err(|e| format!("Failed to serialize UI config: {e}")),
+        "logging" => serde_json::to_value(&config.logging)
+            .map_err(|e| format!("Failed to serialize logging config: {e}")),
+        _ => Err(format!("Unknown config section: {section}")),
+    }
+}
+
+/// Tauri command to reload configuration from file (for hot reloading)
+#[tauri::command]
+async fn reload_config(
+    app_handle: AppHandle,
+    config_path: Option<String>,
+) -> Result<AppConfig, String> {
+    let path = config_path.map(PathBuf::from);
+    let new_config = AppConfig::load_from_file(path)?;
+    AppConfig::update(new_config.clone(), &app_handle)?;
+    log::info!("Configuration reloaded successfully");
+    Ok(new_config)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,14 +278,6 @@ async fn init_db(path: &str) -> Result<Db, anyhow::Error> {
     Ok(db)
 }
 
-fn set_default_config(app: &mut App, store_name: &str) {
-    let store = app.store(store_name).unwrap();
-
-    if store.get("instance_id").is_none() {
-        store.set("instance_id", "default");
-    }
-}
-
 async fn get_private_key(db: &Db) -> Result<SecretKey, String> {
     store::get_default_private_key(db)
         .await
@@ -270,8 +296,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_store::Builder::new().build());
+        .plugin(tauri_plugin_http::init());
 
     let debug = cfg!(dev);
 
@@ -288,15 +313,53 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_cli::init())
         .setup(|app| {
             tauri::async_runtime::block_on(async {
-                let db_name = if let Ok(instance_id) = std::env::var("INSTANCE_ID") {
-                    format!("app-data-{instance_id}.db")
-                } else {
-                    "app-data.db".to_string()
+                // Initialize configuration system
+                let config = {
+                    use tauri_plugin_cli::CliExt;
+
+                    let config_path = match app.cli().matches() {
+                        Ok(matches) => {
+                            // Check for --config argument
+                            matches
+                                .args
+                                .get("config")
+                                .and_then(|arg| arg.value.as_str())
+                                .map(PathBuf::from)
+                                .or_else(|| {
+                                    std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from)
+                                })
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to parse CLI arguments: {e}");
+                            // Fallback to environment variable
+                            std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from)
+                        }
+                    };
+
+                    match AppConfig::load_from_file(config_path) {
+                        Ok(config) => {
+                            log::info!("Configuration loaded successfully: {config:?}");
+                            config
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to load config file, using defaults: {e}");
+                            AppConfig::default()
+                        }
+                    }
                 };
-                let db_path = app.path().app_data_dir().unwrap().join(db_name);
+
+                // Initialize global configuration
+                AppConfig::initialize(config.clone());
+
+                // Use config for database path
+                let db_path = app
+                    .path()
+                    .app_data_dir()
+                    .unwrap()
+                    .join(&config.database.path);
                 let db = init_db(db_path.to_str().unwrap())
                     .await
                     .expect("failed to initialize database");
@@ -305,14 +368,6 @@ pub fn run() {
                 store::regenerate_public_keys_if_needed(&db)
                     .await
                     .expect("failed to regenerate public keys");
-
-                let store_name = if let Ok(instance_id) = std::env::var("INSTANCE_ID") {
-                    format!("app-store-{instance_id}.json")
-                } else {
-                    "app-store.json".to_string()
-                };
-
-                set_default_config(app, store_name.as_str());
 
                 let app_handle = app.handle().clone();
                 let mut app_state = AppState {
@@ -344,6 +399,9 @@ pub fn run() {
             frog::request_leaderboard,
             // Configuration commands
             get_feature_config_command,
+            get_app_config,
+            get_config_section,
+            reload_config,
             // POD management commands
             pod_management::get_app_state,
             pod_management::trigger_sync,

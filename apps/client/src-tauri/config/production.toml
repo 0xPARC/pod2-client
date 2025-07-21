@@ -1,0 +1,14 @@
+# Production environment configuration
+
+[features]
+networking = true
+# Disable experimental features in production
+frogcrypto = false
+
+[network]
+server = "https://api.pod2.dev"
+timeout_seconds = 30
+
+[logging]
+level = "warn"
+console_output = false

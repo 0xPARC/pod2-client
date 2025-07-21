@@ -12,12 +12,12 @@ use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState};
+use crate::{config::config, AppState};
 
 /// Macro to check if integration feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().integration {
+        if !config().features.integration {
             log::warn!("Integration feature is disabled");
             return Err("Integration feature is disabled".to_string());
         }

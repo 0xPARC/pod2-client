@@ -40,6 +40,17 @@
       "desktop": {
         "schemes": ["pod2"]
       }
+    },
+    "cli": {
+      "description": "POD2 Client - A desktop application for managing cryptographic PODs",
+      "args": [
+        {
+          "name": "config",
+          "long": "config",
+          "description": "Path to configuration file",
+          "takesValue": true
+        }
+      ]
     }
   }
 }
