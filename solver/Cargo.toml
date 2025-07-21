@@ -15,6 +15,7 @@ log = { workspace = true }
 env_logger = { workspace = true }
 itertools = { workspace = true }
 hex = { workspace = true }
+num = { workspace = true }
 
 [dev-dependencies]
 pod2 = { workspace = true, features = ["examples"] }

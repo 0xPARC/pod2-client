@@ -913,8 +913,11 @@ mod tests {
     use std::sync::Arc;
 
     use hex::ToHex;
+    use num::BigUint;
     use pod2::{
-        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
+        backends::plonky2::{
+            mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
+        },
         examples::{attest_eth_friend, custom::eth_dos_batch, MOCK_VD_SET},
         frontend::MainPodBuilder,
         lang::parse,
@@ -931,7 +934,7 @@ mod tests {
         metrics::{DebugMetrics, NoOpMetrics},
         planner::Planner,
         proof::Justification,
-        vis,
+        value_to_podlang_literal, vis,
     };
 
     fn pod_id_from_name(name: &str) -> PodId {
@@ -1376,27 +1379,25 @@ mod tests {
             ..Default::default()
         };
 
-        let mut alice = MockSigner { pk: "Alice".into() };
-        let mut bob = MockSigner { pk: "Bob".into() };
-        let charlie = MockSigner {
-            pk: "Charlie".into(),
-        };
-        let _david = MockSigner { pk: "David".into() };
+        let alice = Signer(SecretKey(BigUint::from(1u32)));
+        let bob = Signer(SecretKey(BigUint::from(2u32)));
+        let charlie = Signer(SecretKey(BigUint::from(3u32)));
+        let _david = Signer(SecretKey(BigUint::from(4u32)));
 
-        let alice_attestation = attest_eth_friend(&params, &mut alice, bob.public_key());
-        let bob_attestation = attest_eth_friend(&params, &mut bob, charlie.public_key());
-        let batch = eth_dos_batch(&params, true).unwrap();
+        let alice_attestation = attest_eth_friend(&params, &alice, bob.public_key());
+        let bob_attestation = attest_eth_friend(&params, &bob, charlie.public_key());
+        let batch = eth_dos_batch(&params).unwrap();
 
         let req1 = format!(
             r#"
         use _, _, _, eth_dos from 0x{}
         REQUEST(
-            eth_dos(0x{}, 0x{}, ?Distance)
+            eth_dos({}, {}, ?Distance)
         )
         "#,
             batch.id().encode_hex::<String>(),
-            hash_str(&alice.pk).encode_hex::<String>(),
-            hash_str(&charlie.pk).encode_hex::<String>()
+            value_to_podlang_literal(alice.public_key()),
+            value_to_podlang_literal(charlie.public_key())
         );
 
         let db = Arc::new(

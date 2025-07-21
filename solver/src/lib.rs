@@ -150,8 +150,11 @@ pub fn value_to_podlang_literal(value: Value) -> String {
 #[cfg(test)]
 mod tests {
     use hex::ToHex;
+    use num::BigUint;
     use pod2::{
-        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
+        backends::plonky2::{
+            mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
+        },
         examples::{
             attest_eth_friend, custom::eth_dos_batch, zu_kyc_sign_pod_builders, MOCK_VD_SET,
         },
@@ -172,16 +175,14 @@ mod tests {
             ..Default::default()
         };
 
-        let mut alice = MockSigner { pk: "Alice".into() };
-        let mut bob = MockSigner { pk: "Bob".into() };
-        let charlie = MockSigner {
-            pk: "Charlie".into(),
-        };
-        let _david = MockSigner { pk: "David".into() };
+        let mut alice = Signer(SecretKey(BigUint::from(1u32)));
+        let mut bob = Signer(SecretKey(BigUint::from(2u32)));
+        let charlie = Signer(SecretKey(BigUint::from(3u32)));
+        let _david = Signer(SecretKey(BigUint::from(4u32)));
 
         let alice_attestation = attest_eth_friend(&params, &mut alice, bob.public_key());
         let bob_attestation = attest_eth_friend(&params, &mut bob, charlie.public_key());
-        let batch = eth_dos_batch(&params, true).unwrap();
+        let batch = eth_dos_batch(&params).unwrap();
 
         let req1 = format!(
             r#"
@@ -284,20 +285,14 @@ mod tests {
         let const_1y = 1706367566;
 
         let (gov_id, pay_stub, sanction_list) = zu_kyc_sign_pod_builders(&params);
-        let mut signer = MockSigner {
-            pk: "ZooGov".into(),
-        };
-        let gov_id = gov_id.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey(BigUint::from(1u32)));
+        let gov_id = gov_id.sign(&signer).unwrap();
 
-        let mut signer = MockSigner {
-            pk: "ZooDeel".into(),
-        };
-        let pay_stub = pay_stub.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey(BigUint::from(2u32)));
+        let pay_stub = pay_stub.sign(&signer).unwrap();
 
-        let mut signer = MockSigner {
-            pk: "ZooOFAC".into(),
-        };
-        let sanction_list = sanction_list.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey(BigUint::from(3u32)));
+        let sanction_list = sanction_list.sign(&signer).unwrap();
 
         let zukyc_request = format!(
             r#"
