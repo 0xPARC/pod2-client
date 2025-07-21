@@ -1,6 +1,7 @@
 import { CheckCircle, Loader2, Server, Shield, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useConfigSection } from "../lib/config/hooks";
 import { useAppStore } from "../lib/store";
 import { Button } from "./ui/button";
 import {
@@ -32,27 +33,29 @@ enum SetupStep {
   SETUP_COMPLETE = "setup_complete"
 }
 
-const DEFAULT_IDENTITY_SERVER_URL =
-  import.meta.env.VITE_IDENTITY_SERVER_URL ||
-  (import.meta.env.MODE === "production"
-    ? "https://pod-server.ghost-spica.ts.net/identity"
-    : "http://localhost:3000");
-
 export function IdentitySetupModal({
   open,
   onComplete
 }: IdentitySetupModalProps) {
   const { loadPrivateKeyInfo } = useAppStore();
+  const networkConfig = useConfigSection("network");
   const [currentStep, setCurrentStep] = useState<SetupStep>(
     SetupStep.SERVER_SETUP
   );
-  const [serverUrl, setServerUrl] = useState(DEFAULT_IDENTITY_SERVER_URL);
+  const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [serverInfo, setServerInfo] = useState<{
     server_id: string;
     public_key: any;
   } | null>(null);
+
+  // Update serverUrl when networkConfig loads
+  useEffect(() => {
+    if (networkConfig) {
+      setServerUrl(networkConfig.identity_server);
+    }
+  }, [networkConfig]);
 
   const handleServerSetup = async () => {
     if (!serverUrl.trim()) {
@@ -138,7 +141,10 @@ export function IdentitySetupModal({
                   id="server-url"
                   value={serverUrl}
                   onChange={(e) => setServerUrl(e.target.value)}
-                  placeholder={DEFAULT_IDENTITY_SERVER_URL}
+                  placeholder={
+                    networkConfig ? networkConfig.identity_server : "Loading..."
+                  }
+                  disabled={!networkConfig}
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
@@ -149,7 +155,7 @@ export function IdentitySetupModal({
 
               <Button
                 onClick={handleServerSetup}
-                disabled={isLoading}
+                disabled={isLoading || !networkConfig}
                 className="w-full"
               >
                 {isLoading ? (

@@ -9,7 +9,9 @@ networking = true
 frogcrypto = true
 
 [network]
-server = "http://localhost:3001"  # Different port for separate server
+document_server = "http://localhost:3001"  # Different port for separate server
+identity_server = "http://localhost:3001"
+frogcrypto_server = "http://localhost:3002"
 
 [logging]
 level = "debug"

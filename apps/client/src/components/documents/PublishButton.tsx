@@ -1,4 +1,3 @@
-import { DEFAULT_SERVER_URL } from "@/lib/documentApi";
 import { invoke } from "@tauri-apps/api/core";
 import { SendIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -85,8 +84,11 @@ export function PublishButton({
     });
 
     try {
-      // Get server URL from environment or use default
-      const serverUrl = DEFAULT_SERVER_URL;
+      // Get server URL from configuration
+      const networkConfig = await invoke<any>("get_config_section", {
+        section: "network"
+      });
+      const serverUrl = networkConfig.document_server;
 
       // Prepare file data if file is provided
       let fileData = null;

@@ -51,8 +51,12 @@ impl Default for DatabaseConfig {
 /// Network configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
-    /// Server URL to connect to
-    pub server: String,
+    /// Document server URL
+    pub document_server: String,
+    /// Identity server URL
+    pub identity_server: String,
+    /// FrogCrypto server URL
+    pub frogcrypto_server: String,
     /// Request timeout in seconds
     pub timeout_seconds: u32,
 }
@@ -60,7 +64,9 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            server: "http://localhost:3000".to_string(),
+            document_server: "https://pod-server.ghost-spica.ts.net".to_string(),
+            identity_server: "https://pod-server.ghost-spica.ts.net".to_string(),
+            frogcrypto_server: "https://frog-server-q36c.onrender.com".to_string(),
             timeout_seconds: 30,
         }
     }
@@ -167,20 +173,25 @@ impl AppConfig {
 
     /// Load configuration from file
     pub fn load_from_file(config_path: Option<PathBuf>) -> Result<AppConfig, String> {
-        let mut builder = config::Config::builder();
+        match config_path {
+            Some(path) => {
+                // Load from file - serde will use defaults for missing fields
+                let builder =
+                    config::Config::builder().add_source(config::File::from(path).required(true));
 
-        // Add config file if specified
-        if let Some(path) = config_path {
-            builder = builder.add_source(config::File::from(path).required(true));
+                let file_config = builder
+                    .build()
+                    .map_err(|e| format!("Failed to build config from file: {}", e))?;
+
+                file_config
+                    .try_deserialize()
+                    .map_err(|e| format!("Failed to deserialize config: {}", e))
+            }
+            None => {
+                // No config file specified - use all defaults
+                Ok(AppConfig::default())
+            }
         }
-
-        let config = builder
-            .build()
-            .map_err(|e| format!("Failed to build config: {}", e))?;
-
-        config
-            .try_deserialize()
-            .map_err(|e| format!("Failed to deserialize config: {}", e))
     }
 
     /// Validate configuration
@@ -192,8 +203,16 @@ impl AppConfig {
             errors.push("network.timeout_seconds must be greater than 0".to_string());
         }
 
-        if self.network.server.is_empty() {
-            errors.push("network.server cannot be empty".to_string());
+        if self.network.document_server.is_empty() {
+            errors.push("network.document_server cannot be empty".to_string());
+        }
+
+        if self.network.identity_server.is_empty() {
+            errors.push("network.identity_server cannot be empty".to_string());
+        }
+
+        if self.network.frogcrypto_server.is_empty() {
+            errors.push("network.frogcrypto_server cannot be empty".to_string());
         }
 
         // Validate UI config
@@ -222,4 +241,48 @@ impl AppConfig {
 /// Convenience function for accessing configuration
 pub fn config() -> std::sync::RwLockReadGuard<'static, AppConfig> {
     AppConfig::get()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_defaults_no_file() {
+        // Test that loading with no config file gives us complete defaults
+        let config = AppConfig::load_from_file(None).unwrap();
+
+        // Verify all server URLs have defaults
+        assert!(!config.network.document_server.is_empty());
+        assert!(!config.network.identity_server.is_empty());
+        assert!(!config.network.frogcrypto_server.is_empty());
+        assert_eq!(
+            config.network.document_server,
+            "https://pod-server.ghost-spica.ts.net"
+        );
+        assert_eq!(
+            config.network.identity_server,
+            "https://pod-server.ghost-spica.ts.net"
+        );
+        assert_eq!(
+            config.network.frogcrypto_server,
+            "https://frog-server-q36c.onrender.com"
+        );
+
+        // Verify other defaults
+        assert_eq!(config.database.path, "pod2.db");
+        assert!(config.features.pod_management);
+        assert!(!config.features.networking);
+    }
+
+    #[test]
+    fn test_config_validation() {
+        let config = AppConfig::default();
+        assert!(config.validate().is_ok());
+
+        // Test validation with invalid values
+        let mut invalid_config = AppConfig::default();
+        invalid_config.network.document_server = "".to_string();
+        assert!(invalid_config.validate().is_err());
+    }
 }

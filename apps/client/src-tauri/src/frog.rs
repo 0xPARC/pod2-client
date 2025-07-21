@@ -9,12 +9,10 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::AppState;
-
-const SERVER_URL: &str = "https://frog-server-q36c.onrender.com";
+use crate::{config::config, AppState};
 
 fn server_url(path: &str) -> String {
-    let domain = std::env::var("FROG_SERVER_URL").unwrap_or_else(|_| SERVER_URL.to_string());
+    let domain = config().network.frogcrypto_server.clone();
     format!("{domain}/{path}")
 }
 
