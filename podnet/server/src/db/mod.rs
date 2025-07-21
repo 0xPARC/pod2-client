@@ -156,6 +156,7 @@ impl Database {
     }
 
     // Document methods
+    #[allow(clippy::too_many_arguments)]
     pub fn create_document(
         &self,
         content_id: &Hash,

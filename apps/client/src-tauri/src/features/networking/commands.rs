@@ -89,7 +89,7 @@ pub async fn send_pod_to_peer(
     p2p_node
         .send_main_pod(
             peer_id,
-            serialized_pod.clone(),
+            *serialized_pod.clone(),
             message_text.clone(),
             sender_alias,
         )
@@ -152,7 +152,7 @@ pub async fn send_message_as_pod(
     let pod_id = signed_pod.id().0.encode_hex::<String>();
 
     // Store the SignedPod in the database for record keeping
-    let pod_data = PodData::Signed(signed_pod.clone().into());
+    let pod_data = PodData::Signed(Box::new(signed_pod.clone().into()));
     store::import_pod(
         &app_state.db,
         &pod_data,

@@ -28,6 +28,7 @@ use crate::{
     utils::handle_error_response,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub async fn publish_content(
     keypair_file: &str,
     title: &str,

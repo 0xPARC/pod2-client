@@ -41,7 +41,7 @@ pub struct UpvoteProofParamsSolver<'a> {
 pub fn prove_upvote_verification(params: UpvoteProofParams) -> MainPodResult<MainPod> {
     // Extract required values from pods
     let username = extract_username(params.identity_pod)?;
-    let user_public_key = extract_user_public_key(params.identity_pod)?;
+    let _user_public_key = extract_user_public_key(params.identity_pod)?;
 
     // Step 1: Prove identity_verified using the unified macro syntax
     let identity_main_pod = main_pod!(
@@ -84,100 +84,6 @@ pub fn prove_upvote_verification(params: UpvoteProofParams) -> MainPodResult<Mai
     )?;
 
     Ok(final_main_pod)
-}
-
-pub fn prove_upvote_verification_original_fallback(
-    params: UpvoteProofParams,
-) -> MainPodResult<MainPod> {
-    // For now, fall back to the original implementation
-    let pod_params = PodNetProverSetup::get_params();
-    let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
-        .map_err(MainPodError::ProofGeneration)?;
-
-    // Build final upvote verification main pod
-    let mut final_builder = MainPodBuilder::new(&pod_params, vd_set);
-
-    // COMMENTED OUT - leftover from old implementation
-    // let identity_verification = identity_main_pod.pod.pub_statements()[0].clone();
-    // let upvote_verification = upvote_main_pod.pod.pub_statements()[0].clone();
-
-    // final_builder.add_recursive_pod(identity_main_pod);
-    // final_builder.add_recursive_pod(upvote_main_pod);
-    final_builder.add_signed_pod(params.identity_pod);
-    final_builder.add_signed_pod(params.upvote_pod);
-
-    let identity_server_pk_check = final_builder
-        .priv_op(op!(
-            eq,
-            (params.identity_pod, KEY_SIGNER),
-            params.identity_server_public_key.clone()
-        ))
-        .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final identity server check failed: {e}"))
-        })?;
-
-    let user_pk_check = final_builder
-        .priv_op(op!(
-            eq,
-            (params.identity_pod, "user_public_key"),
-            (params.upvote_pod, KEY_SIGNER)
-        ))
-        .map_err(|e| MainPodError::ProofGeneration(format!("Final user key check failed: {e}")))?;
-
-    // Parse predicates for final verification
-    let predicate_input = get_upvote_verification_predicate();
-    let batch = parse(&predicate_input, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Predicate parsing failed: {e}")))?
-        .custom_batch;
-
-    let upvote_verification_pred = batch
-        .predicate_ref_by_name("upvote_verification")
-        .ok_or_else(|| {
-            MainPodError::ProofGeneration("Missing upvote_verification predicate".to_string())
-        })?;
-
-    // COMMENTED OUT - needs to be fixed with proper variables
-    // let _upvote_verification_final = final_builder
-    //     .pub_op(op!(
-    //         custom,
-    //         upvote_verification_pred,
-    //         identity_verification,
-    //         upvote_verification,
-    //         identity_server_pk_check,
-    //         user_pk_check
-    //     ))
-    //     .map_err(|e| {
-    //         MainPodError::ProofGeneration(format!(
-    //             "Final upvote verification statement failed: {}",
-    //             e
-    //         ))
-    //     })?;
-
-    // For now, create a simple proof just to make this compile
-    let simple_verification = final_builder
-        .pub_op(op!(
-            custom,
-            upvote_verification_pred,
-            identity_server_pk_check,
-            user_pk_check
-        ))
-        .map_err(|e| {
-            MainPodError::ProofGeneration(format!(
-                "Simple upvote verification statement failed: {e}"
-            ))
-        })?;
-
-    let main_pod = final_builder
-        .prove(prover.as_ref(), &pod_params)
-        .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final proof generation failed: {e}"))
-        })?;
-
-    main_pod.pod.verify().map_err(|e| {
-        MainPodError::ProofGeneration(format!("Final proof verification failed: {e}"))
-    })?;
-
-    Ok(main_pod)
 }
 
 pub fn prove_upvote_verification_original(params: UpvoteProofParams) -> MainPodResult<MainPod> {

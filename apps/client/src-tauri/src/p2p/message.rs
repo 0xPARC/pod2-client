@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PodMessage {
     SendMainPod {
-        pod: SerializedMainPod,
+        pod: Box<SerializedMainPod>,
         message_text: Option<String>,
         sender_alias: Option<String>,
     },
     SendSignedPod {
-        pod: SerializedSignedPod,
+        pod: Box<SerializedSignedPod>,
         message_text: Option<String>,
         sender_alias: Option<String>,
     },

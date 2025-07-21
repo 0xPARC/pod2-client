@@ -213,7 +213,7 @@ pub async fn register_username(
     let identity_pod = identity_data.identity_pod;
 
     // Step 4: Store identity POD in database as mandatory
-    let pod_data = pod2_db::store::PodData::Signed(identity_pod.clone().into());
+    let pod_data = pod2_db::store::PodData::Signed(Box::new(identity_pod.clone().into()));
     let identity_pod_id = pod_data.id(); // Get the actual pod ID from the hash
 
     // Ensure "identity" folder exists

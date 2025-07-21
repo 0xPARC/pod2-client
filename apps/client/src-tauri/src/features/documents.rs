@@ -174,7 +174,7 @@ pub async fn upvote_document(
         ))?;
 
     let identity_pod = match identity_pod_info.data {
-        PodData::Signed(pod) => pod
+        PodData::Signed(pod) => (*pod)
             .try_into()
             .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
         PodData::Main(_) => {
@@ -222,7 +222,7 @@ pub async fn upvote_document(
     log::info!("✓ Upvote main pod created and verified");
 
     // Store the upvote MainPod in local database for user's records
-    let upvote_pod_data = PodData::Main(upvote_main_pod.clone().into());
+    let upvote_pod_data = PodData::Main(Box::new(upvote_main_pod.clone().into()));
     let upvote_label = format!("Upvote for document {document_id}");
 
     // Ensure "upvotes" folder exists
@@ -414,7 +414,7 @@ pub async fn publish_document(
         ))?;
 
     let identity_pod: pod2::frontend::SignedPod = match identity_pod_info.data {
-        PodData::Signed(pod) => pod
+        PodData::Signed(pod) => (*pod)
             .try_into()
             .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
         PodData::Main(_) => {
@@ -534,7 +534,7 @@ pub async fn publish_document(
     log::info!("✓ Publish main pod created and verified");
 
     // Step 7: Store the publish MainPod in local database for user's records
-    let publish_pod_data = PodData::Main(publish_main_pod.clone().into());
+    let publish_pod_data = PodData::Main(Box::new(publish_main_pod.clone().into()));
     let publish_label = format!("Publish document with content hash {content_hash}");
 
     // Ensure "published" folder exists

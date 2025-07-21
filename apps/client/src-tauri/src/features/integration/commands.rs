@@ -59,10 +59,10 @@ pub async fn submit_pod_request(
 
         match pod_info.data {
             pod2_db::store::PodData::Signed(helper) => {
-                owned_signed_pods.push(pod2::frontend::SignedPod::try_from(helper).unwrap());
+                owned_signed_pods.push(pod2::frontend::SignedPod::try_from(*helper).unwrap());
             }
             pod2_db::store::PodData::Main(helper) => {
-                match pod2::frontend::MainPod::try_from(helper) {
+                match pod2::frontend::MainPod::try_from(*helper) {
                     Ok(main_pod) => {
                         owned_main_pods.push(main_pod);
                     }

@@ -27,7 +27,7 @@ pub struct PublishProofParams<'a> {
 /// - Document pod was signed by the user from the identity pod
 /// - Cross-verification between identity and document signers
 /// - Content hash verification
-pub fn prove_publish_verification(params: PublishProofParams) -> MainPodResult<MainPod> {
+pub fn prove_publish_verification(_params: PublishProofParams) -> MainPodResult<MainPod> {
     //    // Extract required values from pods
     //    let username = extract_username(params.identity_pod)?;
     //

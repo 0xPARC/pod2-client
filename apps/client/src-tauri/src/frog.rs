@@ -92,7 +92,7 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
     };
     store::import_pod(
         &app_state.db,
-        &PodData::Signed(frog_response.pod.into()),
+        &PodData::Signed(Box::new(frog_response.pod.into())),
         name.as_deref(),
         "frogs",
     )

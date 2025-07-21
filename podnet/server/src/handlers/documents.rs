@@ -206,7 +206,7 @@ pub async fn publish_document(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let identity_server_pk = identity_server_pk.unwrap();
+    let _identity_server_pk = identity_server_pk.unwrap();
 
     log::info!(
         "✓ Solver verification passed: username={}, content_hash={stored_content_hash}",

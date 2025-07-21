@@ -230,9 +230,9 @@ pub async fn execute_code_command(
 
         match pod_info.data {
             PodData::Signed(helper) => {
-                owned_signed_pods.push(SignedPod::try_from(helper).unwrap());
+                owned_signed_pods.push(SignedPod::try_from(*helper).unwrap());
             }
-            PodData::Main(helper) => match MainPod::try_from(helper) {
+            PodData::Main(helper) => match MainPod::try_from(*helper) {
                 Ok(main_pod) => {
                     owned_main_pods.push(main_pod);
                 }

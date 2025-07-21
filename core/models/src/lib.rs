@@ -245,7 +245,7 @@ impl Document {
     /// Verify the timestamp pod signature
     pub fn verify_timestamp_pod_signature(
         &self,
-        server_public_key: &str,
+        _server_public_key: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         println!("Verifying timestamp pod signature...");
 

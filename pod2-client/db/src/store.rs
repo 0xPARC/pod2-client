@@ -21,8 +21,8 @@ pub struct SpaceInfo {
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(tag = "pod_data_variant", content = "pod_data_payload")]
 pub enum PodData {
-    Signed(SerializedSignedPod),
-    Main(SerializedMainPod),
+    Signed(Box<SerializedSignedPod>),
+    Main(Box<SerializedMainPod>),
 }
 
 impl PodData {
@@ -44,13 +44,13 @@ impl PodData {
 
 impl From<SignedPod> for PodData {
     fn from(pod: SignedPod) -> Self {
-        PodData::Signed(pod.into())
+        PodData::Signed(Box::new(pod.into()))
     }
 }
 
 impl From<MainPod> for PodData {
     fn from(pod: MainPod) -> Self {
-        PodData::Main(pod.into())
+        PodData::Main(Box::new(pod.into()))
     }
 }
 

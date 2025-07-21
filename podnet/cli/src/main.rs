@@ -12,6 +12,7 @@ use podnet_models::DocumentContent;
 use pulldown_cmark::{Event, Options, Parser, html};
 use utils::*;
 
+#[allow(clippy::too_many_arguments)]
 fn render_to_html(
     id: &str,
     content_id: &str,
@@ -434,11 +435,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let server = config::CliConfig::load().server_url;
             view_post_in_browser(post_id, &server).await?;
         }
-        Some(("list-posts", sub_matches)) => {
+        Some(("list-posts", _sub_matches)) => {
             let server = config::CliConfig::load().server_url;
             posts::list_posts(&server).await?;
         }
-        Some(("list-documents", sub_matches)) => {
+        Some(("list-documents", _sub_matches)) => {
             let server = config::CliConfig::load().server_url;
             documents::list_documents(&server).await?;
         }
