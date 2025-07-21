@@ -2,12 +2,12 @@ use pod2_db::store;
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState, AppStateData};
+use crate::{config::config, AppState, AppStateData};
 
 /// Macro to check if pod management feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().pod_management {
+        if !config().features.pod_management {
             log::warn!("Pod management feature is disabled");
             return Err("Pod management feature is disabled".to_string());
         }

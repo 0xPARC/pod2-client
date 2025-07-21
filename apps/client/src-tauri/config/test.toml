@@ -1,0 +1,14 @@
+# Test configuration to verify our system works
+[features]
+networking = true
+frogcrypto = true
+
+[database]
+path = "test.db"
+
+[network]
+server = "https://test.example.com"
+timeout_seconds = 60
+
+[logging]
+level = "debug"

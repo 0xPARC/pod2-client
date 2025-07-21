@@ -1,6 +1,10 @@
-use std::sync::OnceLock;
+use std::{
+    path::PathBuf,
+    sync::{OnceLock, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
 
 /// Configuration for enabling/disabling application features
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,78 +33,193 @@ impl Default for FeatureConfig {
     }
 }
 
-/// Global cache for feature configuration
-static FEATURE_CONFIG: OnceLock<FeatureConfig> = OnceLock::new();
+/// Database configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    /// Path to the database file
+    pub path: String,
+}
 
-impl FeatureConfig {
-    /// Load feature configuration from environment variables (cached)
-    /// Falls back to defaults if environment variables are not set
-    pub fn load() -> Self {
-        FEATURE_CONFIG
-            .get_or_init(|| {
-                log::info!("Loading feature configuration from environment variables");
-
-                let config = Self {
-                    pod_management: Self::get_env_bool("FEATURE_POD_MANAGEMENT", true),
-                    networking: Self::get_env_bool("FEATURE_NETWORKING", false),
-                    authoring: Self::get_env_bool("FEATURE_AUTHORING", true),
-                    integration: Self::get_env_bool("FEATURE_INTEGRATION", true),
-                    frogcrypto: Self::get_env_bool("FEATURE_FROGCRYPTO", true),
-                };
-
-                log::info!("Feature configuration loaded: {:?}", config);
-                config
-            })
-            .clone()
-    }
-
-    /// Helper to parse boolean from environment variable
-    fn get_env_bool(key: &str, default: bool) -> bool {
-        match std::env::var(key) {
-            Ok(value) => match value.to_lowercase().as_str() {
-                "true" | "1" | "yes" | "on" => true,
-                "false" | "0" | "no" | "off" => false,
-                _ => {
-                    log::warn!(
-                        "Invalid boolean value '{}' for {}, using default: {}",
-                        value,
-                        key,
-                        default
-                    );
-                    default
-                }
-            },
-            Err(_) => default,
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            path: "pod2.db".to_string(),
         }
     }
+}
 
-    /// Check if any features are enabled
-    pub fn has_any_enabled(&self) -> bool {
-        self.pod_management
-            || self.networking
-            || self.authoring
-            || self.integration
-            || self.frogcrypto
+/// Network configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    /// Server URL to connect to
+    pub server: String,
+    /// Request timeout in seconds
+    pub timeout_seconds: u32,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            server: "http://localhost:3000".to_string(),
+            timeout_seconds: 30,
+        }
+    }
+}
+
+/// UI configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiConfig {
+    /// Default theme (auto, light, dark)
+    pub default_theme: String,
+    /// Default window width
+    pub default_window_width: u32,
+    /// Default window height
+    pub default_window_height: u32,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            default_theme: "auto".to_string(),
+            default_window_width: 800,
+            default_window_height: 600,
+        }
+    }
+}
+
+/// Logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    /// Log level (debug, info, warn, error)
+    pub level: String,
+    /// Enable console output
+    pub console_output: bool,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: "info".to_string(),
+            console_output: true,
+        }
+    }
+}
+
+/// Main application configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AppConfig {
+    /// Feature toggles
+    #[serde(default)]
+    pub features: FeatureConfig,
+    /// Database configuration
+    #[serde(default)]
+    pub database: DatabaseConfig,
+    /// Network configuration
+    #[serde(default)]
+    pub network: NetworkConfig,
+    /// UI configuration
+    #[serde(default)]
+    pub ui: UiConfig,
+    /// Logging configuration
+    #[serde(default)]
+    pub logging: LoggingConfig,
+}
+
+/// Global configuration instance with thread-safe access
+static CONFIG: OnceLock<RwLock<AppConfig>> = OnceLock::new();
+
+impl AppConfig {
+    /// Get read-only access to the global configuration
+    pub fn get() -> std::sync::RwLockReadGuard<'static, AppConfig> {
+        CONFIG
+            .get()
+            .expect("Config not initialized")
+            .read()
+            .unwrap()
     }
 
-    /// Get a list of enabled feature names
-    pub fn enabled_features(&self) -> Vec<&'static str> {
-        let mut features = Vec::new();
-        if self.pod_management {
-            features.push("pod-management");
-        }
-        if self.networking {
-            features.push("networking");
-        }
-        if self.authoring {
-            features.push("authoring");
-        }
-        if self.integration {
-            features.push("integration");
-        }
-        if self.frogcrypto {
-            features.push("frogcrypto");
-        }
-        features
+    /// Initialize the global configuration
+    pub fn initialize(config: AppConfig) {
+        CONFIG
+            .set(RwLock::new(config))
+            .expect("Config already initialized");
     }
+
+    /// Update the global configuration (for hot reloading)
+    pub fn update(config: AppConfig, app_handle: &AppHandle) -> Result<(), String> {
+        config.validate()?;
+
+        let config_lock = CONFIG.get().ok_or("Config not initialized")?;
+        {
+            let mut config_guard = config_lock
+                .write()
+                .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
+            *config_guard = config.clone();
+        }
+
+        // Emit config changed event
+        app_handle
+            .emit("config-changed", &config)
+            .map_err(|e| format!("Failed to emit config change event: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Load configuration from file
+    pub fn load_from_file(config_path: Option<PathBuf>) -> Result<AppConfig, String> {
+        let mut builder = config::Config::builder();
+
+        // Add config file if specified
+        if let Some(path) = config_path {
+            builder = builder.add_source(config::File::from(path).required(true));
+        }
+
+        let config = builder
+            .build()
+            .map_err(|e| format!("Failed to build config: {}", e))?;
+
+        config
+            .try_deserialize()
+            .map_err(|e| format!("Failed to deserialize config: {}", e))
+    }
+
+    /// Validate configuration
+    pub fn validate(&self) -> Result<(), String> {
+        let mut errors = Vec::new();
+
+        // Validate network config
+        if self.network.timeout_seconds == 0 {
+            errors.push("network.timeout_seconds must be greater than 0".to_string());
+        }
+
+        if self.network.server.is_empty() {
+            errors.push("network.server cannot be empty".to_string());
+        }
+
+        // Validate UI config
+        if !["auto", "light", "dark"].contains(&self.ui.default_theme.as_str()) {
+            errors.push("ui.default_theme must be 'auto', 'light', or 'dark'".to_string());
+        }
+
+        // Validate logging config
+        if !["debug", "info", "warn", "error"].contains(&self.logging.level.as_str()) {
+            errors.push("logging.level must be 'debug', 'info', 'warn', or 'error'".to_string());
+        }
+
+        // Validate database config
+        if self.database.path.is_empty() {
+            errors.push("database.path cannot be empty".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(", "))
+        }
+    }
+}
+
+/// Convenience function for accessing configuration
+pub fn config() -> std::sync::RwLockReadGuard<'static, AppConfig> {
+    AppConfig::get()
 }

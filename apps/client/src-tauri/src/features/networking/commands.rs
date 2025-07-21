@@ -9,12 +9,12 @@ use pod2_db::store::{self, PodData};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, p2p, AppState, DEFAULT_SPACE_ID};
+use crate::{config::config, p2p, AppState, DEFAULT_SPACE_ID};
 
 /// Macro to check if networking feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().networking {
+        if !config().features.networking {
             log::warn!("Networking feature is disabled");
             return Err("Networking feature is disabled".to_string());
         }

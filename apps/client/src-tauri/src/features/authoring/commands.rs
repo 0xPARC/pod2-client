@@ -13,12 +13,12 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState};
+use crate::{config::config, AppState};
 
 /// Macro to check if authoring feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().authoring {
+        if !config().features.authoring {
             log::warn!("Authoring feature is disabled");
             return Err("Authoring feature is disabled".to_string());
         }

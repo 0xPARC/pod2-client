@@ -9,3 +9,7 @@ Cargo.lock
 node_modules
 .turbo
 dist
+
+# User-specific configuration files
+user.toml
+apps/client/src-tauri/config/user.toml

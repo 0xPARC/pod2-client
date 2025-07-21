@@ -12,7 +12,7 @@
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "deep-link:default",
-    "store:default",
+    "cli:default",
     "core:window:allow-toggle-maximize",
     "core:window:allow-start-dragging",
     "http:default",

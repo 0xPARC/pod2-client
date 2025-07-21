@@ -1,0 +1,15 @@
+# Development configuration for user "bob"
+# Example of how to have separate database instances via config
+
+[database]
+path = "pod2-bob.db"
+
+[features]
+networking = true
+frogcrypto = true
+
+[network]
+server = "http://localhost:3001"  # Different port for separate server
+
+[logging]
+level = "debug"
