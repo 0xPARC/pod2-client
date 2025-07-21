@@ -1204,7 +1204,7 @@ mod tests {
         assert_eq!(plan.magic_rules.len(), 2);
         assert_eq!(plan.guarded_rules.len(), 2);
 
-        println!("plan: {:#?}", plan);
+        println!("plan: {plan:#?}");
 
         // Check magic rule (seed)
         let magic_rule = &plan.magic_rules[0];

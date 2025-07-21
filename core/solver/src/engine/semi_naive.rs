@@ -908,7 +908,9 @@ mod tests {
 
     use hex::ToHex;
     use pod2::{
-        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
+        backends::plonky2::{
+            mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
+        },
         examples::{attest_eth_friend, custom::eth_dos_batch, MOCK_VD_SET},
         frontend::MainPodBuilder,
         lang::parse,
@@ -999,7 +1001,7 @@ mod tests {
             })
             .unwrap();
         let p_id = is_large_rule.head.predicate.clone();
-        println!("all_facts: {:#?}", all_facts);
+        println!("all_facts: {all_facts:#?}");
         let results = all_facts.get(&p_id).unwrap();
 
         assert_eq!(results.len(), 1);
@@ -1161,13 +1163,12 @@ mod tests {
             )
 
             REQUEST(
-                path(0x{}, ?End)
+                path(0x{pod_a_id_hex}, ?End)
             )
-        "#,
-            pod_a_id_hex
+        "#
         );
-        println!("podlog: {}", podlog);
-        println!("pods: {:#?}", pods);
+        println!("podlog: {podlog}");
+        println!("pods: {pods:#?}");
 
         let params = Params::default();
         let processed = parse(&podlog, &params, &[]).unwrap();
@@ -1213,7 +1214,7 @@ mod tests {
             }
         }
 
-        println!("Results: {:?}", results);
+        println!("Results: {results:?}");
         //  println!("Plan: {:#?}", plan);
 
         assert_eq!(results.len(), 2, "Should find paths to B and C");
@@ -1351,7 +1352,7 @@ mod tests {
         let proof = engine.reconstruct_proof(&all_facts, &provenance, &materializer);
         assert!(proof.is_ok(), "Should find a proof");
         let proof = proof.unwrap();
-        println!("Proof: {:?}", proof);
+        println!("Proof: {proof:?}");
 
         assert_eq!(
             proof.root_nodes.len(),
@@ -1370,16 +1371,14 @@ mod tests {
             ..Default::default()
         };
 
-        let mut alice = MockSigner { pk: "Alice".into() };
-        let mut bob = MockSigner { pk: "Bob".into() };
-        let charlie = MockSigner {
-            pk: "Charlie".into(),
-        };
-        let _david = MockSigner { pk: "David".into() };
+        let alice = Signer(SecretKey::new_rand());
+        let bob = Signer(SecretKey::new_rand());
+        let charlie = Signer(SecretKey::new_rand());
+        let _david = Signer(SecretKey::new_rand());
 
-        let alice_attestation = attest_eth_friend(&params, &mut alice, bob.public_key());
-        let bob_attestation = attest_eth_friend(&params, &mut bob, charlie.public_key());
-        let batch = eth_dos_batch(&params, true).unwrap();
+        let alice_attestation = attest_eth_friend(&params, &alice, bob.public_key());
+        let bob_attestation = attest_eth_friend(&params, &bob, charlie.public_key());
+        let batch = eth_dos_batch(&params).unwrap();
 
         let req1 = format!(
             r#"
@@ -1389,8 +1388,8 @@ mod tests {
         )
         "#,
             batch.id().encode_hex::<String>(),
-            hash_str(&alice.pk).encode_hex::<String>(),
-            hash_str(&charlie.pk).encode_hex::<String>()
+            &alice.public_key().raw().encode_hex::<String>(),
+            &charlie.public_key().raw().encode_hex::<String>()
         );
 
         let db = Arc::new(
@@ -1422,7 +1421,7 @@ mod tests {
                 "blocking tmpl: {:?} {:?}",
                 match tmpl.pred {
                     Predicate::Custom(cpr) => cpr.predicate().name.clone(),
-                    Predicate::Native(op) => format!("{:?}", op),
+                    Predicate::Native(op) => format!("{op:?}"),
                     _ => unreachable!(),
                 },
                 tmpl.args
@@ -1431,19 +1430,19 @@ mod tests {
 
         assert!(proof.is_ok(), "Should find a proof");
         let proof = proof.unwrap();
-        println!("Proof: {}", proof);
+        println!("Proof: {proof}");
         //println!("Operations: {:#?}", proof.to_operations(&db.clone()));
         for (operation, public) in proof.to_operations() {
             println!(
                 "{:?}  public:{}",
                 match operation.0 {
-                    OperationType::Native(op) => format!("{:?}", op),
+                    OperationType::Native(op) => format!("{op:?}"),
                     OperationType::Custom(cpr) => cpr.predicate().name.clone(),
                 },
                 public
             );
             for arg in &operation.1 {
-                println!("  {}", arg);
+                println!("  {arg}");
             }
             println!();
         }
@@ -1557,10 +1556,9 @@ mod tests {
         )
 
         REQUEST(
-            path(0x{}, ?End)
+            path(0x{pod_a_id_hex}, ?End)
         )
-    "#,
-            pod_a_id_hex
+    "#
         );
 
         let params = Params::default();

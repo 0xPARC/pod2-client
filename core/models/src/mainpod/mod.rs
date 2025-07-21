@@ -148,7 +148,6 @@ pub fn verify_mainpod_basics(main_pod: &MainPod) -> MainPodResult<()> {
 /// Macro to extract typed arguments from a MainPod's public statements
 ///
 /// Usage:
-/// ```rust
 /// let (username, content_hash, identity_server_pk, post_id, tags) = extract_mainpod_args!(
 ///     main_pod,
 ///     get_publish_verification_predicate(),
@@ -159,7 +158,6 @@ pub fn verify_mainpod_basics(main_pod: &MainPod) -> MainPodResult<()> {
 ///     post_id: as_i64,
 ///     tags: as_set
 /// )?;
-/// ```
 #[macro_export]
 macro_rules! extract_mainpod_args {
     ($main_pod:expr, $predicate:expr, $statement_name:expr, $($arg_name:ident: $arg_type:ident),* $(,)?) => {

@@ -151,7 +151,9 @@ pub fn value_to_podlang_literal(value: Value) -> String {
 mod tests {
     use hex::ToHex;
     use pod2::{
-        backends::plonky2::mock::{mainpod::MockProver, signedpod::MockSigner},
+        backends::plonky2::{
+            mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signedpod::Signer,
+        },
         examples::{
             attest_eth_friend, custom::eth_dos_batch, zu_kyc_sign_pod_builders, MOCK_VD_SET,
         },
@@ -172,16 +174,14 @@ mod tests {
             ..Default::default()
         };
 
-        let mut alice = MockSigner { pk: "Alice".into() };
-        let mut bob = MockSigner { pk: "Bob".into() };
-        let charlie = MockSigner {
-            pk: "Charlie".into(),
-        };
-        let _david = MockSigner { pk: "David".into() };
+        let alice = Signer(SecretKey::new_rand());
+        let bob = Signer(SecretKey::new_rand());
+        let charlie = Signer(SecretKey::new_rand());
+        let _david = Signer(SecretKey::new_rand());
 
-        let alice_attestation = attest_eth_friend(&params, &mut alice, bob.public_key());
-        let bob_attestation = attest_eth_friend(&params, &mut bob, charlie.public_key());
-        let batch = eth_dos_batch(&params, true).unwrap();
+        let alice_attestation = attest_eth_friend(&params, &alice, bob.public_key());
+        let bob_attestation = attest_eth_friend(&params, &bob, charlie.public_key());
+        let batch = eth_dos_batch(&params).unwrap();
 
         let req1 = format!(
             r#"
@@ -224,7 +224,7 @@ mod tests {
         builder.add_signed_pod(&alice_attestation);
 
         let alice_bob_pod = builder.prove(&prover, &params).unwrap();
-        println!("{}", alice_bob_pod);
+        println!("{alice_bob_pod}");
 
         let req2 = format!(
             r#"
@@ -258,7 +258,7 @@ mod tests {
         let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
 
         let (_pod_ids, ops) = result.to_inputs();
-        println!("{}", result);
+        println!("{result}");
 
         for (op, public) in ops {
             if public {
@@ -272,7 +272,7 @@ mod tests {
         builder.add_recursive_pod(alice_bob_pod);
 
         let bob_charlie_pod = builder.prove(&prover, &params).unwrap();
-        println!("{}", bob_charlie_pod);
+        println!("{bob_charlie_pod}");
     }
 
     #[test]
@@ -284,31 +284,24 @@ mod tests {
         let const_1y = 1706367566;
 
         let (gov_id, pay_stub, sanction_list) = zu_kyc_sign_pod_builders(&params);
-        let mut signer = MockSigner {
-            pk: "ZooGov".into(),
-        };
-        let gov_id = gov_id.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey::new_rand());
+        let gov_id = gov_id.sign(&signer).unwrap();
 
-        let mut signer = MockSigner {
-            pk: "ZooDeel".into(),
-        };
-        let pay_stub = pay_stub.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey::new_rand());
+        let pay_stub = pay_stub.sign(&signer).unwrap();
 
-        let mut signer = MockSigner {
-            pk: "ZooOFAC".into(),
-        };
-        let sanction_list = sanction_list.sign(&mut signer).unwrap();
+        let signer = Signer(SecretKey::new_rand());
+        let sanction_list = sanction_list.sign(&signer).unwrap();
 
         let zukyc_request = format!(
             r#"
         REQUEST(
             NotContains(?sanctions["sanctionList"], ?gov["idNumber"])
-            Lt(?gov["dateOfBirth"], {})
-            Equal(?pay["startDate"], {})
+            Lt(?gov["dateOfBirth"], {const_18y})
+            Equal(?pay["startDate"], {const_1y})
             Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
         )
-        "#,
-            const_18y, const_1y
+        "#
         );
 
         let request = parse(&zukyc_request, &params, &[])
@@ -342,12 +335,12 @@ mod tests {
             if let IndexablePod::SignedPod(pod) = pod {
                 builder.add_signed_pod(pod);
             } else {
-                panic!("Expected signed pod, got {:?}", pod);
+                panic!("Expected signed pod, got {pod:?}");
             }
         }
 
         let kyc = builder.prove(&prover, &params).unwrap();
 
-        println!("{}", kyc);
+        println!("{kyc}");
     }
 }
