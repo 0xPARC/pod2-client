@@ -16,6 +16,18 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-start-dragging",
     "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://pod-server.ghost-spica.ts.net/*" },
+        { "url": "https://frog-server-q36c.onrender.com/*" },
+        { "url": "http://localhost:3000/*" },
+        { "url": "http://localhost:3001/*" }
+      ]
+    },
+    "http:allow-fetch-cancel",
+    "http:allow-fetch-read-body",
+    "http:allow-fetch-send",
     "fs:allow-read-text-file",
     "dialog:default"
   ]
