@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use hex::ToHex;
 use pod2::{
     backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer},
     examples::MOCK_VD_SET,
@@ -13,7 +14,37 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState};
+use crate::{
+    features::console::commands::{
+        log_error_event_from_app_handle, log_pod_operation_from_app_handle,
+    },
+    get_feature_config, AppState,
+};
+
+/// Format size in bytes to human-readable format
+fn format_size_bytes(bytes: usize) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
+    const THRESHOLD: f64 = 1024.0;
+
+    if bytes == 0 {
+        return "0B".to_string();
+    }
+
+    let bytes_f = bytes as f64;
+    let mut size = bytes_f;
+    let mut unit_index = 0;
+
+    while size >= THRESHOLD && unit_index < UNITS.len() - 1 {
+        size /= THRESHOLD;
+        unit_index += 1;
+    }
+
+    if unit_index == 0 {
+        format!("{}{}", bytes, UNITS[unit_index])
+    } else {
+        format!("{:.1}{}", size, UNITS[unit_index])
+    }
+}
 
 /// Macro to check if authoring feature is enabled
 macro_rules! check_feature_enabled {
@@ -119,11 +150,25 @@ pub async fn sign_pod(
     state: State<'_, Mutex<AppState>>,
     serialized_pod_values: String,
 ) -> Result<String, String> {
+    check_feature_enabled!();
     let app_state = state.lock().await;
+    let app_handle = app_state.app_handle.clone();
 
-    let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_pod_values)
-        .map_err(|e| format!("Failed to parse serialized pod values: {}", e))?;
+    let kvs: HashMap<String, PodValue> =
+        serde_json::from_str(&serialized_pod_values).map_err(|e| {
+            let error_msg = format!("Failed to parse serialized pod values: {}", e);
+            let app_handle_clone = app_handle.clone();
+            tokio::spawn(async move {
+                log_error_event_from_app_handle(
+                    &app_handle_clone,
+                    format!("❌ Signing failed: Invalid POD values format"),
+                )
+                .await;
+            });
+            error_msg
+        })?;
 
+    let entry_count = kvs.len();
     let params = Params::default();
     let mut builder = SignedPodBuilder::new(&params);
     for (key, value) in kvs {
@@ -131,17 +176,57 @@ pub async fn sign_pod(
     }
 
     // Get default private key (auto-created if needed)
-    let private_key = store::get_default_private_key(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?;
+    let private_key = match store::get_default_private_key(&app_state.db).await {
+        Ok(key) => key,
+        Err(e) => {
+            let error_msg = format!("Failed to get private key: {}", e);
+            let app_handle_clone = app_handle.clone();
+            tokio::spawn(async move {
+                log_error_event_from_app_handle(
+                    &app_handle_clone,
+                    format!("❌ Signing failed: Private key not available"),
+                )
+                .await;
+            });
+            return Err(error_msg);
+        }
+    };
 
     let mut signer = Signer(private_key);
 
-    let signed_pod = builder
-        .sign(&mut signer)
-        .map_err(|e| format!("Failed to sign pod: {}", e))?;
+    match builder.sign(&mut signer) {
+        Ok(signed_pod) => {
+            // Get POD ID and size for logging
+            let pod_id = signed_pod.id().0.encode_hex::<String>();
+            let pod_id_short = pod_id[..8.min(pod_id.len())].to_string();
+            let size_bytes = serde_json::to_string(&signed_pod).unwrap_or_default().len();
+            let size_str = format_size_bytes(size_bytes);
 
-    Ok(serde_json::to_string(&signed_pod).unwrap())
+            // Log successful signing
+            let sign_msg = format!(
+                "✏️ POD signed via GUI: {} entries → {} ({})",
+                entry_count, pod_id_short, size_str
+            );
+            let app_handle_clone = app_handle.clone();
+            tokio::spawn(async move {
+                log_pod_operation_from_app_handle(&app_handle_clone, sign_msg).await;
+            });
+
+            Ok(serde_json::to_string(&signed_pod).unwrap())
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to sign pod: {}", e);
+            let app_handle_clone = app_handle.clone();
+            tokio::spawn(async move {
+                log_error_event_from_app_handle(
+                    &app_handle_clone,
+                    format!("❌ Signing failed: {} entries ({})", entry_count, e),
+                )
+                .await;
+            });
+            Err(error_msg)
+        }
+    }
 }
 
 // =============================================================================
@@ -189,6 +274,7 @@ pub async fn execute_code_command(
     );
 
     let app_state = state.lock().await;
+    let app_handle = app_state.app_handle.clone();
 
     pest::set_error_detail(true);
     let params = Params::default();
@@ -198,11 +284,27 @@ pub async fn execute_code_command(
         Ok(output) => output,
         Err(e) => {
             log::error!("Failed to parse Podlang code: {:?}", e);
+            let app_handle_clone = app_handle.clone();
+            tokio::spawn(async move {
+                log_error_event_from_app_handle(
+                    &app_handle_clone,
+                    format!("❌ Podlang execution failed: Parse error"),
+                )
+                .await;
+            });
             return Err(format!("Parse error: {}", e));
         }
     };
 
     if processed_output.request_templates.is_empty() {
+        let app_handle_clone = app_handle.clone();
+        tokio::spawn(async move {
+            log_error_event_from_app_handle(
+                &app_handle_clone,
+                format!("❌ Podlang execution failed: No POD Request found"),
+            )
+            .await;
+        });
         return Err("Program does not contain a POD Request".to_string());
     }
 
@@ -278,11 +380,20 @@ pub async fn execute_code_command(
             Ok(solution) => solution,
             Err(e) => {
                 log::error!("Solver error: {:?}", e);
+                let app_handle_clone = app_handle.clone();
+                tokio::spawn(async move {
+                    log_error_event_from_app_handle(
+                        &app_handle_clone,
+                        format!("❌ Podlang execution failed: Solver error"),
+                    )
+                    .await;
+                });
                 return Err(format!("Solver error: {}", e));
             }
         };
 
     let (pod_ids, ops) = proof.to_inputs();
+    let operation_count = ops.len(); // Get count before move
 
     // Choose VD set based on mock mode
     #[allow(clippy::borrow_interior_mutable_const)]
@@ -319,6 +430,33 @@ pub async fn execute_code_command(
     };
 
     let result_main_pod = builder.prove(&*prover, &params).unwrap();
+
+    // Log successful execution
+    let main_pod_id = result_main_pod.id().0.encode_hex::<String>();
+    let pod_id_short = main_pod_id[..8.min(main_pod_id.len())].to_string();
+    let input_count = all_pods_for_facts.len();
+
+    let operation_text = if operation_count == 1 {
+        "operation"
+    } else {
+        "operations"
+    };
+    let execution_msg = if mock {
+        format!(
+            "⚡ Podlang executed (mock): {} inputs → {} ({} {})",
+            input_count, pod_id_short, operation_count, operation_text
+        )
+    } else {
+        format!(
+            "⚡ Podlang executed: {} inputs → {} ({} {})",
+            input_count, pod_id_short, operation_count, operation_text
+        )
+    };
+
+    let app_handle_clone = app_handle.clone();
+    tokio::spawn(async move {
+        log_pod_operation_from_app_handle(&app_handle_clone, execution_msg).await;
+    });
 
     let result = ExecuteCodeResponse {
         main_pod: result_main_pod,

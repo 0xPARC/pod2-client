@@ -176,6 +176,17 @@ pnpm dlx shadcn@latest # For handling shadcn components
 
 Based on the Cursor rules in `.cursor/rules/`:
 
+## Terminology Conventions
+
+**Database vs UI Terminology**: The database uses technical terms, but the UI uses user-friendly language:
+- **Database**: Uses "space" terminology (e.g., `create_space`, `list_spaces`, `space_id`)
+- **UI/Console**: Uses "folder" terminology (e.g., "Created folder", "Delete failed: POD not found in folder")
+- **Code**: Backend function names and parameters use "space", but user-visible messages use "folder"
+
+This keeps the database schema consistent while providing intuitive terminology for end users.
+
+## General Guidelines
+
 1. **Prefer small, modular, composable functions** - Functions should do one thing well
 2. **Parse, don't validate** - Transform inputs into type-safe representations early
 3. **No unhelpful comments** - Avoid comments that describe what code does rather than why

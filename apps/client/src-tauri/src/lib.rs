@@ -331,6 +331,24 @@ pub fn run() {
                     .expect("failed to initialize state");
                 app.manage(Mutex::new(app_state));
 
+                // Initialize console service
+                let console_service = features::console::init_console_service(app.handle().clone());
+                app.manage(console_service);
+
+                // Show welcome message and log system startup
+                let app_handle_for_logging = app.handle().clone();
+                tokio::spawn(async move {
+                    // Give the console service a moment to fully initialize
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+                    // Show welcome ASCII art
+                    if let Some(console_service) = app_handle_for_logging
+                        .try_state::<features::console::commands::ConsoleServiceState>(
+                    ) {
+                        console_service.show_welcome().await;
+                    }
+                });
+
                 // Spawn cache warming task in background to avoid blocking startup
                 tokio::task::spawn_blocking(|| {
                     cache::warm_mainpod_cache();
@@ -381,7 +399,13 @@ pub fn run() {
             identity_setup::is_setup_completed,
             identity_setup::get_app_setup_state,
             // Integration commands
-            integration::submit_pod_request
+            integration::submit_pod_request,
+            // Console commands
+            console::console_execute_command,
+            console::console_get_messages,
+            console::console_get_state,
+            console::console_get_command_history,
+            console::console_log_event
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

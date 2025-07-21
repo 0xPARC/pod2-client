@@ -6,6 +6,7 @@ import { FrogCrypto } from "./FrogCrypto";
 import { DocumentsView } from "./documents/DocumentsView";
 import { PublishPage } from "./documents/PublishPage";
 import { EditorView } from "./editor/EditorView";
+import { ConsoleView } from "./console/ConsoleView";
 import { FeatureGate } from "../lib/features/config";
 
 export function MainContent() {
@@ -28,6 +29,12 @@ export function MainContent() {
       return (
         <FeatureGate feature="authoring">
           <EditorView />
+        </FeatureGate>
+      );
+    case "console":
+      return (
+        <FeatureGate feature="authoring">
+          <ConsoleView />
         </FeatureGate>
       );
     default:

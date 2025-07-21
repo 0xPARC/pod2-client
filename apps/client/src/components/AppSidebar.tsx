@@ -35,6 +35,7 @@ import {
   ImportIcon,
   InboxIcon,
   MessageSquareIcon,
+  TerminalIcon,
   UploadIcon
 } from "lucide-react";
 import { useState } from "react";
@@ -244,6 +245,15 @@ export function AppSidebar() {
                     isOpen={isCreateSignedPodDialogOpen}
                     onOpenChange={setIsCreateSignedPodDialogOpen}
                   />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setCurrentView("console")}
+                    isActive={currentView === "console"}
+                  >
+                    <TerminalIcon />
+                    Console
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

@@ -1,5 +1,6 @@
 pub mod authoring;
 pub mod blockies;
+pub mod console;
 pub mod documents;
 pub mod identity_setup;
 pub mod integration;

@@ -40,6 +40,11 @@ impl PodData {
             PodData::Main(pod) => pod.id().0.encode_hex(),
         }
     }
+
+    /// Calculate the size in bytes of the serialized POD data
+    pub fn calculate_size_bytes(&self) -> usize {
+        serde_json::to_string(self).unwrap_or_default().len()
+    }
 }
 
 impl From<SignedPod> for PodData {
@@ -62,6 +67,7 @@ pub struct PodInfo {
     pub label: Option<String>,
     pub created_at: String,
     pub space: String,
+    pub size_bytes: usize,
 }
 
 pub async fn create_space(db: &Db, id: &str) -> Result<()> {
@@ -214,6 +220,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
                             Box::new(e),
                         )
                     })?;
+                let size_bytes = pod_data.calculate_size_bytes();
                 Ok(PodInfo {
                     id: row.get(0)?,
                     pod_type: row.get(1)?,
@@ -221,6 +228,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
                     label: row.get(3)?,
                     created_at: row.get(4)?,
                     space: row.get(5)?,
+                    size_bytes,
                 })
             });
 
@@ -274,6 +282,7 @@ async fn list_pods_filtered(
                                 Box::new(e),
                             )
                         })?;
+                        let size_bytes = pod_data.calculate_size_bytes();
                         Ok(PodInfo {
                             id: row.get(0)?,
                             pod_type: row.get(1)?,
@@ -281,6 +290,7 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
+                            size_bytes,
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
@@ -298,6 +308,7 @@ async fn list_pods_filtered(
                                 Box::new(e),
                             )
                         })?;
+                        let size_bytes = pod_data.calculate_size_bytes();
                         Ok(PodInfo {
                             id: row.get(0)?,
                             pod_type: row.get(1)?,
@@ -305,6 +316,7 @@ async fn list_pods_filtered(
                             label: row.get(3)?,
                             created_at: row.get(4)?,
                             space: row.get(5)?,
+                            size_bytes,
                         })
                     })?;
                     pod_iter.collect::<Result<Vec<_>, _>>()
@@ -956,6 +968,7 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
                         Box::new(e),
                     )
                 })?;
+                let size_bytes = pod_data.calculate_size_bytes();
                 Ok(PodInfo {
                     id: row.get(0)?,
                     pod_type: row.get(1)?,
@@ -963,6 +976,7 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
                     label: row.get(3)?,
                     created_at: row.get(4)?,
                     space: row.get(5)?,
+                    size_bytes,
                 })
             })?;
             pod_iter.collect::<Result<Vec<_>, _>>()
@@ -1250,4 +1264,179 @@ pub async fn create_default_private_key(db: &Db) -> Result<SecretKey> {
 
     log::info!("Created default private key during setup");
     Ok(private_key)
+}
+
+/// Move a POD from one space to another
+pub async fn move_pod(db: &Db, pod_id: &str, from_space: &str, to_space: &str) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let pod_id_clone = pod_id.to_string();
+    let from_space_clone = from_space.to_string();
+    let to_space_clone = to_space.to_string();
+
+    conn.interact(move |conn| {
+        let tx = conn.transaction()?;
+
+        // Check if source POD exists
+        let source_count: i64 = {
+            let mut check_stmt =
+                tx.prepare("SELECT COUNT(*) FROM pods WHERE space = ?1 AND id = ?2")?;
+            check_stmt.query_row([&from_space_clone, &pod_id_clone], |row| row.get(0))?
+        };
+
+        if source_count == 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!(
+                    "POD {} not found in space {}",
+                    pod_id_clone, from_space_clone
+                )),
+            ));
+        }
+
+        // Check if target space exists
+        let space_count: i64 = {
+            let mut space_stmt = tx.prepare("SELECT COUNT(*) FROM spaces WHERE id = ?1")?;
+            space_stmt.query_row([&to_space_clone], |row| row.get(0))?
+        };
+
+        if space_count == 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!("Target space {} does not exist", to_space_clone)),
+            ));
+        }
+
+        // Check if POD already exists in target space
+        let target_count: i64 = {
+            let mut target_stmt =
+                tx.prepare("SELECT COUNT(*) FROM pods WHERE space = ?1 AND id = ?2")?;
+            target_stmt.query_row([&to_space_clone, &pod_id_clone], |row| row.get(0))?
+        };
+
+        if target_count > 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!(
+                    "POD {} already exists in space {}",
+                    pod_id_clone, to_space_clone
+                )),
+            ));
+        }
+
+        // Update the POD's space
+        tx.execute(
+            "UPDATE pods SET space = ?1 WHERE space = ?2 AND id = ?3",
+            rusqlite::params![&to_space_clone, &from_space_clone, &pod_id_clone],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for move_pod")??;
+
+    Ok(())
+}
+
+/// Copy a POD from one space to another
+pub async fn copy_pod(db: &Db, pod_id: &str, from_space: &str, to_space: &str) -> Result<()> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let pod_id_clone = pod_id.to_string();
+    let from_space_clone = from_space.to_string();
+    let to_space_clone = to_space.to_string();
+
+    conn.interact(move |conn| {
+        let tx = conn.transaction()?;
+
+        // Check if source POD exists
+        let source_count: i64 = {
+            let mut check_stmt =
+                tx.prepare("SELECT COUNT(*) FROM pods WHERE space = ?1 AND id = ?2")?;
+            check_stmt.query_row([&from_space_clone, &pod_id_clone], |row| row.get(0))?
+        };
+
+        if source_count == 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!(
+                    "POD {} not found in space {}",
+                    pod_id_clone, from_space_clone
+                )),
+            ));
+        }
+
+        // Check if target space exists
+        let space_count: i64 = {
+            let mut space_stmt = tx.prepare("SELECT COUNT(*) FROM spaces WHERE id = ?1")?;
+            space_stmt.query_row([&to_space_clone], |row| row.get(0))?
+        };
+
+        if space_count == 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!("Target space {} does not exist", to_space_clone)),
+            ));
+        }
+
+        // Check if from_space and to_space are the same
+        if from_space_clone == to_space_clone {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some("Cannot copy POD within the same space - POD IDs are unique".to_string()),
+            ));
+        }
+
+        // Copy the POD to target space (using INSERT OR IGNORE for idempotency)
+        let copied_rows = tx.execute(
+            "INSERT OR IGNORE INTO pods (id, pod_type, data, label, space, created_at) 
+             SELECT id, pod_type, data, label, ?1, CURRENT_TIMESTAMP 
+             FROM pods WHERE space = ?2 AND id = ?3",
+            rusqlite::params![&to_space_clone, &from_space_clone, &pod_id_clone],
+        )?;
+
+        if copied_rows == 0 {
+            // Check if it already exists in target space
+            let target_count: i64 = {
+                let mut target_stmt =
+                    tx.prepare("SELECT COUNT(*) FROM pods WHERE space = ?1 AND id = ?2")?;
+                target_stmt.query_row([&to_space_clone, &pod_id_clone], |row| row.get(0))?
+            };
+
+            if target_count > 0 {
+                // POD already exists in target space - this is ok (idempotent)
+                log::info!(
+                    "POD {} already exists in space {}, skipping copy",
+                    pod_id_clone,
+                    to_space_clone
+                );
+            } else {
+                return Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                    Some(format!(
+                        "Failed to copy POD {} to space {}",
+                        pod_id_clone, to_space_clone
+                    )),
+                ));
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .context("DB interaction failed for copy_pod")??;
+
+    Ok(())
 }

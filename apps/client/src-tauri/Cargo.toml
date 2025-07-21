@@ -51,6 +51,7 @@ tauri-plugin-fs = "2"
 eth-blockies = "1.1"
 base64 = "0.21"
 lazy_static = "1.4"
+toml = "0.8"
 
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
