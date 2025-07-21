@@ -175,13 +175,13 @@ mod tests {
             ..Default::default()
         };
 
-        let mut alice = Signer(SecretKey(BigUint::from(1u32)));
-        let mut bob = Signer(SecretKey(BigUint::from(2u32)));
+        let alice = Signer(SecretKey(BigUint::from(1u32)));
+        let bob = Signer(SecretKey(BigUint::from(2u32)));
         let charlie = Signer(SecretKey(BigUint::from(3u32)));
         let _david = Signer(SecretKey(BigUint::from(4u32)));
 
-        let alice_attestation = attest_eth_friend(&params, &mut alice, bob.public_key());
-        let bob_attestation = attest_eth_friend(&params, &mut bob, charlie.public_key());
+        let alice_attestation = attest_eth_friend(&params, &alice, bob.public_key());
+        let bob_attestation = attest_eth_friend(&params, &bob, charlie.public_key());
         let batch = eth_dos_batch(&params).unwrap();
 
         let req1 = format!(

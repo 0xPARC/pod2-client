@@ -183,9 +183,9 @@ pub async fn register_username(
     challenge_builder.insert("challenge", challenge_string);
     challenge_builder.insert("username", username.as_str());
 
-    let mut user_signer = pod2::backends::plonky2::signedpod::Signer(private_key);
+    let user_signer = pod2::backends::plonky2::signedpod::Signer(private_key);
     let user_response_pod = challenge_builder
-        .sign(&mut user_signer)
+        .sign(&user_signer)
         .map_err(|e| format!("Failed to sign challenge response: {}", e))?;
 
     // Step 3: Submit challenge response to get identity POD

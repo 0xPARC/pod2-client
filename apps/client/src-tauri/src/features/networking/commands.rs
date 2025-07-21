@@ -141,11 +141,11 @@ pub async fn send_message_as_pod(
     builder.insert("timestamp", PodValue::from(Utc::now().to_rfc3339()));
 
     // Create a real Signer using the private key
-    let mut signer = Signer(private_key);
+    let signer = Signer(private_key);
 
     // Sign the POD
     let signed_pod = builder
-        .sign(&mut signer)
+        .sign(&signer)
         .map_err(|e| format!("Failed to sign message POD: {}", e))?;
 
     // Get pod ID before moving the signed_pod
