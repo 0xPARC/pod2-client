@@ -1,0 +1,2336 @@
+{
+  "params": {
+    "maxInputSignedPods": 3,
+    "maxInputRecursivePods": 2,
+    "maxInputPodsPublicStatements": 10,
+    "maxStatements": 20,
+    "maxSignedPodValues": 8,
+    "maxPublicStatements": 10,
+    "maxOperationArgs": 5,
+    "maxCustomPredicateBatches": 2,
+    "maxCustomPredicateVerifications": 5,
+    "maxCustomPredicateWildcards": 10,
+    "maxMerkleProofsContainers": 5,
+    "maxDepthMtContainers": 32,
+    "maxDepthMtVds": 6,
+    "numPublicStatementsId": 16,
+    "maxStatementArgs": 5,
+    "maxCustomPredicateArity": 5,
+    "maxCustomBatchSize": 5
+  },
+  "podType": [2, "MockMain"],
+  "id": "2df6b3b5ff1eeb942fe5abcd65f93ed95ee8b2de99c480b6866e8cc175706066",
+  "vdSet": { "tree_depth": 8, "vds_hashes": [] },
+  "publicStatements": [
+    {
+      "predicate": "Equal",
+      "args": [
+        {
+          "type": "Key",
+          "value": {
+            "podId": "2df6b3b5ff1eeb942fe5abcd65f93ed95ee8b2de99c480b6866e8cc175706066",
+            "key": "_type"
+          }
+        },
+        { "type": "Literal", "value": { "Int": "2" } }
+      ]
+    },
+    {
+      "predicate": "Custom",
+      "args": [
+        {
+          "batch": {
+            "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+            "name": "PodlangBatch",
+            "predicates": [
+              {
+                "name": "identity_verified",
+                "conjunction": true,
+                "statements": [
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "identity_pod", "index": 1 },
+                          "_type"
+                        ]
+                      },
+                      { "type": "Literal", "value": { "Int": "4" } }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "identity_pod", "index": 1 },
+                          "username"
+                        ]
+                      },
+                      {
+                        "type": "Wildcard",
+                        "value": { "name": "username", "index": 0 }
+                      }
+                    ]
+                  }
+                ],
+                "argsLen": 1,
+                "wildcardNames": ["username", "identity_pod"]
+              },
+              {
+                "name": "upvote_verified",
+                "conjunction": true,
+                "statements": [
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [{ "name": "upvote_pod", "index": 1 }, "_type"]
+                      },
+                      { "type": "Literal", "value": { "Int": "4" } }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "upvote_pod", "index": 1 },
+                          "content_hash"
+                        ]
+                      },
+                      {
+                        "type": "Wildcard",
+                        "value": { "name": "content_hash", "index": 0 }
+                      }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "upvote_pod", "index": 1 },
+                          "request_type"
+                        ]
+                      },
+                      { "type": "Literal", "value": "upvote" }
+                    ]
+                  }
+                ],
+                "argsLen": 1,
+                "wildcardNames": ["content_hash", "upvote_pod"]
+              },
+              {
+                "name": "upvote_verification",
+                "conjunction": true,
+                "statements": [
+                  {
+                    "pred": { "type": "BatchSelf", "value": 0 },
+                    "args": [
+                      {
+                        "type": "Wildcard",
+                        "value": { "name": "username", "index": 0 }
+                      }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "BatchSelf", "value": 1 },
+                    "args": [
+                      {
+                        "type": "Wildcard",
+                        "value": { "name": "content_hash", "index": 1 }
+                      }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "identity_pod", "index": 3 },
+                          "_signer"
+                        ]
+                      },
+                      {
+                        "type": "Wildcard",
+                        "value": { "name": "identity_server_pk", "index": 2 }
+                      }
+                    ]
+                  },
+                  {
+                    "pred": { "type": "Native", "value": "Equal" },
+                    "args": [
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "identity_pod", "index": 3 },
+                          "user_public_key"
+                        ]
+                      },
+                      {
+                        "type": "AnchoredKey",
+                        "value": [
+                          { "name": "upvote_pod", "index": 4 },
+                          "_signer"
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "argsLen": 3,
+                "wildcardNames": [
+                  "username",
+                  "content_hash",
+                  "identity_server_pk",
+                  "identity_pod",
+                  "upvote_pod"
+                ]
+              }
+            ]
+          },
+          "index": 2
+        },
+        [
+          "alice",
+          {
+            "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+          },
+          {
+            "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+          }
+        ]
+      ]
+    }
+  ],
+  "data": {
+    "input_recursive_pods": [
+      [
+        3,
+        {
+          "maxCustomBatchSize": 5,
+          "maxCustomPredicateArity": 5,
+          "maxCustomPredicateBatches": 2,
+          "maxCustomPredicateVerifications": 5,
+          "maxCustomPredicateWildcards": 10,
+          "maxDepthMtContainers": 32,
+          "maxDepthMtVds": 6,
+          "maxInputPodsPublicStatements": 10,
+          "maxInputRecursivePods": 2,
+          "maxInputSignedPods": 3,
+          "maxMerkleProofsContainers": 5,
+          "maxOperationArgs": 5,
+          "maxPublicStatements": 10,
+          "maxSignedPodValues": 8,
+          "maxStatementArgs": 5,
+          "maxStatements": 20,
+          "numPublicStatementsId": 16
+        },
+        "2f4be2ee8b3db58a0b6a1b9b5a73ac90f4cbc464b04c8489a402fce91086071d",
+        { "tree_depth": 8, "vds_hashes": [] },
+        null
+      ],
+      [
+        3,
+        {
+          "maxCustomBatchSize": 5,
+          "maxCustomPredicateArity": 5,
+          "maxCustomPredicateBatches": 2,
+          "maxCustomPredicateVerifications": 5,
+          "maxCustomPredicateWildcards": 10,
+          "maxDepthMtContainers": 32,
+          "maxDepthMtVds": 6,
+          "maxInputPodsPublicStatements": 10,
+          "maxInputRecursivePods": 2,
+          "maxInputSignedPods": 3,
+          "maxMerkleProofsContainers": 5,
+          "maxOperationArgs": 5,
+          "maxPublicStatements": 10,
+          "maxSignedPodValues": 8,
+          "maxStatementArgs": 5,
+          "maxStatements": 20,
+          "numPublicStatementsId": 16
+        },
+        "2f4be2ee8b3db58a0b6a1b9b5a73ac90f4cbc464b04c8489a402fce91086071d",
+        { "tree_depth": 8, "vds_hashes": [] },
+        null
+      ]
+    ],
+    "input_signed_pods": [
+      [
+        4,
+        "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41",
+        {
+          "kvs": {
+            "kvs": {
+              "_signer": {
+                "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+              },
+              "_type": { "Int": "4" },
+              "identity_server_id": "strawman-identity-server",
+              "issued_at": "2025-07-16T04:01:06.931734+00:00",
+              "user_public_key": {
+                "PublicKey": "76uod1UqEC5Bn8shktrhUALSpeHx4dagA7sVxMTTu5ZqgKUgUE8m7WT"
+              },
+              "username": "alice"
+            },
+            "max_depth": 32
+          },
+          "signature": "mQb/oLrD56sX50GLKUc6YKBY2gpBHlIOUdkMpBQsQ+t96mT9oMXbHXRVqBVDb0ox7dNiA8bm+uN1X3JNQY/FUpRsHUA0XTMf+m9YQkIoPL0=",
+          "signer": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+        }
+      ],
+      [
+        4,
+        "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f",
+        {
+          "kvs": {
+            "kvs": {
+              "_signer": {
+                "PublicKey": "76uod1UqEC5Bn8shktrhUALSpeHx4dagA7sVxMTTu5ZqgKUgUE8m7WT"
+              },
+              "_type": { "Int": "4" },
+              "content_hash": {
+                "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+              },
+              "request_type": "upvote",
+              "timestamp": { "Int": "1752698442" }
+            },
+            "max_depth": 32
+          },
+          "signature": "NZ2qep6XdWg0Xjr/fmEpy+qsWSkyp1xbz6vkC/LFwZE8jfe0xzvcKWxuqlIrBI2aYyx8ADdVid6ecumcovEqh4aLU39mvLI1TA0wPuZzGn8=",
+          "signer": "76uod1UqEC5Bn8shktrhUALSpeHx4dagA7sVxMTTu5ZqgKUgUE8m7WT"
+        }
+      ],
+      [
+        1,
+        "70c227cf51ba87dac89f0e00edd2ae9a5c83edd23996c3ccbb4dc00c34a92b08",
+        {
+          "kvs": {
+            "_signer": {
+              "Raw": "ef9bdfa5ee6365db8de633f55ea215104b46688ab1ddd80657030065fb678e3e"
+            },
+            "_type": { "Int": "1" }
+          },
+          "mt_max_depth": 32,
+          "signature": "0x70c227cf…_signed_by_0xef9bdfa5…"
+        }
+      ]
+    ],
+    "merkle_proofs": [],
+    "operations": [
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 1 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 4 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        {
+          "Custom": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 0
+          }
+        },
+        [{ "Index": 1 }, { "Index": 4 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 9 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 12 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 11 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        {
+          "Custom": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 1
+          }
+        },
+        [{ "Index": 9 }, { "Index": 12 }, { "Index": 11 }, "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 2 }, { "Index": 0 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        { "Native": "EqualFromEntries" },
+        [{ "Index": 3 }, { "Index": 10 }, "None", "None", "None"],
+        "None"
+      ],
+      [
+        {
+          "Custom": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 2
+          }
+        },
+        [
+          { "Index": 47 },
+          { "Index": 51 },
+          { "Index": 2 },
+          { "Index": 53 },
+          "None"
+        ],
+        "None"
+      ],
+      [{ "Native": "NewEntry" }, [], "None"],
+      [
+        { "Native": "CopyStatement" },
+        [{ "Index": 54 }, "None", "None", "None", "None"],
+        "None"
+      ],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"],
+      [{ "Native": "None" }, ["None", "None", "None", "None", "None"], "None"]
+    ],
+    "public_statements": [
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          },
+          { "Literal": { "Int": "2" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        {
+          "type": "Custom",
+          "value": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 2
+          }
+        },
+        [
+          { "Literal": "alice" },
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+            }
+          },
+          "None",
+          "None"
+        ]
+      ]
+    ],
+    "statements": [
+      [{ "type": "Native", "value": "None" }, []],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": { "Int": "4" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_signer",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "user_public_key",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "76uod1UqEC5Bn8shktrhUALSpeHx4dagA7sVxMTTu5ZqgKUgUE8m7WT"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "username",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": "alice" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "issued_at",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": "2025-07-16T04:01:06.931734+00:00" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "identity_server_id",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": "strawman-identity-server" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          { "Literal": { "Int": "4" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_signer",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "76uod1UqEC5Bn8shktrhUALSpeHx4dagA7sVxMTTu5ZqgKUgUE8m7WT"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "request_type",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          { "Literal": "upvote" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "content_hash",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "timestamp",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          { "Literal": { "Int": "1752698442" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "70c227cf51ba87dac89f0e00edd2ae9a5c83edd23996c3ccbb4dc00c34a92b08"
+            }
+          },
+          { "Literal": { "Int": "1" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_signer",
+              "podId": "70c227cf51ba87dac89f0e00edd2ae9a5c83edd23996c3ccbb4dc00c34a92b08"
+            }
+          },
+          {
+            "Literal": {
+              "Raw": "ef9bdfa5ee6365db8de633f55ea215104b46688ab1ddd80657030065fb678e3e"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "2f4be2ee8b3db58a0b6a1b9b5a73ac90f4cbc464b04c8489a402fce91086071d"
+            }
+          },
+          { "Literal": { "Int": "6" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "2f4be2ee8b3db58a0b6a1b9b5a73ac90f4cbc464b04c8489a402fce91086071d"
+            }
+          },
+          { "Literal": { "Int": "6" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": { "Int": "4" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "username",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          { "Literal": "alice" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        {
+          "type": "Custom",
+          "value": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 0
+          }
+        },
+        [{ "Literal": "alice" }, "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          { "Literal": { "Int": "4" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "content_hash",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "request_type",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          { "Literal": "upvote" },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        {
+          "type": "Custom",
+          "value": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 1
+          }
+        },
+        [
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          "None",
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_signer",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "user_public_key",
+              "podId": "7a7769e288c509f0ef686dd2901d752a3a071e69f79f8112b50dfcd1ff3dbd41"
+            }
+          },
+          {
+            "Key": {
+              "key": "_signer",
+              "podId": "ff4a66be050b18f4833c00c7987370ec39f97be0e17c3adc8034245cc46baa8f"
+            }
+          },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        {
+          "type": "Custom",
+          "value": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 2
+          }
+        },
+        [
+          { "Literal": "alice" },
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+            }
+          },
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "Equal" },
+        [
+          {
+            "Key": {
+              "key": "_type",
+              "podId": "0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          },
+          { "Literal": { "Int": "2" } },
+          "None",
+          "None",
+          "None"
+        ]
+      ],
+      [
+        {
+          "type": "Custom",
+          "value": {
+            "batch": {
+              "id": "0aab510aa88643f219f4e861ddc0bc5bea51e2da8b806cd32040f4980eecb22e",
+              "name": "PodlangBatch",
+              "predicates": [
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "identity_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "identity_pod" },
+                            "username"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["username", "identity_pod"]
+                },
+                {
+                  "argsLen": 1,
+                  "conjunction": true,
+                  "name": "upvote_verified",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": { "Int": "4" } }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "content_hash"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 1, "name": "upvote_pod" },
+                            "request_type"
+                          ]
+                        },
+                        { "type": "Literal", "value": "upvote" }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": ["content_hash", "upvote_pod"]
+                },
+                {
+                  "argsLen": 3,
+                  "conjunction": true,
+                  "name": "upvote_verification",
+                  "statements": [
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 0, "name": "username" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 0 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 1, "name": "content_hash" }
+                        }
+                      ],
+                      "pred": { "type": "BatchSelf", "value": 1 }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "_signer"
+                          ]
+                        },
+                        {
+                          "type": "Wildcard",
+                          "value": { "index": 2, "name": "identity_server_pk" }
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    },
+                    {
+                      "args": [
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 3, "name": "identity_pod" },
+                            "user_public_key"
+                          ]
+                        },
+                        {
+                          "type": "AnchoredKey",
+                          "value": [
+                            { "index": 4, "name": "upvote_pod" },
+                            "_signer"
+                          ]
+                        }
+                      ],
+                      "pred": { "type": "Native", "value": "Equal" }
+                    }
+                  ],
+                  "wildcardNames": [
+                    "username",
+                    "content_hash",
+                    "identity_server_pk",
+                    "identity_pod",
+                    "upvote_pod"
+                  ]
+                }
+              ]
+            },
+            "index": 2
+          }
+        },
+        [
+          { "Literal": "alice" },
+          {
+            "Literal": {
+              "Raw": "eee73e344ffc120fb787c7650fd9a036362e4d2dc20a3646cc8e9f7112ec4d12"
+            }
+          },
+          {
+            "Literal": {
+              "PublicKey": "8YvEHKEhrZati5F9W7M3Vors67r36fGksV6aBF89PjzTcX7YH5K3Hbp"
+            }
+          },
+          "None",
+          "None"
+        ]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ],
+      [
+        { "type": "Native", "value": "None" },
+        ["None", "None", "None", "None", "None"]
+      ]
+    ]
+  }
+}

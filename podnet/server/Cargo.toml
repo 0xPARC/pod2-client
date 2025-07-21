@@ -1,0 +1,31 @@
+[package]
+name = "podnet-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies (shared)
+podnet-models = { workspace = true }
+pod2.workspace = true
+plonky2.workspace = true
+pod-utils.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+hex.workspace = true
+log.workspace = true
+num-bigint.workspace = true
+chrono.workspace = true
+
+# Server-specific dependencies
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+rusqlite = { workspace = true, features = ["bundled"] }
+pulldown-cmark = "0.13"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+config = "0.14"
+sha2 = "0.10"
+rand = "0.9.1"
