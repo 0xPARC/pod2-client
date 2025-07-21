@@ -13,7 +13,9 @@ export interface DatabaseConfig {
 }
 
 export interface NetworkConfig {
-  server: string;
+  document_server: string;
+  identity_server: string;
+  frogcrypto_server: string;
   timeout_seconds: number;
 }
 

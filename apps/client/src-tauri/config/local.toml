@@ -6,7 +6,9 @@ networking = true
 frogcrypto = true
 
 [network]
-server = "http://localhost:3000"
+document_server = "http://localhost:3000"
+identity_server = "http://localhost:3000"
+frogcrypto_server = "http://localhost:3001"
 
 [logging]
 level = "debug"

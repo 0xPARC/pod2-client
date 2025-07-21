@@ -19,8 +19,12 @@ frogcrypto = false
 path = "pod2.db"
 
 [network]
-# Server URL to connect to
-server = "http://localhost:3000"
+# Document server URL (PodNet)
+document_server = "https://pod-server.ghost-spica.ts.net"
+# Identity server URL
+identity_server = "https://pod-server.ghost-spica.ts.net"
+# FrogCrypto server URL
+frogcrypto_server = "https://frog-server-q36c.onrender.com"
 # Request timeout in seconds
 timeout_seconds = 30
 
