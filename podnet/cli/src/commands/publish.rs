@@ -1,23 +1,32 @@
-use num_bigint::BigUint;
-use pod_utils::ValueExt;
-use pod_utils::prover_setup::PodNetProverSetup;
-use pod2::backends::plonky2::primitives::ec::schnorr::SecretKey;
-use pod2::backends::plonky2::signedpod::Signer;
-use pod2::frontend::{SignedPod, SignedPodBuilder};
-use pod2::middleware::Key;
-use pod2::middleware::containers::Dictionary;
-use pod2::middleware::{KEY_SIGNER, Value, containers::Set, hash_values};
-use podnet_models::mainpod::publish::{
-    PublishProofParams, prove_publish_verification, prove_publish_verification_with_solver,
-    verify_publish_verification_with_solver,
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
 };
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
 
-use crate::conversion::{DocumentFormat, convert_to_markdown};
-use crate::utils::handle_error_response;
-use podnet_models::signed_pod;
-use podnet_models::{DocumentContent, DocumentFile, PublishRequest};
+use num_bigint::BigUint;
+use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod2::{
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+    frontend::{SignedPod, SignedPodBuilder},
+    middleware::{
+        KEY_SIGNER, Key, Value,
+        containers::{Dictionary, Set},
+        hash_values,
+    },
+};
+use podnet_models::{
+    DocumentContent, DocumentFile, PublishRequest,
+    mainpod::publish::{
+        PublishProofParams, prove_publish_verification, prove_publish_verification_with_solver,
+        verify_publish_verification_with_solver,
+    },
+    signed_pod,
+};
+
+use crate::{
+    conversion::{DocumentFormat, convert_to_markdown},
+    utils::handle_error_response,
+};
 
 pub async fn publish_content(
     keypair_file: &str,

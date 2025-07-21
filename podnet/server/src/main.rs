@@ -4,11 +4,12 @@ mod handlers;
 mod pod;
 mod storage;
 
+use std::sync::Arc;
+
 use axum::{
     Router,
     routing::{get, post},
 };
-use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -43,7 +44,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Database initialized successfully");
 
     tracing::info!("Initializing content storage...");
-    let storage = Arc::new(storage::ContentAddressedStorage::new(&config.content_storage_path)?);
+    let storage = Arc::new(storage::ContentAddressedStorage::new(
+        &config.content_storage_path,
+    )?);
     tracing::info!("Content storage initialized successfully");
 
     let pod_config = pod::PodConfig::new(config.mock_proofs);

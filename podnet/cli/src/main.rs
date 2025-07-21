@@ -5,14 +5,12 @@ mod conversion;
 mod utils;
 
 use clap::{Arg, Command};
+use cli::*;
+use commands::{documents, identity, keygen, posts, publish, upvote};
 use hex::ToHex;
 use podnet_models::DocumentContent;
 use pulldown_cmark::{Event, Options, Parser, html};
-
-use cli::*;
-use commands::{keygen, identity, documents, posts, publish, upvote};
 use utils::*;
-
 
 fn render_to_html(
     id: &str,
@@ -275,7 +273,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Command::new("publish")
                 .about("Sign content and submit to server using main pod verification (creates new post or adds revision)")
                 .args([
-                    keypair_arg(), 
+                    keypair_arg(),
                     optional_post_id_arg(),
                     Arg::new("title")
                         .help("Document title")
@@ -409,7 +407,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("At least one of --message, --file, or --url must be provided".into());
             }
 
-            publish::publish_content(keypair_file, title, message, file_path, url, format_override, &server, post_id, identity_pod_file, use_mock, tags, authors, reply_to).await?;
+            publish::publish_content(
+                keypair_file,
+                title,
+                message,
+                file_path,
+                url,
+                format_override,
+                &server,
+                post_id,
+                identity_pod_file,
+                use_mock,
+                tags,
+                authors,
+                reply_to,
+            )
+            .await?;
         }
         Some(("get-post", sub_matches)) => {
             let post_id = sub_matches.get_one::<String>("post_id").unwrap();
@@ -442,7 +455,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let document_id = sub_matches.get_one::<String>("document_id").unwrap();
             let identity_pod = sub_matches.get_one::<String>("identity_pod").unwrap();
             let use_mock = sub_matches.get_flag("mock");
-            upvote::upvote_document(keypair_file, document_id, &server, identity_pod, use_mock).await?;
+            upvote::upvote_document(keypair_file, document_id, &server, identity_pod, use_mock)
+                .await?;
         }
         _ => {
             println!("No valid subcommand provided. Use --help for usage information.");
@@ -507,11 +521,7 @@ async fn view_post_in_browser(
         if !document_response.status().is_success() {
             let status = document_response.status();
             let error_text = document_response.text().await?;
-            handle_error_response(
-                status,
-                &error_text,
-                &format!("retrieve document {doc_id}"),
-            );
+            handle_error_response(status, &error_text, &format!("retrieve document {doc_id}"));
             continue; // Skip this document but continue with others
         }
 
@@ -523,9 +533,14 @@ async fn view_post_in_browser(
 
         // Render the raw DocumentContent to HTML on the client side
         let html_content = render_document_content_to_html(&document.content);
-        
+
         let content_id = document.metadata.content_id;
-        let created_at = document.metadata.created_at.as_deref().unwrap_or("Unknown").to_string();
+        let created_at = document
+            .metadata
+            .created_at
+            .as_deref()
+            .unwrap_or("Unknown")
+            .to_string();
         let revision = document.metadata.revision;
         let uploader_username = document.metadata.uploader_id.clone();
         let upvote_count = document.metadata.upvote_count;
@@ -551,25 +566,43 @@ async fn view_post_in_browser(
             if let Some(replies_array) = replies.as_array() {
                 if !replies_array.is_empty() {
                     replies_html.push_str("<div class=\"replies-section\" style=\"margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;\">");
-                    replies_html.push_str(&format!("<h3>Replies ({} replies)</h3>", replies_array.len()));
-                    
+                    replies_html.push_str(&format!(
+                        "<h3>Replies ({} replies)</h3>",
+                        replies_array.len()
+                    ));
+
                     for reply in replies_array {
                         let reply_id = reply.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let reply_uploader = reply.get("uploader_id").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                        let reply_created = reply.get("created_at").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                        let reply_upvotes = reply.get("upvote_count").and_then(|v| v.as_i64()).unwrap_or(0);
-                        
+                        let reply_uploader = reply
+                            .get("uploader_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown");
+                        let reply_created = reply
+                            .get("created_at")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown");
+                        let reply_upvotes = reply
+                            .get("upvote_count")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
+
                         // Fetch the reply content
                         let reply_response = client
                             .get(format!("{server_url}/documents/{reply_id}/render"))
                             .send()
                             .await;
-                        
+
                         let reply_content = if let Ok(reply_resp) = reply_response {
                             if reply_resp.status().is_success() {
-                                if let Ok(reply_doc_value) = reply_resp.json::<serde_json::Value>().await {
+                                if let Ok(reply_doc_value) =
+                                    reply_resp.json::<serde_json::Value>().await
+                                {
                                     // Try to parse as Document and render the content
-                                    if let Ok(reply_doc) = serde_json::from_value::<podnet_models::Document>(reply_doc_value) {
+                                    if let Ok(reply_doc) =
+                                        serde_json::from_value::<podnet_models::Document>(
+                                            reply_doc_value,
+                                        )
+                                    {
                                         render_document_content_to_html(&reply_doc.content)
                                     } else {
                                         "Error parsing reply document".to_string()
@@ -583,7 +616,7 @@ async fn view_post_in_browser(
                         } else {
                             "Error fetching reply content".to_string()
                         };
-                        
+
                         replies_html.push_str(&format!(
                             "<div class=\"reply\" style=\"margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;\">
                                 <div class=\"reply-meta\" style=\"font-size: 0.9em; color: #666; margin-bottom: 10px;\">
@@ -607,7 +640,7 @@ async fn view_post_in_browser(
             format!("{html_content}{replies_html}"),
             upvote_count,
             tags,
-            authors
+            authors,
         ));
     }
 
@@ -624,8 +657,20 @@ async fn view_post_in_browser(
     let mut embedded_documents = String::new();
 
     if document_data.len() > 1 {
-        for (i, (doc_id, doc_revision, content_id, doc_created, username, html_content, upvote_count, _, _)) in
-            document_data.iter().enumerate()
+        for (
+            i,
+            (
+                doc_id,
+                doc_revision,
+                content_id,
+                doc_created,
+                username,
+                html_content,
+                upvote_count,
+                _,
+                _,
+            ),
+        ) in document_data.iter().enumerate()
         {
             let is_current = i == 0; // First item is the latest
             let current_class = if is_current { " current" } else { "" };
@@ -654,8 +699,17 @@ async fn view_post_in_browser(
             ));
         }
     } else {
-        let (doc_id, doc_revision, content_id, doc_created, username, html_content, upvote_count, _tags, _authors) =
-            &document_data[0];
+        let (
+            doc_id,
+            doc_revision,
+            content_id,
+            doc_created,
+            username,
+            html_content,
+            upvote_count,
+            _tags,
+            _authors,
+        ) = &document_data[0];
         revision_links.push_str(&format!(
             r#"<div style="padding: 10px; color: #666; font-style: italic;">
                 This post has only one revision.
@@ -673,7 +727,7 @@ async fn view_post_in_browser(
     let content_id_hex: String = latest_doc.2.encode_hex();
     let full_html = render_to_html(
         post_id,
-        &content_id_hex,       // content_id
+        &content_id_hex,     // content_id
         &latest_doc.3,       // created_at
         &latest_doc.4,       // uploader_username
         &latest_doc.7,       // tags
@@ -719,7 +773,10 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
             message.clone()
         } else {
             // Treat as plain text and convert to HTML
-            format!("<pre style=\"white-space: pre-wrap; font-family: inherit;\">{}</pre>", escape_html(message))
+            format!(
+                "<pre style=\"white-space: pre-wrap; font-family: inherit;\">{}</pre>",
+                escape_html(message)
+            )
         };
         html_parts.push(rendered_message);
     }
@@ -737,7 +794,12 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
                     </p>
                     <img src="data:{};base64,{}" alt="{}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 3px;" />
                 </div>"#,
-                file.name, file.mime_type, file.content.len(), file.mime_type, base64_content, file.name
+                file.name,
+                file.mime_type,
+                file.content.len(),
+                file.mime_type,
+                base64_content,
+                file.name
             )
         } else if file.mime_type == "text/plain" {
             // Display plain text files
@@ -752,7 +814,10 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
                     <pre style="margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 3px; overflow-x: auto; white-space: pre-wrap;"><code>{}</code></pre>
                     </details>
                 </div>"#,
-                file.name, file.mime_type, file.content.len(), escape_html(&file_content)
+                file.name,
+                file.mime_type,
+                file.content.len(),
+                escape_html(&file_content)
             )
         } else if file.mime_type == "text/markdown" {
             // Render markdown files
@@ -773,13 +838,19 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
                     <pre style="margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 3px; overflow-x: auto; white-space: pre-wrap;"><code>{}</code></pre>
                     </details>
                 </div>"#,
-                file.name, file.mime_type, file.content.len(), rendered_markdown, escape_html(&file_content)
+                file.name,
+                file.mime_type,
+                file.content.len(),
+                rendered_markdown,
+                escape_html(&file_content)
             )
         } else if file.mime_type == "application/json" {
             // Pretty-print JSON files
             let file_content = String::from_utf8_lossy(&file.content);
             let formatted_json = match serde_json::from_str::<serde_json::Value>(&file_content) {
-                Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| file_content.to_string()),
+                Ok(json) => {
+                    serde_json::to_string_pretty(&json).unwrap_or_else(|_| file_content.to_string())
+                }
                 Err(_) => file_content.to_string(),
             };
             format!(
@@ -792,7 +863,10 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
                     <pre style="margin: 10px 0; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 3px; overflow-x: auto; white-space: pre-wrap;"><code>{}</code></pre>
                     </details>
                 </div>"#,
-                file.name, file.mime_type, file.content.len(), escape_html(&formatted_json)
+                file.name,
+                file.mime_type,
+                file.content.len(),
+                escape_html(&formatted_json)
             )
         } else {
             // For other file types, just show metadata
@@ -804,7 +878,9 @@ fn render_document_content_to_html(content: &DocumentContent) -> String {
                     </p>
                     <p style="margin: 5px 0; color: #666;"><em>Preview not available for this file type</em></p>
                 </div>"#,
-                file.name, file.mime_type, file.content.len()
+                file.name,
+                file.mime_type,
+                file.content.len()
             )
         };
         html_parts.push(file_html);
@@ -873,17 +949,26 @@ fn render_markdown_to_html(markdown: &str) -> String {
 
 fn is_markdown(text: &str) -> bool {
     // Simple heuristics to detect markdown
-    text.contains("# ") || text.contains("## ") || text.contains("**") || 
-    text.contains("*") || text.contains("[") || text.contains("`") ||
-    text.contains("- ") || text.contains("1. ")
+    text.contains("# ")
+        || text.contains("## ")
+        || text.contains("**")
+        || text.contains("*")
+        || text.contains("[")
+        || text.contains("`")
+        || text.contains("- ")
+        || text.contains("1. ")
 }
 
 fn is_html(text: &str) -> bool {
     // Simple heuristics to detect HTML
-    text.contains("<") && text.contains(">") && (
-        text.contains("<p>") || text.contains("<div>") || text.contains("<h1>") ||
-        text.contains("<span>") || text.contains("<br>") || text.contains("</")
-    )
+    text.contains("<")
+        && text.contains(">")
+        && (text.contains("<p>")
+            || text.contains("<div>")
+            || text.contains("<h1>")
+            || text.contains("<span>")
+            || text.contains("<br>")
+            || text.contains("</"))
 }
 
 fn escape_html(text: &str) -> String {
@@ -898,33 +983,32 @@ fn base64_encode(data: &[u8]) -> String {
     // Simple base64 encoding (in a real implementation, you'd use a proper base64 crate)
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut result = String::new();
-    
+
     for chunk in data.chunks(3) {
         let mut buf = [0u8; 3];
         for (i, &byte) in chunk.iter().enumerate() {
             buf[i] = byte;
         }
-        
+
         let b0 = buf[0] as usize;
         let b1 = buf[1] as usize;
         let b2 = buf[2] as usize;
-        
+
         result.push(ALPHABET[b0 >> 2] as char);
         result.push(ALPHABET[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
-        
+
         if chunk.len() > 1 {
             result.push(ALPHABET[((b1 & 0x0f) << 2) | (b2 >> 6)] as char);
         } else {
             result.push('=');
         }
-        
+
         if chunk.len() > 2 {
             result.push(ALPHABET[b2 & 0x3f] as char);
         } else {
             result.push('=');
         }
     }
-    
+
     result
 }
-

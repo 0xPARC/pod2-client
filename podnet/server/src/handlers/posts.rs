@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
 };
-use std::sync::Arc;
-use podnet_models::{PostWithDocuments};
+use podnet_models::PostWithDocuments;
 
 pub async fn get_posts(
     State(state): State<Arc<crate::AppState>>,

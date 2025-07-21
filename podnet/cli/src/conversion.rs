@@ -1,5 +1,5 @@
-use std::io::Write;
-use std::process::Command;
+use std::{io::Write, process::Command};
+
 use tempfile::NamedTempFile;
 
 #[derive(Debug, Clone, PartialEq)]

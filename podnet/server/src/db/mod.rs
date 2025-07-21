@@ -1,11 +1,14 @@
+use std::{collections::HashSet, sync::Mutex};
+
 use hex::{FromHex, ToHex};
-use pod2::frontend::{MainPod, SignedPod};
-use pod2::middleware::Hash;
-use podnet_models::{Document, DocumentMetadata, IdentityServer, Post, RawDocument, Upvote};
-use podnet_models::lazy_pod::LazyDeser;
+use pod2::{
+    frontend::{MainPod, SignedPod},
+    middleware::Hash,
+};
+use podnet_models::{
+    Document, DocumentMetadata, IdentityServer, Post, RawDocument, Upvote, lazy_pod::LazyDeser,
+};
 use rusqlite::{Connection, OptionalExtension, Result};
-use std::collections::HashSet;
-use std::sync::Mutex;
 
 pub struct Database {
     conn: Mutex<Connection>,
@@ -184,11 +187,11 @@ impl Database {
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
         let content_id_string: String = content_id.encode_hex();
-        
+
         // Serialize tags to JSON
         let tags_json = serde_json::to_string(tags)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-        
+
         // Serialize authors to JSON
         let authors_json = serde_json::to_string(authors)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
@@ -306,7 +309,8 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> = serde_json::from_str(&authors_json).unwrap_or_default();
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -341,7 +345,8 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> = serde_json::from_str(&authors_json).unwrap_or_default();
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -376,7 +381,8 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> = serde_json::from_str(&authors_json).unwrap_or_default();
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -411,7 +417,8 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> = serde_json::from_str(&authors_json).unwrap_or_default();
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -563,16 +570,34 @@ impl Database {
     // Helper method to convert RawDocument to DocumentMetadata
     pub fn raw_document_to_metadata(&self, raw_doc: RawDocument) -> Result<DocumentMetadata> {
         // Create lazy pod wrappers instead of deserializing immediately
-        let pod = LazyDeser::from_json_string(raw_doc.pod)
-            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "pod".to_string(), rusqlite::types::Type::Text))?;
-        let timestamp_pod = LazyDeser::from_json_string(raw_doc.timestamp_pod)
-            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "timestamp_pod".to_string(), rusqlite::types::Type::Text))?;
-        
+        let pod = LazyDeser::from_json_string(raw_doc.pod).map_err(|_| {
+            rusqlite::Error::InvalidColumnType(0, "pod".to_string(), rusqlite::types::Type::Text)
+        })?;
+        let timestamp_pod = LazyDeser::from_json_string(raw_doc.timestamp_pod).map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                "timestamp_pod".to_string(),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
         // For optional MainPod, we need to create the JSON for Option<MainPod>
-        let upvote_count_pod_json = serde_json::to_string(&raw_doc.upvote_count_pod)
-            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "upvote_count_pod".to_string(), rusqlite::types::Type::Text))?;
-        let upvote_count_pod = LazyDeser::from_json_string(upvote_count_pod_json)
-            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "upvote_count_pod".to_string(), rusqlite::types::Type::Text))?;
+        let upvote_count_pod_json =
+            serde_json::to_string(&raw_doc.upvote_count_pod).map_err(|_| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "upvote_count_pod".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
+        let upvote_count_pod =
+            LazyDeser::from_json_string(upvote_count_pod_json).map_err(|_| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "upvote_count_pod".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
 
         // Get upvote count
         let upvote_count = raw_doc
@@ -727,7 +752,8 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> = serde_json::from_str(&authors_json).unwrap_or_default();
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,

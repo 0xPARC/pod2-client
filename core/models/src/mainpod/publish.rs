@@ -1,31 +1,31 @@
 //! Publish verification MainPod operations
 
+use std::collections::{HashMap, HashSet};
+
+use hex::ToHex;
+use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod2::{
+    backends::plonky2::{mock::mainpod::MockProver, primitives::ec::curve::Point},
+    frontend::{MainPod, MainPodBuilder, SignedPod},
+    lang::parse,
+    middleware::{
+        Hash, KEY_SIGNER, KEY_TYPE, Params, PodType, Value,
+        containers::{Dictionary, Set},
+    },
+    op,
+};
+// Import solver dependencies
+use pod2_solver::{
+    db::IndexablePod, metrics::MetricsLevel, proof::Proof, solve, value_to_podlang_literal,
+};
+
 use super::{
     MainPodError, MainPodResult, extract_authors, extract_post_id, extract_reply_to, extract_tags,
     extract_user_public_key, extract_username, verify_mainpod_basics,
 };
 use crate::get_publish_verification_predicate;
-use hex::ToHex;
-use pod_utils::ValueExt;
-use pod_utils::prover_setup::PodNetProverSetup;
-use pod2::backends::plonky2::mock::mainpod::MockProver;
-use pod2::backends::plonky2::primitives::ec::curve::Point;
-use pod2::frontend::{MainPod, MainPodBuilder, SignedPod};
-use pod2::lang::parse;
-use pod2::middleware::Params;
-use pod2::middleware::containers::Dictionary;
-use pod2::middleware::{Hash, KEY_SIGNER, KEY_TYPE, PodType, Value, containers::Set};
-use pod2::op;
-
-use std::collections::{HashMap, HashSet};
-
 // Import the main_pod macro
 use crate::main_pod;
-
-// Import solver dependencies
-use pod2_solver::{
-    db::IndexablePod, metrics::MetricsLevel, proof::Proof, solve, value_to_podlang_literal,
-};
 
 /// Parameters for publish verification proof generation
 pub struct PublishProofParams<'a> {

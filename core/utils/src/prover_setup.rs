@@ -1,8 +1,9 @@
+use std::sync::OnceLock;
+
 use pod2::{
     backends::plonky2::{basetypes::DEFAULT_VD_SET, mainpod::Prover, mock::mainpod::MockProver},
     middleware::{Params, PodProver, VDSet},
 };
-use std::sync::OnceLock;
 
 static MOCK_VD_SET: OnceLock<VDSet> = OnceLock::new();
 

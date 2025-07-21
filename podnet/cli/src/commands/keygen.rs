@@ -1,6 +1,6 @@
+use std::{fs::File, io::prelude::*};
+
 use pod2::backends::plonky2::primitives::ec::{curve::Point, schnorr::SecretKey};
-use std::fs::File;
-use std::io::prelude::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct KeypairData {

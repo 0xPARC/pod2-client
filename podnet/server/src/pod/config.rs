@@ -1,6 +1,6 @@
 use axum::http::StatusCode;
-use pod2::middleware::{Params, PodProver, VDSet};
 use pod_utils::prover_setup::PodNetProverSetup;
+use pod2::middleware::{Params, PodProver, VDSet};
 
 /// Configuration for POD-related operations
 pub struct PodConfig {

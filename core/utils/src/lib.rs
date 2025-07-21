@@ -1,7 +1,9 @@
-use pod2::backends::plonky2::primitives::ec::curve::Point as PublicKey;
-use pod2::middleware::{
-    Hash, PodId, RawValue, TypedValue, Value, containers::Array,
-    containers::Dictionary, containers::Set,
+use pod2::{
+    backends::plonky2::primitives::ec::curve::Point as PublicKey,
+    middleware::{
+        Hash, PodId, RawValue, TypedValue, Value,
+        containers::{Array, Dictionary, Set},
+    },
 };
 
 pub mod prover_setup;

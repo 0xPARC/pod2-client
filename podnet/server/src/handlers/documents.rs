@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -12,8 +14,6 @@ use podnet_models::{
     Document, DocumentMetadata, PublishRequest,
     mainpod::publish::verify_publish_verification_with_solver,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
 
 pub async fn get_documents(
     State(state): State<Arc<crate::AppState>>,

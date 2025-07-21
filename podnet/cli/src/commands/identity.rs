@@ -1,11 +1,14 @@
-use crate::commands::keygen::KeypairData;
-use crate::utils::handle_error_response;
-use pod2::backends::plonky2::{primitives::ec::curve::Point as PublicKey, signedpod::Signer};
-use pod2::frontend::{SignedPod, SignedPodBuilder};
-use pod2::middleware::Params;
-use pod_utils::ValueExt;
-use serde::{Deserialize, Serialize};
 use std::fs::File;
+
+use pod_utils::ValueExt;
+use pod2::{
+    backends::plonky2::{primitives::ec::curve::Point as PublicKey, signedpod::Signer},
+    frontend::{SignedPod, SignedPodBuilder},
+    middleware::Params,
+};
+use serde::{Deserialize, Serialize};
+
+use crate::{commands::keygen::KeypairData, utils::handle_error_response};
 
 #[derive(Debug, Deserialize)]
 pub struct ChallengeResponse {
@@ -69,17 +72,18 @@ pub async fn get_identity(
     }
 
     let challenge_data: ChallengeResponse = challenge_response.json().await?;
-    
+
     // Verify the challenge pod signature
     challenge_data.challenge_pod.verify()?;
     println!("✓ Received and verified challenge pod from identity server");
-    
+
     // Extract challenge from the signed pod
-    let challenge = challenge_data.challenge_pod
+    let challenge = challenge_data
+        .challenge_pod
         .get("challenge")
         .and_then(|v| v.as_str())
         .ok_or("Challenge pod missing challenge field")?;
-    
+
     println!("Challenge: {challenge}");
 
     // Step 2: Sign the challenge and send back to get identity pod
@@ -102,7 +106,8 @@ pub async fn get_identity(
     let challenge_response_pod = challenge_builder.sign(&mut user_signer)?;
 
     // Extract server_id from challenge pod before moving it
-    let server_id = challenge_data.challenge_pod
+    let server_id = challenge_data
+        .challenge_pod
         .get("server_id")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
@@ -144,7 +149,7 @@ pub async fn get_identity(
     println!("✓ Identity pod saved to: {output_file}");
     println!("✓ Identity acquired successfully!");
     println!("Username: {username}");
-    
+
     // Display server_id if available
     if let Some(server_id) = server_id {
         println!("Identity Server: {server_id}");
@@ -152,4 +157,3 @@ pub async fn get_identity(
 
     Ok(())
 }
-

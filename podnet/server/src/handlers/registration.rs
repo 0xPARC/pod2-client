@@ -1,18 +1,19 @@
+use std::sync::Arc;
+
 use axum::{extract::State, http::StatusCode, response::Json};
 use pod_utils::ValueExt;
 use podnet_models::{
     IdentityServerChallengeRequest, IdentityServerChallengeResponse, IdentityServerRegistration,
     ServerInfo,
 };
-use std::sync::Arc;
 
 pub async fn request_identity_challenge(
     State(_state): State<Arc<crate::AppState>>,
     Json(payload): Json<IdentityServerChallengeRequest>,
 ) -> Result<Json<IdentityServerChallengeResponse>, StatusCode> {
-    use pod2::backends::plonky2::signedpod::Signer;
-    use pod2::frontend::SignedPodBuilder;
-    use pod2::middleware::Params;
+    use pod2::{
+        backends::plonky2::signedpod::Signer, frontend::SignedPodBuilder, middleware::Params,
+    };
     use rand::Rng;
 
     log::info!(

@@ -7,10 +7,13 @@ pub mod publish;
 pub mod upvote;
 //pub mod upvote_count;
 
-use pod_utils::ValueExt;
-use pod2::frontend::{MainPod, SignedPod};
-use pod2::middleware::{Hash, KEY_SIGNER, Value};
 use std::error::Error;
+
+use pod_utils::ValueExt;
+use pod2::{
+    frontend::{MainPod, SignedPod},
+    middleware::{Hash, KEY_SIGNER, Value},
+};
 
 /// Common error type for MainPod operations
 #[derive(Debug)]

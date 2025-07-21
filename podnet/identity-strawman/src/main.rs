@@ -1,3 +1,8 @@
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+};
+
 use axum::{
     Router,
     extract::{Query, State},
@@ -6,17 +11,17 @@ use axum::{
     routing::{get, post},
 };
 use pod_utils::ValueExt;
-use pod2::backends::plonky2::{
-    primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
-    signedpod::Signer,
+use pod2::{
+    backends::plonky2::{
+        primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
+        signedpod::Signer,
+    },
+    frontend::{SignedPod, SignedPodBuilder},
+    middleware::Params,
 };
-use pod2::frontend::{SignedPod, SignedPodBuilder};
-use pod2::middleware::Params;
 use rand::Rng;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

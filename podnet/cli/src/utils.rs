@@ -54,4 +54,3 @@ pub async fn get_server_public_key(server_url: &str) -> Result<String, Box<dyn s
         Err("Failed to get server info".into())
     }
 }
-

@@ -1,9 +1,9 @@
+use std::{fs, path::PathBuf};
+
 use anyhow::Result;
 use hex::ToHex;
 use pod2::middleware::{Hash, Value, hash_values};
 use podnet_models::DocumentContent;
-use std::fs;
-use std::path::PathBuf;
 
 pub struct ContentAddressedStorage {
     base_path: PathBuf,

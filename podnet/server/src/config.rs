@@ -32,21 +32,20 @@ impl ServerConfig {
         let mock_proofs = env::var("PODNET_MOCK_PROOFS")
             .map(|v| v.parse().unwrap_or(true))
             .unwrap_or(true);
-        
+
         let port = env::var("PORT") // Use PORT for Render compatibility
             .or_else(|_| env::var("PODNET_PORT"))
             .map(|v| v.parse().unwrap_or(3000))
             .unwrap_or(3000);
-        
-        let host = env::var("PODNET_HOST")
-            .unwrap_or_else(|_| "0.0.0.0".to_string());
-        
-        let database_path = env::var("PODNET_DATABASE_PATH")
-            .unwrap_or_else(|_| "app.db".to_string());
-        
-        let content_storage_path = env::var("PODNET_CONTENT_STORAGE_PATH")
-            .unwrap_or_else(|_| "content".to_string());
-        
+
+        let host = env::var("PODNET_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+
+        let database_path =
+            env::var("PODNET_DATABASE_PATH").unwrap_or_else(|_| "app.db".to_string());
+
+        let content_storage_path =
+            env::var("PODNET_CONTENT_STORAGE_PATH").unwrap_or_else(|_| "content".to_string());
+
         Self {
             mock_proofs,
             port,

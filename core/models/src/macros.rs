@@ -1,8 +1,8 @@
 /// A macro for creating SignedPods with reduced boilerplate.
-/// 
+///
 /// This macro simplifies the creation of signed pods by automatically handling
 /// the builder pattern and signing process.
-/// 
+///
 /// # Syntax
 /// ```rust
 /// signed_pod!(pod_params, secret_key, {
@@ -11,20 +11,20 @@
 ///     // ... more fields
 /// })
 /// ```
-/// 
+///
 /// # Arguments
 /// * `pod_params` - The pod parameters from `PodNetProverSetup::get_params()`
 /// * `secret_key` - The secret key for signing (will be cloned automatically)
 /// * Fields - Key-value pairs where keys are strings and values are POD-compatible types
-/// 
+///
 /// # Returns
 /// Returns a `Result<SignedPod, Error>` that must be handled with `?` or `.unwrap()`.
-/// 
+///
 /// # Example
 /// ```rust
 /// let params = PodNetProverSetup::get_params();
 /// let secret_key = /* your secret key */;
-/// 
+///
 /// let pod = signed_pod!(&params, secret_key.clone(), {
 ///     "request_type" => "publish",
 ///     "content_hash" => content_hash,
@@ -45,22 +45,20 @@ macro_rules! signed_pod {
     }};
 }
 
-
-
 /// A unified macro for creating MainPods with both inline operations and recursive pod references.
-/// 
+///
 /// This macro provides a clean, consistent syntax for creating cryptographic proofs using MainPods.
-/// It supports both inline operations (like `eq`, `custom`) and references to statements from 
+/// It supports both inline operations (like `eq`, `custom`) and references to statements from
 /// previously created MainPods.
-/// 
+///
 /// # Syntax
-/// 
+///
 /// ## With Recursive Pods
 /// ```rust
 /// main_pod!(
 ///     use_mock_proofs,
 ///     predicate_function,
-///     using [pod1, pod2, ...] 
+///     using [pod1, pod2, ...]
 ///     with recursive [recursive_pod1, recursive_pod2], {
 ///         predicate_name(args) => statement_from_recursive_pod,
 ///         other_predicate(args) => {
@@ -70,7 +68,7 @@ macro_rules! signed_pod {
 ///     }
 /// )
 /// ```
-/// 
+///
 /// ## Without Recursive Pods
 /// ```rust
 /// main_pod!(
@@ -84,9 +82,9 @@ macro_rules! signed_pod {
 ///     }
 /// )
 /// ```
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `use_mock_proofs` - Boolean indicating whether to use mock proofs (faster) or real ZK proofs
 /// * `predicate_function` - Function that returns the predicate string (e.g., `get_publish_verification_predicate`)
 /// * `using [...]` - Array of SignedPods that will be added to the MainPod builder
@@ -94,12 +92,12 @@ macro_rules! signed_pod {
 /// * Predicate mappings - Each predicate maps to either:
 ///   - A statement from a recursive pod: `predicate(args) => statement`
 ///   - Inline operations: `predicate(args) => { op1(...), op2(...), ... }`
-/// 
+///
 /// # Returns
 /// Returns a `Result<MainPod, MainPodError>` that must be handled with `?` or `.unwrap()`.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ## Basic Usage with Inline Operations
 /// ```rust
 /// let main_pod = main_pod!(
@@ -113,17 +111,17 @@ macro_rules! signed_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// ## Advanced Usage with Recursive Pods
 /// ```rust
 /// // First create individual proofs
 /// let identity_main_pod = main_pod!(/* ... */)?;
 /// let document_main_pod = main_pod!(/* ... */)?;
-/// 
+///
 /// // Extract statements - NOTE: Parentheses are required around expressions!
 /// let identity_statement = identity_main_pod.pod.pub_statements()[1].clone();
 /// let document_statement = document_main_pod.pod.pub_statements()[1].clone();
-/// 
+///
 /// // Combine them in a final proof
 /// let final_main_pod = main_pod!(
 ///     params.use_mock_proofs,
@@ -135,34 +133,34 @@ macro_rules! signed_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// # Important Notes
-/// 
+///
 /// ## Parentheses Requirement
-/// When using expressions (like `statement.clone()`) in recursive pod references, you MUST 
+/// When using expressions (like `statement.clone()`) in recursive pod references, you MUST
 /// wrap them in parentheses to ensure proper macro parsing:
-/// 
+///
 /// ✅ Correct: `predicate(args) => (statement.clone())`  
 /// ❌ Incorrect: `predicate(args) => statement.clone()`
-/// 
+///
 /// ## Statement Validation
 /// The macro automatically validates that statements from recursive pods match the expected
 /// predicate type, preventing mismatched statement usage.
-/// 
+///
 /// ## Recursive Pod Limit
 /// Currently supports up to 2 recursive pods due to macro complexity. For more pods,
 /// create intermediate proofs as shown in the publish verification example.
-/// 
+///
 /// # Predicate Operations
-/// 
+///
 /// Common operations used in inline predicate definitions:
 /// - `eq(field, value)` - Assert equality between field and value
 /// - `custom(predicate_ref, args...)` - Call custom predicate with arguments
-/// 
+///
 /// Fields are referenced as `(pod_variable, "field_name")` tuples.
-/// 
+///
 /// # Quick Reference
-/// 
+///
 /// ## Before (verbose)
 /// ```rust
 /// let mut builder = MainPodBuilder::new(&pod_params, vd_set);
@@ -174,7 +172,7 @@ macro_rules! signed_pod {
 /// let main_pod = builder.prove(prover.as_ref(), &pod_params)?;
 /// // ~15+ lines of boilerplate
 /// ```
-/// 
+///
 /// ## After (with macro)
 /// ```rust
 /// let main_pod = main_pod!(
@@ -335,10 +333,10 @@ macro_rules! main_pod {
 }
 
 /// A macro for verifying MainPods with clean syntax and wildcard support.
-/// 
+///
 /// This macro simplifies MainPod verification by automatically handling predicate parsing,
 /// statement extraction, and value comparison with support for wildcards.
-/// 
+///
 /// # Syntax
 /// ```rust
 /// verify_main_pod!(
@@ -349,12 +347,12 @@ macro_rules! main_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// # Arguments
 /// * `main_pod` - The MainPod to verify
 /// * `get_predicate_function()` - Function that returns the predicate string
 /// * Predicate verification specs - Each predicate with expected argument values
-/// 
+///
 /// # Wildcard Support
 /// Use `_` to skip verification for specific arguments:
 /// ```rust
@@ -365,7 +363,7 @@ macro_rules! main_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// # Multiple Predicates
 /// You can verify multiple predicates in one call:
 /// ```rust
@@ -378,10 +376,10 @@ macro_rules! main_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// # Returns
 /// Returns a `Result<(), MainPodError>` that must be handled with `?` or `.unwrap()`.
-/// 
+///
 /// # Example
 /// ```rust
 /// // Verify upvote verification MainPod
@@ -391,7 +389,7 @@ macro_rules! main_pod {
 ///         upvote_verification("alice", expected_content_hash, expected_server_pk)
 ///     }
 /// )?;
-/// 
+///
 /// // Verify with wildcards (don't care about server key)
 /// verify_main_pod!(
 ///     &upvote_main_pod,
@@ -400,7 +398,7 @@ macro_rules! main_pod {
 ///     }
 /// )?;
 /// ```
-/// 
+///
 /// # What It Does
 /// The macro automatically:
 /// 1. Calls `verify_mainpod_basics(main_pod)?` for signature verification
@@ -408,9 +406,9 @@ macro_rules! main_pod {
 /// 3. Extracts public statements from the MainPod
 /// 4. Compares actual values against expected values (skipping wildcards)
 /// 5. Returns appropriate `MainPodError::InvalidValue` on mismatch
-/// 
+///
 /// # Quick Reference
-/// 
+///
 /// ## Before (verbose)
 /// ```rust
 /// verify_mainpod_basics(main_pod)?;
@@ -426,7 +424,7 @@ macro_rules! main_pod {
 /// if content_hash != expected_content_hash { return Err(...); }
 /// // ~10+ lines of boilerplate
 /// ```
-/// 
+///
 /// ## After (with macro)
 /// ```rust
 /// verify_main_pod!(
@@ -478,7 +476,7 @@ macro_rules! verify_main_pod {
 
             // Extract and verify each argument
             let expected_args = [$(verify_main_pod!(@to_value $expected)),*];
-            
+
             for (i, (actual, expected_opt)) in actual_args.iter().zip(expected_args.iter()).enumerate() {
                 if let Some(expected) = expected_opt {
                     if actual != expected {
@@ -498,5 +496,3 @@ macro_rules! verify_main_pod {
     (@to_value _) => { None };
     (@to_value $val:expr) => { Some($val) };
 }
-
-

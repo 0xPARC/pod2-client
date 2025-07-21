@@ -1,14 +1,15 @@
 #![feature(stmt_expr_attributes)]
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 use hex::ToHex;
-
 use lazy_pod::LazyDeser;
-use pod2::backends::plonky2::primitives::ec::curve::Point as PublicKey;
-use pod2::frontend::{MainPod, SignedPod};
-use pod2::middleware::{Hash, KEY_SIGNER, KEY_TYPE, Key, PodType, Value};
+use pod2::{
+    backends::plonky2::primitives::ec::curve::Point as PublicKey,
+    frontend::{MainPod, SignedPod},
+    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Key, PodType, Value},
+};
+use serde::{Deserialize, Serialize};
 
 /// Lazy deserialization wrappers for pods
 pub mod lazy_pod;
@@ -162,11 +163,12 @@ impl Document {
 
     /// Verify the publish verification MainPod
     pub fn verify_publish_verification(&self) -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::HashMap;
+
         use pod2::middleware::{
             Statement,
             containers::{Dictionary, Set},
         };
-        use std::collections::HashMap;
 
         println!("Verifying publish verification MainPod...");
 
@@ -301,7 +303,7 @@ impl Document {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PublishRequest {
-    pub title: String,            // Document title
+    pub title: String, // Document title
     pub content: DocumentContent,
     pub tags: HashSet<String>,    // Set of tags for document organization
     pub authors: HashSet<String>, // Set of authors for document attribution

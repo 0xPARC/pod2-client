@@ -1,20 +1,23 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
 };
 use pod_utils::ValueExt;
-use pod2::backends::plonky2::{
-    primitives::ec::schnorr::SecretKey,
-    signedpod::Signer,
+use pod2::{
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+    frontend::{MainPod, SignedPodBuilder},
+    middleware::{Hash, Value},
 };
-use pod2::frontend::{MainPod, SignedPodBuilder};
-use pod2::middleware::{Hash, Value};
 use podnet_models::{
     UpvoteRequest, get_upvote_verification_predicate,
-    mainpod::upvote::{verify_upvote_verification_with_solver, prove_upvote_count_base_with_solver, UpvoteCountBaseParams, prove_upvote_count_inductive_with_solver, UpvoteCountInductiveParams},
+    mainpod::upvote::{
+        UpvoteCountBaseParams, UpvoteCountInductiveParams, prove_upvote_count_base_with_solver,
+        prove_upvote_count_inductive_with_solver, verify_upvote_verification_with_solver,
+    },
 };
-use std::sync::Arc;
 
 use crate::pod::get_server_secret_key;
 
@@ -23,7 +26,6 @@ pub async fn upvote_document(
     State(state): State<Arc<crate::AppState>>,
     Json(payload): Json<UpvoteRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-
     log::info!("Processing upvote for document {document_id} with main pod verification");
 
     let (_vd_set, _prover) = state.pod_config.get_prover_setup()?;
@@ -52,13 +54,10 @@ pub async fn upvote_document(
 
     // We need to verify with all registered identity servers, since we don't know which one was used
     log::info!("Getting all registered identity servers for verification");
-    let identity_servers = state
-        .db
-        .get_all_identity_servers()
-        .map_err(|e| {
-            log::error!("Database error retrieving identity servers: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let identity_servers = state.db.get_all_identity_servers().map_err(|e| {
+        log::error!("Database error retrieving identity servers: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     if identity_servers.is_empty() {
         log::error!("No identity servers registered");
@@ -70,7 +69,7 @@ pub async fn upvote_document(
 
     for identity_server in &identity_servers {
         // Parse the identity server public key from database
-        let server_pk: pod2::backends::plonky2::primitives::ec::curve::Point = 
+        let server_pk: pod2::backends::plonky2::primitives::ec::curve::Point =
             serde_json::from_str(&identity_server.public_key).map_err(|e| {
                 log::error!("Failed to parse identity server public key: {e}");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -79,7 +78,10 @@ pub async fn upvote_document(
         let server_pk_value = Value::from(server_pk);
 
         // Try verification with this identity server using username from request
-        log::info!("Trying upvote verification with identity server: {}", identity_server.server_id);
+        log::info!(
+            "Trying upvote verification with identity server: {}",
+            identity_server.server_id
+        );
         match verify_upvote_verification_with_solver(
             &payload.upvote_main_pod,
             &payload.username,
@@ -87,12 +89,18 @@ pub async fn upvote_document(
             &server_pk_value,
         ) {
             Ok(_) => {
-                log::info!("✓ Solver verification succeeded with identity server: {}", identity_server.server_id);
+                log::info!(
+                    "✓ Solver verification succeeded with identity server: {}",
+                    identity_server.server_id
+                );
                 verification_succeeded = true;
                 break;
             }
             Err(_) => {
-                log::debug!("Verification failed with identity server: {}", identity_server.server_id);
+                log::debug!(
+                    "Verification failed with identity server: {}",
+                    identity_server.server_id
+                );
                 continue;
             }
         }
@@ -105,7 +113,8 @@ pub async fn upvote_document(
 
     log::info!(
         "✓ Solver verification passed: username={}, content_hash={}",
-        payload.username, document.content_id
+        payload.username,
+        document.content_id
     );
 
     // Content hash verification was already done during solver verification
@@ -167,9 +176,7 @@ pub async fn upvote_document(
         )
         .await
         {
-            log::error!(
-                "Failed to generate inductive upvote count pod for document {doc_id}: {e}"
-            );
+            log::error!("Failed to generate inductive upvote count pod for document {doc_id}: {e}");
         }
     });
 
@@ -200,12 +207,12 @@ pub async fn generate_base_case_upvote_pod(
     let main_pod = prove_upvote_count_base_with_solver(params)
         .map_err(|e| format!("Failed to generate base case upvote count pod: {e}"))?;
 
-    main_pod.pod.verify()
+    main_pod
+        .pod
+        .verify()
         .map_err(|e| format!("Failed to verify base case upvote count pod: {e}"))?;
 
-    log::info!(
-        "✓ Successfully proved upvote_count(0) for document {document_id} using solver"
-    );
+    log::info!("✓ Successfully proved upvote_count(0) for document {document_id} using solver");
 
     // Store the pod in the database
     let pod_json = serde_json::to_string(&main_pod)
@@ -216,9 +223,7 @@ pub async fn generate_base_case_upvote_pod(
         .update_upvote_count_pod(document_id, &pod_json)
         .map_err(|e| format!("Failed to store upvote count pod: {e}"))?;
 
-    log::info!(
-        "✓ Stored base case upvote count pod for document {document_id}"
-    );
+    log::info!("✓ Stored base case upvote count pod for document {document_id}");
 
     Ok(())
 }
@@ -274,7 +279,9 @@ async fn generate_inductive_upvote_pod(
     let main_pod = prove_upvote_count_inductive_with_solver(params)
         .map_err(|e| format!("Failed to generate inductive upvote count pod: {e}"))?;
 
-    main_pod.pod.verify()
+    main_pod
+        .pod
+        .verify()
         .map_err(|e| format!("Failed to verify inductive upvote count pod: {e}"))?;
 
     log::info!(

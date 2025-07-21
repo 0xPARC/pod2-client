@@ -1,19 +1,22 @@
+use std::{collections::HashMap, fs};
+
 use hex::FromHex;
 use log;
 use num_bigint::BigUint;
-use pod2::backends::plonky2::primitives::ec::schnorr::SecretKey;
-use pod2::backends::plonky2::signedpod::Signer;
-use pod2::frontend::{MainPod, SignedPodBuilder};
-use pod2::lang::parse;
-use pod2::middleware::{Hash, Key, Params, Value, containers::Dictionary};
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
-use podnet_models::get_upvote_count_predicate;
-use podnet_models::mainpod::upvote::{
-    UpvoteCountBaseParams, UpvoteCountInductiveParams, prove_upvote_count_base_with_solver,
-    prove_upvote_count_inductive_with_solver,
+use pod2::{
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+    frontend::{MainPod, SignedPodBuilder},
+    lang::parse,
+    middleware::{Hash, Key, Params, Value, containers::Dictionary},
 };
-use std::collections::HashMap;
-use std::fs;
+use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+use podnet_models::{
+    get_upvote_count_predicate,
+    mainpod::upvote::{
+        UpvoteCountBaseParams, UpvoteCountInductiveParams, prove_upvote_count_base_with_solver,
+        prove_upvote_count_inductive_with_solver,
+    },
+};
 
 #[test]
 fn test_full_upvote_count() {

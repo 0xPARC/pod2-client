@@ -1,18 +1,19 @@
+use std::fs::File;
+
 use chrono::Utc;
 use hex::FromHex;
 use num_bigint::BigUint;
-use pod_utils::ValueExt;
-use pod_utils::prover_setup::PodNetProverSetup;
-use pod2::backends::plonky2::primitives::ec::schnorr::SecretKey;
-use pod2::backends::plonky2::signedpod::Signer;
-use pod2::frontend::{SignedPod, SignedPodBuilder};
-use pod2::middleware::{Hash, KEY_SIGNER};
+use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod2::{
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+    frontend::{SignedPod, SignedPodBuilder},
+    middleware::{Hash, KEY_SIGNER},
+};
 use podnet_models::{
     UpvoteRequest,
     mainpod::upvote::{UpvoteProofParamsSolver, prove_upvote_verification_with_solver},
 };
 use reqwest::StatusCode;
-use std::fs::File;
 
 use crate::utils::handle_error_response;
 

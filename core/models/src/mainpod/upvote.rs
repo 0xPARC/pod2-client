@@ -1,19 +1,19 @@
 //! Upvote verification MainPod operations
 
+// Import solver dependencies
+use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod2::{
+    frontend::{MainPod, MainPodBuilder, SignedPod},
+    lang::parse,
+    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Params, PodType, Value},
+    op,
+};
+use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+
 use super::{
     MainPodError, MainPodResult, extract_user_public_key, extract_username, verify_mainpod_basics,
 };
-use crate::get_upvote_verification_predicate;
-use crate::{main_pod, signed_pod, verify_main_pod};
-
-// Import solver dependencies
-use pod_utils::ValueExt;
-use pod_utils::prover_setup::PodNetProverSetup;
-use pod2::frontend::{MainPod, MainPodBuilder, SignedPod};
-use pod2::lang::parse;
-use pod2::middleware::{Hash, KEY_SIGNER, KEY_TYPE, Params, PodType, Value};
-use pod2::op;
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+use crate::{get_upvote_verification_predicate, main_pod, signed_pod, verify_main_pod};
 
 /// Parameters for upvote verification proof generation
 pub struct UpvoteProofParams<'a> {
@@ -565,9 +565,10 @@ pub fn prove_upvote_count_base_with_solver(
     params: UpvoteCountBaseParams,
 ) -> MainPodResult<MainPod> {
     use num_bigint::BigUint;
-    use pod2::backends::plonky2::primitives::ec::schnorr::SecretKey;
-    use pod2::backends::plonky2::signedpod::Signer;
-    use pod2::frontend::SignedPodBuilder;
+    use pod2::{
+        backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+        frontend::SignedPodBuilder,
+    };
 
     // Create a data pod with the content hash (signed by server)
     let pod_params = PodNetProverSetup::get_params();

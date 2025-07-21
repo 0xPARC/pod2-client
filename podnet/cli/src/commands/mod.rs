@@ -1,7 +1,7 @@
-pub mod keygen;
-pub mod registry;
-pub mod identity;
 pub mod documents;
+pub mod identity;
+pub mod keygen;
 pub mod posts;
 pub mod publish;
+pub mod registry;
 pub mod upvote;

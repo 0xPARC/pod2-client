@@ -1,6 +1,6 @@
-use std::sync::OnceLock;
+use std::{marker::PhantomData, sync::OnceLock};
+
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::marker::PhantomData;
 
 /// A generic lazy deserialization wrapper that stores the serialized value and deserializes only when accessed
 #[derive(Debug, Clone)]
@@ -36,10 +36,10 @@ where
         D: serde::Deserializer<'de>,
     {
         use serde::de::Error;
-        
+
         // First try to deserialize as a JSON value
         let value = serde_json::Value::deserialize(deserializer)?;
-        
+
         // If it's a string, try to parse it as JSON (for database storage)
         let serialized_value = if let serde_json::Value::String(json_str) = value {
             // Parse the JSON string to get the actual JSON object
@@ -48,7 +48,7 @@ where
             // It's already a JSON value, use it directly
             value
         };
-        
+
         Ok(Self::new(serialized_value))
     }
 }
@@ -83,7 +83,10 @@ where
             serde_json::from_value(self.serialized_value.clone()).unwrap_or_else(|e| {
                 // If deserialization fails, we need to handle it gracefully
                 // For now, panic - in production you might want different error handling
-                panic!("Failed to deserialize JSON in LazyDeser. JSON content: '{}', Error: {}", self.serialized_value, e)
+                panic!(
+                    "Failed to deserialize JSON in LazyDeser. JSON content: '{}', Error: {}",
+                    self.serialized_value, e
+                )
             })
         }))
     }
