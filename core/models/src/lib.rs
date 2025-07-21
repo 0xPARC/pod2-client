@@ -197,7 +197,7 @@ impl Document {
                 .map(|tag| Value::from(tag.clone()))
                 .collect::<HashSet<_>>(),
         )
-        .map_err(|e| format!("Failed to create tags set: {:?}", e))?;
+        .map_err(|e| format!("Failed to create tags set: {e:?}"))?;
         data_map.insert(Key::from("tags"), Value::from(tags_set));
 
         // Convert authors to Set
@@ -209,7 +209,7 @@ impl Document {
                 .map(|author| Value::from(author.clone()))
                 .collect::<HashSet<_>>(),
         )
-        .map_err(|e| format!("Failed to create authors set: {:?}", e))?;
+        .map_err(|e| format!("Failed to create authors set: {e:?}"))?;
         data_map.insert(Key::from("authors"), Value::from(authors_set));
 
         // Add reply_to
@@ -227,7 +227,7 @@ impl Document {
 
         // Create expected data dictionary
         let expected_data = Dictionary::new(6, data_map)
-            .map_err(|e| format!("Failed to create expected data dictionary: {:?}", e))?;
+            .map_err(|e| format!("Failed to create expected data dictionary: {e:?}"))?;
 
         // Use solver-based verification
         mainpod::publish::verify_publish_verification_with_solver(
@@ -247,7 +247,7 @@ impl Document {
         &self,
         server_public_key: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use pod2::frontend::SignedPod;
+        
 
         println!("Verifying timestamp pod signature...");
 

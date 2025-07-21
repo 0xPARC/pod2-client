@@ -7,7 +7,7 @@ use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
     backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
     frontend::{SignedPod, SignedPodBuilder},
-    middleware::{Hash, KEY_SIGNER},
+    middleware::Hash,
 };
 use podnet_models::{
     UpvoteRequest,

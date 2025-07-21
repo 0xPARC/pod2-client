@@ -10,14 +10,14 @@ pub fn print_all_facts(facts: &FactStore) {
         let pred_name = match predicate {
             PredicateIdentifier::Normal(Predicate::Custom(cpr)) => cpr.predicate().name.clone(),
             PredicateIdentifier::Normal(Predicate::Native(native)) => {
-                format!("{:?}", native)
+                format!("{native:?}")
             }
             PredicateIdentifier::Magic {
                 name,
                 bound_indices: _,
-            } => format!("magic[{}]", name),
+            } => format!("magic[{name}]"),
             PredicateIdentifier::Normal(Predicate::BatchSelf(batch_self)) => {
-                format!("batch_self[{}]", batch_self)
+                format!("batch_self[{batch_self}]")
             }
         };
 
@@ -43,20 +43,20 @@ pub fn print_provenance(provenance: &ProvenanceStore) {
             match predicate {
                 PredicateIdentifier::Normal(Predicate::Custom(cpr)) => cpr.predicate().name.clone(),
                 PredicateIdentifier::Normal(Predicate::Native(native)) => {
-                    format!("{:?}", native)
+                    format!("{native:?}")
                 }
                 PredicateIdentifier::Magic {
                     name,
                     bound_indices: _,
-                } => format!("magic[{}]", name),
+                } => format!("magic[{name}]"),
                 PredicateIdentifier::Normal(Predicate::BatchSelf(batch_self)) => {
-                    format!("batch_self[{}]", batch_self)
+                    format!("batch_self[{batch_self}]")
                 }
             }
         );
-        println!("  args: {:?}", args);
+        println!("  args: {args:?}");
         //  println!("  rule: {:?}", rule);
-        println!("  bindings: {:?}", bindings);
+        println!("  bindings: {bindings:?}");
         println!();
     }
 }
@@ -71,6 +71,6 @@ fn arg_to_string(arg: &ValueRef) -> String {
 fn format_value(v: &Value) -> String {
     match &v.typed() {
         &TypedValue::String(s) => s.clone(),
-        _ => format!("{:?}", v),
+        _ => format!("{v:?}"),
     }
 }

@@ -29,7 +29,7 @@ impl fmt::Display for Proof {
             if !first {
                 writeln!(f)?;
             }
-            write!(f, "{}", node)?;
+            write!(f, "{node}")?;
             first = false;
         }
         Ok(())
@@ -52,7 +52,7 @@ impl ProofNode {
         let because_prefix = "  ".repeat(indent + 1);
         match &self.justification {
             Justification::Fact => {
-                writeln!(f, "{}- by Fact", because_prefix)?;
+                writeln!(f, "{because_prefix}- by Fact")?;
             }
             Justification::ValueComparison(op) => {
                 writeln!(f, "{}- by {:?}", because_prefix, *op)?;

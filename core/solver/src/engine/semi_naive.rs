@@ -195,7 +195,7 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
             iteration_count += 1;
             self.metrics.increment_iterations();
 
-            log::debug!("=== ITERATION {} ===", iteration_count);
+            log::debug!("=== ITERATION {iteration_count} ===");
             log::debug!(
                 "Delta facts going into iteration: {}",
                 crate::pretty_print::PrettyFactStore(&delta_facts)
@@ -219,21 +219,18 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                 crate::pretty_print::PrettyFactStore(&new_delta)
             );
             log::debug!(
-                "Iteration {} complete. New facts this iteration: {}",
-                iteration_count,
-                num_new_facts
+                "Iteration {iteration_count} complete. New facts this iteration: {num_new_facts}"
             );
 
             if new_delta.values().all(|rel| rel.is_empty()) {
-                debug!("Fixpoint reached after {} iterations.", iteration_count);
+                debug!("Fixpoint reached after {iteration_count} iterations.");
                 break; // Fixpoint reached.
             }
 
             // Safety check for infinite loops
             if iteration_count > 100 {
                 log::error!(
-                    "Stopping after {} iterations to prevent infinite loop",
-                    iteration_count
+                    "Stopping after {iteration_count} iterations to prevent infinite loop"
                 );
                 log::error!(
                     "Current delta: {}",
@@ -446,7 +443,7 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                         ))
                     })?;
                     let pod_id = PodId::try_from(pod_id_val.typed())
-                        .map_err(|e| SolverError::Internal(format!("{}", e)))?;
+                        .map_err(|e| SolverError::Internal(format!("{e}")))?;
                     let ak = middleware::AnchoredKey::new(pod_id, key.clone());
                     Ok(ValueRef::Key(ak))
                 }
@@ -562,7 +559,7 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
         }
 
         for &i in &delta_positions {
-            trace!("  Delta join on literal index {}", i);
+            trace!("  Delta join on literal index {i}");
             let new_bindings =
                 self.perform_join(rule, &rule.body, i, all_facts, delta_facts, materializer)?;
             trace!(
@@ -689,8 +686,7 @@ impl<M: MetricsSink> SemiNaiveEngine<M> {
                         }
                     } else {
                         return Err(SolverError::Internal(format!(
-                            "Literal value_ref should be a Literal: {:?}",
-                            value_ref
+                            "Literal value_ref should be a Literal: {value_ref:?}"
                         )));
                     }
                 }

@@ -43,7 +43,7 @@ pub async fn setup_identity_server(
     server_url: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<IdentityServerInfo, String> {
-    log::info!("Setting up identity server: {}", server_url);
+    log::info!("Setting up identity server: {server_url}");
 
     // Make HTTP GET request to identity server's root endpoint
     let client = reqwest::Client::new();
@@ -51,7 +51,7 @@ pub async fn setup_identity_server(
         .get(&server_url)
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to identity server: {}", e))?;
+        .map_err(|e| format!("Failed to connect to identity server: {e}"))?;
 
     if !response.status().is_success() {
         return Err(format!(
@@ -63,7 +63,7 @@ pub async fn setup_identity_server(
     let server_info_raw = response
         .json::<HashMap<String, serde_json::Value>>()
         .await
-        .map_err(|e| format!("Failed to parse identity server response: {}", e))?;
+        .map_err(|e| format!("Failed to parse identity server response: {e}"))?;
 
     // Extract server_id and public_key from response
     let server_id = server_info_raw
@@ -79,7 +79,7 @@ pub async fn setup_identity_server(
 
     // Store server info in database
     let public_key_str = serde_json::to_string(&public_key)
-        .map_err(|e| format!("Failed to serialize public key: {}", e))?;
+        .map_err(|e| format!("Failed to serialize public key: {e}"))?;
 
     let app_state = state.lock().await;
     pod2_db::store::update_identity_server_info(
@@ -89,9 +89,9 @@ pub async fn setup_identity_server(
         &public_key_str,
     )
     .await
-    .map_err(|e| format!("Failed to store identity server info: {}", e))?;
+    .map_err(|e| format!("Failed to store identity server info: {e}"))?;
 
-    log::info!("Successfully configured identity server: {}", server_id);
+    log::info!("Successfully configured identity server: {server_id}");
 
     Ok(IdentityServerInfo {
         server_id,
@@ -106,7 +106,7 @@ pub async fn register_username(
     server_url: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<IdentityPodResult, String> {
-    log::info!("Registering username '{}' with identity server", username);
+    log::info!("Registering username '{username}' with identity server");
 
     // Get or create the user's private key during setup
     let mut app_state = state.lock().await;
@@ -119,7 +119,7 @@ pub async fn register_username(
             log::info!("Creating new default private key");
             pod2_db::store::create_default_private_key(&app_state.db)
                 .await
-                .map_err(|e| format!("Failed to create private key: {}", e))?
+                .map_err(|e| format!("Failed to create private key: {e}"))?
         }
     };
 
@@ -128,14 +128,14 @@ pub async fn register_username(
     // Step 1: Request challenge from identity server
     let client = reqwest::Client::new();
     let challenge_response = client
-        .post(format!("{}/user/challenge", server_url))
+        .post(format!("{server_url}/user/challenge"))
         .json(&serde_json::json!({
             "username": username,
             "user_public_key": public_key
         }))
         .send()
         .await
-        .map_err(|e| format!("Failed to request challenge: {}", e))?;
+        .map_err(|e| format!("Failed to request challenge: {e}"))?;
 
     if !challenge_response.status().is_success() {
         return Err(format!(
@@ -147,18 +147,15 @@ pub async fn register_username(
     let challenge_response_text = challenge_response
         .text()
         .await
-        .map_err(|e| format!("Failed to read challenge response text: {}", e))?;
+        .map_err(|e| format!("Failed to read challenge response text: {e}"))?;
 
     let challenge_data: ChallengeResponse = serde_json::from_str(&challenge_response_text)
         .map_err(|e| {
             log::error!(
-                "Failed to parse challenge response: {}, raw response: {}",
-                e,
-                challenge_response_text
+                "Failed to parse challenge response: {e}, raw response: {challenge_response_text}"
             );
             format!(
-                "Failed to parse challenge response: {}, raw response: {}",
-                e, challenge_response_text
+                "Failed to parse challenge response: {e}, raw response: {challenge_response_text}"
             )
         })?;
 
@@ -167,7 +164,7 @@ pub async fn register_username(
     // Verify the challenge pod signature
     challenge_pod
         .verify()
-        .map_err(|e| format!("Failed to verify challenge pod: {}", e))?;
+        .map_err(|e| format!("Failed to verify challenge pod: {e}"))?;
 
     let challenge_string = challenge_pod
         .get("challenge")
@@ -186,7 +183,7 @@ pub async fn register_username(
     let mut user_signer = pod2::backends::plonky2::signedpod::Signer(private_key);
     let user_response_pod = challenge_builder
         .sign(&mut user_signer)
-        .map_err(|e| format!("Failed to sign challenge response: {}", e))?;
+        .map_err(|e| format!("Failed to sign challenge response: {e}"))?;
 
     // Step 3: Submit challenge response to get identity POD
     let identity_request = IdentityRequest {
@@ -195,11 +192,11 @@ pub async fn register_username(
     };
 
     let identity_response = client
-        .post(format!("{}/identity", server_url))
+        .post(format!("{server_url}/identity"))
         .json(&identity_request)
         .send()
         .await
-        .map_err(|e| format!("Failed to submit identity verification: {}", e))?;
+        .map_err(|e| format!("Failed to submit identity verification: {e}"))?;
 
     if !identity_response.status().is_success() {
         return Err(format!(
@@ -211,7 +208,7 @@ pub async fn register_username(
     let identity_data = identity_response
         .json::<IdentityResponse>()
         .await
-        .map_err(|e| format!("Failed to parse identity response: {}", e))?;
+        .map_err(|e| format!("Failed to parse identity response: {e}"))?;
 
     let identity_pod = identity_data.identity_pod;
 
@@ -227,7 +224,7 @@ pub async fn register_username(
     {
         pod2_db::store::create_space(&app_state.db, IDENTITY_FOLDER)
             .await
-            .map_err(|e| format!("Failed to create identity folder: {}", e))?;
+            .map_err(|e| format!("Failed to create identity folder: {e}"))?;
         log::info!("✓ Created identity folder");
     }
 
@@ -238,24 +235,23 @@ pub async fn register_username(
         Some("Identity POD"),
     )
     .await
-    .map_err(|e| format!("Failed to store identity POD: {}", e))?;
+    .map_err(|e| format!("Failed to store identity POD: {e}"))?;
 
     // Step 5: Update setup state with username and identity POD ID
     pod2_db::store::update_identity_info(&app_state.db, &username, &identity_pod_id)
         .await
-        .map_err(|e| format!("Failed to update identity info: {}", e))?;
+        .map_err(|e| format!("Failed to update identity info: {e}"))?;
 
     // Step 6: Trigger state sync to refresh UI with new identity POD
     app_state.trigger_state_sync().await?;
 
     log::info!(
-        "Successfully registered username '{}' and received identity POD",
-        username
+        "Successfully registered username '{username}' and received identity POD"
     );
 
     Ok(IdentityPodResult {
         identity_pod: serde_json::to_value(identity_pod)
-            .map_err(|e| format!("Failed to serialize identity POD: {}", e))?,
+            .map_err(|e| format!("Failed to serialize identity POD: {e}"))?,
         username,
         server_id: "identity_server".to_string(), // TODO: Get from stored server info
     })
@@ -270,7 +266,7 @@ pub async fn complete_identity_setup(state: State<'_, Mutex<AppState>>) -> Resul
     let app_state = state.lock().await;
     pod2_db::store::complete_app_setup(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to complete setup: {}", e))?;
+        .map_err(|e| format!("Failed to complete setup: {e}"))?;
 
     log::info!("Identity setup completed successfully");
 
@@ -283,7 +279,7 @@ pub async fn is_setup_completed(state: State<'_, Mutex<AppState>>) -> Result<boo
     let app_state = state.lock().await;
     pod2_db::store::is_setup_completed(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to check setup status: {}", e))
+        .map_err(|e| format!("Failed to check setup status: {e}"))
 }
 
 /// Get the current app setup state
@@ -294,5 +290,5 @@ pub async fn get_app_setup_state(
     let app_state = state.lock().await;
     pod2_db::store::get_app_setup_state(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to get setup state: {}", e))
+        .map_err(|e| format!("Failed to get setup state: {e}"))
 }

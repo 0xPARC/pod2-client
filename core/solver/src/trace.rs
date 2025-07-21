@@ -102,7 +102,7 @@ impl TraceConfig {
             self.matches_qualified_pattern(pattern, identifier)
         } else {
             // Simple name matching
-            identifier.contains(pattern) || identifier.ends_with(&format!("::{}", pattern))
+            identifier.contains(pattern) || identifier.ends_with(&format!("::{pattern}"))
         }
     }
 

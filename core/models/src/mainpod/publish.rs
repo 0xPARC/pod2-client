@@ -1,31 +1,25 @@
 //! Publish verification MainPod operations
 
-use std::collections::{HashMap, HashSet};
 
-use hex::ToHex;
-use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod_utils::prover_setup::PodNetProverSetup;
 use pod2::{
-    backends::plonky2::{mock::mainpod::MockProver, primitives::ec::curve::Point},
     frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::parse,
     middleware::{
-        Hash, KEY_SIGNER, KEY_TYPE, Params, PodType, Value,
-        containers::{Dictionary, Set},
+        KEY_SIGNER, Params, Value,
+        containers::Dictionary,
     },
-    op,
 };
 // Import solver dependencies
 use pod2_solver::{
-    db::IndexablePod, metrics::MetricsLevel, proof::Proof, solve, value_to_podlang_literal,
+    db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
 };
 
 use super::{
-    MainPodError, MainPodResult, extract_authors, extract_post_id, extract_reply_to, extract_tags,
-    extract_user_public_key, extract_username, verify_mainpod_basics,
+    MainPodError, MainPodResult,
 };
 use crate::get_publish_verification_predicate;
 // Import the main_pod macro
-use crate::main_pod;
 
 /// Parameters for publish verification proof generation
 pub struct PublishProofParams<'a> {
@@ -193,10 +187,10 @@ pub fn prove_publish_verification_with_solver(
     let mut query = get_publish_verification_predicate();
 
     // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(Value::from(username.clone()));
-    let data_literal = value_to_podlang_literal(Value::from(data.clone()));
+    let username_literal = value_to_podlang_literal(username.clone());
+    let data_literal = value_to_podlang_literal(data.clone());
     let identity_server_pk_literal =
-        value_to_podlang_literal(Value::from(identity_server_pk.clone()));
+        value_to_podlang_literal(identity_server_pk.clone());
 
     query.push_str(&format!(
         r#"
@@ -206,12 +200,12 @@ pub fn prove_publish_verification_with_solver(
         )
         "#
     ));
-    println!("QUERY: {}", query);
+    println!("QUERY: {query}");
 
     // Parse the complete query
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request_templates;
 
     // Provide all three pods as facts
@@ -222,7 +216,7 @@ pub fn prove_publish_verification_with_solver(
 
     // Let the solver find the proof
     let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
@@ -236,11 +230,11 @@ pub fn prove_publish_verification_with_solver(
         if public {
             builder
                 .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         } else {
             builder
                 .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         }
     }
 
@@ -255,7 +249,7 @@ pub fn prove_publish_verification_with_solver(
 
     let main_pod = builder
         .prove(&*prover, &pod_params)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -270,7 +264,7 @@ pub fn verify_publish_verification_with_solver(
     let mut query = get_publish_verification_predicate();
 
     // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(Value::from(expected_username.clone()));
+    let username_literal = value_to_podlang_literal(Value::from(expected_username));
     let data_literal = value_to_podlang_literal(Value::from(expected_data.clone()));
     let identity_server_pk_literal = value_to_podlang_literal(expected_identity_server_pk.clone());
 
@@ -282,12 +276,12 @@ pub fn verify_publish_verification_with_solver(
         )
         "#
     ));
-    println!("QUERY: {}", query);
+    println!("QUERY: {query}");
 
     // Parse the complete query
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request_templates;
 
     // Provide all three pods as facts
@@ -295,8 +289,8 @@ pub fn verify_publish_verification_with_solver(
 
     // Let the solver find the proof
     let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
-    println!("GOT PROOF: {}", proof);
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
+    println!("GOT PROOF: {proof}");
 
     Ok(())
 }

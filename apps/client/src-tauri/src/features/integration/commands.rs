@@ -31,7 +31,7 @@ pub async fn submit_pod_request(
     request: String,
 ) -> Result<SerializedMainPod, String> {
     check_feature_enabled!();
-    log::info!("request: {}", request);
+    log::info!("request: {request}");
     let params = Params::default();
     let pod_request = lang::parse(request.as_str(), &params, &[]).unwrap();
 
@@ -43,7 +43,7 @@ pub async fn submit_pod_request(
     let mut app_state = state.lock().await;
     let fetched_pod_infos = store::list_all_pods(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to list pods: {}", e))?;
+        .map_err(|e| format!("Failed to list pods: {e}"))?;
 
     let mut owned_signed_pods = Vec::new();
     let mut owned_main_pods = Vec::new();
@@ -113,8 +113,8 @@ pub async fn submit_pod_request(
         match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
             Ok(solution) => solution,
             Err(e) => {
-                log::error!("Solver error: {:?}", e);
-                return Err(format!("Solver error: {:?}, request: {}", e, request));
+                log::error!("Solver error: {e:?}");
+                return Err(format!("Solver error: {e:?}, request: {request}"));
             }
         };
 

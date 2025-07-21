@@ -5,7 +5,6 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use pod_utils::ValueExt;
 use pod2::middleware::{
     Key, Value,
     containers::{Dictionary, Set},
@@ -103,7 +102,7 @@ pub async fn publish_document(
             .collect(),
     )
     .map_err(|e| {
-        log::error!("Failed to create tags set: {:?}", e);
+        log::error!("Failed to create tags set: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     data_map.insert(Key::from("tags"), Value::from(tags_set));
@@ -118,7 +117,7 @@ pub async fn publish_document(
             .collect(),
     )
     .map_err(|e| {
-        log::error!("Failed to create authors set: {:?}", e);
+        log::error!("Failed to create authors set: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     data_map.insert(Key::from("authors"), Value::from(authors_set));
@@ -142,7 +141,7 @@ pub async fn publish_document(
 
     // Create expected data dictionary
     let expected_data = Dictionary::new(6, data_map).map_err(|e| {
-        log::error!("Failed to create expected data dictionary: {:?}", e);
+        log::error!("Failed to create expected data dictionary: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 

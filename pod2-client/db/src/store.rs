@@ -607,7 +607,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
                     let bytes = match hex::decode(&private_key_hex) {
                         Ok(bytes) => bytes,
                         Err(e) => {
-                            log::error!("Failed to decode private key hex for regeneration: {}", e);
+                            log::error!("Failed to decode private key hex for regeneration: {e}");
                             continue; // Skip this key and continue with others
                         }
                     };
@@ -631,10 +631,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
         .context("DB interaction failed for regenerate_public_keys_if_needed")??;
 
     if updated_count > 0 {
-        log::info!(
-            "Regenerated {} public keys to use proper base58 encoding",
-            updated_count
-        );
+        log::info!("Regenerated {updated_count} public keys to use proper base58 encoding");
     }
 
     Ok(())

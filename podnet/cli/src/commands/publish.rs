@@ -17,7 +17,7 @@ use pod2::{
 use podnet_models::{
     DocumentContent, DocumentFile, PublishRequest,
     mainpod::publish::{
-        PublishProofParams, prove_publish_verification, prove_publish_verification_with_solver,
+        PublishProofParams, prove_publish_verification_with_solver,
         verify_publish_verification_with_solver,
     },
     signed_pod,

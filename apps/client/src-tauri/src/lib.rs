@@ -93,11 +93,11 @@ impl AppState {
     async fn refresh_pod_stats(&mut self) -> Result<(), String> {
         let total_pods = store::count_all_pods(&self.db)
             .await
-            .map_err(|e| format!("Failed to count pods: {}", e))?;
+            .map_err(|e| format!("Failed to count pods: {e}"))?;
 
         let (signed_pods, main_pods) = store::count_pods_by_type(&self.db)
             .await
-            .map_err(|e| format!("Failed to count pods by type: {}", e))?;
+            .map_err(|e| format!("Failed to count pods by type: {e}"))?;
 
         self.state_data.pod_stats = PodStats {
             total_pods,
@@ -111,7 +111,7 @@ impl AppState {
     async fn emit_state_change(&self) -> Result<(), String> {
         self.app_handle
             .emit("state-changed", &self.state_data)
-            .map_err(|e| format!("Failed to emit state change: {}", e))?;
+            .map_err(|e| format!("Failed to emit state change: {e}"))?;
         Ok(())
     }
 
@@ -119,7 +119,7 @@ impl AppState {
         // Load all PODs from all spaces for proper folder filtering
         let all_pods = store::list_all_pods(&self.db)
             .await
-            .map_err(|e| format!("Failed to list all pods: {}", e))?;
+            .map_err(|e| format!("Failed to list all pods: {e}"))?;
 
         // Separate PODs by type for the frontend structure
         let signed_pods = all_pods
@@ -145,7 +145,7 @@ impl AppState {
     async fn refresh_spaces(&mut self) -> Result<(), String> {
         let spaces = store::list_spaces(&self.db)
             .await
-            .map_err(|e| format!("Failed to list spaces: {}", e))?;
+            .map_err(|e| format!("Failed to list spaces: {e}"))?;
 
         self.state_data.spaces = spaces;
         Ok(())
@@ -216,7 +216,7 @@ pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
             log::info!("Successfully inserted ZuKYC pods to default space.");
         }
         Err(e) => {
-            log::error!("Failed to sign one or more pods for ZuKYC insertion: {}", e);
+            log::error!("Failed to sign one or more pods for ZuKYC insertion: {e}");
             return Err(e);
         }
     }
@@ -225,15 +225,14 @@ pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
 }
 
 async fn init_db(path: &str) -> Result<Db, anyhow::Error> {
-    log::info!("Initializing database at: {}", path);
+    log::info!("Initializing database at: {path}");
 
     // Ensure the parent directory exists
     let path_buf = std::path::Path::new(path);
     if let Some(parent) = path_buf.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             format!(
-                "Failed to create parent directory for database: {:?}",
-                parent
+                "Failed to create parent directory for database: {parent:?}"
             )
         })?;
     }
@@ -258,7 +257,7 @@ fn set_default_config(app: &mut App, store_name: &str) {
 async fn get_private_key(db: &Db) -> Result<SecretKey, String> {
     store::get_default_private_key(db)
         .await
-        .map_err(|e| format!("Failed to get private key: {}", e))
+        .map_err(|e| format!("Failed to get private key: {e}"))
 }
 
 #[tauri::command]
@@ -295,7 +294,7 @@ pub fn run() {
         .setup(|app| {
             tauri::async_runtime::block_on(async {
                 let db_name = if let Ok(instance_id) = std::env::var("INSTANCE_ID") {
-                    format!("app-data-{}.db", instance_id)
+                    format!("app-data-{instance_id}.db")
                 } else {
                     "app-data.db".to_string()
                 };
@@ -310,7 +309,7 @@ pub fn run() {
                     .expect("failed to regenerate public keys");
 
                 let store_name = if let Ok(instance_id) = std::env::var("INSTANCE_ID") {
-                    format!("app-store-{}.json", instance_id)
+                    format!("app-store-{instance_id}.json")
                 } else {
                     "app-store.json".to_string()
                 };

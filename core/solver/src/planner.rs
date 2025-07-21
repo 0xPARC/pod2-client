@@ -530,7 +530,7 @@ impl Planner {
             for rule in relevant_rules {
                 // Create and add the guarded rule if we haven't seen it for this adornment.
                 let guarded_rule = self.create_guarded_rule(rule, &adornment)?;
-                let rule_signature = format!("{:?}", guarded_rule);
+                let rule_signature = format!("{guarded_rule:?}");
                 if seen_guarded_rules.insert(rule_signature) {
                     guarded_rules.push(guarded_rule);
                 }
@@ -593,7 +593,7 @@ impl Planner {
                                         .map(|w| w.name.clone())
                                         .collect(),
                                 },
-                                predicate_id: format!("native::{:?}", native_pred),
+                                predicate_id: format!("native::{native_pred:?}"),
                                 context: TraceContext {
                                     iteration: 0,
                                     rule_index: 0,
@@ -644,9 +644,7 @@ impl Planner {
                                 .join(", ")
                         );
                         log::debug!(
-                            "Computed adornment for '{}': {:?}",
-                            body_pred_name,
-                            body_literal_adornment
+                            "Computed adornment for '{body_pred_name}': {body_literal_adornment:?}"
                         );
                         log::debug!(
                             "Literal terms: [{}]",

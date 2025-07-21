@@ -51,7 +51,7 @@ use crate::{
 pub fn format_value(value: &Value) -> String {
     match value.typed() {
         pod2::middleware::TypedValue::Int(i) => i.to_string(),
-        pod2::middleware::TypedValue::String(s) => format!("\"{}\"", s),
+        pod2::middleware::TypedValue::String(s) => format!("\"{s}\""),
         pod2::middleware::TypedValue::Bool(b) => b.to_string(),
         pod2::middleware::TypedValue::Array(a) => {
             let items: Vec<String> = a.array().iter().map(format_value).collect();
@@ -69,7 +69,7 @@ pub fn format_value(value: &Value) -> String {
             let items: Vec<String> = s.set().iter().map(format_value).collect();
             format!("#{{{}}}", items.join(", "))
         }
-        pod2::middleware::TypedValue::PublicKey(pk) => format!("PublicKey({})", pk),
+        pod2::middleware::TypedValue::PublicKey(pk) => format!("PublicKey({pk})"),
         pod2::middleware::TypedValue::PodId(id) => format!("PodId({})", format_hash(&id.0)),
         pod2::middleware::TypedValue::Raw(raw) => {
             format!("Raw({})", format_hash(&Hash::from(*raw)))
@@ -103,9 +103,9 @@ pub fn format_statement_arg(arg: &StatementTmplArg) -> String {
 /// Pretty-print a predicate identifier
 pub fn format_predicate_identifier(pred: &PredicateIdentifier) -> String {
     match pred {
-        PredicateIdentifier::Normal(Predicate::Native(native)) => format!("{:?}", native),
+        PredicateIdentifier::Normal(Predicate::Native(native)) => format!("{native:?}"),
         PredicateIdentifier::Normal(Predicate::Custom(cpr)) => format_custom_predicate_ref(cpr),
-        PredicateIdentifier::Normal(Predicate::BatchSelf(idx)) => format!("BatchSelf({})", idx),
+        PredicateIdentifier::Normal(Predicate::BatchSelf(idx)) => format!("BatchSelf({idx})"),
         PredicateIdentifier::Magic {
             name,
             bound_indices,
@@ -140,7 +140,7 @@ pub fn format_atom(atom: &Atom) -> String {
 pub fn format_rule(rule: &Rule) -> String {
     let head = format_atom(&rule.head);
     if rule.body.is_empty() {
-        format!("{}.", head)
+        format!("{head}.")
     } else {
         let body_atoms: Vec<String> = rule.body.iter().map(format_atom).collect();
         format!("{} :- {}.", head, body_atoms.join(", "))
@@ -150,9 +150,9 @@ pub fn format_rule(rule: &Rule) -> String {
 /// Pretty-print a StatementTmpl
 pub fn format_statement_template(stmt: &StatementTmpl) -> String {
     let pred_name = match &stmt.pred {
-        Predicate::Native(native) => format!("{:?}", native),
+        Predicate::Native(native) => format!("{native:?}"),
         Predicate::Custom(cpr) => format_custom_predicate_ref(cpr),
-        Predicate::BatchSelf(idx) => format!("BatchSelf({})", idx),
+        Predicate::BatchSelf(idx) => format!("BatchSelf({idx})"),
     };
     let args: Vec<String> = stmt.args.iter().map(format_statement_arg).collect();
     format!("{}({})", pred_name, args.join(", "))
@@ -187,7 +187,7 @@ pub fn format_fact_store(facts: &FactStore) -> String {
                 items.push(format!("{}: [{}]", pred_name, fact_strings.join(", ")));
             } else {
                 // Show count if there are many
-                items.push(format!("{}: {} facts", pred_name, fact_count));
+                items.push(format!("{pred_name}: {fact_count} facts"));
             }
         }
     }

@@ -100,8 +100,7 @@ impl<'a> ProofReconstructor<'a> {
                         .and_then(|rel| rel.iter().find(|f| f.args == instantiated_args).cloned())
                         .ok_or_else(|| {
                             SolverError::Internal(format!(
-                                "Could not locate fact for {:?} {:?}",
-                                resolved_pid, instantiated_args
+                                "Could not locate fact for {resolved_pid:?} {instantiated_args:?}"
                             ))
                         })?;
 
@@ -165,7 +164,7 @@ impl<'a> ProofReconstructor<'a> {
                             Justification::Custom(cpr.clone(), premises)
                         }
                     }
-                    _ => panic!("Unsupported predicate: {:?}", pid),
+                    _ => panic!("Unsupported predicate: {pid:?}"),
                 };
 
                 Arc::new(ProofNode {

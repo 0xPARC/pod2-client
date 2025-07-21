@@ -5,21 +5,18 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use pod_utils::ValueExt;
 use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-    frontend::{MainPod, SignedPodBuilder},
+    frontend::MainPod,
     middleware::{Hash, Value},
 };
 use podnet_models::{
-    UpvoteRequest, get_upvote_verification_predicate,
+    UpvoteRequest,
     mainpod::upvote::{
         UpvoteCountBaseParams, UpvoteCountInductiveParams, prove_upvote_count_base_with_solver,
         prove_upvote_count_inductive_with_solver, verify_upvote_verification_with_solver,
     },
 };
 
-use crate::pod::get_server_secret_key;
 
 pub async fn upvote_document(
     Path(document_id): Path<i64>,

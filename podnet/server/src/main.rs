@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let bind_addr = format!("{}:{}", host, port);
+    let bind_addr = format!("{host}:{port}");
     tracing::info!("Binding to {}...", bind_addr);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     tracing::info!("Server running on http://{}:{}", host, port);

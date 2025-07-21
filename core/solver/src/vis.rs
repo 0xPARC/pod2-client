@@ -82,13 +82,12 @@ pub fn graphviz_dot(proof: &Proof) -> String {
                 *op_counter += 1;
                 writeln!(
                     dot,
-                    "  {} [label=\"{:?}\", shape=ellipse, style=filled, fillcolor=lightgrey];",
-                    op_id, op
+                    "  {op_id} [label=\"{op:?}\", shape=ellipse, style=filled, fillcolor=lightgrey];"
                 )
                 .unwrap();
                 let edge = (op_id.clone(), stmt_id.clone());
                 if edges_declared.insert(edge.clone()) {
-                    writeln!(dot, "  {} -> {};", op_id, stmt_id).unwrap();
+                    writeln!(dot, "  {op_id} -> {stmt_id};").unwrap();
                 }
             }
             Justification::Custom(cpr, premises) => {
@@ -103,7 +102,7 @@ pub fn graphviz_dot(proof: &Proof) -> String {
                 .unwrap();
                 let edge = (op_id.clone(), stmt_id.clone());
                 if edges_declared.insert(edge.clone()) {
-                    writeln!(dot, "  {} -> {};", op_id, stmt_id).unwrap();
+                    writeln!(dot, "  {op_id} -> {stmt_id};").unwrap();
                 }
                 for child in premises {
                     walk_node(
@@ -120,7 +119,7 @@ pub fn graphviz_dot(proof: &Proof) -> String {
                         get_stmt_id(&format!("{}", child.statement), stmt_counter, stmt_ids);
                     let edge = (child_id.clone(), op_id.clone());
                     if edges_declared.insert(edge.clone()) {
-                        writeln!(dot, "  {} -> {};", child_id, op_id).unwrap();
+                        writeln!(dot, "  {child_id} -> {op_id};").unwrap();
                     }
                 }
             }
@@ -221,9 +220,9 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
             Justification::ValueComparison(op) => {
                 let op_id = format!("OP{}", *op_counter);
                 *op_counter += 1;
-                writeln!(md, "  {}(\"{:?}\");", op_id, op,).unwrap();
+                writeln!(md, "  {op_id}(\"{op:?}\");",).unwrap();
                 if edges_declared.insert((op_id.clone(), stmt_id.clone())) {
-                    writeln!(md, "  {} --> {};", op_id, stmt_id).unwrap();
+                    writeln!(md, "  {op_id} --> {stmt_id};").unwrap();
                 }
                 node.statement
                     .args()
@@ -236,7 +235,7 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
                                 "  {}_{}(\"{}\") --> {};",
                                 op_id,
                                 i,
-                                escape_md(&format!("{}", k)),
+                                escape_md(&format!("{k}")),
                                 op_id
                             )
                             .unwrap();
@@ -247,7 +246,7 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
                                 "  {}_{}(\"{}\") --> {};",
                                 op_id,
                                 i,
-                                escape_md(&format!("{}", l)),
+                                escape_md(&format!("{l}")),
                                 op_id
                             )
                             .unwrap();
@@ -258,9 +257,9 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
             Justification::Special(op) => {
                 let op_id = format!("OP{}", *op_counter);
                 *op_counter += 1;
-                writeln!(md, "  {}(\"{:?}\");", op_id, op,).unwrap();
+                writeln!(md, "  {op_id}(\"{op:?}\");",).unwrap();
                 if edges_declared.insert((op_id.clone(), stmt_id.clone())) {
-                    writeln!(md, "  {} --> {};", op_id, stmt_id).unwrap();
+                    writeln!(md, "  {op_id} --> {stmt_id};").unwrap();
                 }
             }
             Justification::Custom(cpr, premises) => {
@@ -268,7 +267,7 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
                 *op_counter += 1;
                 writeln!(md, "  {}(\"{}\");", op_id, escape_md(&cpr.predicate().name)).unwrap();
                 if edges_declared.insert((op_id.clone(), stmt_id.clone())) {
-                    writeln!(md, "  {} --> {};", op_id, stmt_id).unwrap();
+                    writeln!(md, "  {op_id} --> {stmt_id};").unwrap();
                 }
                 for child in premises {
                     if Predicate::Native(NativePredicate::None) == child.statement.predicate() {
@@ -287,7 +286,7 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
                     let child_id =
                         get_stmt_id(&format!("{}", child.statement), stmt_counter, stmt_ids);
                     if edges_declared.insert((child_id.clone(), op_id.clone())) {
-                        writeln!(md, "  {} --> {};", child_id, op_id).unwrap();
+                        writeln!(md, "  {child_id} --> {op_id};").unwrap();
                     }
                 }
             }

@@ -42,7 +42,7 @@ impl Db {
                 format!("file:{unique_name}?mode=memory&cache=shared")
             }
         };
-        info!("Initializing database with path: {}", db_path);
+        info!("Initializing database with path: {db_path}");
 
         let config = Config::new(db_path);
         let pool = config.create_pool(Runtime::Tokio1)?;

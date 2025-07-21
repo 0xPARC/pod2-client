@@ -5,7 +5,7 @@ use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
     frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::parse,
-    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Params, PodType, Value},
+    middleware::{Hash, KEY_SIGNER, KEY_TYPE, PodType, Value},
     op,
 };
 use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
@@ -13,7 +13,7 @@ use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podla
 use super::{
     MainPodError, MainPodResult, extract_user_public_key, extract_username, verify_mainpod_basics,
 };
-use crate::{get_upvote_verification_predicate, main_pod, signed_pod, verify_main_pod};
+use crate::{get_upvote_verification_predicate, main_pod};
 
 /// Parameters for upvote verification proof generation
 pub struct UpvoteProofParams<'a> {
@@ -113,7 +113,7 @@ pub fn prove_upvote_verification_original_fallback(
             params.identity_server_public_key.clone()
         ))
         .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final identity server check failed: {}", e))
+            MainPodError::ProofGeneration(format!("Final identity server check failed: {e}"))
         })?;
 
     let user_pk_check = final_builder
@@ -123,13 +123,13 @@ pub fn prove_upvote_verification_original_fallback(
             (params.upvote_pod, KEY_SIGNER)
         ))
         .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final user key check failed: {}", e))
+            MainPodError::ProofGeneration(format!("Final user key check failed: {e}"))
         })?;
 
     // Parse predicates for final verification
     let predicate_input = get_upvote_verification_predicate();
     let batch = parse(&predicate_input, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Predicate parsing failed: {}", e)))?
+        .map_err(|e| MainPodError::ProofGeneration(format!("Predicate parsing failed: {e}")))?
         .custom_batch;
 
     let upvote_verification_pred = batch
@@ -165,19 +165,18 @@ pub fn prove_upvote_verification_original_fallback(
         ))
         .map_err(|e| {
             MainPodError::ProofGeneration(format!(
-                "Simple upvote verification statement failed: {}",
-                e
+                "Simple upvote verification statement failed: {e}"
             ))
         })?;
 
     let main_pod = final_builder
         .prove(prover.as_ref(), &pod_params)
         .map_err(|e| {
-            MainPodError::ProofGeneration(format!("Final proof generation failed: {}", e))
+            MainPodError::ProofGeneration(format!("Final proof generation failed: {e}"))
         })?;
 
     main_pod.pod.verify().map_err(|e| {
-        MainPodError::ProofGeneration(format!("Final proof verification failed: {}", e))
+        MainPodError::ProofGeneration(format!("Final proof verification failed: {e}"))
     })?;
 
     Ok(main_pod)
@@ -459,7 +458,7 @@ pub fn prove_upvote_verification_with_solver(
     // Parse the complete query - only need upvote verification predicates
     let pod_params = PodNetProverSetup::get_params();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request_templates;
 
     // Provide both pods as facts
@@ -470,7 +469,7 @@ pub fn prove_upvote_verification_with_solver(
 
     // Let the solver find the proof
     let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
@@ -484,11 +483,11 @@ pub fn prove_upvote_verification_with_solver(
         if public {
             builder
                 .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         } else {
             builder
                 .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         }
     }
 
@@ -503,7 +502,7 @@ pub fn prove_upvote_verification_with_solver(
 
     let main_pod = builder
         .prove(&*prover, &pod_params)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -538,7 +537,7 @@ pub fn verify_upvote_verification_with_solver(
     // Parse the complete query - only need upvote verification predicates
     let pod_params = PodNetProverSetup::get_params();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request_templates;
 
     // Provide the MainPod as a fact
@@ -546,7 +545,7 @@ pub fn verify_upvote_verification_with_solver(
 
     // Let the solver verify the proof
     let (_proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     Ok(())
 }
@@ -581,7 +580,7 @@ pub fn prove_upvote_count_base_with_solver(
     let mut signer = Signer(dummy_sk);
     let data_pod = data_builder
         .sign(&mut signer)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Failed to sign data pod: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Failed to sign data pod: {e:?}")))?;
 
     // First parse the upvote verification predicate batch
     let upvote_verification_batch = parse(
@@ -590,7 +589,7 @@ pub fn prove_upvote_count_base_with_solver(
         &[],
     )
     .map_err(|e| {
-        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {:?}", e))
+        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {e:?}"))
     })?
     .custom_batch;
 
@@ -609,7 +608,7 @@ pub fn prove_upvote_count_base_with_solver(
         "#
     ));
 
-    log::info!("Upvote count query: {}", upvote_count_query);
+    log::info!("Upvote count query: {upvote_count_query}");
 
     // Parse the complete query with the verification batch as a dependency
     let request = parse(
@@ -617,7 +616,7 @@ pub fn prove_upvote_count_base_with_solver(
         &pod_params,
         &[upvote_verification_batch],
     )
-    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
     .request_templates;
 
     // Provide the data pod as a fact
@@ -625,7 +624,7 @@ pub fn prove_upvote_count_base_with_solver(
 
     // Let the solver find the proof
     let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
@@ -638,11 +637,11 @@ pub fn prove_upvote_count_base_with_solver(
         if public {
             builder
                 .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         } else {
             builder
                 .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         }
     }
 
@@ -655,7 +654,7 @@ pub fn prove_upvote_count_base_with_solver(
 
     let main_pod = builder
         .prove(&*prover, &pod_params)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -684,7 +683,7 @@ pub fn prove_upvote_count_inductive_with_solver(
         &[],
     )
     .map_err(|e| {
-        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {:?}", e))
+        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {e:?}"))
     })?
     .custom_batch;
 
@@ -710,7 +709,7 @@ pub fn prove_upvote_count_inductive_with_solver(
         &pod_params,
         &[upvote_verification_batch],
     )
-    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
     .request_templates;
 
     // Provide both the previous count pod and upvote verification pod as facts
@@ -721,7 +720,7 @@ pub fn prove_upvote_count_inductive_with_solver(
 
     // Let the solver find the proof
     let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
@@ -734,11 +733,11 @@ pub fn prove_upvote_count_inductive_with_solver(
         if public {
             builder
                 .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         } else {
             builder
                 .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {:?}", e)))?;
+                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
         }
     }
 
@@ -753,7 +752,7 @@ pub fn prove_upvote_count_inductive_with_solver(
 
     let main_pod = builder
         .prove(&*prover, &pod_params)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -774,7 +773,7 @@ pub fn verify_upvote_count_with_solver(
         &[],
     )
     .map_err(|e| {
-        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {:?}", e))
+        MainPodError::ProofGeneration(format!("Parse error for upvote verification: {e:?}"))
     })?
     .custom_batch;
 
@@ -799,7 +798,7 @@ pub fn verify_upvote_count_with_solver(
         &pod_params,
         &[upvote_verification_batch],
     )
-    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {:?}", e)))?
+    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
     .request_templates;
 
     // Provide the MainPod as a fact
@@ -807,7 +806,7 @@ pub fn verify_upvote_count_with_solver(
 
     // Let the solver verify the proof
     let (_proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {:?}", e)))?;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     Ok(())
 }

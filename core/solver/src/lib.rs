@@ -141,7 +141,7 @@ pub fn value_to_podlang_literal(value: Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        TypedValue::PublicKey(p) => format!("PublicKey({})", p),
+        TypedValue::PublicKey(p) => format!("PublicKey({p})"),
         TypedValue::PodId(p) => format!("0x{}", p.0.encode_hex::<String>()),
         TypedValue::Raw(r) => format!("Raw(0x{})", r.encode_hex::<String>()),
     }
