@@ -155,7 +155,7 @@ export async function fetchDocumentReplies(
  * @returns Array of document metadata for replies to any version of the post
  */
 export async function fetchPostReplies(
-  postId: number,
+  postId: number
 ): Promise<DocumentMetadata[]> {
   try {
     // Since there's no direct post replies endpoint, we'll fetch all documents
