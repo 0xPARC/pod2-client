@@ -1,23 +1,19 @@
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import "highlight.js/styles/github-dark.css";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
   CheckCircleIcon,
-  ClockIcon,
   DownloadIcon,
   ExternalLinkIcon,
-  FileTextIcon,
-  TagIcon,
-  UserIcon,
-  VoteIcon
+  FileTextIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import {
   DEFAULT_SERVER_URL,
@@ -30,7 +26,6 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Separator } from "../ui/separator";
 
 interface DocumentDetailViewProps {
   documentId: number;
