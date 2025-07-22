@@ -9,3 +9,8 @@ Cargo.lock
 node_modules
 .turbo
 dist
+
+# PodNet specific
+*.secret
+content
+identity-server-keypair.json

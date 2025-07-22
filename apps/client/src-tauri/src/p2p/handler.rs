@@ -66,7 +66,7 @@ impl MessageHandler {
             } => {
                 self.handle_send_main_pod(
                     received_message.from,
-                    pod.clone(),
+                    *pod.clone(),
                     message_text.clone(),
                     sender_alias.clone(),
                 )
@@ -79,7 +79,7 @@ impl MessageHandler {
             } => {
                 self.handle_send_signed_pod(
                     received_message.from,
-                    pod.clone(),
+                    *pod.clone(),
                     message_text.clone(),
                     sender_alias.clone(),
                 )
@@ -104,7 +104,7 @@ impl MessageHandler {
     ) -> Result<()> {
         // Convert to PodData for import
         let main_pod = pod2::frontend::MainPod::try_from(pod)?;
-        let pod_data = pod2_db::store::PodData::Main(main_pod.into());
+        let pod_data = pod2_db::store::PodData::Main(Box::new(main_pod.into()));
 
         // Extract message text from POD if not provided
         let final_message_text = message_text.or({
@@ -158,7 +158,7 @@ impl MessageHandler {
     ) -> Result<()> {
         // Convert to PodData for import
         let signed_pod = pod2::frontend::SignedPod::try_from(pod)?;
-        let pod_data = pod2_db::store::PodData::Signed(signed_pod.clone().into());
+        let pod_data = pod2_db::store::PodData::Signed(Box::new(signed_pod.clone().into()));
 
         // Use the provided message text
         // TODO: Implement POD value extraction when needed

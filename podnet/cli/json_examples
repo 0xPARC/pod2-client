@@ -1,0 +1,77 @@
+Publish cli->server:
+{"content":"Hello! Edit2","public_key":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo","signed_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"},"max_depth":32},"signature":"pfpeRLKwKrDeX75e0JaOvdIlpFKEAkOGt3Eq5yA3icr+MGN7aryFRxPUlB+K5eUcmr7L7lKvUN3zMgxRUDBkvwpEkVfiQv6/NvLqu+TaPuw=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587","podType":[4,"Signed"]}}
+
+Publish server->cli:
+Server response: {
+  "content": "Hello! Edit2",
+  "content_id": "ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21",
+  "created_at": "2025-06-27 17:37:46",
+  "id": 7,
+  "pod": {
+    "data": {
+      "kvs": {
+        "kvs": {
+          "_signer": {
+            "PublicKey": "CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"
+          },
+          "_type": {
+            "Int": "4"
+          },
+          "content_hash": "ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"
+        },
+        "max_depth": 32
+      },
+      "signature": "pfpeRLKwKrDeX75e0JaOvdIlpFKEAkOGt3Eq5yA3icr+MGN7aryFRxPUlB+K5eUcmr7L7lKvUN3zMgxRUDBkvwpEkVfiQv6/NvLqu+TaPuw=",
+      "signer": "7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="
+    },
+    "id": "d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587",
+    "podType": [
+      4,
+      "Signed"
+    ]
+  },
+  "post_id": 3,
+  "revision": 4,
+  "timestamp_pod": {
+    "data": {
+      "kvs": {
+        "kvs": {
+          "_signer": {
+            "PublicKey": "8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"
+          },
+          "_type": {
+            "Int": "4"
+          },
+          "document-pod": {
+            "PodId": "d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587"
+          },
+          "timestamp": "2025-06-27T17:37:46.442073863+00:00"
+        },
+        "max_depth": 32
+      },
+      "signature": "Birz3+gp/IS42h1uRR0nkNihY+e4NszZx+8lP4PeHknJzQ2u2jUbD+XJWRc7SX/oAiJYSYv2pHQPww6nQnMJmy87Z7Wm5LWo1HadZyaQvvI=",
+      "signer": "kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="
+    },
+    "id": "5b4ef0389418ecdbe65d70de13bfc5570076e4af7db0f2ef808a1b7bf3820556",
+    "podType": [
+      4,
+      "Signed"
+    ]
+  },
+  "user_id": "evan"
+}
+
+
+View post:
+get post server->cli: {"created_at":"2025-06-27 16:29:33","documents":[{"content":"Hello! Edit2","content_id":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21","created_at":"2025-06-27 17:37:46","id":7,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"},"max_depth":32},"signature":"pfpeRLKwKrDeX75e0JaOvdIlpFKEAkOGt3Eq5yA3icr+MGN7aryFRxPUlB+K5eUcmr7L7lKvUN3zMgxRUDBkvwpEkVfiQv6/NvLqu+TaPuw=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587","podType":[4,"Signed"]},"post_id":3,"revision":4,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587"},"timestamp":"2025-06-27T17:37:46.442073863+00:00"},"max_depth":32},"signature":"Birz3+gp/IS42h1uRR0nkNihY+e4NszZx+8lP4PeHknJzQ2u2jUbD+XJWRc7SX/oAiJYSYv2pHQPww6nQnMJmy87Z7Wm5LWo1HadZyaQvvI=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"5b4ef0389418ecdbe65d70de13bfc5570076e4af7db0f2ef808a1b7bf3820556","podType":[4,"Signed"]},"user_id":"evan"},{"content":"Hello! Edit2","content_id":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21","created_at":"2025-06-27 17:36:48","id":6,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"},"max_depth":32},"signature":"vPDGQunpE/dr6pASNRfkyRs6joRsdIgrHihnO9MrAt02LTfJxFhQcrgv+9kuL/FGCVeeKgV7VlNY/OKuaoy7jg04rQwtsUeiYZKMvbzRTHk=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587","podType":[4,"Signed"]},"post_id":3,"revision":3,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587"},"timestamp":"2025-06-27T17:36:48.915505213+00:00"},"max_depth":32},"signature":"ur0GOKgU4qJrJ82umtp2ONqPLdgm9kPIU9nrH7kpkpSZhS1TkAkzImscebR/TVUWXeMJYFq65uq30fksiZzW+tGFOvqzDvC0rYOBsDKAVFU=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"b438030593d3d70062bfa733d6a35d8e95a4cde8ac9f6dad8885a479503f4fa3","podType":[4,"Signed"]},"user_id":"evan"},{"content":"Hello! Edit","content_id":"8d727bb0ca197c97de571a68d3f5064435b79b38bb8bd8e3ccf4c8ee735a8ff9","created_at":"2025-06-27 16:30:49","id":5,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"8d727bb0ca197c97de571a68d3f5064435b79b38bb8bd8e3ccf4c8ee735a8ff9"},"max_depth":32},"signature":"dHIhZKN/q+fJH3muv4Q2nFezZC/r5E0OTPDBCtNZVWAGEjNSct+9JF2g0wHoUFPnjksaqTtLLNBGnwEqsPK4RIuGwfoiomWfz36ZAsGhV9s=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"dcb12127941184126b91cf2b822d9c028f4e6350dec6138b653c0ebce6cfd45e","podType":[4,"Signed"]},"post_id":3,"revision":2,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"dcb12127941184126b91cf2b822d9c028f4e6350dec6138b653c0ebce6cfd45e"},"timestamp":"2025-06-27T16:30:49.277343038+00:00"},"max_depth":32},"signature":"twKz7BPzINJt1j3OK1qHwFu3Il4AAU3VAhI6WbuUnqrUGBlczoXJaSNZCZUv2ai9YI5zTf/4sns6GdNOVbtkUQ6mRfwU8fctXwMlilApQMA=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"a69b79b810518df1be8ba748dff198a471a02cfb12e5eb99b76e3a4cc0ee60eb","podType":[4,"Signed"]},"user_id":"evan"},{"content":"Hello!","content_id":"2399748ac3b024d5b3e10515d9dc6d63d3a5396cbb31d379b481892c2b6f0b70","created_at":"2025-06-27 16:29:33","id":4,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"2399748ac3b024d5b3e10515d9dc6d63d3a5396cbb31d379b481892c2b6f0b70"},"max_depth":32},"signature":"5i+rkWHQ7BApfl9Hqbj/xBiJiF12y7mFat5JqRWiWwgIwRhNAHPOVwaHyKe4/WeyuXf/9pGBYPIWNYHusx9bQ8ZMWE9rySFYf5t7+0ymaak=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"2e5fb25bbdd6082bfa32a893520f32c48ee1f9dabe57535be522d09a54337b62","podType":[4,"Signed"]},"post_id":3,"revision":1,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"2e5fb25bbdd6082bfa32a893520f32c48ee1f9dabe57535be522d09a54337b62"},"timestamp":"2025-06-27T16:29:33.877073409+00:00"},"max_depth":32},"signature":"L3B812HM81WUNG0NaClS+a4afolMRJzWmhOFO4MJ9xWJOD65+kszOsmJOBmQSeV1t6JkONegQtkTQuggJD8/M3yLLjYAJzi8vUuvdECXEyI=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"bc1d1d6bfd7fab1b7c04fc1f2fad059d78d9996a33a07952eb451ed4b4a78f33","podType":[4,"Signed"]},"user_id":"evan"}],"id":3,"last_edited_at":"2025-06-27 17:37:46"}
+
+get documents server->cli:
+Fetching revision 4...
+get post response: {"content":"<p>Hello! Edit2</p>\n","content_id":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21","created_at":"2025-06-27 17:37:46","id":7,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"},"max_depth":32},"signature":"pfpeRLKwKrDeX75e0JaOvdIlpFKEAkOGt3Eq5yA3icr+MGN7aryFRxPUlB+K5eUcmr7L7lKvUN3zMgxRUDBkvwpEkVfiQv6/NvLqu+TaPuw=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587","podType":[4,"Signed"]},"post_id":3,"revision":4,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587"},"timestamp":"2025-06-27T17:37:46.442073863+00:00"},"max_depth":32},"signature":"Birz3+gp/IS42h1uRR0nkNihY+e4NszZx+8lP4PeHknJzQ2u2jUbD+XJWRc7SX/oAiJYSYv2pHQPww6nQnMJmy87Z7Wm5LWo1HadZyaQvvI=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"5b4ef0389418ecdbe65d70de13bfc5570076e4af7db0f2ef808a1b7bf3820556","podType":[4,"Signed"]},"user_id":"evan"}
+Fetching revision 3...
+get post response: {"content":"<p>Hello! Edit2</p>\n","content_id":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21","created_at":"2025-06-27 17:36:48","id":6,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"ebeb3f85a1d55a6247418e67cf6849a3eae9ab5d5da913424757fda805c3ea21"},"max_depth":32},"signature":"vPDGQunpE/dr6pASNRfkyRs6joRsdIgrHihnO9MrAt02LTfJxFhQcrgv+9kuL/FGCVeeKgV7VlNY/OKuaoy7jg04rQwtsUeiYZKMvbzRTHk=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587","podType":[4,"Signed"]},"post_id":3,"revision":3,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"d990b8ef0b2df88f522e7f7ec748f145f30bdf2d3c23ad7e72a7f2466a189587"},"timestamp":"2025-06-27T17:36:48.915505213+00:00"},"max_depth":32},"signature":"ur0GOKgU4qJrJ82umtp2ONqPLdgm9kPIU9nrH7kpkpSZhS1TkAkzImscebR/TVUWXeMJYFq65uq30fksiZzW+tGFOvqzDvC0rYOBsDKAVFU=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"b438030593d3d70062bfa733d6a35d8e95a4cde8ac9f6dad8885a479503f4fa3","podType":[4,"Signed"]},"user_id":"evan"}
+Fetching revision 2...
+get post response: {"content":"<p>Hello! Edit</p>\n","content_id":"8d727bb0ca197c97de571a68d3f5064435b79b38bb8bd8e3ccf4c8ee735a8ff9","created_at":"2025-06-27 16:30:49","id":5,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"8d727bb0ca197c97de571a68d3f5064435b79b38bb8bd8e3ccf4c8ee735a8ff9"},"max_depth":32},"signature":"dHIhZKN/q+fJH3muv4Q2nFezZC/r5E0OTPDBCtNZVWAGEjNSct+9JF2g0wHoUFPnjksaqTtLLNBGnwEqsPK4RIuGwfoiomWfz36ZAsGhV9s=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"dcb12127941184126b91cf2b822d9c028f4e6350dec6138b653c0ebce6cfd45e","podType":[4,"Signed"]},"post_id":3,"revision":2,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"dcb12127941184126b91cf2b822d9c028f4e6350dec6138b653c0ebce6cfd45e"},"timestamp":"2025-06-27T16:30:49.277343038+00:00"},"max_depth":32},"signature":"twKz7BPzINJt1j3OK1qHwFu3Il4AAU3VAhI6WbuUnqrUGBlczoXJaSNZCZUv2ai9YI5zTf/4sns6GdNOVbtkUQ6mRfwU8fctXwMlilApQMA=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"a69b79b810518df1be8ba748dff198a471a02cfb12e5eb99b76e3a4cc0ee60eb","podType":[4,"Signed"]},"user_id":"evan"}
+Fetching revision 1...
+get post response: {"content":"<p>Hello!</p>\n","content_id":"2399748ac3b024d5b3e10515d9dc6d63d3a5396cbb31d379b481892c2b6f0b70","created_at":"2025-06-27 16:29:33","id":4,"pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"CmBsbGi3RYyXAKwpebQ2uL5oHsuizKGqaspebExgQ9BTUP865EkiTeo"},"_type":{"Int":"4"},"content_hash":"2399748ac3b024d5b3e10515d9dc6d63d3a5396cbb31d379b481892c2b6f0b70"},"max_depth":32},"signature":"5i+rkWHQ7BApfl9Hqbj/xBiJiF12y7mFat5JqRWiWwgIwRhNAHPOVwaHyKe4/WeyuXf/9pGBYPIWNYHusx9bQ8ZMWE9rySFYf5t7+0ymaak=","signer":"7Ldz+egcGmT4ZvE/5ap5Iyzg0Hd5k6joCSwPCGBlWlRgFownynVF8A=="},"id":"2e5fb25bbdd6082bfa32a893520f32c48ee1f9dabe57535be522d09a54337b62","podType":[4,"Signed"]},"post_id":3,"revision":1,"timestamp_pod":{"data":{"kvs":{"kvs":{"_signer":{"PublicKey":"8FqagsQhD7Q1UycySELaVHVKnZTV2DJK2UA75gt87JzySpeVnwtBHo6"},"_type":{"Int":"4"},"document-pod":{"PodId":"2e5fb25bbdd6082bfa32a893520f32c48ee1f9dabe57535be522d09a54337b62"},"timestamp":"2025-06-27T16:29:33.877073409+00:00"},"max_depth":32},"signature":"L3B812HM81WUNG0NaClS+a4afolMRJzWmhOFO4MJ9xWJOD65+kszOsmJOBmQSeV1t6JkONegQtkTQuggJD8/M3yLLjYAJzi8vUuvdECXEyI=","signer":"kgd2Jr6d0JYD9SP475jRmmpIvBa7oPzOsfYjfgoDqxq/XBUR46NqcQ=="},"id":"bc1d1d6bfd7fab1b7c04fc1f2fad059d78d9996a33a07952eb451ed4b4a78f33","podType":[4,"Signed"]},"user_id":"evan"}
+

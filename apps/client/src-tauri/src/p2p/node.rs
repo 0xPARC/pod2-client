@@ -119,7 +119,7 @@ impl P2PNode {
         sender_alias: Option<String>,
     ) -> Result<()> {
         let message = super::message::PodMessage::SendMainPod {
-            pod,
+            pod: Box::new(pod),
             message_text,
             sender_alias,
         };
@@ -136,7 +136,7 @@ impl P2PNode {
         sender_alias: Option<String>,
     ) -> Result<()> {
         let message = super::message::PodMessage::SendSignedPod {
-            pod,
+            pod: Box::new(pod),
             message_text,
             sender_alias,
         };

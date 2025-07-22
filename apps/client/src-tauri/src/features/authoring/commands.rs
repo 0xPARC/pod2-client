@@ -76,15 +76,15 @@ fn lang_error_to_diagnostics(lang_error: &LangError) -> Vec<Diagnostic> {
         }
         LangError::Processor(processor_error_box) => {
             let processor_error = &**processor_error_box;
-            (format!("{}", processor_error), 1, 1, 1, 1)
+            (format!("{processor_error}"), 1, 1, 1, 1)
         }
         LangError::Middleware(middleware_error_box) => {
             let middleware_error = &**middleware_error_box;
-            (format!("{}", middleware_error), 1, 1, 1, 1)
+            (format!("{middleware_error}"), 1, 1, 1, 1)
         }
         LangError::Frontend(frontend_error_box) => {
             let frontend_error = &**frontend_error_box;
-            (format!("{}", frontend_error), 1, 1, 1, 1)
+            (format!("{frontend_error}"), 1, 1, 1, 1)
         }
     };
 
@@ -110,7 +110,7 @@ pub async fn get_private_key_info(
 
     store::get_default_private_key_info(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to get private key info: {}", e))
+        .map_err(|e| format!("Failed to get private key info: {e}"))
 }
 
 /// Sign a POD with the given key-value pairs
@@ -122,7 +122,7 @@ pub async fn sign_pod(
     let app_state = state.lock().await;
 
     let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_pod_values)
-        .map_err(|e| format!("Failed to parse serialized pod values: {}", e))?;
+        .map_err(|e| format!("Failed to parse serialized pod values: {e}"))?;
 
     let params = Params::default();
     let mut builder = SignedPodBuilder::new(&params);
@@ -133,13 +133,13 @@ pub async fn sign_pod(
     // Get default private key (auto-created if needed)
     let private_key = store::get_default_private_key(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to get private key: {}", e))?;
+        .map_err(|e| format!("Failed to get private key: {e}"))?;
 
-    let mut signer = Signer(private_key);
+    let signer = Signer(private_key);
 
     let signed_pod = builder
-        .sign(&mut signer)
-        .map_err(|e| format!("Failed to sign pod: {}", e))?;
+        .sign(&signer)
+        .map_err(|e| format!("Failed to sign pod: {e}"))?;
 
     Ok(serde_json::to_string(&signed_pod).unwrap())
 }
@@ -166,7 +166,7 @@ pub async fn validate_code_command(code: String) -> Result<ValidateCodeResponse,
             diagnostics: vec![],
         }),
         Err(lang_error) => {
-            log::debug!("Validation error: {:?}", lang_error);
+            log::debug!("Validation error: {lang_error:?}");
             let diagnostics = lang_error_to_diagnostics(&lang_error);
             Ok(ValidateCodeResponse { diagnostics })
         }
@@ -197,8 +197,8 @@ pub async fn execute_code_command(
     let processed_output = match lang::parse(&code, &params, &[]) {
         Ok(output) => output,
         Err(e) => {
-            log::error!("Failed to parse Podlang code: {:?}", e);
-            return Err(format!("Parse error: {}", e));
+            log::error!("Failed to parse Podlang code: {e:?}");
+            return Err(format!("Parse error: {e}"));
         }
     };
 
@@ -209,7 +209,7 @@ pub async fn execute_code_command(
     // Get all PODs from all spaces
     let all_pod_infos = store::list_all_pods(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to list PODs: {}", e))?;
+        .map_err(|e| format!("Failed to list PODs: {e}"))?;
 
     if all_pod_infos.is_empty() {
         log::warn!("No PODs found for execution. Proceeding with empty facts.");
@@ -230,9 +230,9 @@ pub async fn execute_code_command(
 
         match pod_info.data {
             PodData::Signed(helper) => {
-                owned_signed_pods.push(SignedPod::try_from(helper).unwrap());
+                owned_signed_pods.push(SignedPod::try_from(*helper).unwrap());
             }
-            PodData::Main(helper) => match MainPod::try_from(helper) {
+            PodData::Main(helper) => match MainPod::try_from(*helper) {
                 Ok(main_pod) => {
                     owned_main_pods.push(main_pod);
                 }
@@ -277,8 +277,8 @@ pub async fn execute_code_command(
         match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
             Ok(solution) => solution,
             Err(e) => {
-                log::error!("Solver error: {:?}", e);
-                return Err(format!("Solver error: {}", e));
+                log::error!("Solver error: {e:?}");
+                return Err(format!("Solver error: {e}"));
             }
         };
 

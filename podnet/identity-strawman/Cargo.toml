@@ -1,0 +1,26 @@
+[package]
+name = "podnet-ident-strawman"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies (shared)
+pod2.workspace = true
+pod-utils.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+hex.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+num-bigint.workspace = true
+
+# Strawman-specific dependencies
+axum = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tower-http = { version = "0.5", features = ["cors"] }
+rand = "0.9.1"
+rusqlite = { workspace = true, features = ["bundled"] }

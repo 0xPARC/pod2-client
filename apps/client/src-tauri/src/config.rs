@@ -48,7 +48,7 @@ impl FeatureConfig {
                     frogcrypto: Self::get_env_bool("FEATURE_FROGCRYPTO", true),
                 };
 
-                log::info!("Feature configuration loaded: {:?}", config);
+                log::info!("Feature configuration loaded: {config:?}");
                 config
             })
             .clone()
@@ -62,10 +62,7 @@ impl FeatureConfig {
                 "false" | "0" | "no" | "off" => false,
                 _ => {
                     log::warn!(
-                        "Invalid boolean value '{}' for {}, using default: {}",
-                        value,
-                        key,
-                        default
+                        "Invalid boolean value '{value}' for {key}, using default: {default}"
                     );
                     default
                 }

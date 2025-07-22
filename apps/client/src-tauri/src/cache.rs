@@ -14,7 +14,7 @@ pub fn warm_mainpod_cache() {
             log::info!("Successfully warmed MainPod CommonCircuitData cache");
         }
         Err(e) => {
-            log::warn!("Failed to warm MainPod cache: {}", e);
+            log::warn!("Failed to warm MainPod cache: {e}");
         }
     }
 }

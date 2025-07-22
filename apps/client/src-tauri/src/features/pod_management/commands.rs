@@ -41,7 +41,7 @@ pub async fn list_spaces(
 
     let spaces = store::list_spaces(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to list spaces: {}", e))?;
+        .map_err(|e| format!("Failed to list spaces: {e}"))?;
 
     Ok(spaces
         .into_iter()
@@ -69,12 +69,12 @@ pub async fn import_pod(
         "MockSigned" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
         "Main" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
         "MockMain" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
-        _ => return Err(format!("Not a valid POD type: {}", pod_type)),
+        _ => return Err(format!("Not a valid POD type: {pod_type}")),
     };
 
     let _ = store::import_pod(&app_state.db, &pod_data, label.as_deref(), DEFAULT_SPACE_ID)
         .await
-        .map_err(|e| format!("Failed to import POD: {}", e));
+        .map_err(|e| format!("Failed to import POD: {e}"));
 
     app_state.trigger_state_sync().await?;
     Ok(())
@@ -92,7 +92,7 @@ pub async fn delete_pod(
 
     let rows_deleted = store::delete_pod(&app_state.db, &space_id, &pod_id)
         .await
-        .map_err(|e| format!("Failed to delete POD: {}", e))?;
+        .map_err(|e| format!("Failed to delete POD: {e}"))?;
 
     if rows_deleted == 0 {
         return Err("POD not found or already deleted".to_string());
@@ -114,7 +114,7 @@ pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), 
 
     insert_zukyc_pods(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
+        .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
 
     // Trigger state sync to update frontend
     app_state.trigger_state_sync().await?;
