@@ -13,8 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Input } from "../ui/input";
+import { Card, CardContent } from "../ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "../ui/dropdown-menu";
+import { Input } from "../ui/input";
 import { DocumentDetailView } from "./DocumentDetailView";
 import { PublishPage } from "./PublishPage";
 
