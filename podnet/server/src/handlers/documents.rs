@@ -122,13 +122,19 @@ pub async fn publish_document(
     })?;
     data_map.insert(Key::from("authors"), Value::from(authors_set));
 
-    data_map.insert(
-        Key::from("reply_to"),
-        match payload.reply_to {
-            Some(id) => Value::from(id),
-            None => Value::from(-1i64), // Use -1 for None to match original logic
-        },
-    );
+    // Add reply_to (convert ReplyReference to dictionary or use -1 if None)
+    if let Some(ref reply_ref) = payload.reply_to {
+        let mut reply_map = HashMap::new();
+        reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+        reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+        let reply_dict = Dictionary::new(2, reply_map).map_err(|e| {
+            log::error!("Failed to create reply_to dictionary: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        data_map.insert(Key::from("reply_to"), Value::from(reply_dict));
+    } else {
+        data_map.insert(Key::from("reply_to"), Value::from(-1i64));
+    }
 
     // Add post_id to data dictionary
     data_map.insert(
@@ -249,21 +255,44 @@ pub async fn publish_document(
     };
 
     // Validate reply_to if provided
-    if let Some(reply_to_id) = payload.reply_to {
-        log::info!("Validating reply_to document ID: {reply_to_id}");
+    if let Some(ref reply_ref) = payload.reply_to {
+        log::info!(
+            "Validating reply_to document ID: {} in post: {}",
+            reply_ref.document_id,
+            reply_ref.post_id
+        );
+
         // Verify the document being replied to exists
-        state
+        let target_doc = state
             .db
-            .get_document_metadata(reply_to_id)
+            .get_document_metadata(reply_ref.document_id)
             .map_err(|e| {
-                log::error!("Database error checking reply_to document {reply_to_id}: {e}");
+                log::error!(
+                    "Database error checking reply_to document {}: {e}",
+                    reply_ref.document_id
+                );
                 StatusCode::INTERNAL_SERVER_ERROR
             })?
             .ok_or_else(|| {
-                log::error!("Reply_to document {reply_to_id} not found");
+                log::error!("Reply_to document {} not found", reply_ref.document_id);
                 StatusCode::NOT_FOUND
             })?;
-        log::info!("Reply_to document {reply_to_id} exists");
+
+        // Verify the post_id matches
+        if target_doc.post_id != reply_ref.post_id {
+            log::error!(
+                "Reply_to post_id {} doesn't match document's actual post_id {}",
+                reply_ref.post_id,
+                target_doc.post_id
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        log::info!(
+            "Reply_to reference validated: document {} in post {}",
+            reply_ref.document_id,
+            reply_ref.post_id
+        );
     }
 
     // Create document with timestamp pod in a single transaction
@@ -277,7 +306,7 @@ pub async fn publish_document(
             uploader_username,
             &payload.tags,
             &payload.authors,
-            payload.reply_to,
+            payload.reply_to.clone(),
             Some(post_id), // Store original requested post_id for verification
             &payload.title,
             &state.storage,

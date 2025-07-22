@@ -147,6 +147,7 @@ export function DocumentsView() {
       <DocumentDetailView
         documentId={selectedDocumentId}
         onBack={() => setSelectedDocumentId(null)}
+        onNavigateToDocument={(documentId) => setSelectedDocumentId(documentId)}
       />
     );
   }
@@ -364,7 +365,10 @@ export function DocumentsView() {
                         {doc.reply_to && (
                           <>
                             <span>•</span>
-                            <span>reply to #{doc.reply_to}</span>
+                            <span>
+                              reply to #{doc.reply_to.document_id} (Post{" "}
+                              {doc.reply_to.post_id})
+                            </span>
                           </>
                         )}
                       </div>

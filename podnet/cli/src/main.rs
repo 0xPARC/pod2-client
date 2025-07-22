@@ -301,10 +301,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .long("authors")
                         .value_name("AUTHOR1,AUTHOR2,AUTHOR3"),
                     Arg::new("reply_to")
-                        .help("Optional document ID to reply to")
+                        .help("Optional reply reference in format 'post_id:document_id'")
                         .short('r')
                         .long("reply-to")
-                        .value_name("DOCUMENT_ID"),
+                        .value_name("POST_ID:DOCUMENT_ID"),
                     Arg::new("message")
                         .help("Text message content")
                         .short('m')
