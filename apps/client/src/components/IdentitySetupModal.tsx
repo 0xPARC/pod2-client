@@ -1,5 +1,5 @@
 import { CheckCircle, Loader2, Server, Shield, User } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfigSection } from "../lib/config/hooks";
 import { useAppStore } from "../lib/store";
@@ -49,6 +49,8 @@ export function IdentitySetupModal({
     server_id: string;
     public_key: any;
   } | null>(null);
+
+  console.log(networkConfig);
 
   // Update serverUrl when networkConfig loads
   useEffect(() => {

@@ -20,6 +20,7 @@ import { SidebarProvider } from "./components/ui/sidebar";
 import { Textarea } from "./components/ui/textarea";
 import { Toaster } from "./components/ui/sonner";
 import { useAppStore } from "./lib/store";
+import { useConfigInitialization } from "./lib/config/hooks";
 import { FeatureConfigProvider } from "./lib/features/config";
 import { ThemeProvider } from "./components/theme-provider";
 
@@ -98,6 +99,9 @@ function App() {
   const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(
     null
   );
+
+  // Initialize config store
+  useConfigInitialization();
 
   useEffect(() => {
     onOpenUrl((urls) => {

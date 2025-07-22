@@ -46,7 +46,6 @@
       "args": [
         {
           "name": "config",
-          "long": "config",
           "description": "Path to configuration file",
           "takesValue": true
         }

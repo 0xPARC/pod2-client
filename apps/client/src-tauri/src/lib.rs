@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use config::{AppConfig, FeatureConfig};
@@ -16,13 +16,14 @@ use pod2_db::{
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tokio::sync::Mutex;
 
 mod cache;
 mod config;
 mod features;
 pub(crate) mod frog;
-mod p2p;
+mod p2p_node;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
@@ -120,7 +121,7 @@ pub struct AppState {
     db: Db,
     state_data: AppStateData,
     app_handle: AppHandle,
-    p2p_node: Option<p2p::P2PNode>,
+    p2p_node: Option<p2p_node::P2PNode>,
 }
 
 impl AppState {
@@ -291,7 +292,6 @@ fn get_build_info() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -333,7 +333,8 @@ pub fn run() {
                                 })
                         }
                         Err(e) => {
-                            log::warn!("Failed to parse CLI arguments: {e}");
+                            // The logger is not yet initialized, so we use eprintln.
+                            eprintln!("Failed to parse CLI arguments: {e}");
                             // Fallback to environment variable
                             std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from)
                         }
@@ -341,15 +342,42 @@ pub fn run() {
 
                     match AppConfig::load_from_file(config_path) {
                         Ok(config) => {
-                            log::info!("Configuration loaded successfully: {config:?}");
+                            // We can't log yet, so we use eprintln.
+                            eprintln!("Configuration loaded successfully.");
                             config
                         }
+
                         Err(e) => {
-                            log::warn!("Failed to load config file, using defaults: {e}");
+                            // The logger is not yet initialized, so we use eprintln.
+                            eprintln!("Failed to load config file, using defaults: {e}");
                             AppConfig::default()
                         }
                     }
                 };
+
+                let log_level = log::LevelFilter::from_str(&config.logging.level)
+                    .unwrap_or(log::LevelFilter::Info);
+
+                let mut log_builder = tauri_plugin_log::Builder::new()
+                    .level(log_level)
+                    .timezone_strategy(TimezoneStrategy::UseLocal)
+                    .clear_targets();
+
+                // Add a file target to the default log directory.
+                log_builder =
+                    log_builder.target(Target::new(TargetKind::LogDir { file_name: None }));
+
+                // Add a console target if enabled in the config.
+                if config.logging.console_output {
+                    log_builder = log_builder.target(Target::new(TargetKind::Stdout));
+                }
+
+                app.handle()
+                    .plugin(log_builder.build())
+                    .expect("failed to initialize logger");
+
+                // Now that the logger is configured, we can use it.
+                log::info!("Logger initialized. Configuration: {config:?}");
 
                 // Initialize global configuration
                 AppConfig::initialize(config.clone());
@@ -412,14 +440,14 @@ pub fn run() {
             // Blockies commands
             blockies::commands::generate_blockies,
             blockies::commands::get_blockies_data,
-            // Networking commands
-            networking::start_p2p_node,
-            networking::send_pod_to_peer,
-            networking::send_message_as_pod,
-            networking::get_inbox_messages,
-            networking::accept_inbox_message,
-            networking::get_chats,
-            networking::get_chat_messages,
+            // P2P commands
+            p2p::start_p2p_node,
+            p2p::send_pod_to_peer,
+            p2p::send_message_as_pod,
+            p2p::get_inbox_messages,
+            p2p::accept_inbox_message,
+            p2p::get_chats,
+            p2p::get_chat_messages,
             // Authoring commands
             authoring::get_private_key_info,
             authoring::sign_pod,

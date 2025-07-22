@@ -1,9 +1,6 @@
 # Local development configuration
-# Enables development-friendly features and settings
 
 [features]
-networking = true
-frogcrypto = true
 
 [network]
 document_server = "http://localhost:3000"

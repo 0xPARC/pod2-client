@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { create } from "zustand";
 import type { AppConfig, FeatureConfig } from "./types";
 
 interface ConfigStore {

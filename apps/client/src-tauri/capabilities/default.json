@@ -29,6 +29,7 @@
     "http:allow-fetch-read-body",
     "http:allow-fetch-send",
     "fs:allow-read-text-file",
-    "dialog:default"
+    "dialog:default",
+    "log:default"
   ]
 }

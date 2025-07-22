@@ -12,7 +12,7 @@ pub struct FeatureConfig {
     /// Core POD collection management - viewing, organizing, and basic operations
     pub pod_management: bool,
     /// P2P communication and messaging
-    pub networking: bool,
+    pub p2p: bool,
     /// Creating and signing new PODs
     pub authoring: bool,
     /// External POD Request handling and protocol integration
@@ -25,7 +25,7 @@ impl Default for FeatureConfig {
     fn default() -> Self {
         Self {
             pod_management: true,
-            networking: false,
+            p2p: false,
             authoring: true,
             integration: true,
             frogcrypto: false,
@@ -64,8 +64,8 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            document_server: "https://pod-server.ghost-spica.ts.net".to_string(),
-            identity_server: "https://pod-server.ghost-spica.ts.net".to_string(),
+            document_server: "https://pod-server.ghost-spica.ts.net/server".to_string(),
+            identity_server: "https://pod-server.ghost-spica.ts.net/identity".to_string(),
             frogcrypto_server: "https://frog-server-q36c.onrender.com".to_string(),
             timeout_seconds: 30,
         }
@@ -272,7 +272,7 @@ mod tests {
         // Verify other defaults
         assert_eq!(config.database.path, "pod2.db");
         assert!(config.features.pod_management);
-        assert!(!config.features.networking);
+        assert!(!config.features.p2p);
     }
 
     #[test]
