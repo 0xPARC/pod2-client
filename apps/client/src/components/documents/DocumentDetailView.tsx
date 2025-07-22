@@ -8,7 +8,8 @@ import {
   CheckCircleIcon,
   DownloadIcon,
   ExternalLinkIcon,
-  FileTextIcon
+  FileTextIcon,
+  MessageSquareIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -19,9 +20,11 @@ import {
   DEFAULT_SERVER_URL,
   Document,
   DocumentFile,
+  DocumentMetadata,
   DocumentVerificationResult,
   ReplyReference,
   fetchDocument,
+  fetchDocumentReplies,
   verifyDocumentPod
 } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
@@ -31,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 interface DocumentDetailViewProps {
   documentId: number;
   onBack: () => void;
+  onNavigateToDocument?: (documentId: number) => void;
 }
 
 // MIME type to file extension mapping
@@ -105,7 +109,8 @@ const ensureFileExtension = (filename: string, mimeType: string): string => {
 
 export function DocumentDetailView({
   documentId,
-  onBack
+  onBack,
+  onNavigateToDocument
 }: DocumentDetailViewProps) {
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,6 +126,9 @@ export function DocumentDetailView({
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(
     new Set()
   );
+  const [replies, setReplies] = useState<DocumentMetadata[]>([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [repliesError, setRepliesError] = useState<string | null>(null);
 
   const loadDocument = async () => {
     try {
@@ -133,6 +141,23 @@ export function DocumentDetailView({
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadReplies = async () => {
+    if (!documentId) return;
+
+    try {
+      setRepliesLoading(true);
+      setRepliesError(null);
+      const repliesData = await fetchDocumentReplies(documentId);
+      setReplies(repliesData);
+    } catch (err) {
+      setRepliesError(
+        err instanceof Error ? err.message : "Failed to load replies"
+      );
+    } finally {
+      setRepliesLoading(false);
     }
   };
 
@@ -207,6 +232,7 @@ export function DocumentDetailView({
 
   useEffect(() => {
     loadDocument();
+    loadReplies();
   }, [documentId]);
 
   const handleDownloadFile = async (file: DocumentFile) => {
@@ -782,6 +808,95 @@ export function DocumentDetailView({
               </div>
             )}
         </div>
+
+        {/* Replies Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <MessageSquareIcon className="h-5 w-5" />
+              Replies ({replies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {repliesLoading && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
+                Loading replies...
+              </div>
+            )}
+            
+            {repliesError && (
+              <div className="flex items-center gap-2 text-destructive py-4">
+                <AlertCircleIcon className="h-4 w-4" />
+                <span>Failed to load replies: {repliesError}</span>
+              </div>
+            )}
+            
+            {!repliesLoading && !repliesError && replies.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No replies yet</p>
+              </div>
+            )}
+            
+            {!repliesLoading && !repliesError && replies.length > 0 && (
+              <div className="space-y-4">
+                {replies.map((reply) => (
+                  <div key={reply.id} className="border-l-2 border-muted pl-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span className="font-medium text-blue-600">
+                          u/{reply.uploader_id}
+                        </span>
+                        <span>•</span>
+                        <span>{formatDate(reply.created_at)}</span>
+                        <span>•</span>
+                        <span className="text-orange-600">
+                          #{reply.id} ({reply.upvote_count} upvotes)
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <h4 className="font-medium text-foreground mb-2">
+                      {reply.title}
+                    </h4>
+                    
+                    {reply.tags.length > 0 && (
+                      <div className="flex gap-1 mb-2">
+                        {reply.tags.map((tag, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {reply.authors.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                        <span>Authors:</span>
+                        {reply.authors.map((author, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {author}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onNavigateToDocument?.(reply.id!)}
+                      className="text-blue-600 hover:text-blue-800 p-0 h-auto font-normal"
+                      disabled={!onNavigateToDocument}
+                    >
+                      View full reply →
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Technical Details - Moved to Bottom */}
         <Card className="bg-muted/30">

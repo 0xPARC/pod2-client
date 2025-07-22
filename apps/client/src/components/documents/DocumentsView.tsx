@@ -147,6 +147,7 @@ export function DocumentsView() {
       <DocumentDetailView
         documentId={selectedDocumentId}
         onBack={() => setSelectedDocumentId(null)}
+        onNavigateToDocument={(documentId) => setSelectedDocumentId(documentId)}
       />
     );
   }
