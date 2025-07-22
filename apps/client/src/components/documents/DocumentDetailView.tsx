@@ -17,8 +17,10 @@ import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import {
+  DEFAULT_SERVER_URL,
   Document,
   DocumentFile,
   DocumentVerificationResult,
@@ -29,7 +31,6 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Separator } from "../ui/separator";
-import { UpvoteButton } from "./UpvoteButton";
 
 interface DocumentDetailViewProps {
   documentId: number;
@@ -120,6 +121,7 @@ export function DocumentDetailView({
     null
   );
   const [upvoteCount, setUpvoteCount] = useState<number>(0);
+  const [isUpvoting, setIsUpvoting] = useState(false);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(
     new Set()
   );
@@ -153,6 +155,57 @@ export function DocumentDetailView({
       );
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleUpvote = async () => {
+    if (isUpvoting || !document) return;
+
+    setIsUpvoting(true);
+
+    // Show loading toast
+    const loadingToast = toast("Generating upvote POD...", {
+      duration: Infinity
+    });
+
+    try {
+      // Get server URL from environment or use default
+      const serverUrl = DEFAULT_SERVER_URL;
+
+      // Call the Tauri upvote command
+      const result = await invoke<{
+        success: boolean;
+        new_upvote_count: number | null;
+        error_message: string | null;
+        already_upvoted: boolean;
+      }>("upvote_document", {
+        documentId: document.metadata.id,
+        serverUrl: serverUrl
+      });
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+
+      if (result.success && result.new_upvote_count !== null) {
+        // Success - update count and show success message
+        toast.success("Document upvoted successfully!");
+        setUpvoteCount(result.new_upvote_count);
+      } else if (result.already_upvoted) {
+        // Already upvoted
+        toast.info("You have already upvoted this document");
+      } else {
+        // Other error
+        toast.error(result.error_message || "Failed to upvote document");
+      }
+    } catch (error) {
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to upvote document: ${errorMessage}`);
+      console.error("Upvote error:", error);
+    } finally {
+      setIsUpvoting(false);
     }
   };
 
@@ -570,129 +623,121 @@ export function DocumentDetailView({
           Back to Documents
         </Button>
 
-        {/* Document Header */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <FileTextIcon className="h-6 w-6" />
-                  <span className="truncate">{document.metadata.title}</span>
-                </CardTitle>
-                <p className="text-muted-foreground mt-1">
-                  Document #{document.metadata.id} • Post{" "}
-                  {document.metadata.post_id} • Revision{" "}
-                  {document.metadata.revision}
-                </p>
+        {/* Document Header - Reddit-style */}
+        <div className="mb-6">
+          <div className="flex items-start gap-4">
+            {/* Upvote section */}
+            <div className="flex flex-col items-center min-w-[80px] pt-2">
+              <button
+                onClick={handleUpvote}
+                disabled={isUpvoting}
+                className={`text-3xl mb-2 transition-colors ${
+                  isUpvoting
+                    ? "text-muted-foreground cursor-not-allowed"
+                    : "text-muted-foreground hover:text-orange-500 cursor-pointer"
+                }`}
+                title="Upvote this document"
+              >
+                ▲
+              </button>
+              <div className="text-2xl font-bold text-orange-500 mb-1">
+                {upvoteCount}
               </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleVerifyDocument}
-                  disabled={isVerifying}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isVerifying ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircleIcon className="h-3 w-3 mr-1" />
-                      Verify POD
-                    </>
-                  )}
-                </Button>
-
-                {verificationResult &&
-                  verificationResult.publish_verified &&
-                  verificationResult.timestamp_verified &&
-                  verificationResult.upvote_count_verified && (
-                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                  )}
-
-                <UpvoteButton
-                  documentId={document.metadata.id || 0}
-                  currentUpvotes={upvoteCount}
-                  onUpvoteSuccess={setUpvoteCount}
-                />
-              </div>
+              <div className="text-xs text-muted-foreground">upvotes</div>
             </div>
-          </CardHeader>
 
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <UserIcon className="h-4 w-4" />
-                <span className="font-medium">Uploader:</span>
-                <span>{document.metadata.uploader_id}</span>
-              </div>
+            {/* Main content header */}
+            <div className="flex-1 min-w-0">
+              {/* Title */}
+              <h1 className="text-3xl font-bold text-foreground mb-4 line-clamp-3">
+                {document.metadata.title}
+              </h1>
 
-              <div className="flex items-center gap-2">
-                <ClockIcon className="h-4 w-4" />
-                <span className="font-medium">Created:</span>
+              {/* Author/Uploader info */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                <span>Posted by</span>
+                <span className="font-medium text-blue-600">
+                  u/{document.metadata.uploader_id}
+                </span>
+                <span>•</span>
                 <span>{formatDate(document.metadata.created_at)}</span>
+                {document.metadata.reply_to && (
+                  <>
+                    <span>•</span>
+                    <span className="text-orange-600">
+                      Reply to #{document.metadata.reply_to}
+                    </span>
+                  </>
+                )}
               </div>
 
-              <div className="min-w-0">
-                <span className="font-medium">Content ID:</span>
-                <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
-                  {document.metadata.content_id.slice(0, 16)}...
-                </code>
-              </div>
+              {/* Authors (if different from uploader) */}
+              {document.metadata.authors.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                  <span>Authors:</span>
+                  <div className="flex gap-2">
+                    {document.metadata.authors.map((author, index) => (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="text-xs bg-blue-100 text-blue-800"
+                      >
+                        {author}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              <div className="flex items-center gap-2">
-                <VoteIcon className="h-4 w-4" />
-                <span className="font-medium">Upvote Count:</span>
-                <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
-                  {document.metadata.upvote_count}
-                </code>
-              </div>
+              {/* Tags */}
+              {document.metadata.tags.length > 0 && (
+                <div className="flex items-center gap-2 mb-6">
+                  {document.metadata.tags.map((tag, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {(document.metadata.tags.length > 0 ||
-              document.metadata.authors.length > 0) && (
-              <>
-                <Separator className="my-4" />
-                <div className="space-y-3">
-                  {document.metadata.tags.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <TagIcon className="h-4 w-4" />
-                      <span className="font-medium">Tags:</span>
-                      {document.metadata.tags.map((tag, index) => (
-                        <Badge
-                          key={index}
-                          variant="outline"
-                          className="text-xs"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+            {/* Right side - Verify POD */}
+            <div className="flex flex-col items-end gap-2">
+              <Button
+                onClick={handleVerifyDocument}
+                disabled={isVerifying}
+                variant="outline"
+                size="sm"
+              >
+                {isVerifying ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircleIcon className="h-3 w-3 mr-1" />
+                    Verify POD
+                  </>
+                )}
+              </Button>
 
-                  {document.metadata.authors.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <UserIcon className="h-4 w-4" />
-                      <span className="font-medium">Authors:</span>
-                      {document.metadata.authors.map((author, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {author}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              {verificationResult &&
+                verificationResult.publish_verified &&
+                verificationResult.timestamp_verified &&
+                verificationResult.upvote_count_verified && (
+                  <div className="flex items-center gap-1 text-green-600 text-xs">
+                    <CheckCircleIcon className="h-4 w-4" />
+                    <span>Verified</span>
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
 
         {/* Show verification error if it exists */}
         {verificationError && (
@@ -708,37 +753,93 @@ export function DocumentDetailView({
           </Card>
         )}
 
-        {/* Document Content */}
-        <Card>
+        {/* Document Content - Main Focus */}
+        <div className="mb-8">
+          {/* Render message content if it exists */}
+          {document.content.message && (
+            <div className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6">
+              {renderContent(document.content)}
+            </div>
+          )}
+
+          {/* If no message content but there's a file, render the file content */}
+          {!document.content.message &&
+            document.content.file &&
+            renderFileAttachment(document.content.file)}
+
+          {/* If there's both message and file, render file as attachment */}
+          {document.content.message &&
+            document.content.file &&
+            renderFileAttachment(document.content.file)}
+
+          {/* Render URL if it exists */}
+          {document.content.url && renderUrl(document.content.url)}
+
+          {/* Show empty state only if no content at all */}
+          {!document.content.message &&
+            !document.content.file &&
+            !document.content.url && (
+              <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
+                <p>Content not available or unsupported format</p>
+              </div>
+            )}
+        </div>
+
+        {/* Technical Details - Moved to Bottom */}
+        <Card className="bg-muted/30">
           <CardHeader>
-            <CardTitle>Content</CardTitle>
+            <CardTitle className="text-lg text-muted-foreground">
+              Document Metadata
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Render message content if it exists */}
-            {document.content.message && renderContent(document.content)}
-
-            {/* If no message content but there's a file, render the file content */}
-            {!document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
-
-            {/* If there's both message and file, render file as attachment */}
-            {document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
-
-            {/* Render URL if it exists */}
-            {document.content.url && renderUrl(document.content.url)}
-
-            {/* Show empty state only if no content at all */}
-            {!document.content.message &&
-              !document.content.file &&
-              !document.content.url && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
-                  <p>Content not available or unsupported format</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Document ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  #{document.metadata.id}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Post ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  #{document.metadata.post_id}
+                </div>
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Revision:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  r{document.metadata.revision}
+                </div>
+              </div>
+
+              <div className="lg:col-span-2">
+                <span className="font-medium text-muted-foreground">
+                  Content ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1 break-all">
+                  {document.metadata.content_id}
+                </div>
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Verified Upvotes:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  {document.metadata.upvote_count}
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
