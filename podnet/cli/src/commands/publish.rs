@@ -234,9 +234,7 @@ pub async fn publish_content(
             .parse::<i64>()
             .map_err(|_| format!("Invalid document_id in reply_to: {}", parts[1]))?;
 
-        println!(
-            "Replying to post {reply_post_id} document {reply_document_id}"
-        );
+        println!("Replying to post {reply_post_id} document {reply_document_id}");
         Some(ReplyReference {
             post_id: reply_post_id,
             document_id: reply_document_id,

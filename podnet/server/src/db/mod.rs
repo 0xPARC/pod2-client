@@ -120,10 +120,12 @@ impl Database {
 
         // If we can get a value and it's a number (not JSON), we need to migrate
         if let Ok(value) = migration_check
-            && !value.is_empty() && value.parse::<i64>().is_ok() {
-                // Create a new table with the correct schema
-                conn.execute(
-                    "CREATE TABLE IF NOT EXISTS documents_new (
+            && !value.is_empty()
+            && value.parse::<i64>().is_ok()
+        {
+            // Create a new table with the correct schema
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS documents_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         content_id TEXT NOT NULL,
                         post_id INTEGER NOT NULL,
@@ -141,12 +143,12 @@ impl Database {
                         FOREIGN KEY (post_id) REFERENCES posts (id),
                         UNIQUE (post_id, revision)
                     )",
-                    [],
-                )?;
+                [],
+            )?;
 
-                // Copy data, converting INTEGER reply_to to JSON format
-                conn.execute(
-                    "INSERT INTO documents_new 
+            // Copy data, converting INTEGER reply_to to JSON format
+            conn.execute(
+                "INSERT INTO documents_new 
                      SELECT id, content_id, post_id, revision, created_at, pod, timestamp_pod, 
                             uploader_id, upvote_count_pod, tags, authors,
                             CASE 
@@ -155,13 +157,13 @@ impl Database {
                             END as reply_to,
                             requested_post_id, title
                      FROM documents",
-                    [],
-                )?;
+                [],
+            )?;
 
-                // Drop old table and rename new one
-                conn.execute("DROP TABLE documents", [])?;
-                conn.execute("ALTER TABLE documents_new RENAME TO documents", [])?;
-            }
+            // Drop old table and rename new one
+            conn.execute("DROP TABLE documents", [])?;
+            conn.execute("ALTER TABLE documents_new RENAME TO documents", [])?;
+        }
 
         Ok(())
     }
