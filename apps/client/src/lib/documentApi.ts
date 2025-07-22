@@ -145,6 +145,39 @@ export async function fetchDocumentReplies(
 }
 
 /**
+ * Fetch replies to all versions of a post
+ * @param postId - The post ID
+ * @param serverUrl - Optional server URL (defaults to localhost:3000)
+ * @returns Array of document metadata for replies to any version of the post
+ */
+export async function fetchPostReplies(
+  postId: number,
+  serverUrl: string = DEFAULT_SERVER_URL
+): Promise<DocumentMetadata[]> {
+  try {
+    // Since there's no direct post replies endpoint, we'll fetch all documents
+    // and filter for those that reply to any document in this post
+    const allDocuments = await fetchDocuments(serverUrl);
+    
+    // Filter documents that have reply_to.post_id matching our postId
+    const postReplies = allDocuments.filter(doc => 
+      doc.reply_to?.post_id === postId
+    );
+    
+    // Sort by creation date (oldest first, like comment threads)
+    return postReplies.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateA - dateB;
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch replies for post ${postId}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
  * Fetch all posts with their documents from the PodNet server
  * @param serverUrl - Optional server URL (defaults to localhost:3000)
  * @returns Array of posts with documents
