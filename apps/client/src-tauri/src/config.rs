@@ -194,6 +194,109 @@ impl AppConfig {
         }
     }
 
+    /// Apply CLI overrides using dot notation to the configuration
+    pub fn apply_overrides(&mut self, overrides: &[String]) -> Result<(), String> {
+        for override_str in overrides {
+            if let Some((key_path, value)) = override_str.split_once('=') {
+                self.apply_single_override(key_path, value)?;
+            } else {
+                return Err(format!(
+                    "Invalid override format: '{}'. Expected format: 'key.path=value'",
+                    override_str
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply a single override using dot notation
+    fn apply_single_override(&mut self, key_path: &str, value: &str) -> Result<(), String> {
+        let parts: Vec<&str> = key_path.split('.').collect();
+
+        match parts.as_slice() {
+            ["network", "document_server"] => {
+                self.network.document_server = value.to_string();
+            }
+            ["network", "identity_server"] => {
+                self.network.identity_server = value.to_string();
+            }
+            ["network", "frogcrypto_server"] => {
+                self.network.frogcrypto_server = value.to_string();
+            }
+            ["network", "timeout_seconds"] => {
+                self.network.timeout_seconds = value
+                    .parse()
+                    .map_err(|e| format!("Invalid timeout_seconds value '{}': {}", value, e))?;
+            }
+            ["features", "pod_management"] => {
+                self.features.pod_management = value
+                    .parse()
+                    .map_err(|e| format!("Invalid pod_management value '{}': {}", value, e))?;
+            }
+            ["features", "p2p"] => {
+                self.features.p2p = value
+                    .parse()
+                    .map_err(|e| format!("Invalid p2p value '{}': {}", value, e))?;
+            }
+            ["features", "authoring"] => {
+                self.features.authoring = value
+                    .parse()
+                    .map_err(|e| format!("Invalid authoring value '{}': {}", value, e))?;
+            }
+            ["features", "integration"] => {
+                self.features.integration = value
+                    .parse()
+                    .map_err(|e| format!("Invalid integration value '{}': {}", value, e))?;
+            }
+            ["features", "frogcrypto"] => {
+                self.features.frogcrypto = value
+                    .parse()
+                    .map_err(|e| format!("Invalid frogcrypto value '{}': {}", value, e))?;
+            }
+            ["database", "path"] => {
+                self.database.path = value.to_string();
+            }
+            ["logging", "level"] => {
+                if !["debug", "info", "warn", "error"].contains(&value) {
+                    return Err(format!(
+                        "Invalid logging level '{}'. Must be one of: debug, info, warn, error",
+                        value
+                    ));
+                }
+                self.logging.level = value.to_string();
+            }
+            ["logging", "console_output"] => {
+                self.logging.console_output = value
+                    .parse()
+                    .map_err(|e| format!("Invalid console_output value '{}': {}", value, e))?;
+            }
+            ["ui", "default_theme"] => {
+                if !["auto", "light", "dark"].contains(&value) {
+                    return Err(format!(
+                        "Invalid default_theme '{}'. Must be one of: auto, light, dark",
+                        value
+                    ));
+                }
+                self.ui.default_theme = value.to_string();
+            }
+            ["ui", "default_window_width"] => {
+                self.ui.default_window_width = value.parse().map_err(|e| {
+                    format!("Invalid default_window_width value '{}': {}", value, e)
+                })?;
+            }
+            ["ui", "default_window_height"] => {
+                self.ui.default_window_height = value.parse().map_err(|e| {
+                    format!("Invalid default_window_height value '{}': {}", value, e)
+                })?;
+            }
+            _ => {
+                return Err(format!("Unknown config path: '{}'", key_path));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Validate configuration
     pub fn validate(&self) -> Result<(), String> {
         let mut errors = Vec::new();

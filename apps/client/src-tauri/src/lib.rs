@@ -15,6 +15,7 @@ use pod2_db::{
     Db,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tokio::sync::Mutex;
@@ -320,37 +321,83 @@ pub fn run() {
                 let config = {
                     use tauri_plugin_cli::CliExt;
 
-                    let config_path = match app.cli().matches() {
+                    let (config_path, cli_overrides) = match app.cli().matches() {
                         Ok(matches) => {
                             // Check for --config argument
-                            matches
+                            let config_path = matches
                                 .args
                                 .get("config")
                                 .and_then(|arg| arg.value.as_str())
                                 .map(PathBuf::from)
                                 .or_else(|| {
                                     std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from)
+                                });
+
+                            // Extract --set arguments
+                            let cli_overrides = matches
+                                .args
+                                .get("set")
+                                .map(|arg| {
+                                    match &arg.value {
+                                        Value::Array(values) => {
+                                            values.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect()
+                                        },
+                                        Value::String(value) => {
+                                            vec![value.clone()]
+                                        },
+                                        _ => Vec::new()
+                                    }
                                 })
+                                .unwrap_or_default();
+
+                            (config_path, cli_overrides)
                         }
                         Err(e) => {
                             // The logger is not yet initialized, so we use eprintln.
                             eprintln!("Failed to parse CLI arguments: {e}");
                             // Fallback to environment variable
-                            std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from)
+                            let config_path = std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from);
+                            (config_path, Vec::new())
                         }
                     };
 
                     match AppConfig::load_from_file(config_path) {
-                        Ok(config) => {
-                            // We can't log yet, so we use eprintln.
-                            eprintln!("Configuration loaded successfully.");
+                        Ok(mut config) => {
+                            // Apply CLI overrides
+                            if !cli_overrides.is_empty() {
+                                match config.apply_overrides(&cli_overrides) {
+                                    Ok(()) => {
+                                        eprintln!("Configuration loaded successfully with {} override(s).", cli_overrides.len());
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to apply config overrides: {e}");
+                                        // Continue with config before overrides were applied
+                                    }
+                                }
+                            } else {
+                                eprintln!("Configuration loaded successfully.");
+                            }
                             config
                         }
 
                         Err(e) => {
                             // The logger is not yet initialized, so we use eprintln.
                             eprintln!("Failed to load config file, using defaults: {e}");
-                            AppConfig::default()
+                            let mut config = AppConfig::default();
+
+                            // Still apply CLI overrides to default config
+                            if !cli_overrides.is_empty() {
+                                match config.apply_overrides(&cli_overrides) {
+                                    Ok(()) => {
+                                        eprintln!("Applied {} override(s) to default configuration.", cli_overrides.len());
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to apply config overrides to defaults: {e}");
+                                    }
+                                }
+                            }
+
+                            config
                         }
                     }
                 };

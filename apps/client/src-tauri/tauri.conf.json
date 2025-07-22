@@ -48,6 +48,12 @@
           "name": "config",
           "description": "Path to configuration file",
           "takesValue": true
+        },
+        {
+          "name": "set",
+          "description": "Override config value using dot notation (e.g., network.document_server=localhost:3000)",
+          "takesValue": true,
+          "multiple": true
         }
       ]
     }
