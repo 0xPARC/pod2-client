@@ -158,12 +158,12 @@ export async function fetchPostReplies(
     // Since there's no direct post replies endpoint, we'll fetch all documents
     // and filter for those that reply to any document in this post
     const allDocuments = await fetchDocuments(serverUrl);
-    
+
     // Filter documents that have reply_to.post_id matching our postId
-    const postReplies = allDocuments.filter(doc => 
-      doc.reply_to?.post_id === postId
+    const postReplies = allDocuments.filter(
+      (doc) => doc.reply_to?.post_id === postId
     );
-    
+
     // Sort by creation date (oldest first, like comment threads)
     return postReplies.sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
