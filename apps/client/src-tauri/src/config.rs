@@ -201,8 +201,7 @@ impl AppConfig {
                 self.apply_single_override(key_path, value)?;
             } else {
                 return Err(format!(
-                    "Invalid override format: '{}'. Expected format: 'key.path=value'",
-                    override_str
+                    "Invalid override format: '{override_str}'. Expected format: 'key.path=value'"
                 ));
             }
         }
@@ -226,32 +225,32 @@ impl AppConfig {
             ["network", "timeout_seconds"] => {
                 self.network.timeout_seconds = value
                     .parse()
-                    .map_err(|e| format!("Invalid timeout_seconds value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid timeout_seconds value '{value}': {e}"))?;
             }
             ["features", "pod_management"] => {
                 self.features.pod_management = value
                     .parse()
-                    .map_err(|e| format!("Invalid pod_management value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid pod_management value '{value}': {e}"))?;
             }
             ["features", "p2p"] => {
                 self.features.p2p = value
                     .parse()
-                    .map_err(|e| format!("Invalid p2p value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid p2p value '{value}': {e}"))?;
             }
             ["features", "authoring"] => {
                 self.features.authoring = value
                     .parse()
-                    .map_err(|e| format!("Invalid authoring value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid authoring value '{value}': {e}"))?;
             }
             ["features", "integration"] => {
                 self.features.integration = value
                     .parse()
-                    .map_err(|e| format!("Invalid integration value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid integration value '{value}': {e}"))?;
             }
             ["features", "frogcrypto"] => {
                 self.features.frogcrypto = value
                     .parse()
-                    .map_err(|e| format!("Invalid frogcrypto value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid frogcrypto value '{value}': {e}"))?;
             }
             ["database", "path"] => {
                 self.database.path = value.to_string();
@@ -259,8 +258,7 @@ impl AppConfig {
             ["logging", "level"] => {
                 if !["debug", "info", "warn", "error"].contains(&value) {
                     return Err(format!(
-                        "Invalid logging level '{}'. Must be one of: debug, info, warn, error",
-                        value
+                        "Invalid logging level '{value}'. Must be one of: debug, info, warn, error"
                     ));
                 }
                 self.logging.level = value.to_string();
@@ -268,29 +266,28 @@ impl AppConfig {
             ["logging", "console_output"] => {
                 self.logging.console_output = value
                     .parse()
-                    .map_err(|e| format!("Invalid console_output value '{}': {}", value, e))?;
+                    .map_err(|e| format!("Invalid console_output value '{value}': {e}"))?;
             }
             ["ui", "default_theme"] => {
                 if !["auto", "light", "dark"].contains(&value) {
                     return Err(format!(
-                        "Invalid default_theme '{}'. Must be one of: auto, light, dark",
-                        value
+                        "Invalid default_theme '{value}'. Must be one of: auto, light, dark"
                     ));
                 }
                 self.ui.default_theme = value.to_string();
             }
             ["ui", "default_window_width"] => {
-                self.ui.default_window_width = value.parse().map_err(|e| {
-                    format!("Invalid default_window_width value '{}': {}", value, e)
-                })?;
+                self.ui.default_window_width = value
+                    .parse()
+                    .map_err(|e| format!("Invalid default_window_width value '{value}': {e}"))?;
             }
             ["ui", "default_window_height"] => {
-                self.ui.default_window_height = value.parse().map_err(|e| {
-                    format!("Invalid default_window_height value '{}': {}", value, e)
-                })?;
+                self.ui.default_window_height = value
+                    .parse()
+                    .map_err(|e| format!("Invalid default_window_height value '{value}': {e}"))?;
             }
             _ => {
-                return Err(format!("Unknown config path: '{}'", key_path));
+                return Err(format!("Unknown config path: '{key_path}'"));
             }
         }
 
