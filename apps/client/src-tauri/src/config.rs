@@ -258,11 +258,11 @@ mod tests {
         assert!(!config.network.frogcrypto_server.is_empty());
         assert_eq!(
             config.network.document_server,
-            "https://pod-server.ghost-spica.ts.net"
+            "https://pod-server.ghost-spica.ts.net/server"
         );
         assert_eq!(
             config.network.identity_server,
-            "https://pod-server.ghost-spica.ts.net"
+            "https://pod-server.ghost-spica.ts.net/identity"
         );
         assert_eq!(
             config.network.frogcrypto_server,
