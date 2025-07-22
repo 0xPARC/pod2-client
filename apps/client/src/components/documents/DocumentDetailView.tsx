@@ -22,7 +22,6 @@ import {
   DocumentFile,
   DocumentMetadata,
   DocumentVerificationResult,
-  ReplyReference,
   fetchDocument,
   fetchDocumentReplies,
   fetchPostReplies,
@@ -151,24 +150,37 @@ export function DocumentDetailView({
     try {
       setRepliesLoading(true);
       setRepliesError(null);
-      
-      console.log(`Loading replies for post ${document.metadata.post_id} (document ${documentId})`);
-      
+
+      console.log(
+        `Loading replies for post ${document.metadata.post_id} (document ${documentId})`
+      );
+
       // Fetch replies to all versions of this post
       const postRepliesData = await fetchPostReplies(document.metadata.post_id);
-      console.log(`Found ${postRepliesData.length} replies to post ${document.metadata.post_id}:`, postRepliesData);
+      console.log(
+        `Found ${postRepliesData.length} replies to post ${document.metadata.post_id}:`,
+        postRepliesData
+      );
       setReplies(postRepliesData);
     } catch (err) {
       // Fallback to document-specific replies if post replies fails
       try {
-        console.warn('Post replies failed, falling back to document replies:', err);
+        console.warn(
+          "Post replies failed, falling back to document replies:",
+          err
+        );
         const docRepliesData = await fetchDocumentReplies(documentId);
-        console.log(`Fallback: Found ${docRepliesData.length} replies to document ${documentId}:`, docRepliesData);
+        console.log(
+          `Fallback: Found ${docRepliesData.length} replies to document ${documentId}:`,
+          docRepliesData
+        );
         setReplies(docRepliesData);
       } catch (fallbackErr) {
-        console.error('Both post and document replies failed:', fallbackErr);
+        console.error("Both post and document replies failed:", fallbackErr);
         setRepliesError(
-          fallbackErr instanceof Error ? fallbackErr.message : "Failed to load replies"
+          fallbackErr instanceof Error
+            ? fallbackErr.message
+            : "Failed to load replies"
         );
       }
     } finally {
@@ -847,29 +859,34 @@ export function DocumentDetailView({
                 Loading replies...
               </div>
             )}
-            
+
             {repliesError && (
               <div className="flex items-center gap-2 text-destructive py-4">
                 <AlertCircleIcon className="h-4 w-4" />
                 <span>Failed to load replies: {repliesError}</span>
               </div>
             )}
-            
+
             {!repliesLoading && !repliesError && replies.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No replies yet</p>
               </div>
             )}
-            
+
             {!repliesLoading && !repliesError && replies.length > 0 && (
               <div className="space-y-4">
                 {replies.map((reply) => {
-                  const isReplyToCurrentDoc = reply.reply_to?.document_id === documentId;
-                  const isReplyToCurrentPost = reply.reply_to?.post_id === document?.metadata.post_id;
-                  
+                  const isReplyToCurrentDoc =
+                    reply.reply_to?.document_id === documentId;
+                  const isReplyToCurrentPost =
+                    reply.reply_to?.post_id === document?.metadata.post_id;
+
                   return (
-                    <div key={reply.id} className="border-l-2 border-muted pl-4">
+                    <div
+                      key={reply.id}
+                      className="border-l-2 border-muted pl-4"
+                    >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span className="font-medium text-blue-600">
@@ -883,23 +900,33 @@ export function DocumentDetailView({
                           </span>
                         </div>
                       </div>
-                      
+
                       {/* Show which version this reply targets */}
                       {reply.reply_to && (
                         <div className="mb-2">
                           {isReplyToCurrentDoc ? (
-                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-green-50 text-green-700 border-green-200"
+                            >
                               Reply to this version
                             </Badge>
                           ) : isReplyToCurrentPost ? (
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                              >
                                 Reply to different version
                               </Badge>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => onNavigateToDocument?.(reply.reply_to!.document_id)}
+                                onClick={() =>
+                                  onNavigateToDocument?.(
+                                    reply.reply_to!.document_id
+                                  )
+                                }
                                 className="text-yellow-700 hover:text-yellow-900 p-0 h-auto font-normal text-xs underline"
                                 disabled={!onNavigateToDocument}
                               >
@@ -908,13 +935,20 @@ export function DocumentDetailView({
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                              >
                                 Reply to post #{reply.reply_to.post_id}
                               </Badge>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => onNavigateToDocument?.(reply.reply_to!.document_id)}
+                                onClick={() =>
+                                  onNavigateToDocument?.(
+                                    reply.reply_to!.document_id
+                                  )
+                                }
                                 className="text-blue-700 hover:text-blue-900 p-0 h-auto font-normal text-xs underline"
                                 disabled={!onNavigateToDocument}
                               >
@@ -924,32 +958,40 @@ export function DocumentDetailView({
                           )}
                         </div>
                       )}
-                      
+
                       <h4 className="font-medium text-foreground mb-2">
                         {reply.title}
                       </h4>
-                      
+
                       {reply.tags.length > 0 && (
                         <div className="flex gap-1 mb-2">
                           {reply.tags.map((tag, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className="text-xs"
+                            >
                               {tag}
                             </Badge>
                           ))}
                         </div>
                       )}
-                      
+
                       {reply.authors.length > 0 && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                           <span>Authors:</span>
                           {reply.authors.map((author, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="text-xs"
+                            >
                               {author}
                             </Badge>
                           ))}
                         </div>
                       )}
-                      
+
                       <Button
                         variant="ghost"
                         size="sm"

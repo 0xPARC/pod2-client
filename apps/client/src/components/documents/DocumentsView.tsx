@@ -10,7 +10,7 @@ import {
   XIcon
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { DocumentMetadata, ReplyReference, fetchDocuments } from "../../lib/documentApi";
+import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -365,7 +365,10 @@ export function DocumentsView() {
                         {doc.reply_to && (
                           <>
                             <span>•</span>
-                            <span>reply to #{doc.reply_to.document_id} (Post {doc.reply_to.post_id})</span>
+                            <span>
+                              reply to #{doc.reply_to.document_id} (Post{" "}
+                              {doc.reply_to.post_id})
+                            </span>
                           </>
                         )}
                       </div>
