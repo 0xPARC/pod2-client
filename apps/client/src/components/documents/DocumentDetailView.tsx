@@ -17,7 +17,6 @@ import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import {
-  DEFAULT_SERVER_URL,
   Document,
   DocumentFile,
   DocumentMetadata,
@@ -217,8 +216,10 @@ export function DocumentDetailView({
     });
 
     try {
-      // Get server URL from environment or use default
-      const serverUrl = DEFAULT_SERVER_URL;
+      const networkConfig = await invoke<any>("get_config_section", {
+        section: "network"
+      });
+      const serverUrl = networkConfig.document_server;
 
       // Call the Tauri upvote command
       const result = await invoke<{
