@@ -19,7 +19,7 @@
     "maxCustomBatchSize": 5
   },
   "podType": [
-    5,
+    2,
     "Main"
   ],
   "id": "d4208250c74b1abab84aa68dddec6e2e5621605f215116410ce630ed9d9c4d0e",
