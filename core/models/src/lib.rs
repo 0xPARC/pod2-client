@@ -73,7 +73,7 @@ pub struct Post {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplyReference {
-    pub post_id: i64,    // Post ID being replied to
+    pub post_id: i64,     // Post ID being replied to
     pub document_id: i64, // Specific document ID being replied to
 }
 

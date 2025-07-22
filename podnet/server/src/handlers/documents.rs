@@ -10,7 +10,7 @@ use pod2::middleware::{
     containers::{Dictionary, Set},
 };
 use podnet_models::{
-    Document, DocumentMetadata, PublishRequest, ReplyReference,
+    Document, DocumentMetadata, PublishRequest,
     mainpod::publish::verify_publish_verification_with_solver,
 };
 
@@ -256,30 +256,43 @@ pub async fn publish_document(
 
     // Validate reply_to if provided
     if let Some(ref reply_ref) = payload.reply_to {
-        log::info!("Validating reply_to document ID: {} in post: {}", reply_ref.document_id, reply_ref.post_id);
-        
+        log::info!(
+            "Validating reply_to document ID: {} in post: {}",
+            reply_ref.document_id,
+            reply_ref.post_id
+        );
+
         // Verify the document being replied to exists
         let target_doc = state
             .db
             .get_document_metadata(reply_ref.document_id)
             .map_err(|e| {
-                log::error!("Database error checking reply_to document {}: {e}", reply_ref.document_id);
+                log::error!(
+                    "Database error checking reply_to document {}: {e}",
+                    reply_ref.document_id
+                );
                 StatusCode::INTERNAL_SERVER_ERROR
             })?
             .ok_or_else(|| {
                 log::error!("Reply_to document {} not found", reply_ref.document_id);
                 StatusCode::NOT_FOUND
             })?;
-        
+
         // Verify the post_id matches
         if target_doc.post_id != reply_ref.post_id {
-            log::error!("Reply_to post_id {} doesn't match document's actual post_id {}", 
-                       reply_ref.post_id, target_doc.post_id);
+            log::error!(
+                "Reply_to post_id {} doesn't match document's actual post_id {}",
+                reply_ref.post_id,
+                target_doc.post_id
+            );
             return Err(StatusCode::BAD_REQUEST);
         }
-        
-        log::info!("Reply_to reference validated: document {} in post {}", 
-                  reply_ref.document_id, reply_ref.post_id);
+
+        log::info!(
+            "Reply_to reference validated: document {} in post {}",
+            reply_ref.document_id,
+            reply_ref.post_id
+        );
     }
 
     // Create document with timestamp pod in a single transaction

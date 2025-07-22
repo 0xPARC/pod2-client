@@ -11,7 +11,9 @@ use pod2::{
     },
 };
 use pod2_db::store::PodData;
-use podnet_models::{Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference, UpvoteRequest};
+use podnet_models::{
+    Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference, UpvoteRequest,
+};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tauri::State;

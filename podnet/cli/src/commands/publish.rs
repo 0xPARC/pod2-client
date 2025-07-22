@@ -221,15 +221,22 @@ pub async fn publish_content(
     let reply_to_ref: Option<ReplyReference> = if let Some(reply_to_str) = reply_to {
         let parts: Vec<&str> = reply_to_str.split(':').collect();
         if parts.len() != 2 {
-            return Err(format!("Invalid reply_to format. Expected 'post_id:document_id', got '{}'", reply_to_str).into());
+            return Err(format!(
+                "Invalid reply_to format. Expected 'post_id:document_id', got '{reply_to_str}'"
+            )
+            .into());
         }
-        
-        let reply_post_id = parts[0].parse::<i64>()
+
+        let reply_post_id = parts[0]
+            .parse::<i64>()
             .map_err(|_| format!("Invalid post_id in reply_to: {}", parts[0]))?;
-        let reply_document_id = parts[1].parse::<i64>()
+        let reply_document_id = parts[1]
+            .parse::<i64>()
             .map_err(|_| format!("Invalid document_id in reply_to: {}", parts[1]))?;
-            
-        println!("Replying to post {} document {}", reply_post_id, reply_document_id);
+
+        println!(
+            "Replying to post {reply_post_id} document {reply_document_id}"
+        );
         Some(ReplyReference {
             post_id: reply_post_id,
             document_id: reply_document_id,

@@ -119,8 +119,8 @@ impl Database {
         );
 
         // If we can get a value and it's a number (not JSON), we need to migrate
-        if let Ok(value) = migration_check {
-            if !value.is_empty() && value.parse::<i64>().is_ok() {
+        if let Ok(value) = migration_check
+            && !value.is_empty() && value.parse::<i64>().is_ok() {
                 // Create a new table with the correct schema
                 conn.execute(
                     "CREATE TABLE IF NOT EXISTS documents_new (
@@ -162,7 +162,6 @@ impl Database {
                 conn.execute("DROP TABLE documents", [])?;
                 conn.execute("ALTER TABLE documents_new RENAME TO documents", [])?;
             }
-        }
 
         Ok(())
     }
