@@ -1401,7 +1401,7 @@ mod tests {
         );
         let materializer = Materializer::new(db.clone());
 
-        let processed = parse(&req1, &params, &[batch.clone()]).unwrap();
+        let processed = parse(&req1, &params, std::slice::from_ref(&batch)).unwrap();
         let request = processed.request_templates;
 
         let planner = Planner::new();

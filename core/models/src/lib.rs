@@ -53,10 +53,11 @@ impl DocumentContent {
         }
 
         // Validate URL format
-        if let Some(ref url) = self.url {
-            if !url.starts_with("http://") && !url.starts_with("https://") {
-                return Err("URL must start with http:// or https://".to_string());
-            }
+        if let Some(ref url) = self.url
+            && !url.starts_with("http://")
+            && !url.starts_with("https://")
+        {
+            return Err("URL must start with http:// or https://".to_string());
         }
 
         Ok(())

@@ -30,11 +30,11 @@ fn load_or_generate_server_key() -> SecretKey {
 
     if Path::new(key_path).exists() {
         // Load existing key
-        if let Ok(key_data) = fs::read_to_string(key_path) {
-            if let Some(key_bigint) = BigUint::parse_bytes(key_data.trim().as_bytes(), 10) {
-                tracing::info!("Loaded existing server key from {key_path}");
-                return SecretKey(key_bigint);
-            }
+        if let Ok(key_data) = fs::read_to_string(key_path)
+            && let Some(key_bigint) = BigUint::parse_bytes(key_data.trim().as_bytes(), 10)
+        {
+            tracing::info!("Loaded existing server key from {key_path}");
+            return SecretKey(key_bigint);
         }
         tracing::warn!("Failed to load server key from {key_path}, generating new one");
     }

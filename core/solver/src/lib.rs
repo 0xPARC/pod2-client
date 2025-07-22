@@ -196,7 +196,7 @@ mod tests {
             value_to_podlang_literal(bob.public_key())
         );
 
-        let request = parse(&req1, &params, &[batch.clone()])
+        let request = parse(&req1, &params, std::slice::from_ref(&batch))
             .unwrap()
             .request_templates;
 
@@ -239,7 +239,7 @@ mod tests {
             value_to_podlang_literal(charlie.public_key())
         );
 
-        let request = parse(&req2, &params, &[batch.clone()])
+        let request = parse(&req2, &params, std::slice::from_ref(&batch))
             .unwrap()
             .request_templates;
 

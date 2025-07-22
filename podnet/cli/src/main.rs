@@ -564,61 +564,62 @@ async fn view_post_in_browser(
         let mut replies_html = String::new();
         if replies_response.status().is_success() {
             let replies: serde_json::Value = replies_response.json().await?;
-            if let Some(replies_array) = replies.as_array() {
-                if !replies_array.is_empty() {
-                    replies_html.push_str("<div class=\"replies-section\" style=\"margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;\">");
-                    replies_html.push_str(&format!(
-                        "<h3>Replies ({} replies)</h3>",
-                        replies_array.len()
-                    ));
+            if let Some(replies_array) = replies.as_array()
+                && !replies_array.is_empty()
+            {
+                replies_html.push_str("<div class=\"replies-section\" style=\"margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;\">");
+                replies_html.push_str(&format!(
+                    "<h3>Replies ({} replies)</h3>",
+                    replies_array.len()
+                ));
 
-                    for reply in replies_array {
-                        let reply_id = reply.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let reply_uploader = reply
-                            .get("uploader_id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("Unknown");
-                        let reply_created = reply
-                            .get("created_at")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("Unknown");
-                        let reply_upvotes = reply
-                            .get("upvote_count")
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0);
+                for reply in replies_array {
+                    let reply_id = reply.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let reply_uploader = reply
+                        .get("uploader_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown");
+                    let reply_created = reply
+                        .get("created_at")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown");
+                    let reply_upvotes = reply
+                        .get("upvote_count")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
 
-                        // Fetch the reply content
-                        let reply_response = client
-                            .get(format!("{server_url}/documents/{reply_id}/render"))
-                            .send()
-                            .await;
+                    // Fetch the reply content
+                    let reply_response = client
+                        .get(format!("{server_url}/documents/{reply_id}/render"))
+                        .send()
+                        .await;
 
-                        let reply_content = if let Ok(reply_resp) = reply_response {
-                            if reply_resp.status().is_success() {
-                                if let Ok(reply_doc_value) =
-                                    reply_resp.json::<serde_json::Value>().await
+                    let reply_content = if let Ok(reply_resp) = reply_response {
+                        if reply_resp.status().is_success() {
+                            if let Ok(reply_doc_value) =
+                                reply_resp.json::<serde_json::Value>().await
+                            {
+                                // Try to parse as Document and render the content
+                                if let Ok(reply_doc) =
+                                    serde_json::from_value::<podnet_models::Document>(
+                                        reply_doc_value,
+                                    )
                                 {
-                                    // Try to parse as Document and render the content
-                                    if let Ok(reply_doc) =
-                                        serde_json::from_value::<podnet_models::Document>(
-                                            reply_doc_value,
-                                        )
-                                    {
-                                        render_document_content_to_html(&reply_doc.content)
-                                    } else {
-                                        "Error parsing reply document".to_string()
-                                    }
+                                    render_document_content_to_html(&reply_doc.content)
                                 } else {
-                                    "Error parsing reply content".to_string()
+                                    "Error parsing reply document".to_string()
                                 }
                             } else {
-                                "Error fetching reply content".to_string()
+                                "Error parsing reply content".to_string()
                             }
                         } else {
                             "Error fetching reply content".to_string()
-                        };
+                        }
+                    } else {
+                        "Error fetching reply content".to_string()
+                    };
 
-                        replies_html.push_str(&format!(
+                    replies_html.push_str(&format!(
                             "<div class=\"reply\" style=\"margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;\">
                                 <div class=\"reply-meta\" style=\"font-size: 0.9em; color: #666; margin-bottom: 10px;\">
                                     <strong>Reply by {reply_uploader}</strong> • {reply_created} • 👍 {reply_upvotes}
@@ -626,9 +627,8 @@ async fn view_post_in_browser(
                                 <div class=\"reply-content\">{reply_content}</div>
                             </div>"
                         ));
-                    }
-                    replies_html.push_str("</div>");
                 }
+                replies_html.push_str("</div>");
             }
         }
 
