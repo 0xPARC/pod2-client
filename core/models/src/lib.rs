@@ -1,5 +1,4 @@
 #![feature(stmt_expr_attributes)]
-#![feature(let_chains)]
 
 use std::collections::HashSet;
 
