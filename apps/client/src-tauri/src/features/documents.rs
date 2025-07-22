@@ -11,7 +11,7 @@ use pod2::{
     },
 };
 use pod2_db::store::PodData;
-use podnet_models::{Document, DocumentContent, DocumentFile, PublishRequest, UpvoteRequest};
+use podnet_models::{Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference, UpvoteRequest};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -333,7 +333,7 @@ pub async fn publish_document(
     url: Option<String>,
     tags: Vec<String>,
     authors: Vec<String>,
-    reply_to: Option<i64>,
+    reply_to: Option<ReplyReference>,
     server_url: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<PublishResult, String> {
@@ -483,6 +483,18 @@ pub async fn publish_document(
     )
     .map_err(|e| format!("Failed to create authors set: {e}"))?;
 
+    // Create reply_to value
+    let reply_to_value = if let Some(ref reply_ref) = reply_to {
+        let mut reply_map = HashMap::new();
+        reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+        reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+        let reply_dict = Dictionary::new(2, reply_map)
+            .map_err(|e| format!("Failed to create reply_to dictionary: {e}"))?;
+        Value::from(reply_dict)
+    } else {
+        Value::from(-1i64)
+    };
+
     let data_dict = Dictionary::new(
         6,
         HashMap::from([
@@ -490,7 +502,7 @@ pub async fn publish_document(
             (Key::from("content_hash"), Value::from(content_hash)),
             (Key::from("tags"), Value::from(tag_set)),
             (Key::from("post_id"), Value::from(-1i64)), // Will be assigned by server
-            (Key::from("reply_to"), Value::from(reply_to.unwrap_or(-1))),
+            (Key::from("reply_to"), reply_to_value),
         ]),
     )
     .map_err(|e| format!("Failed to create data dictionary: {e}"))?;

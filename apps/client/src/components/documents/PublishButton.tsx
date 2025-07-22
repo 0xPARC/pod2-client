@@ -111,7 +111,7 @@ export function PublishButton({
         url: data.url || null,
         tags: data.tags || [],
         authors: data.authors || [],
-        replyTo: data.replyTo || null,
+        reply_to: null, // TODO: Update when UI supports ReplyReference
         serverUrl: serverUrl
       });
 

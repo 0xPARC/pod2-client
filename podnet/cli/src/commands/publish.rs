@@ -15,7 +15,7 @@ use pod2::{
     },
 };
 use podnet_models::{
-    DocumentContent, DocumentFile, PublishRequest,
+    DocumentContent, DocumentFile, PublishRequest, ReplyReference,
     mainpod::publish::{
         PublishProofParams, prove_publish_verification_with_solver,
         verify_publish_verification_with_solver,
@@ -200,7 +200,6 @@ pub async fn publish_content(
     };
 
     let post_id_num = post_id.map(|id| id.parse::<i64>()).transpose()?;
-    let reply_to_num = reply_to.map(|id| id.parse::<i64>()).transpose()?;
 
     let tag_set = Set::new(
         5, // TODO: put this configuration somewhere global
@@ -218,6 +217,38 @@ pub async fn publish_content(
             .collect(),
     )?;
 
+    // Process reply_to parameter - expect format "post_id:document_id"
+    let reply_to_ref: Option<ReplyReference> = if let Some(reply_to_str) = reply_to {
+        let parts: Vec<&str> = reply_to_str.split(':').collect();
+        if parts.len() != 2 {
+            return Err(format!("Invalid reply_to format. Expected 'post_id:document_id', got '{}'", reply_to_str).into());
+        }
+        
+        let reply_post_id = parts[0].parse::<i64>()
+            .map_err(|_| format!("Invalid post_id in reply_to: {}", parts[0]))?;
+        let reply_document_id = parts[1].parse::<i64>()
+            .map_err(|_| format!("Invalid document_id in reply_to: {}", parts[1]))?;
+            
+        println!("Replying to post {} document {}", reply_post_id, reply_document_id);
+        Some(ReplyReference {
+            post_id: reply_post_id,
+            document_id: reply_document_id,
+        })
+    } else {
+        None
+    };
+
+    // Create reply_to value for the data dictionary
+    let reply_to_value = if let Some(ref reply_ref) = reply_to_ref {
+        let mut reply_map = HashMap::new();
+        reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+        reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+        let reply_dict = Dictionary::new(2, reply_map)?;
+        Value::from(reply_dict)
+    } else {
+        Value::from(-1i64)
+    };
+
     let data_dict = Dictionary::new(
         6,
         HashMap::from([
@@ -225,10 +256,7 @@ pub async fn publish_content(
             (Key::from("content_hash"), Value::from(content_hash)),
             (Key::from("tags"), Value::from(tag_set)),
             (Key::from("post_id"), Value::from(post_id_num.unwrap_or(-1))),
-            (
-                Key::from("reply_to"),
-                Value::from(reply_to_num.unwrap_or(-1)),
-            ),
+            (Key::from("reply_to"), reply_to_value),
         ]),
     )?;
 
@@ -262,21 +290,6 @@ pub async fn publish_content(
 
     println!("✓ Main pod created and verified");
 
-    // Process reply_to parameter
-    let reply_to_id: Option<i64> = if let Some(reply_to_str) = reply_to {
-        match reply_to_str.parse::<i64>() {
-            Ok(id) => {
-                println!("Replying to document ID: {id}");
-                Some(id)
-            }
-            Err(_) => {
-                return Err(format!("Invalid reply_to document ID: {reply_to_str}").into());
-            }
-        }
-    } else {
-        None
-    };
-
     println!("Creating publish request");
     // Create the publish request using the proper struct
     let publish_request = PublishRequest {
@@ -284,7 +297,7 @@ pub async fn publish_content(
         content: document_content,
         tags: document_tags,
         authors: document_authors,
-        reply_to: reply_to_id,
+        reply_to: reply_to_ref,
         post_id: post_id_num,
         username: username.clone(),
         main_pod,

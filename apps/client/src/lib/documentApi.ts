@@ -25,6 +25,14 @@ export interface DocumentContent {
 }
 
 /**
+ * Reply reference containing both post_id and document_id
+ */
+export interface ReplyReference {
+  post_id: number;
+  document_id: number;
+}
+
+/**
  * Document metadata from the PodNet server
  */
 export interface DocumentMetadata {
@@ -40,7 +48,7 @@ export interface DocumentMetadata {
   upvote_count_pod?: MainPod; // MainPod proving upvote count
   tags: string[]; // Tags for organization
   authors: string[]; // Authors for attribution
-  reply_to?: number; // Document ID this replies to
+  reply_to?: ReplyReference; // Post and document IDs this replies to
   requested_post_id?: number; // Original post_id from request
   title: string; // Document title
 }

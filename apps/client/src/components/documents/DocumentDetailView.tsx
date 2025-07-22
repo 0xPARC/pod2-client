@@ -20,6 +20,7 @@ import {
   Document,
   DocumentFile,
   DocumentVerificationResult,
+  ReplyReference,
   fetchDocument,
   verifyDocumentPod
 } from "../../lib/documentApi";
@@ -660,7 +661,8 @@ export function DocumentDetailView({
                   <>
                     <span>•</span>
                     <span className="text-orange-600">
-                      Reply to #{document.metadata.reply_to}
+                      Reply to #{document.metadata.reply_to.document_id} (Post{" "}
+                      {document.metadata.reply_to.post_id})
                     </span>
                   </>
                 )}

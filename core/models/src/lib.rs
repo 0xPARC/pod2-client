@@ -72,6 +72,12 @@ pub struct Post {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplyReference {
+    pub post_id: i64,    // Post ID being replied to
+    pub document_id: i64, // Specific document ID being replied to
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RawDocument {
     pub id: Option<i64>,
     pub content_id: String,
@@ -84,7 +90,7 @@ pub struct RawDocument {
     pub upvote_count_pod: Option<String>, // JSON string of the upvote count main pod
     pub tags: HashSet<String>,            // Set of tags for document organization
     pub authors: HashSet<String>,         // Set of authors for document attribution
-    pub reply_to: Option<i64>,            // Document ID this document is replying to
+    pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     pub requested_post_id: Option<i64>,   // Original post_id from request used in MainPod proof
     pub title: String,                    // Document title
 }
@@ -133,7 +139,7 @@ pub struct DocumentMetadata {
     pub upvote_count_pod: LazyDeser<Option<MainPod>>,
     pub tags: HashSet<String>, // Set of tags for document organization and discovery
     pub authors: HashSet<String>, // Set of authors for document attribution
-    pub reply_to: Option<i64>, // Document ID this document is replying to
+    pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     /// Original post_id value from the publish request used in the MainPod proof
     /// This may be -1 for new documents, while post_id is the actual assigned ID
     pub requested_post_id: Option<i64>,
@@ -213,11 +219,17 @@ impl Document {
         .map_err(|e| format!("Failed to create authors set: {e:?}"))?;
         data_map.insert(Key::from("authors"), Value::from(authors_set));
 
-        // Add reply_to
-        data_map.insert(
-            Key::from("reply_to"),
-            Value::from(self.metadata.reply_to.unwrap_or(-1)),
-        );
+        // Add reply_to (convert ReplyReference to dictionary or use -1 if None)
+        if let Some(ref reply_ref) = self.metadata.reply_to {
+            let mut reply_map = HashMap::new();
+            reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+            reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+            let reply_dict = Dictionary::new(2, reply_map)
+                .map_err(|e| format!("Failed to create reply_to dictionary: {e:?}"))?;
+            data_map.insert(Key::from("reply_to"), Value::from(reply_dict));
+        } else {
+            data_map.insert(Key::from("reply_to"), Value::from(-1));
+        }
 
         // Add post_id (use requested_post_id if available, otherwise use post_id)
         let verification_post_id = self
@@ -306,7 +318,7 @@ pub struct PublishRequest {
     pub content: DocumentContent,
     pub tags: HashSet<String>,    // Set of tags for document organization
     pub authors: HashSet<String>, // Set of authors for document attribution
-    pub reply_to: Option<i64>,    // Document ID this document is replying to
+    pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     pub post_id: Option<i64>,     // Post ID (None means create new post)
     pub username: String,         // Expected username from identity verification
     /// MainPod that cryptographically proves the user's identity and document authenticity:

@@ -3,7 +3,8 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentMetadata, IdentityServer, Post, RawDocument, Upvote, lazy_pod::LazyDeser,
+    Document, DocumentMetadata, IdentityServer, Post, RawDocument, ReplyReference, Upvote,
+    lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
 
@@ -48,11 +49,10 @@ impl Database {
                 upvote_count_pod TEXT,
                 tags TEXT DEFAULT '[]',
                 authors TEXT DEFAULT '[]',
-                reply_to INTEGER,
+                reply_to TEXT,
                 requested_post_id INTEGER,
                 title TEXT NOT NULL,
                 FOREIGN KEY (post_id) REFERENCES posts (id),
-                FOREIGN KEY (reply_to) REFERENCES documents (id),
                 UNIQUE (post_id, revision)
             )",
             [],
@@ -71,6 +71,9 @@ impl Database {
             "ALTER TABLE documents ADD COLUMN title TEXT NOT NULL DEFAULT ''",
             [],
         );
+
+        // Migrate reply_to column to TEXT for ReplyReference support
+        self.migrate_reply_to_column(&conn)?;
 
         // Create identity_servers table
         conn.execute(
@@ -98,6 +101,68 @@ impl Database {
             )",
             [],
         )?;
+
+        Ok(())
+    }
+
+    fn migrate_reply_to_column(&self, conn: &Connection) -> Result<()> {
+        // Check if the migration has already been applied by checking if reply_to contains JSON
+        let migration_check: Result<String, _> = conn.query_row(
+            "SELECT reply_to FROM documents WHERE reply_to IS NOT NULL LIMIT 1",
+            [],
+            |row| {
+                Ok(row
+                    .get::<_, Option<String>>(0)
+                    .unwrap_or_default()
+                    .unwrap_or_default())
+            },
+        );
+
+        // If we can get a value and it's a number (not JSON), we need to migrate
+        if let Ok(value) = migration_check {
+            if !value.is_empty() && value.parse::<i64>().is_ok() {
+                // Create a new table with the correct schema
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS documents_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        content_id TEXT NOT NULL,
+                        post_id INTEGER NOT NULL,
+                        revision INTEGER NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        pod TEXT NOT NULL,
+                        timestamp_pod TEXT NOT NULL,
+                        uploader_id TEXT NOT NULL,
+                        upvote_count_pod TEXT,
+                        tags TEXT DEFAULT '[]',
+                        authors TEXT DEFAULT '[]',
+                        reply_to TEXT,
+                        requested_post_id INTEGER,
+                        title TEXT NOT NULL,
+                        FOREIGN KEY (post_id) REFERENCES posts (id),
+                        UNIQUE (post_id, revision)
+                    )",
+                    [],
+                )?;
+
+                // Copy data, converting INTEGER reply_to to JSON format
+                conn.execute(
+                    "INSERT INTO documents_new 
+                     SELECT id, content_id, post_id, revision, created_at, pod, timestamp_pod, 
+                            uploader_id, upvote_count_pod, tags, authors,
+                            CASE 
+                                WHEN reply_to IS NULL THEN NULL 
+                                ELSE json_object('post_id', -1, 'document_id', reply_to)
+                            END as reply_to,
+                            requested_post_id, title
+                     FROM documents",
+                    [],
+                )?;
+
+                // Drop old table and rename new one
+                conn.execute("DROP TABLE documents", [])?;
+                conn.execute("ALTER TABLE documents_new RENAME TO documents", [])?;
+            }
+        }
 
         Ok(())
     }
@@ -165,7 +230,7 @@ impl Database {
         uploader_id: &str,
         tags: &HashSet<String>,
         authors: &HashSet<String>,
-        reply_to: Option<i64>,
+        reply_to: Option<ReplyReference>,
         requested_post_id: Option<i64>,
         title: &str,
         storage: &crate::storage::ContentAddressedStorage,
@@ -194,6 +259,16 @@ impl Database {
         let authors_json = serde_json::to_string(authors)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
+        // Serialize reply_to to JSON if present
+        let reply_to_json = if let Some(ref reply_ref) = reply_to {
+            Some(
+                serde_json::to_string(reply_ref)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+            )
+        } else {
+            None
+        };
+
         // Insert document with empty timestamp_pod and null upvote_count_pod initially
         tx.execute(
             "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title) VALUES (?1, ?2, ?3, ?4, '', ?5, NULL, ?6, ?7, ?8, ?9, ?10)",
@@ -205,7 +280,7 @@ impl Database {
                 uploader_id,
                 tags_json,
                 authors_json,
-                reply_to,
+                reply_to_json,
                 requested_post_id,
                 title,
             ],
@@ -309,6 +384,9 @@ impl Database {
                 let authors_json: String = row.get(10)?;
                 let authors: HashSet<String> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -321,7 +399,7 @@ impl Database {
                     upvote_count_pod: row.get(8)?,
                     tags,
                     authors,
-                    reply_to: row.get(11)?,
+                    reply_to,
                     requested_post_id: row.get(12)?,
                     title: row.get(13)?,
                 })
@@ -345,6 +423,9 @@ impl Database {
                 let authors_json: String = row.get(10)?;
                 let authors: HashSet<String> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -357,7 +438,7 @@ impl Database {
                     upvote_count_pod: row.get(8)?,
                     tags,
                     authors,
-                    reply_to: row.get(11)?,
+                    reply_to,
                     requested_post_id: row.get(12)?,
                     title: row.get(13)?,
                 })
@@ -381,6 +462,9 @@ impl Database {
                 let authors_json: String = row.get(10)?;
                 let authors: HashSet<String> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -393,7 +477,7 @@ impl Database {
                     upvote_count_pod: row.get(8)?,
                     tags,
                     authors,
-                    reply_to: row.get(11)?,
+                    reply_to,
                     requested_post_id: row.get(12)?,
                     title: row.get(13)?,
                 })
@@ -417,6 +501,9 @@ impl Database {
                 let authors_json: String = row.get(10)?;
                 let authors: HashSet<String> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -429,7 +516,7 @@ impl Database {
                     upvote_count_pod: row.get(8)?,
                     tags,
                     authors,
-                    reply_to: row.get(11)?,
+                    reply_to,
                     requested_post_id: row.get(12)?,
                     title: row.get(13)?,
                 })
@@ -742,7 +829,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, content_id, post_id, revision, created_at, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title
-             FROM documents WHERE reply_to = ?1 ORDER BY created_at ASC",
+             FROM documents WHERE json_extract(reply_to, '$.document_id') = ?1 ORDER BY created_at ASC",
         )?;
 
         let documents = stmt
@@ -752,6 +839,9 @@ impl Database {
                 let authors_json: String = row.get(10)?;
                 let authors: HashSet<String> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
                 Ok(RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -764,7 +854,7 @@ impl Database {
                     upvote_count_pod: row.get(8)?,
                     tags,
                     authors,
-                    reply_to: row.get(11)?,
+                    reply_to,
                     requested_post_id: row.get(12)?,
                     title: row.get(13)?,
                 })
