@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "770da880e9219f2ebe21c79a63637f7b3e84f494", features = [
   "examples",
 ] }
 pod2_solver = { path = "core/solver" }
@@ -68,6 +68,6 @@ inherits = "release"
 debug = true
 
 [workspace.dev-dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "770da880e9219f2ebe21c79a63637f7b3e84f494", features = [
   "examples",
 ] }
