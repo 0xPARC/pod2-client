@@ -78,6 +78,9 @@ pub async fn send_pod_to_peer(
         PodData::Signed(_) => {
             return Err("Cannot send SignedPod directly. Only MainPods can be sent.".to_string());
         }
+        PodData::RsaIntro(_) => {
+            return Err("Cannot send RSA intro POD. Only MainPods can be sent.".to_string());
+        }
     };
 
     // Parse peer NodeID

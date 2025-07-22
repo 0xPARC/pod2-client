@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use chrono;
+use introduction_pods::rsapod::RsaPod;
 use pod2::middleware::TypedValue;
 use serde::{Deserialize, Serialize};
+use ssh_key::SshSig;
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -289,4 +292,123 @@ pub async fn get_app_setup_state(
     pod2_db::store::get_app_setup_state(&app_state.db)
         .await
         .map_err(|e| format!("Failed to get setup state: {e}"))
+}
+
+/// Create RSA intro POD from SSH signature for GitHub linking (Step 2: Actual POD creation)
+#[tauri::command]
+pub async fn validate_ssh_signature(
+    github_username: String,
+    ssh_signature: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    log::info!("Creating RSA intro POD for GitHub user: {github_username}");
+
+    // Basic input validation
+    if github_username.trim().is_empty() {
+        return Err("GitHub username cannot be empty".to_string());
+    }
+
+    if ssh_signature.trim().is_empty() {
+        return Err("SSH signature cannot be empty".to_string());
+    }
+
+    // Parse SSH signature
+    let ssh_sig = SshSig::from_pem(ssh_signature.trim())
+        .map_err(|e| format!("Invalid SSH signature format: {e}"))?;
+
+    log::info!("Successfully parsed SSH signature");
+
+    // Create RSA intro POD
+    const MESSAGE: &str = "E PLURIBUS UNUM; DO NOT SHARE\n";
+    const NAMESPACE: &str = "podnet";
+
+    log::info!("Creating RSA intro POD with message: {MESSAGE} and namespace: {NAMESPACE}");
+
+    // Get required parameters and VDSet
+    let params = pod2::backends::plonky2::DEFAULT_PARAMS.clone();
+
+    // Create a basic VDSet for RSA PODs
+    let vds = vec![
+        pod2::backends::plonky2::STANDARD_REC_MAIN_POD_CIRCUIT_DATA
+            .verifier_only
+            .clone(),
+        pod2::backends::plonky2::emptypod::STANDARD_EMPTY_POD_DATA
+            .1
+            .verifier_only
+            .clone(),
+    ];
+    let vd_set = pod2::backends::plonky2::basetypes::VDSet::new(params.max_depth_mt_vds, &vds)
+        .map_err(|e| format!("Failed to create VDSet: {e}"))?;
+
+    let rsa_pod = RsaPod::new_boxed(&params, &vd_set, MESSAGE, &ssh_sig, NAMESPACE)
+        .map_err(|e| format!("Failed to create RSA intro POD: {e}"))?;
+
+    log::info!("Successfully created RSA intro POD");
+
+    // Store the RSA intro POD in the identity folder
+    let mut app_state = state.lock().await;
+
+    // Ensure "identity" folder exists
+    const IDENTITY_FOLDER: &str = "identity";
+    if !pod2_db::store::space_exists(&app_state.db, IDENTITY_FOLDER)
+        .await
+        .unwrap_or(false)
+    {
+        pod2_db::store::create_space(&app_state.db, IDENTITY_FOLDER)
+            .await
+            .map_err(|e| format!("Failed to create identity folder: {e}"))?;
+        log::info!("✓ Created identity folder");
+    }
+
+    // Create structured data for the RSA intro POD
+    let rsa_pod_data = serde_json::json!({
+        "type": "RSA Intro POD",
+        "github_username": github_username,
+        "message": MESSAGE,
+        "namespace": NAMESPACE,
+        "pod_id": rsa_pod.id().to_string(),
+        "created_at": chrono::Utc::now().to_rfc3339(),
+        "verification_status": rsa_pod.verify().is_ok(),
+        "serialized_pod": rsa_pod.serialize_data()
+    });
+
+    // Create PodData for RSA intro POD
+    let pod_data = pod2_db::store::PodData::RsaIntro(rsa_pod_data);
+    let label = format!("RSA Intro POD - GitHub: {github_username}");
+    let pod_id = pod_data.id();
+
+    // Check if RSA intro POD already exists
+    match pod2_db::store::get_pod(&app_state.db, IDENTITY_FOLDER, &pod_id).await {
+        Ok(Some(_existing_pod)) => {
+            log::info!("RSA intro POD already exists with ID: {}, skipping storage", pod_id);
+        }
+        Ok(None) => {
+            // POD doesn't exist, store it
+            log::info!("Storing new RSA intro POD in identity folder with label: {}", label);
+            pod2_db::store::import_pod(&app_state.db, &pod_data, Some(&label), IDENTITY_FOLDER)
+                .await
+                .map_err(|e| format!("Failed to store RSA intro POD: {e}"))?;
+            log::info!("✓ Successfully stored RSA intro POD in database");
+        }
+        Err(e) => {
+            return Err(format!("Failed to check for existing RSA intro POD: {e}"));
+        }
+    }
+
+    log::info!(
+        "Successfully created and stored RSA intro POD with ID: {}",
+        rsa_pod.id()
+    );
+    log::info!("RSA intro POD verification: {:?}", rsa_pod.verify());
+
+    // Trigger state sync to refresh UI
+    app_state
+        .trigger_state_sync()
+        .await
+        .map_err(|e| format!("Failed to trigger state sync: {e}"))?;
+
+    Ok(format!(
+        "Successfully created RSA intro POD for GitHub user: {github_username} (POD ID: {})",
+        rsa_pod.id()
+    ))
 }

@@ -37,7 +37,8 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
   const { appState } = useAppStore();
   const allPods = [
     ...appState.pod_lists.signed_pods,
-    ...appState.pod_lists.main_pods
+    ...appState.pod_lists.main_pods,
+    ...appState.pod_lists.rsa_intro_pods
   ];
 
   // Check if a POD with this ID already exists

@@ -82,6 +82,10 @@ pub async fn submit_pod_request(
                     }
                 }
             }
+            pod2_db::store::PodData::RsaIntro(_) => {
+                // RSA intro PODs are not used in integration requests, skip them
+                log::debug!("Skipping RSA intro POD {} during integration request", pod_info.id);
+            }
         }
     }
 

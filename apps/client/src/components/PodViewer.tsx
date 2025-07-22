@@ -1,8 +1,9 @@
-import { FileCheck, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
+import { FileCheck, FilePen, KeyRound, MoreHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../lib/store";
 import { DeletePodDialog } from "./DeletePodDialog";
 import MainPodCard from "./MainPodCard";
+import RsaIntroPodCard from "./RsaIntroPodCard";
 import SignedPodCard from "./SignedPodCard";
 import { Button } from "./ui/button";
 import {
@@ -105,6 +106,8 @@ export function PodViewer() {
                     >
                       {pod.pod_type === "signed" ? (
                         <FilePen className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                      ) : pod.pod_type === "rsa_intro" ? (
+                        <KeyRound className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
                       ) : (
                         <FileCheck className="h-4 w-4 shrink-0 text-fuchsia-600 dark:text-fuchsia-400" />
                       )}
@@ -174,6 +177,11 @@ export function PodViewer() {
                     {selectedPod.data.pod_data_variant === "Signed" && (
                       <SignedPodCard
                         signedPod={selectedPod.data.pod_data_payload}
+                      />
+                    )}
+                    {selectedPod.data.pod_data_variant === "RsaIntro" && (
+                      <RsaIntroPodCard
+                        rsaIntroPod={selectedPod.data.pod_data_payload}
                       />
                     )}
                   </div>

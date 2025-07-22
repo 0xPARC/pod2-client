@@ -1,3 +1,5 @@
+#![feature(get_many_mut)]
+
 use anyhow::Context;
 use config::FeatureConfig;
 use features::{blockies, *};
@@ -50,11 +52,12 @@ pub struct AppStateData {
 pub struct PodLists {
     pub signed_pods: Vec<PodInfo>,
     pub main_pods: Vec<PodInfo>,
+    pub rsa_intro_pods: Vec<PodInfo>,
 }
 
 impl PodLists {
     pub fn all_pods(&self) -> impl Iterator<Item = &PodInfo> {
-        self.signed_pods.iter().chain(self.main_pods.iter())
+        self.signed_pods.iter().chain(self.main_pods.iter()).chain(self.rsa_intro_pods.iter())
     }
 }
 
@@ -63,6 +66,7 @@ pub struct PodStats {
     pub total_pods: u32,
     pub signed_pods: u32,
     pub main_pods: u32,
+    pub rsa_intro_pods: u32,
 }
 
 impl Default for AppStateData {
@@ -72,10 +76,12 @@ impl Default for AppStateData {
                 total_pods: 0,
                 signed_pods: 0,
                 main_pods: 0,
+                rsa_intro_pods: 0,
             },
             pod_lists: PodLists {
                 signed_pods: Vec::new(),
                 main_pods: Vec::new(),
+                rsa_intro_pods: Vec::new(),
             },
             spaces: Vec::new(),
         }
@@ -95,7 +101,7 @@ impl AppState {
             .await
             .map_err(|e| format!("Failed to count pods: {e}"))?;
 
-        let (signed_pods, main_pods) = store::count_pods_by_type(&self.db)
+        let (signed_pods, main_pods, rsa_intro_pods) = store::count_pods_by_type(&self.db)
             .await
             .map_err(|e| format!("Failed to count pods by type: {e}"))?;
 
@@ -103,6 +109,7 @@ impl AppState {
             total_pods,
             signed_pods,
             main_pods,
+            rsa_intro_pods,
         };
 
         Ok(())
@@ -134,9 +141,16 @@ impl AppState {
             .cloned()
             .collect();
 
+        let rsa_intro_pods = all_pods
+            .iter()
+            .filter(|pod| pod.pod_type == "rsa_intro")
+            .cloned()
+            .collect();
+
         self.state_data.pod_lists = PodLists {
             signed_pods,
             main_pods,
+            rsa_intro_pods,
         };
 
         Ok(())
@@ -377,6 +391,7 @@ pub fn run() {
             identity_setup::complete_identity_setup,
             identity_setup::is_setup_completed,
             identity_setup::get_app_setup_state,
+            identity_setup::validate_ssh_signature,
             // Integration commands
             integration::submit_pod_request
         ])

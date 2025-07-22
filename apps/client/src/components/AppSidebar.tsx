@@ -35,6 +35,7 @@ import {
   ImportIcon,
   InboxIcon,
   MessageSquareIcon,
+  SettingsIcon,
   UploadIcon
 } from "lucide-react";
 import { useState } from "react";
@@ -123,7 +124,8 @@ export function AppSidebar() {
                         folders.map((folder) => {
                           const podCount = [
                             ...appState.pod_lists.signed_pods,
-                            ...appState.pod_lists.main_pods
+                            ...appState.pod_lists.main_pods,
+                            ...appState.pod_lists.rsa_intro_pods
                           ].filter((p) => p.space === folder.id).length;
 
                           return (
@@ -174,6 +176,15 @@ export function AppSidebar() {
                 >
                   <UploadIcon />
                   Publish
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setCurrentView("identity")}
+                  isActive={currentView === "identity"}
+                >
+                  <SettingsIcon />
+                  Identity Settings
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

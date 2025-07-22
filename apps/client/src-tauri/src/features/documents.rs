@@ -182,6 +182,9 @@ pub async fn upvote_document(
         PodData::Main(_) => {
             return Err("Expected signed pod for identity, got main pod".to_string())
         }
+        PodData::RsaIntro(_) => {
+            return Err("Expected signed pod for identity, got RSA intro pod".to_string())
+        }
     };
 
     // 3. Get the user's private key
@@ -421,6 +424,9 @@ pub async fn publish_document(
             .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
         PodData::Main(_) => {
             return Err("Expected signed pod for identity, got main pod".to_string())
+        }
+        PodData::RsaIntro(_) => {
+            return Err("Expected signed pod for identity, got RSA intro pod".to_string())
         }
     };
 

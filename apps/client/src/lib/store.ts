@@ -39,7 +39,8 @@ export type AppView =
   | "chats"
   | "frogs"
   | "editor"
-  | "publish";
+  | "publish"
+  | "identity";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
 interface AppStoreState {
@@ -255,7 +256,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       const { appState } = get();
       const allPods = [
         ...appState.pod_lists.signed_pods,
-        ...appState.pod_lists.main_pods
+        ...appState.pod_lists.main_pods,
+        ...appState.pod_lists.rsa_intro_pods
       ];
       const pod = allPods.find((p) => p.id === podId);
 
@@ -278,7 +280,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
     const pods = [
       ...appState.pod_lists.signed_pods,
-      ...appState.pod_lists.main_pods
+      ...appState.pod_lists.main_pods,
+      ...appState.pod_lists.rsa_intro_pods
     ].filter((p) => p.space === folder);
 
     return pods;
@@ -291,7 +294,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       // Return all pods when "all" is selected
       return [
         ...appState.pod_lists.signed_pods,
-        ...appState.pod_lists.main_pods
+        ...appState.pod_lists.main_pods,
+        ...appState.pod_lists.rsa_intro_pods
       ];
     }
 
@@ -305,7 +309,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     const { appState } = get();
     const allPods = [
       ...appState.pod_lists.signed_pods,
-      ...appState.pod_lists.main_pods
+      ...appState.pod_lists.main_pods,
+      ...appState.pod_lists.rsa_intro_pods
     ];
     return allPods.find((pod) => pod.id === selectedPodId) || null;
   },

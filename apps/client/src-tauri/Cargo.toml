@@ -26,6 +26,8 @@ pod2 = { workspace = true }
 pod2_db = { workspace = true }
 pod2_solver = { workspace = true }
 podnet-models = { workspace = true }
+introduction-pods = { path = "../../../../introduction-pods" }
+ssh-key = { version = "0.6.7", features = ["ed25519"] }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }

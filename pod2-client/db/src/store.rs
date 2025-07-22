@@ -23,6 +23,7 @@ pub struct SpaceInfo {
 pub enum PodData {
     Signed(Box<SerializedSignedPod>),
     Main(Box<SerializedMainPod>),
+    RsaIntro(serde_json::Value),
 }
 
 impl PodData {
@@ -31,6 +32,7 @@ impl PodData {
         match self {
             PodData::Signed(_) => "signed",
             PodData::Main(_) => "main",
+            PodData::RsaIntro(_) => "rsa_intro",
         }
     }
 
@@ -38,6 +40,12 @@ impl PodData {
         match self {
             PodData::Signed(pod) => pod.id().0.encode_hex(),
             PodData::Main(pod) => pod.id().0.encode_hex(),
+            PodData::RsaIntro(data) => {
+                data.get("pod_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            }
         }
     }
 }
@@ -379,7 +387,7 @@ pub async fn count_all_pods(db: &Db) -> Result<u32> {
     .context("DB interaction failed for count_all_pods")?
 }
 
-pub async fn count_pods_by_type(db: &Db) -> Result<(u32, u32)> {
+pub async fn count_pods_by_type(db: &Db) -> Result<(u32, u32, u32)> {
     let conn = db
         .pool()
         .get()
@@ -398,7 +406,12 @@ pub async fn count_pods_by_type(db: &Db) -> Result<(u32, u32)> {
                 [],
                 |row| row.get(0),
             )?;
-            Ok::<_, rusqlite::Error>((signed_count as u32, main_count as u32))
+            let rsa_intro_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM pods WHERE pod_type = 'rsa_intro'",
+                [],
+                |row| row.get(0),
+            )?;
+            Ok::<_, rusqlite::Error>((signed_count as u32, main_count as u32, rsa_intro_count as u32))
         })
         .await
         .map_err(|e| anyhow::anyhow!("InteractError: {}", e))

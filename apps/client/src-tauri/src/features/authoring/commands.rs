@@ -249,6 +249,10 @@ pub async fn execute_code_command(
                     ));
                 }
             },
+            PodData::RsaIntro(_) => {
+                // RSA intro PODs are not used in code execution, skip them
+                log::debug!("Skipping RSA intro POD {} during code execution", pod_info.id);
+            }
         }
     }
 

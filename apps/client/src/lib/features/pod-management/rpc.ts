@@ -19,6 +19,7 @@ export interface PodStats {
   total_pods: number;
   signed_pods: number;
   main_pods: number;
+  rsa_intro_pods: number;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface PodStats {
 export interface PodLists {
   signed_pods: PodInfo[];
   main_pods: PodInfo[];
+  rsa_intro_pods: PodInfo[];
 }
 
 /**
@@ -49,9 +51,11 @@ function isAppStateData(obj: any): obj is AppStateData {
     typeof obj.pod_stats.total_pods === "number" &&
     typeof obj.pod_stats.signed_pods === "number" &&
     typeof obj.pod_stats.main_pods === "number" &&
+    typeof obj.pod_stats.rsa_intro_pods === "number" &&
     obj.pod_lists &&
     Array.isArray(obj.pod_lists.signed_pods) &&
     Array.isArray(obj.pod_lists.main_pods) &&
+    Array.isArray(obj.pod_lists.rsa_intro_pods) &&
     obj.spaces &&
     Array.isArray(obj.spaces)
   );
