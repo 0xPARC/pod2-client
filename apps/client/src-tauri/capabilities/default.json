@@ -30,6 +30,8 @@
     "http:allow-fetch-send",
     "fs:allow-read-text-file",
     "dialog:default",
-    "log:default"
+    "log:default",
+    "fs:allow-write-file",
+    "dialog:default"
   ]
 }
