@@ -40,7 +40,8 @@ export function PublishForm({
   const [authors, setAuthors] = useState<string[]>([]);
   const [authorInput, setAuthorInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-  const [replyToDocument, setReplyToDocument] = useState<DocumentMetadata | null>(null);
+  const [replyToDocument, setReplyToDocument] =
+    useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
   const addTag = () => {
@@ -167,7 +168,7 @@ export function PublishForm({
     if (replyTo) {
       setReplyToLoading(true);
       // Extract document_id from "post_id:document_id" format
-      const documentId = parseInt(replyTo.split(':')[1]);
+      const documentId = parseInt(replyTo.split(":")[1]);
       fetchDocument(documentId)
         .then((doc) => {
           setReplyToDocument(doc.metadata);
@@ -187,7 +188,9 @@ export function PublishForm({
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <CardTitle className="text-xl">
-              {replyTo ? `Reply to Document #${replyTo.split(':')[1]} (Post ${replyTo.split(':')[0]})` : "Publish New Document"}
+              {replyTo
+                ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
+                : "Publish New Document"}
             </CardTitle>
             {replyTo && replyToDocument && (
               <div className="mt-2 p-3 bg-muted rounded-lg">

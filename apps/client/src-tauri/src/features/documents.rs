@@ -341,7 +341,11 @@ pub async fn publish_document(
 ) -> Result<PublishResult, String> {
     log::info!("Publishing document to server {server_url}");
     if let Some(ref reply_ref) = reply_to {
-        log::info!("Replying to post {} document {}", reply_ref.post_id, reply_ref.document_id);
+        log::info!(
+            "Replying to post {} document {}",
+            reply_ref.post_id,
+            reply_ref.document_id
+        );
     }
 
     // Validate title

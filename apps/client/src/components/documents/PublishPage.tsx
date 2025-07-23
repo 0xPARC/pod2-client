@@ -10,7 +10,7 @@ interface PublishPageProps {
 
 export function PublishPage({ onBack, onPublishSuccess }: PublishPageProps) {
   const { replyToDocumentId, setReplyToDocumentId } = useAppStore();
-  
+
   const handlePublishSuccess = (documentId: number) => {
     console.log("Document published successfully with ID:", documentId);
     // Clear the reply context after successful publish
@@ -41,13 +41,14 @@ export function PublishPage({ onBack, onPublishSuccess }: PublishPageProps) {
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold">
-              {replyToDocumentId ? `Reply to Document #${replyToDocumentId.split(':')[1]} (Post ${replyToDocumentId.split(':')[0]})` : "Publish Document"}
+              {replyToDocumentId
+                ? `Reply to Document #${replyToDocumentId.split(":")[1]} (Post ${replyToDocumentId.split(":")[0]})`
+                : "Publish Document"}
             </h1>
             <p className="text-muted-foreground mt-2">
-              {replyToDocumentId 
-                ? `Create a reply to document #${replyToDocumentId.split(':')[1]} with cryptographic verification.`
-                : "Create and publish a new document to the POD2 network with cryptographic verification."
-              }
+              {replyToDocumentId
+                ? `Create a reply to document #${replyToDocumentId.split(":")[1]} with cryptographic verification.`
+                : "Create and publish a new document to the POD2 network with cryptographic verification."}
             </p>
           </div>
 

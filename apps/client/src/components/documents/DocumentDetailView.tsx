@@ -160,22 +160,22 @@ export function DocumentDetailView({
     // Get direct replies to this post
     const directReplies = await fetchPostReplies(postId);
     const allReplies: DocumentMetadata[] = [...directReplies];
-    
+
     // For each direct reply, recursively fetch its replies
     for (const reply of directReplies) {
       if (!reply.id || visited.has(reply.id)) {
         continue;
       }
-      
+
       visited.add(reply.id);
-      
+
       try {
         // Fetch replies to this specific document
         const nestedReplies = await fetchDocumentReplies(reply.id);
-        
+
         if (nestedReplies.length > 0) {
           allReplies.push(...nestedReplies);
-          
+
           // Recursively fetch replies to nested replies
           for (const nestedReply of nestedReplies) {
             if (nestedReply.id && !visited.has(nestedReply.id)) {
@@ -186,11 +186,14 @@ export function DocumentDetailView({
           }
         }
       } catch (error) {
-        console.warn(`Failed to fetch replies for document ${reply.id}:`, error);
+        console.warn(
+          `Failed to fetch replies for document ${reply.id}:`,
+          error
+        );
         // Continue with other replies even if one fails
       }
     }
-    
+
     return allReplies;
   };
 
@@ -202,13 +205,20 @@ export function DocumentDetailView({
       setRepliesError(null);
 
       // Use recursive fetching to get complete conversation tree
-      const allRepliesData = await fetchAllRepliesRecursively(document.metadata.post_id);
+      const allRepliesData = await fetchAllRepliesRecursively(
+        document.metadata.post_id
+      );
       setReplies(allRepliesData);
     } catch (err) {
       // Fallback to basic post replies if recursive fails
       try {
-        console.warn("Recursive replies failed, falling back to basic post replies:", err);
-        const postRepliesData = await fetchPostReplies(document.metadata.post_id);
+        console.warn(
+          "Recursive replies failed, falling back to basic post replies:",
+          err
+        );
+        const postRepliesData = await fetchPostReplies(
+          document.metadata.post_id
+        );
         setReplies(postRepliesData);
       } catch (fallbackErr) {
         console.error("Both recursive and basic replies failed:", fallbackErr);
@@ -243,7 +253,7 @@ export function DocumentDetailView({
 
   const handleReplyToDocument = () => {
     if (!document) return;
-    
+
     // Format: "post_id:document_id"
     const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
     console.log("Setting replyToDocumentId to:", replyToId);
@@ -378,7 +388,7 @@ export function DocumentDetailView({
     const rootReplies: ThreadedReply[] = [];
 
     // First pass: create all reply objects
-    replies.forEach(reply => {
+    replies.forEach((reply) => {
       const threadedReply: ThreadedReply = {
         ...reply,
         children: [],
@@ -388,9 +398,9 @@ export function DocumentDetailView({
     });
 
     // Second pass: build parent-child relationships
-    replies.forEach(reply => {
+    replies.forEach((reply) => {
       const threadedReply = replyMap.get(reply.id!)!;
-      
+
       if (reply.reply_to?.document_id) {
         // This is a reply to another document
         const parentReply = replyMap.get(reply.reply_to.document_id);
@@ -412,9 +422,10 @@ export function DocumentDetailView({
   };
 
   // Recursive component to render a reply and its children
-  const renderThreadedReply = (reply: ThreadedReply): JSX.Element => {
+  const renderThreadedReply = (reply: ThreadedReply): React.JSX.Element => {
     const isReplyToCurrentDoc = reply.reply_to?.document_id === documentId;
-    const isReplyToCurrentPost = reply.reply_to?.post_id === document?.metadata.post_id;
+    const isReplyToCurrentPost =
+      reply.reply_to?.post_id === document?.metadata.post_id;
     const maxDepth = 5; // Limit nesting depth for readability
     const displayDepth = Math.min(reply.depth, maxDepth);
 
@@ -422,9 +433,11 @@ export function DocumentDetailView({
       <div key={reply.id} className="space-y-4">
         <div
           className={`border-l-2 border-muted pl-4 ${
-            displayDepth > 0 ? `ml-${Math.min(displayDepth * 4, 16)}` : ''
+            displayDepth > 0 ? `ml-${Math.min(displayDepth * 4, 16)}` : ""
           }`}
-          style={{ marginLeft: displayDepth > 0 ? `${displayDepth * 16}px` : '0' }}
+          style={{
+            marginLeft: displayDepth > 0 ? `${displayDepth * 16}px` : "0"
+          }}
         >
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -502,18 +515,12 @@ export function DocumentDetailView({
             </div>
           )}
 
-          <h4 className="font-medium text-foreground mb-2">
-            {reply.title}
-          </h4>
+          <h4 className="font-medium text-foreground mb-2">{reply.title}</h4>
 
           {reply.tags.length > 0 && (
             <div className="flex gap-1 mb-2">
               {reply.tags.map((tag, index) => (
-                <Badge
-                  key={index}
-                  variant="outline"
-                  className="text-xs"
-                >
+                <Badge key={index} variant="outline" className="text-xs">
                   {tag}
                 </Badge>
               ))}
@@ -524,11 +531,7 @@ export function DocumentDetailView({
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
               <span>Authors:</span>
               {reply.authors.map((author, index) => (
-                <Badge
-                  key={index}
-                  variant="secondary"
-                  className="text-xs"
-                >
+                <Badge key={index} variant="secondary" className="text-xs">
                   {author}
                 </Badge>
               ))}
@@ -549,7 +552,7 @@ export function DocumentDetailView({
         {/* Render children recursively */}
         {reply.children.length > 0 && (
           <div className="space-y-4">
-            {reply.children.map(child => renderThreadedReply(child))}
+            {reply.children.map((child) => renderThreadedReply(child))}
           </div>
         )}
       </div>
@@ -1118,7 +1121,9 @@ export function DocumentDetailView({
 
             {!repliesLoading && !repliesError && replies.length > 0 && (
               <div className="space-y-4">
-                {buildReplyTree(replies).map(reply => renderThreadedReply(reply))}
+                {buildReplyTree(replies).map((reply) =>
+                  renderThreadedReply(reply)
+                )}
               </div>
             )}
           </CardContent>
