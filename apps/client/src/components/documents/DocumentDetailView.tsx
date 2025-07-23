@@ -157,28 +157,21 @@ export function DocumentDetailView({
     postId: number,
     visited: Set<number> = new Set()
   ): Promise<DocumentMetadata[]> => {
-    console.log(`Fetching all replies recursively for post ${postId}`);
-    
     // Get direct replies to this post
     const directReplies = await fetchPostReplies(postId);
-    console.log(`Found ${directReplies.length} direct replies to post ${postId}`);
-    
     const allReplies: DocumentMetadata[] = [...directReplies];
     
     // For each direct reply, recursively fetch its replies
     for (const reply of directReplies) {
       if (!reply.id || visited.has(reply.id)) {
-        console.log(`Skipping reply ${reply.id} (already visited or no ID)`);
         continue;
       }
       
       visited.add(reply.id);
-      console.log(`Recursively fetching replies to document ${reply.id}`);
       
       try {
         // Fetch replies to this specific document
         const nestedReplies = await fetchDocumentReplies(reply.id);
-        console.log(`Found ${nestedReplies.length} replies to document ${reply.id}`);
         
         if (nestedReplies.length > 0) {
           allReplies.push(...nestedReplies);
@@ -188,7 +181,6 @@ export function DocumentDetailView({
             if (nestedReply.id && !visited.has(nestedReply.id)) {
               visited.add(nestedReply.id);
               const deeperReplies = await fetchDocumentReplies(nestedReply.id);
-              console.log(`Found ${deeperReplies.length} deeper replies to document ${nestedReply.id}`);
               allReplies.push(...deeperReplies);
             }
           }
@@ -199,7 +191,6 @@ export function DocumentDetailView({
       }
     }
     
-    console.log(`Total replies found recursively: ${allReplies.length}`);
     return allReplies;
   };
 
@@ -210,29 +201,14 @@ export function DocumentDetailView({
       setRepliesLoading(true);
       setRepliesError(null);
 
-      console.log(
-        `Loading replies for post ${document.metadata.post_id} (document ${documentId})`
-      );
-
       // Use recursive fetching to get complete conversation tree
       const allRepliesData = await fetchAllRepliesRecursively(document.metadata.post_id);
-      console.log(
-        `Found ${allRepliesData.length} total replies (including nested) to post ${document.metadata.post_id}:`,
-        allRepliesData
-      );
       setReplies(allRepliesData);
     } catch (err) {
       // Fallback to basic post replies if recursive fails
       try {
-        console.warn(
-          "Recursive replies failed, falling back to basic post replies:",
-          err
-        );
+        console.warn("Recursive replies failed, falling back to basic post replies:", err);
         const postRepliesData = await fetchPostReplies(document.metadata.post_id);
-        console.log(
-          `Fallback: Found ${postRepliesData.length} direct replies to post ${document.metadata.post_id}:`,
-          postRepliesData
-        );
         setReplies(postRepliesData);
       } catch (fallbackErr) {
         console.error("Both recursive and basic replies failed:", fallbackErr);
@@ -401,13 +377,6 @@ export function DocumentDetailView({
     const replyMap = new Map<number, ThreadedReply>();
     const rootReplies: ThreadedReply[] = [];
 
-    console.log("Building reply tree from", replies.length, "replies");
-    console.log("Replies data:", replies.map(r => ({
-      id: r.id,
-      title: r.title,
-      reply_to: r.reply_to
-    })));
-
     // First pass: create all reply objects
     replies.forEach(reply => {
       const threadedReply: ThreadedReply = {
@@ -418,38 +387,26 @@ export function DocumentDetailView({
       replyMap.set(reply.id!, threadedReply);
     });
 
-    console.log("Created reply map with IDs:", Array.from(replyMap.keys()));
-
     // Second pass: build parent-child relationships
     replies.forEach(reply => {
       const threadedReply = replyMap.get(reply.id!)!;
       
       if (reply.reply_to?.document_id) {
-        console.log(`Reply ${reply.id} (${reply.title}) is replying to document ${reply.reply_to.document_id}`);
         // This is a reply to another document
         const parentReply = replyMap.get(reply.reply_to.document_id);
         if (parentReply) {
-          console.log(`Found parent reply ${parentReply.id} for ${reply.id}, nesting it`);
           // It's a reply to another reply
           threadedReply.depth = parentReply.depth + 1;
           parentReply.children.push(threadedReply);
         } else {
-          console.log(`No parent found for ${reply.id}, making it root (replying to original doc)`);
           // It's a reply to the original document (not in replies list)
           rootReplies.push(threadedReply);
         }
       } else {
-        console.log(`Reply ${reply.id} has no reply_to, making it root`);
         // Top-level reply
         rootReplies.push(threadedReply);
       }
     });
-
-    console.log("Final tree structure:", rootReplies.map(r => ({
-      id: r.id,
-      title: r.title,
-      children: r.children.map(c => ({ id: c.id, title: c.title }))
-    })));
 
     return rootReplies;
   };
