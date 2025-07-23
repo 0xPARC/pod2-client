@@ -7,28 +7,54 @@ format:
     pnpm format
     cargo fmt
 
-# Run client in development mode
+# Client development commands
+# Default: dev mode with release build and staging servers (recommended for most development)
 client-dev:
-    cd apps/client && pnpm tauri dev
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity
+
+# Dev mode with debug build (slower, better for debugging)
+client-dev-debug:
+    cd apps/client && pnpm tauri dev -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity
+
+# Dev mode with local servers (requires running servers-local)
+client-dev-local:
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=http://localhost:3000 --set network.identity_server=http://localhost:3000
+
+# Dev mode with production servers (testing against prod)
+client-dev-prod:
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://api.pod2.dev --set network.identity_server=https://api.pod2.dev
 
 client-build:
     cd apps/client && pnpm tauri build
 
-# PodNet commands
+# Server management commands
+# Run both document and identity servers locally (for client-dev-local)
+servers-local:
+    just podnet-server & just podnet-identity
+
+# Individual server commands
 podnet-server:
     cargo run --profile release-with-debug -p podnet-server
 
-podnet-cli *args:
-    cargo run --profile release-with-debug -p podnet-cli -- {{ args }}
-
 podnet-identity:
     cargo run --profile release-with-debug -p podnet-ident-strawman
+
+# PodNet CLI
+podnet-cli *args:
+    cargo run --profile release-with-debug -p podnet-cli -- {{ args }}
 
 # Build entire workspace
 build-all:
     cargo build
 
-# Run full development environment (all services + desktop app)
+# Complete development environments
+# Full local development (client + local servers)
+dev-local:
+    echo "Starting local development environment..."
+    echo "This will run the client with local servers"
+    just servers-local & sleep 3 && just client-dev-local
+
+# Full development environment (all services + desktop app) - uses mprocs
 dev-all:
     pnpm exec mprocs
 

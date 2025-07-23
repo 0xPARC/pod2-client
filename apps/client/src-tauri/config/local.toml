@@ -1,0 +1,12 @@
+# Local development configuration
+
+[features]
+
+[network]
+document_server = "http://localhost:3000"
+identity_server = "http://localhost:3000"
+frogcrypto_server = "http://localhost:3001"
+
+[logging]
+level = "debug"
+console_output = true

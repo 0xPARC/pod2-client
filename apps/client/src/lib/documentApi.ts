@@ -76,20 +76,26 @@ export interface DocumentVerificationResult {
 // Document Server API Client
 // =============================================================================
 
-export const DEFAULT_SERVER_URL =
-  import.meta.env.VITE_DOCUMENT_SERVER_URL ||
-  (import.meta.env.MODE === "production"
-    ? "https://pod-server.ghost-spica.ts.net/server"
-    : "http://localhost:3000");
+// We'll get the server URL from configuration instead of hardcoding it
+
+/**
+ * Get the document server URL from configuration
+ * @returns Promise resolving to the document server URL
+ */
+async function getDocumentServerUrl(): Promise<string> {
+  const config = await invoke<any>("get_config_section", {
+    section: "network"
+  });
+  return config.document_server;
+}
 
 /**
  * Fetch all documents from the PodNet server
- * @param serverUrl - Optional server URL (defaults to localhost:3000)
+ * @param serverUrl - Optional server URL (defaults to configuration value)
  * @returns Array of document metadata
  */
-export async function fetchDocuments(
-  serverUrl: string = DEFAULT_SERVER_URL
-): Promise<DocumentMetadata[]> {
+export async function fetchDocuments(): Promise<DocumentMetadata[]> {
+  const serverUrl = await getDocumentServerUrl();
   try {
     console.log(
       `[documentApi] Fetching documents from: ${serverUrl}/documents`
@@ -111,13 +117,11 @@ export async function fetchDocuments(
 /**
  * Fetch a specific document by ID from the PodNet server
  * @param id - The document ID
- * @param serverUrl - Optional server URL (defaults to localhost:3000)
+ * @param serverUrl - Optional server URL (defaults to configuration value)
  * @returns Complete document with content
  */
-export async function fetchDocument(
-  id: number,
-  serverUrl: string = DEFAULT_SERVER_URL
-): Promise<Document> {
+export async function fetchDocument(id: number): Promise<Document> {
+  const serverUrl = await getDocumentServerUrl();
   const response = await tauriFetch(`${serverUrl}/documents/${id}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch document ${id}: ${response.statusText}`);
@@ -128,13 +132,13 @@ export async function fetchDocument(
 /**
  * Fetch replies to a specific document
  * @param id - The document ID
- * @param serverUrl - Optional server URL (defaults to localhost:3000)
+ * @param serverUrl - Optional server URL (defaults to configuration value)
  * @returns Array of document metadata for replies
  */
 export async function fetchDocumentReplies(
-  id: number,
-  serverUrl: string = DEFAULT_SERVER_URL
+  id: number
 ): Promise<DocumentMetadata[]> {
+  const serverUrl = await getDocumentServerUrl();
   const response = await tauriFetch(`${serverUrl}/documents/${id}/replies`);
   if (!response.ok) {
     throw new Error(
@@ -151,13 +155,12 @@ export async function fetchDocumentReplies(
  * @returns Array of document metadata for replies to any version of the post
  */
 export async function fetchPostReplies(
-  postId: number,
-  serverUrl: string = DEFAULT_SERVER_URL
+  postId: number
 ): Promise<DocumentMetadata[]> {
   try {
     // Since there's no direct post replies endpoint, we'll fetch all documents
     // and filter for those that reply to any document in this post
-    const allDocuments = await fetchDocuments(serverUrl);
+    const allDocuments = await fetchDocuments();
 
     // Filter documents that have reply_to.post_id matching our postId
     const postReplies = allDocuments.filter(
@@ -179,12 +182,11 @@ export async function fetchPostReplies(
 
 /**
  * Fetch all posts with their documents from the PodNet server
- * @param serverUrl - Optional server URL (defaults to localhost:3000)
+ * @param serverUrl - Optional server URL (defaults to configuration value)
  * @returns Array of posts with documents
  */
-export async function fetchPosts(
-  serverUrl: string = DEFAULT_SERVER_URL
-): Promise<any[]> {
+export async function fetchPosts(): Promise<any[]> {
+  const serverUrl = await getDocumentServerUrl();
   const response = await tauriFetch(`${serverUrl}/posts`);
   if (!response.ok) {
     throw new Error(`Failed to fetch posts: ${response.statusText}`);

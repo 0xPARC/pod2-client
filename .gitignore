@@ -9,8 +9,13 @@ Cargo.lock
 node_modules
 .turbo
 dist
+mprocs.log
 
 # PodNet specific
 *.secret
 content
 identity-server-keypair.json
+
+# User-specific configuration files
+user.toml
+apps/client/src-tauri/config/user.toml

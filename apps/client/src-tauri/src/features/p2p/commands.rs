@@ -9,14 +9,14 @@ use pod2_db::store::{self, PodData};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, p2p, AppState, DEFAULT_SPACE_ID};
+use crate::{config::config, p2p_node, AppState, DEFAULT_SPACE_ID};
 
 /// Macro to check if networking feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().networking {
-            log::warn!("Networking feature is disabled");
-            return Err("Networking feature is disabled".to_string());
+        if !config().features.p2p {
+            log::warn!("P2P feature is disabled");
+            return Err("P2P feature is disabled".to_string());
         }
     };
 }
@@ -35,10 +35,10 @@ pub async fn start_p2p_node(state: State<'_, Mutex<AppState>>) -> Result<String,
 
     // Create message handler for incoming PODs
     let message_handler =
-        p2p::MessageHandler::new(app_state.db.clone(), app_state.app_handle.clone());
+        p2p_node::MessageHandler::new(app_state.db.clone(), app_state.app_handle.clone());
 
     // Spawn new P2P node
-    let p2p_node = p2p::P2PNode::spawn(None, Some(message_handler))
+    let p2p_node = p2p_node::P2PNode::spawn(None, Some(message_handler))
         .await
         .map_err(|e| format!("Failed to start P2P node: {e}"))?;
 

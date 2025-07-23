@@ -6,6 +6,7 @@ import { FrogCrypto } from "./FrogCrypto";
 import { DocumentsView } from "./documents/DocumentsView";
 import { PublishPage } from "./documents/PublishPage";
 import { EditorView } from "./editor/EditorView";
+import { DebugView } from "./DebugView";
 import { FeatureGate } from "../lib/features/config";
 
 export function MainContent() {
@@ -30,6 +31,8 @@ export function MainContent() {
           <EditorView />
         </FeatureGate>
       );
+    case "debug":
+      return <DebugView />;
     default:
       return <PodViewer />;
   }
