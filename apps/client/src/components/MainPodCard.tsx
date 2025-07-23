@@ -1,4 +1,9 @@
-import type { MainPod, ValueRef } from "@pod2/pod2js";
+import type {
+  CustomPredicateRef,
+  MainPod,
+  Value,
+  ValueRef
+} from "@pod2/pod2js";
 import { ClipboardCopy, Plus } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
@@ -7,6 +12,7 @@ import { useAppStore } from "../lib/store";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import ValueRenderer from "./ValueRenderer";
+import ValueTable from "./ValueTable";
 
 interface MainPodCardProps {
   mainPod: MainPod;
@@ -28,6 +34,28 @@ function ViewStatementArg({ arg }: { arg: ValueRef }) {
     );
   }
   return <ValueRenderer value={arg.value} />;
+}
+
+function ViewCustomPredicate({
+  predicate,
+  args
+}: {
+  predicate: CustomPredicateRef;
+  args: Value[];
+}): React.ReactNode {
+  const index = predicate.index;
+  const batch = predicate.batch;
+  const predicateName = batch.predicates[index].name;
+
+  return (
+    <div>
+      <span className="font-medium mb-2 block">
+        Predicate: <span className="font-mono">{predicateName}</span>
+      </span>
+      <span className="font-medium mb-2 block">Arguments:</span>
+      <ValueTable values={args} />
+    </div>
+  );
 }
 
 const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
@@ -114,6 +142,14 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
                         <ViewStatementArg key={index} arg={arg} />
                       </div>
                     ))}
+                  {statement.predicate === "Custom" && (
+                    <div className="text-gray-900 dark:text-gray-100 break-all">
+                      <ViewCustomPredicate
+                        predicate={statement.args[0]}
+                        args={statement.args[1]}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
