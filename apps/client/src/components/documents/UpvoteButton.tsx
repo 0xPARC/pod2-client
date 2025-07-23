@@ -1,4 +1,3 @@
-import { DEFAULT_SERVER_URL } from "@/lib/documentApi";
 import { invoke } from "@tauri-apps/api/core";
 import { PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -54,8 +53,11 @@ export function UpvoteButton({
     });
 
     try {
-      // Get server URL from environment or use default
-      const serverUrl = DEFAULT_SERVER_URL;
+      // Get server URL from configuration
+      const networkConfig = await invoke<any>("get_config_section", {
+        section: "network"
+      });
+      const serverUrl = networkConfig.document_server;
 
       // Call the Tauri upvote command
       const result = await invoke<{

@@ -97,6 +97,19 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Build PodNet CLI
+        run: cargo build --release --bin podnet-cli
+
+      - name: Prepare CLI binary for upload
+        shell: bash
+        run: |
+          mkdir -p cli-dist
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cp target/release/podnet-cli.exe cli-dist/
+          else
+            cp target/release/podnet-cli cli-dist/
+          fi
+
       - name: Build Tauri application
         uses: tauri-apps/tauri-action@v0
         env:
@@ -106,13 +119,23 @@ jobs:
         with:
           projectPath: apps/client
           tagName: ${{ github.ref_name }}
-          releaseName: "POD Client v${{ github.ref_name }}"
+          releaseName: "POD Client ${{ github.ref_name }}"
+          args: ${{ matrix.args }}
+          includeDebug: false
+          updaterJsonPreferNsis: false
           releaseBody: |
             Release ${{ github.ref_name }} - See the assets below to download this version and install.
 
+            ## What's Included
+
+            - **POD2 Desktop Client** - Tauri-based desktop application for managing POD collections
+            - **PodNet CLI** - Command-line tool for publishing and upvoting content on PodNet
+
             ## Installation Notes
 
-            ### macOS
+            ### POD2 Desktop Client
+
+            #### macOS
             The macOS application is ad-hoc signed. On first launch, you may see a security warning. To run the app:
             1. Right-click the app in Applications folder
             2. Select "Open" from the context menu
@@ -120,9 +143,25 @@ jobs:
 
             This is a one-time process. Subsequent launches will work normally.
 
-            ### Windows & Linux
+            #### Windows & Linux
             No additional steps required for installation.
+
+            ### PodNet CLI
+
+            Download the CLI binary for your platform and make it executable:
+            - Linux/macOS: `chmod +x podnet-cli && ./podnet-cli --help`
+            - Windows: `podnet-cli.exe --help`
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
           dryRun: ${{ inputs.dry_run }}
+
+      - name: Upload CLI binary to release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            cli-dist/podnet-cli*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

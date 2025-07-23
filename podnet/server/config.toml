@@ -1,0 +1,23 @@
+# PodNet Server Configuration
+# This file is now optional - all settings can be configured via environment variables
+
+# Whether to use mock proofs instead of real ZK proofs
+# Set to true for faster development, false for production
+# Environment variable: PODNET_MOCK_PROOFS
+mock_proofs = true
+
+# Port to run the server on
+# Environment variable: PORT or PODNET_PORT
+port = 3000
+
+# Host to bind the server to
+# Environment variable: PODNET_HOST
+host = "0.0.0.0"
+
+# Database file path
+# Environment variable: PODNET_DATABASE_PATH
+database_path = "app.db"
+
+# Content storage directory path
+# Environment variable: PODNET_CONTENT_STORAGE_PATH
+content_storage_path = "content"

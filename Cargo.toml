@@ -1,15 +1,25 @@
 [workspace]
 resolver = "2"
-members = ["solver", "apps/client/src-tauri", "db", "packages/pod2-node"]
+members = [
+    "core/models", 
+    "core/utils", 
+    "core/solver",
+    "podnet/server", 
+    "podnet/cli", 
+    "podnet/identity-strawman", 
+    "pod2-client/db", 
+    "apps/client/src-tauri",
+    "packages/pod2-node"
+]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "2f0c414542cf091bbf4dbbc9d61535aa55cdefc0", features = [
   "examples",
 ] }
-pod2_solver = { path = "solver" }
-pod2_server = { path = "server" }
-podnet-models = { git = "https://github.com/0xPARC/podnet", rev = "35f4a3724a8b5c3269ba9c173e05558f032f6b36" }
-pod2_db = { path = "db" }
+pod2_solver = { path = "core/solver" }
+podnet-models = { path = "core/models" }
+pod-utils = { path = "core/utils" }
+pod2_db = { path = "pod2-client/db" }
 hex = "0.4.3"
 itertools = "0.14.0"
 log = "0.4"
@@ -36,15 +46,28 @@ rand = "0.8"
 rusqlite = "0.35.0"
 rusqlite_migration = { version = "2.1.0", features = ["from-directory"] }
 tempfile = "3.10"
-tokio = "1.21.0"
+tokio = { version = "1.21.0", features = ["full"] }
 toml = "0.8"
 tower-http = "0.5"
 uuid = "1.16.0"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
+reqwest = { version = "0.11", features = ["json"] }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git" }
+
+# Common workspace metadata
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Shared profile
+[profile.release-with-debug]
+inherits = "release"
+debug = true
 
 [workspace.dev-dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", branch = "playground-tweaks", features = [
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "770da880e9219f2ebe21c79a63637f7b3e84f494", features = [
   "examples",
 ] }

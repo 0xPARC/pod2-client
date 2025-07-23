@@ -1,0 +1,16 @@
+# Production environment configuration
+
+[features]
+networking = true
+# Disable experimental features in production
+frogcrypto = false
+
+[network]
+document_server = "https://api.pod2.dev"
+identity_server = "https://api.pod2.dev"
+frogcrypto_server = "https://frog-server-q36c.onrender.com"
+timeout_seconds = 30
+
+[logging]
+level = "warn"
+console_output = false

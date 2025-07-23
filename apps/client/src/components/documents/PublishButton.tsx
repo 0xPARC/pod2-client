@@ -1,4 +1,3 @@
-import { DEFAULT_SERVER_URL } from "@/lib/documentApi";
 import { invoke } from "@tauri-apps/api/core";
 import { SendIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -35,7 +34,7 @@ interface PublishData {
   url?: string;
   tags?: string[];
   authors?: string[];
-  replyTo?: number;
+  replyTo?: string;
 }
 
 interface PublishButtonProps {
@@ -85,8 +84,11 @@ export function PublishButton({
     });
 
     try {
-      // Get server URL from environment or use default
-      const serverUrl = DEFAULT_SERVER_URL;
+      // Get server URL from configuration
+      const networkConfig = await invoke<any>("get_config_section", {
+        section: "network"
+      });
+      const serverUrl = networkConfig.document_server;
 
       // Prepare file data if file is provided
       let fileData = null;
@@ -99,21 +101,32 @@ export function PublishButton({
         };
       }
 
-      // Call the Tauri publish command
-      const result = await invoke<{
-        success: boolean;
-        document_id: number | null;
-        error_message: string | null;
-      }>("publish_document", {
+      console.log("Publishing with data:", data);
+      console.log("Reply to being sent (raw):", data.replyTo);
+
+      const invokeParams = {
         title: data.title.trim(),
         message: data.message || null,
         file: fileData,
         url: data.url || null,
         tags: data.tags || [],
         authors: data.authors || [],
-        replyTo: data.replyTo || null,
+        replyTo: data.replyTo
+          ? {
+              post_id: parseInt(data.replyTo.split(":")[0]),
+              document_id: parseInt(data.replyTo.split(":")[1])
+            }
+          : null,
         serverUrl: serverUrl
-      });
+      };
+      console.log("Full invoke parameters:", invokeParams);
+
+      // Call the Tauri publish command
+      const result = await invoke<{
+        success: boolean;
+        document_id: number | null;
+        error_message: string | null;
+      }>("publish_document", invokeParams);
 
       // Dismiss loading toast
       toast.dismiss(loadingToast);

@@ -12,12 +12,12 @@ use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState};
+use crate::{config::config, AppState};
 
 /// Macro to check if integration feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().integration {
+        if !config().features.integration {
             log::warn!("Integration feature is disabled");
             return Err("Integration feature is disabled".to_string());
         }
@@ -31,7 +31,7 @@ pub async fn submit_pod_request(
     request: String,
 ) -> Result<SerializedMainPod, String> {
     check_feature_enabled!();
-    log::info!("request: {}", request);
+    log::info!("request: {request}");
     let params = Params::default();
     let pod_request = lang::parse(request.as_str(), &params, &[]).unwrap();
 
@@ -43,7 +43,7 @@ pub async fn submit_pod_request(
     let mut app_state = state.lock().await;
     let fetched_pod_infos = store::list_all_pods(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to list pods: {}", e))?;
+        .map_err(|e| format!("Failed to list pods: {e}"))?;
 
     let mut owned_signed_pods = Vec::new();
     let mut owned_main_pods = Vec::new();
@@ -59,10 +59,10 @@ pub async fn submit_pod_request(
 
         match pod_info.data {
             pod2_db::store::PodData::Signed(helper) => {
-                owned_signed_pods.push(pod2::frontend::SignedPod::try_from(helper).unwrap());
+                owned_signed_pods.push(pod2::frontend::SignedPod::try_from(*helper).unwrap());
             }
             pod2_db::store::PodData::Main(helper) => {
-                match pod2::frontend::MainPod::try_from(helper) {
+                match pod2::frontend::MainPod::try_from(*helper) {
                     Ok(main_pod) => {
                         owned_main_pods.push(main_pod);
                     }
@@ -113,8 +113,8 @@ pub async fn submit_pod_request(
         match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
             Ok(solution) => solution,
             Err(e) => {
-                log::error!("Solver error: {:?}", e);
-                return Err(format!("Solver error: {:?}, request: {}", e, request));
+                log::error!("Solver error: {e:?}");
+                return Err(format!("Solver error: {e:?}, request: {request}"));
             }
         };
 

@@ -9,12 +9,12 @@ lazy_static! {
 /// Generate a blockies image for a given public key
 #[tauri::command]
 pub async fn generate_blockies(public_key: String) -> Result<String, String> {
-    log::debug!("Generating blockies for public key: {}", public_key);
+    log::debug!("Generating blockies for public key: {public_key}");
 
     // Generate the blockies image
     let image_data = BLOCKIES_GENERATOR
         .generate_png(&public_key)
-        .map_err(|e| format!("Failed to generate blockies: {}", e))?;
+        .map_err(|e| format!("Failed to generate blockies: {e}"))?;
 
     // Convert to base64 for transmission to frontend
     use base64::{engine::general_purpose, Engine as _};
@@ -28,7 +28,7 @@ pub async fn generate_blockies(public_key: String) -> Result<String, String> {
 /// Get blockies data as raw RGB values (for debugging or other uses)
 #[tauri::command]
 pub async fn get_blockies_data(public_key: String) -> Result<Vec<Vec<[u8; 3]>>, String> {
-    log::debug!("Getting blockies data for public key: {}", public_key);
+    log::debug!("Getting blockies data for public key: {public_key}");
 
     use eth_blockies::{Blockies, BlockiesGenerator};
 

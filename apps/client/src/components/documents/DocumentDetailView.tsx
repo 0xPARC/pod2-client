@@ -1,39 +1,47 @@
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import "highlight.js/styles/github-dark.css";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
   CheckCircleIcon,
-  ClockIcon,
   DownloadIcon,
   ExternalLinkIcon,
   FileTextIcon,
-  TagIcon,
-  UserIcon,
-  VoteIcon
+  MessageSquareIcon,
+  ReplyIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import {
   Document,
   DocumentFile,
+  DocumentMetadata,
   DocumentVerificationResult,
   fetchDocument,
+  fetchDocumentReplies,
+  fetchPostReplies,
   verifyDocumentPod
 } from "../../lib/documentApi";
+import { useAppStore } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Separator } from "../ui/separator";
-import { UpvoteButton } from "./UpvoteButton";
+
+// Interface for threaded reply structure
+interface ThreadedReply extends DocumentMetadata {
+  children: ThreadedReply[];
+  depth: number;
+}
 
 interface DocumentDetailViewProps {
   documentId: number;
   onBack: () => void;
+  onNavigateToDocument?: (documentId: number) => void;
 }
 
 // MIME type to file extension mapping
@@ -108,8 +116,10 @@ const ensureFileExtension = (filename: string, mimeType: string): string => {
 
 export function DocumentDetailView({
   documentId,
-  onBack
+  onBack,
+  onNavigateToDocument
 }: DocumentDetailViewProps) {
+  const { setCurrentView, setReplyToDocumentId } = useAppStore();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,9 +130,13 @@ export function DocumentDetailView({
     null
   );
   const [upvoteCount, setUpvoteCount] = useState<number>(0);
+  const [isUpvoting, setIsUpvoting] = useState(false);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(
     new Set()
   );
+  const [replies, setReplies] = useState<DocumentMetadata[]>([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [repliesError, setRepliesError] = useState<string | null>(null);
 
   const loadDocument = async () => {
     try {
@@ -135,6 +149,87 @@ export function DocumentDetailView({
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Recursively fetch all replies to build complete conversation tree
+  const fetchAllRepliesRecursively = async (
+    postId: number,
+    visited: Set<number> = new Set()
+  ): Promise<DocumentMetadata[]> => {
+    // Get direct replies to this post
+    const directReplies = await fetchPostReplies(postId);
+    const allReplies: DocumentMetadata[] = [...directReplies];
+
+    // For each direct reply, recursively fetch its replies
+    for (const reply of directReplies) {
+      if (!reply.id || visited.has(reply.id)) {
+        continue;
+      }
+
+      visited.add(reply.id);
+
+      try {
+        // Fetch replies to this specific document
+        const nestedReplies = await fetchDocumentReplies(reply.id);
+
+        if (nestedReplies.length > 0) {
+          allReplies.push(...nestedReplies);
+
+          // Recursively fetch replies to nested replies
+          for (const nestedReply of nestedReplies) {
+            if (nestedReply.id && !visited.has(nestedReply.id)) {
+              visited.add(nestedReply.id);
+              const deeperReplies = await fetchDocumentReplies(nestedReply.id);
+              allReplies.push(...deeperReplies);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to fetch replies for document ${reply.id}:`,
+          error
+        );
+        // Continue with other replies even if one fails
+      }
+    }
+
+    return allReplies;
+  };
+
+  const loadReplies = async () => {
+    if (!documentId || !document) return;
+
+    try {
+      setRepliesLoading(true);
+      setRepliesError(null);
+
+      // Use recursive fetching to get complete conversation tree
+      const allRepliesData = await fetchAllRepliesRecursively(
+        document.metadata.post_id
+      );
+      setReplies(allRepliesData);
+    } catch (err) {
+      // Fallback to basic post replies if recursive fails
+      try {
+        console.warn(
+          "Recursive replies failed, falling back to basic post replies:",
+          err
+        );
+        const postRepliesData = await fetchPostReplies(
+          document.metadata.post_id
+        );
+        setReplies(postRepliesData);
+      } catch (fallbackErr) {
+        console.error("Both recursive and basic replies failed:", fallbackErr);
+        setRepliesError(
+          fallbackErr instanceof Error
+            ? fallbackErr.message
+            : "Failed to load replies"
+        );
+      }
+    } finally {
+      setRepliesLoading(false);
     }
   };
 
@@ -156,9 +251,79 @@ export function DocumentDetailView({
     }
   };
 
+  const handleReplyToDocument = () => {
+    if (!document) return;
+
+    // Format: "post_id:document_id"
+    const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
+    console.log("Setting replyToDocumentId to:", replyToId);
+    // Set the reply context and navigate to publish page
+    setReplyToDocumentId(replyToId);
+    setCurrentView("publish");
+  };
+
+  const handleUpvote = async () => {
+    if (isUpvoting || !document) return;
+
+    setIsUpvoting(true);
+
+    // Show loading toast
+    const loadingToast = toast("Generating upvote POD...", {
+      duration: Infinity
+    });
+
+    try {
+      const networkConfig = await invoke<any>("get_config_section", {
+        section: "network"
+      });
+      const serverUrl = networkConfig.document_server;
+
+      // Call the Tauri upvote command
+      const result = await invoke<{
+        success: boolean;
+        new_upvote_count: number | null;
+        error_message: string | null;
+        already_upvoted: boolean;
+      }>("upvote_document", {
+        documentId: document.metadata.id,
+        serverUrl: serverUrl
+      });
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+
+      if (result.success && result.new_upvote_count !== null) {
+        // Success - update count and show success message
+        toast.success("Document upvoted successfully!");
+        setUpvoteCount(result.new_upvote_count);
+      } else if (result.already_upvoted) {
+        // Already upvoted
+        toast.info("You have already upvoted this document");
+      } else {
+        // Other error
+        toast.error(result.error_message || "Failed to upvote document");
+      }
+    } catch (error) {
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to upvote document: ${errorMessage}`);
+      console.error("Upvote error:", error);
+    } finally {
+      setIsUpvoting(false);
+    }
+  };
+
   useEffect(() => {
     loadDocument();
   }, [documentId]);
+
+  useEffect(() => {
+    if (document) {
+      loadReplies();
+    }
+  }, [document]);
 
   const handleDownloadFile = async (file: DocumentFile) => {
     const fileKey = `${file.name}_${file.mime_type}`;
@@ -215,6 +380,183 @@ export function DocumentDetailView({
       minute: "2-digit",
       second: "2-digit"
     });
+  };
+
+  // Build threaded reply tree from flat list
+  const buildReplyTree = (replies: DocumentMetadata[]): ThreadedReply[] => {
+    const replyMap = new Map<number, ThreadedReply>();
+    const rootReplies: ThreadedReply[] = [];
+
+    // First pass: create all reply objects
+    replies.forEach((reply) => {
+      const threadedReply: ThreadedReply = {
+        ...reply,
+        children: [],
+        depth: 0
+      };
+      replyMap.set(reply.id!, threadedReply);
+    });
+
+    // Second pass: build parent-child relationships
+    replies.forEach((reply) => {
+      const threadedReply = replyMap.get(reply.id!)!;
+
+      if (reply.reply_to?.document_id) {
+        // This is a reply to another document
+        const parentReply = replyMap.get(reply.reply_to.document_id);
+        if (parentReply) {
+          // It's a reply to another reply
+          threadedReply.depth = parentReply.depth + 1;
+          parentReply.children.push(threadedReply);
+        } else {
+          // It's a reply to the original document (not in replies list)
+          rootReplies.push(threadedReply);
+        }
+      } else {
+        // Top-level reply
+        rootReplies.push(threadedReply);
+      }
+    });
+
+    return rootReplies;
+  };
+
+  // Recursive component to render a reply and its children
+  const renderThreadedReply = (reply: ThreadedReply): React.JSX.Element => {
+    const isReplyToCurrentDoc = reply.reply_to?.document_id === documentId;
+    const isReplyToCurrentPost =
+      reply.reply_to?.post_id === document?.metadata.post_id;
+    const maxDepth = 5; // Limit nesting depth for readability
+    const displayDepth = Math.min(reply.depth, maxDepth);
+
+    return (
+      <div key={reply.id} className="space-y-4">
+        <div
+          className={`border-l-2 border-muted pl-4 ${
+            displayDepth > 0 ? `ml-${Math.min(displayDepth * 4, 16)}` : ""
+          }`}
+          style={{
+            marginLeft: displayDepth > 0 ? `${displayDepth * 16}px` : "0"
+          }}
+        >
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-medium text-blue-600">
+                u/{reply.uploader_id}
+              </span>
+              <span>•</span>
+              <span>{formatDate(reply.created_at)}</span>
+              <span>•</span>
+              <span className="text-orange-600">
+                #{reply.id} ({reply.upvote_count} upvotes)
+              </span>
+              {displayDepth > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    Level {displayDepth}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Show which version this reply targets */}
+          {reply.reply_to && (
+            <div className="mb-2">
+              {isReplyToCurrentDoc ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-green-50 text-green-700 border-green-200"
+                >
+                  Reply to this version
+                </Badge>
+              ) : isReplyToCurrentPost ? (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                  >
+                    Reply to different version
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onNavigateToDocument?.(reply.reply_to!.document_id)
+                    }
+                    className="text-yellow-700 hover:text-yellow-900 p-0 h-auto font-normal text-xs underline"
+                    disabled={!onNavigateToDocument}
+                  >
+                    (view version #{reply.reply_to.document_id})
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                  >
+                    Reply to #{reply.reply_to.document_id}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onNavigateToDocument?.(reply.reply_to!.document_id)
+                    }
+                    className="text-blue-700 hover:text-blue-900 p-0 h-auto font-normal text-xs underline"
+                    disabled={!onNavigateToDocument}
+                  >
+                    (view doc #{reply.reply_to.document_id})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <h4 className="font-medium text-foreground mb-2">{reply.title}</h4>
+
+          {reply.tags.length > 0 && (
+            <div className="flex gap-1 mb-2">
+              {reply.tags.map((tag, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {reply.authors.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+              <span>Authors:</span>
+              {reply.authors.map((author, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {author}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigateToDocument?.(reply.id!)}
+            className="text-blue-600 hover:text-blue-800 p-0 h-auto font-normal"
+            disabled={!onNavigateToDocument}
+          >
+            View full reply →
+          </Button>
+        </div>
+
+        {/* Render children recursively */}
+        {reply.children.length > 0 && (
+          <div className="space-y-4">
+            {reply.children.map((child) => renderThreadedReply(child))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderContent = (content: Document["content"]) => {
@@ -570,23 +912,100 @@ export function DocumentDetailView({
           Back to Documents
         </Button>
 
-        {/* Document Header */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <FileTextIcon className="h-6 w-6" />
-                  <span className="truncate">{document.metadata.title}</span>
-                </CardTitle>
-                <p className="text-muted-foreground mt-1">
-                  Document #{document.metadata.id} • Post{" "}
-                  {document.metadata.post_id} • Revision{" "}
-                  {document.metadata.revision}
-                </p>
+        {/* Document Header - Reddit-style */}
+        <div className="mb-6">
+          <div className="flex items-start gap-4">
+            {/* Upvote section */}
+            <div className="flex flex-col items-center min-w-[80px] pt-2">
+              <button
+                onClick={handleUpvote}
+                disabled={isUpvoting}
+                className={`text-3xl mb-2 transition-colors ${
+                  isUpvoting
+                    ? "text-muted-foreground cursor-not-allowed"
+                    : "text-muted-foreground hover:text-orange-500 cursor-pointer"
+                }`}
+                title="Upvote this document"
+              >
+                ▲
+              </button>
+              <div className="text-2xl font-bold text-orange-500 mb-1">
+                {upvoteCount}
+              </div>
+              <div className="text-xs text-muted-foreground">upvotes</div>
+            </div>
+
+            {/* Main content header */}
+            <div className="flex-1 min-w-0">
+              {/* Title */}
+              <h1 className="text-3xl font-bold text-foreground mb-4 line-clamp-3">
+                {document.metadata.title}
+              </h1>
+
+              {/* Author/Uploader info */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                <span>Posted by</span>
+                <span className="font-medium text-blue-600">
+                  u/{document.metadata.uploader_id}
+                </span>
+                <span>•</span>
+                <span>{formatDate(document.metadata.created_at)}</span>
+                {document.metadata.reply_to && (
+                  <>
+                    <span>•</span>
+                    <span className="text-orange-600">
+                      Reply to #{document.metadata.reply_to.document_id} (Post{" "}
+                      {document.metadata.reply_to.post_id})
+                    </span>
+                  </>
+                )}
               </div>
 
+              {/* Authors (if different from uploader) */}
+              {document.metadata.authors.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                  <span>Authors:</span>
+                  <div className="flex gap-2">
+                    {document.metadata.authors.map((author, index) => (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="text-xs bg-blue-100 text-blue-800"
+                      >
+                        {author}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {document.metadata.tags.length > 0 && (
+                <div className="flex items-center gap-2 mb-6">
+                  {document.metadata.tags.map((tag, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right side - Action buttons */}
+            <div className="flex flex-col items-end gap-2">
               <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleReplyToDocument}
+                  variant="outline"
+                  size="sm"
+                >
+                  <ReplyIcon className="h-3 w-3 mr-1" />
+                  Reply
+                </Button>
                 <Button
                   onClick={handleVerifyDocument}
                   disabled={isVerifying}
@@ -605,94 +1024,20 @@ export function DocumentDetailView({
                     </>
                   )}
                 </Button>
-
-                {verificationResult &&
-                  verificationResult.publish_verified &&
-                  verificationResult.timestamp_verified &&
-                  verificationResult.upvote_count_verified && (
-                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                  )}
-
-                <UpvoteButton
-                  documentId={document.metadata.id || 0}
-                  currentUpvotes={upvoteCount}
-                  onUpvoteSuccess={setUpvoteCount}
-                />
               </div>
+
+              {verificationResult &&
+                verificationResult.publish_verified &&
+                verificationResult.timestamp_verified &&
+                verificationResult.upvote_count_verified && (
+                  <div className="flex items-center gap-1 text-green-600 text-xs">
+                    <CheckCircleIcon className="h-4 w-4" />
+                    <span>Verified</span>
+                  </div>
+                )}
             </div>
-          </CardHeader>
-
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <UserIcon className="h-4 w-4" />
-                <span className="font-medium">Uploader:</span>
-                <span>{document.metadata.uploader_id}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <ClockIcon className="h-4 w-4" />
-                <span className="font-medium">Created:</span>
-                <span>{formatDate(document.metadata.created_at)}</span>
-              </div>
-
-              <div className="min-w-0">
-                <span className="font-medium">Content ID:</span>
-                <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
-                  {document.metadata.content_id.slice(0, 16)}...
-                </code>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <VoteIcon className="h-4 w-4" />
-                <span className="font-medium">Upvote Count:</span>
-                <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded break-all">
-                  {document.metadata.upvote_count}
-                </code>
-              </div>
-            </div>
-
-            {(document.metadata.tags.length > 0 ||
-              document.metadata.authors.length > 0) && (
-              <>
-                <Separator className="my-4" />
-                <div className="space-y-3">
-                  {document.metadata.tags.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <TagIcon className="h-4 w-4" />
-                      <span className="font-medium">Tags:</span>
-                      {document.metadata.tags.map((tag, index) => (
-                        <Badge
-                          key={index}
-                          variant="outline"
-                          className="text-xs"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {document.metadata.authors.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <UserIcon className="h-4 w-4" />
-                      <span className="font-medium">Authors:</span>
-                      {document.metadata.authors.map((author, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {author}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Show verification error if it exists */}
         {verificationError && (
@@ -708,37 +1053,136 @@ export function DocumentDetailView({
           </Card>
         )}
 
-        {/* Document Content */}
-        <Card>
+        {/* Document Content - Main Focus */}
+        <div className="mb-8">
+          {/* Render message content if it exists */}
+          {document.content.message && (
+            <div className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6">
+              {renderContent(document.content)}
+            </div>
+          )}
+
+          {/* If no message content but there's a file, render the file content */}
+          {!document.content.message &&
+            document.content.file &&
+            renderFileAttachment(document.content.file)}
+
+          {/* If there's both message and file, render file as attachment */}
+          {document.content.message &&
+            document.content.file &&
+            renderFileAttachment(document.content.file)}
+
+          {/* Render URL if it exists */}
+          {document.content.url && renderUrl(document.content.url)}
+
+          {/* Show empty state only if no content at all */}
+          {!document.content.message &&
+            !document.content.file &&
+            !document.content.url && (
+              <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
+                <p>Content not available or unsupported format</p>
+              </div>
+            )}
+        </div>
+
+        {/* Replies Section */}
+        <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Content</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <MessageSquareIcon className="h-5 w-5" />
+              Replies to Post #{document.metadata.post_id} ({replies.length})
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Showing replies to all versions of this post
+            </p>
           </CardHeader>
           <CardContent>
-            {/* Render message content if it exists */}
-            {document.content.message && renderContent(document.content)}
+            {repliesLoading && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
+                Loading replies...
+              </div>
+            )}
 
-            {/* If no message content but there's a file, render the file content */}
-            {!document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
+            {repliesError && (
+              <div className="flex items-center gap-2 text-destructive py-4">
+                <AlertCircleIcon className="h-4 w-4" />
+                <span>Failed to load replies: {repliesError}</span>
+              </div>
+            )}
 
-            {/* If there's both message and file, render file as attachment */}
-            {document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
+            {!repliesLoading && !repliesError && replies.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No replies yet</p>
+              </div>
+            )}
 
-            {/* Render URL if it exists */}
-            {document.content.url && renderUrl(document.content.url)}
+            {!repliesLoading && !repliesError && replies.length > 0 && (
+              <div className="space-y-4">
+                {buildReplyTree(replies).map((reply) =>
+                  renderThreadedReply(reply)
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            {/* Show empty state only if no content at all */}
-            {!document.content.message &&
-              !document.content.file &&
-              !document.content.url && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
-                  <p>Content not available or unsupported format</p>
+        {/* Technical Details - Moved to Bottom */}
+        <Card className="bg-muted/30">
+          <CardHeader>
+            <CardTitle className="text-lg text-muted-foreground">
+              Document Metadata
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Document ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  #{document.metadata.id}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Post ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  #{document.metadata.post_id}
+                </div>
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Revision:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  r{document.metadata.revision}
+                </div>
+              </div>
+
+              <div className="lg:col-span-2">
+                <span className="font-medium text-muted-foreground">
+                  Content ID:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1 break-all">
+                  {document.metadata.content_id}
+                </div>
+              </div>
+
+              <div>
+                <span className="font-medium text-muted-foreground">
+                  Verified Upvotes:
+                </span>
+                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                  {document.metadata.upvote_count}
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -1,13 +1,20 @@
+use std::sync::Arc;
+
+use pod2::{
+    frontend::MainPod,
+    lang::pretty_print::PrettyPrint,
+    middleware::{CustomPredicateBatch, Predicate},
+};
 use pod2_db::store;
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{get_feature_config, AppState, AppStateData};
+use crate::{config::config, AppState, AppStateData};
 
 /// Macro to check if pod management feature is enabled
 macro_rules! check_feature_enabled {
     () => {
-        if !get_feature_config().pod_management {
+        if !config().features.pod_management {
             log::warn!("Pod management feature is disabled");
             return Err("Pod management feature is disabled".to_string());
         }
@@ -41,7 +48,7 @@ pub async fn list_spaces(
 
     let spaces = store::list_spaces(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to list spaces: {}", e))?;
+        .map_err(|e| format!("Failed to list spaces: {e}"))?;
 
     Ok(spaces
         .into_iter()
@@ -69,12 +76,12 @@ pub async fn import_pod(
         "MockSigned" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
         "Main" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
         "MockMain" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
-        _ => return Err(format!("Not a valid POD type: {}", pod_type)),
+        _ => return Err(format!("Not a valid POD type: {pod_type}")),
     };
 
     let _ = store::import_pod(&app_state.db, &pod_data, label.as_deref(), DEFAULT_SPACE_ID)
         .await
-        .map_err(|e| format!("Failed to import POD: {}", e));
+        .map_err(|e| format!("Failed to import POD: {e}"));
 
     app_state.trigger_state_sync().await?;
     Ok(())
@@ -92,7 +99,7 @@ pub async fn delete_pod(
 
     let rows_deleted = store::delete_pod(&app_state.db, &space_id, &pod_id)
         .await
-        .map_err(|e| format!("Failed to delete POD: {}", e))?;
+        .map_err(|e| format!("Failed to delete POD: {e}"))?;
 
     if rows_deleted == 0 {
         return Err("POD not found or already deleted".to_string());
@@ -114,10 +121,48 @@ pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), 
 
     insert_zukyc_pods(&app_state.db)
         .await
-        .map_err(|e| format!("Failed to insert ZuKYC pods: {}", e))?;
+        .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
 
     // Trigger state sync to update frontend
     app_state.trigger_state_sync().await?;
 
     Ok(())
+}
+
+/// Return pretty-printed Podlang for custom predicates
+#[tauri::command]
+pub async fn pretty_print_custom_predicates(serialized_main_pod: String) -> Result<String, String> {
+    check_feature_enabled!();
+    let main_pod: MainPod = serde_json::from_str(&serialized_main_pod).unwrap();
+
+    let batches = main_pod
+        .public_statements
+        .iter()
+        .filter_map(|statement| match statement.predicate() {
+            Predicate::Custom(custom_predicate) => Some(custom_predicate.batch.clone()),
+            _ => None,
+        })
+        .flat_map(|batch| {
+            let mut collected_batches: Vec<_> = batch
+                .predicates()
+                .iter()
+                .flat_map(|pred| pred.statements().iter())
+                .filter_map(|stmt| {
+                    if let Predicate::Custom(inner_custom_predicate) = &stmt.pred {
+                        Some(inner_custom_predicate.batch.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            collected_batches.push(batch);
+            collected_batches
+        })
+        .collect::<Vec<Arc<CustomPredicateBatch>>>();
+
+    Ok(batches
+        .iter()
+        .map(|batch| batch.to_podlang_string())
+        .collect::<Vec<String>>()
+        .join("\n\n"))
 }

@@ -1,0 +1,42 @@
+# POD2 Client Configuration Sample
+# This file shows all available configuration options
+# Copy and modify sections as needed for your environment
+
+[features]
+# Core POD collection management - viewing, organizing, and basic operations
+pod_management = true
+# P2P communication and messaging
+networking = false
+# Creating and signing new PODs
+authoring = true
+# External POD Request handling and protocol integration
+integration = true
+# FrogCrypto experimental features
+frogcrypto = false
+
+[database]
+# Path to the database file (relative to app data directory)
+path = "pod2.db"
+
+[network]
+# Document server URL (PodNet)
+document_server = "https://pod-server.ghost-spica.ts.net"
+# Identity server URL
+identity_server = "https://pod-server.ghost-spica.ts.net"
+# FrogCrypto server URL
+frogcrypto_server = "https://frog-server-q36c.onrender.com"
+# Request timeout in seconds
+timeout_seconds = 30
+
+[ui]
+# Default theme: "auto", "light", or "dark"
+default_theme = "auto"
+# Default window dimensions
+default_window_width = 800
+default_window_height = 600
+
+[logging]
+# Log level: "debug", "info", "warn", or "error"
+level = "info"
+# Enable console output
+console_output = true

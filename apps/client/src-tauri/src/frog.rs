@@ -16,12 +16,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, State};
 use tokio::sync::Mutex;
 
-use crate::AppState;
-
-const SERVER_URL: &str = "https://frog-server-q36c.onrender.com";
+use crate::{config::config, AppState};
 
 fn server_url(path: &str) -> String {
-    let domain = std::env::var("FROG_SERVER_URL").unwrap_or_else(|_| SERVER_URL.to_string());
+    let domain = config().network.frogcrypto_server.clone();
     format!("{domain}/{path}")
 }
 
@@ -54,9 +52,9 @@ async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<Si
     let mut builder = SignedPodBuilder::new(&Default::default());
     builder.insert("public_key", challenge.public_key);
     builder.insert("time", challenge.time);
-    let mut signer = Signer(private_key);
+    let signer = Signer(private_key);
     builder
-        .sign(&mut signer)
+        .sign(&signer)
         .map_err(|_| "failed to sign pod".to_string())
 }
 
@@ -99,7 +97,7 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
     };
     store::import_pod(
         &app_state.db,
-        &PodData::Signed(frog_response.pod.into()),
+        &PodData::Signed(Box::new(frog_response.pod.into())),
         name.as_deref(),
         "frogs",
     )

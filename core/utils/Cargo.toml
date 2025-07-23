@@ -1,0 +1,9 @@
+[package]
+name = "pod-utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies
+pod2.workspace = true
+log.workspace = true
