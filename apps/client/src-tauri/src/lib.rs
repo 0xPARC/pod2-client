@@ -577,6 +577,7 @@ pub fn run() {
             pod_management::list_spaces,
             pod_management::import_pod,
             pod_management::insert_zukyc_pods,
+            pod_management::pretty_print_custom_predicates,
             // Blockies commands
             blockies::commands::generate_blockies,
             blockies::commands::get_blockies_data,

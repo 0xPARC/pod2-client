@@ -1,3 +1,10 @@
+use std::sync::Arc;
+
+use pod2::{
+    frontend::MainPod,
+    lang::pretty_print::PrettyPrint,
+    middleware::{CustomPredicateBatch, Predicate},
+};
 use pod2_db::store;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -120,4 +127,42 @@ pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), 
     app_state.trigger_state_sync().await?;
 
     Ok(())
+}
+
+/// Return pretty-printed Podlang for custom predicates
+#[tauri::command]
+pub async fn pretty_print_custom_predicates(serialized_main_pod: String) -> Result<String, String> {
+    check_feature_enabled!();
+    let main_pod: MainPod = serde_json::from_str(&serialized_main_pod).unwrap();
+
+    let batches = main_pod
+        .public_statements
+        .iter()
+        .filter_map(|statement| match statement.predicate() {
+            Predicate::Custom(custom_predicate) => Some(custom_predicate.batch.clone()),
+            _ => None,
+        })
+        .flat_map(|batch| {
+            let mut collected_batches: Vec<_> = batch
+                .predicates()
+                .iter()
+                .flat_map(|pred| pred.statements().iter())
+                .filter_map(|stmt| {
+                    if let Predicate::Custom(inner_custom_predicate) = &stmt.pred {
+                        Some(inner_custom_predicate.batch.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            collected_batches.push(batch);
+            collected_batches
+        })
+        .collect::<Vec<Arc<CustomPredicateBatch>>>();
+
+    Ok(batches
+        .iter()
+        .map(|batch| batch.to_podlang_string())
+        .collect::<Vec<String>>()
+        .join("\n\n"))
 }

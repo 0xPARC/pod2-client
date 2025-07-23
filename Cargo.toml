@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", rev = "770da880e9219f2ebe21c79a63637f7b3e84f494", features = [
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "2f0c414542cf091bbf4dbbc9d61535aa55cdefc0", features = [
   "examples",
 ] }
 pod2_solver = { path = "core/solver" }

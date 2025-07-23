@@ -62,16 +62,16 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
           <span className="font-mono text-blue-600 dark:text-blue-400">[]</span>
         );
       return (
-        <span className="font-mono text-blue-600 dark:text-blue-400">
-          [{" "}
+        <div className="font-mono text-blue-600 dark:text-blue-400">
+          <div>[</div>
           {arr.array.map((item, index) => (
-            <React.Fragment key={index}>
+            <div key={index} className="pl-4">
               <ValueRenderer value={item} />
-              {index < arr.array.length - 1 ? ", " : ""}
-            </React.Fragment>
-          ))}{" "}
-          ]
-        </span>
+              {index < arr.array.length - 1 ? "," : ""}
+            </div>
+          ))}
+          <div>]</div>
+        </div>
       );
     }
     if ("set" in value) {
@@ -83,21 +83,21 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
           </span>
         );
       return (
-        <span className="font-mono text-orange-600 dark:text-orange-400">
-          Set([{" "}
+        <div className="font-mono text-orange-600 dark:text-orange-400">
+          <div>Set([</div>
           {set.set.map((item, index) => (
-            <React.Fragment key={index}>
+            <div key={index} className="pl-4">
               <ValueRenderer value={item} />
-              {index < set.set.length - 1 ? ", " : ""}
-            </React.Fragment>
-          ))}{" "}
-          ] )
-        </span>
+              {index < set.set.length - 1 ? "," : ""}
+            </div>
+          ))}
+          <div>])</div>
+        </div>
       );
     }
-    if ("Dictionary" in value) {
-      const dict = (value as { Dictionary: Dictionary }).Dictionary;
-      const entries = Object.entries(dict);
+    if ("kvs" in value) {
+      const dict = value as Dictionary;
+      const entries = Object.entries(dict.kvs);
       if (entries.length === 0)
         return (
           <span className="font-mono text-indigo-600 dark:text-indigo-400">
@@ -105,17 +105,17 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
           </span>
         );
       return (
-        <span className="font-mono text-indigo-600 dark:text-indigo-400">
-          {"{ "}
+        <div className="font-mono text-indigo-600 dark:text-indigo-400">
+          <div>{"{"}</div>
           {entries.map(([key, val], index) => (
-            <React.Fragment key={key}>
+            <div key={key} className="pl-4">
               <span className="text-red-500 dark:text-red-400">{key}</span>:{" "}
               <ValueRenderer value={val} />
-              {index < entries.length - 1 ? ", " : ""}
-            </React.Fragment>
+              {index < entries.length - 1 ? "," : ""}
+            </div>
           ))}
-          {" }"}
-        </span>
+          <div>{"}"}</div>
+        </div>
       );
     }
   }
