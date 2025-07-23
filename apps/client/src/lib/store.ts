@@ -39,7 +39,8 @@ export type AppView =
   | "chats"
   | "frogs"
   | "editor"
-  | "publish";
+  | "publish"
+  | "debug";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
 interface AppStoreState {

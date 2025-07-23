@@ -1,4 +1,11 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -23,9 +30,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  BugIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CodeIcon,
+  DatabaseIcon,
   EditIcon,
   FilePenLineIcon,
   FileTextIcon,
@@ -35,14 +44,26 @@ import {
   ImportIcon,
   InboxIcon,
   MessageSquareIcon,
+  SettingsIcon,
   UploadIcon
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { FeatureGate } from "../lib/features/config";
 import { useAppStore } from "../lib/store";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { ImportPodDialog } from "./ImportPodDialog";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 
@@ -61,6 +82,8 @@ export function AppSidebar() {
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [allFoldersExpanded, setAllFoldersExpanded] = useState(true);
+  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleCopyPublicKey = async () => {
     if (privateKeyInfo?.public_key) {
@@ -70,6 +93,24 @@ export function AppSidebar() {
       } catch (error) {
         console.error("Failed to copy public key:", error);
       }
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    setIsResetting(true);
+    try {
+      await invoke("reset_database");
+      toast.success("Database reset successfully! Redirecting to setup...");
+      setShowResetConfirmation(false);
+
+      // Trigger a page reload to restart the app state and show identity setup
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      toast.error(`Failed to reset database: ${error}`);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -302,18 +343,46 @@ export function AppSidebar() {
           </div>
         )}
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
-          onClick={() => {
-            invoke("insert_zukyc_pods").then(() => {
-              console.log("Zukyc PODs inserted");
-            });
-          }}
-        >
-          Zukyc PODs
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+            >
+              <BugIcon className="h-4 w-4 mr-2" />
+              Debug
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            <DropdownMenuItem
+              onClick={() => {
+                invoke("insert_zukyc_pods")
+                  .then(() => {
+                    toast.success("ZuKYC PODs added successfully");
+                  })
+                  .catch((error) => {
+                    toast.error(`Failed to add ZuKYC PODs: ${error}`);
+                  });
+              }}
+            >
+              <ImportIcon className="h-4 w-4 mr-2" />
+              Add ZuKYC PODs
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setCurrentView("debug")}>
+              <SettingsIcon className="h-4 w-4 mr-2" />
+              View Config
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setShowResetConfirmation(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <DatabaseIcon className="h-4 w-4 mr-2" />
+              Reset Database
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* GitHub Link with Commit SHA */}
         <Button
@@ -343,6 +412,64 @@ export function AppSidebar() {
           </div>
         </Button>
       </SidebarFooter>
+
+      {/* Reset Database Confirmation Dialog */}
+      <AlertDialog
+        open={showResetConfirmation}
+        onOpenChange={setShowResetConfirmation}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <DatabaseIcon className="h-5 w-5" />
+              Reset Database - Permanent Action
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              <div className="space-y-3 mt-3">
+                <p className="font-medium text-destructive">
+                  This will permanently delete:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                  <li>Your private key</li>
+                  <li>All PODs (signed and main)</li>
+                  <li>All folders</li>
+                  <li>Your identity POD</li>
+                  <li>All other application data</li>
+                </ul>
+                <p className="text-sm font-medium">
+                  This will <span className="font-bold">NOT</span> delete any
+                  documents posted to the PodNet server, or remove your identity
+                  from the PodNet server or the FrogCrypto leaderboard. However,
+                  you will be unable to re-claim your identity.
+                </p>
+                <p className="text-sm font-medium mt-4">
+                  The application will restart and show the setup screen.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetDatabase}
+              disabled={isResetting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isResetting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b border-white mr-2"></div>
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <DatabaseIcon className="h-4 w-4 mr-2" />
+                  Reset Database
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }

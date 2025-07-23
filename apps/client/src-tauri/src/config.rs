@@ -28,7 +28,7 @@ impl Default for FeatureConfig {
             p2p: false,
             authoring: true,
             integration: true,
-            frogcrypto: false,
+            frogcrypto: true,
         }
     }
 }

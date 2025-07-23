@@ -40,6 +40,45 @@ async fn get_app_config() -> Result<AppConfig, String> {
     Ok(config::config().clone())
 }
 
+/// Extended config info with full paths for debugging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtendedAppConfig {
+    pub config: AppConfig,
+    pub config_file_path: Option<String>,
+    pub database_full_path: String,
+}
+
+/// Tauri command to get extended app config with full paths
+#[tauri::command]
+async fn get_extended_app_config(app_handle: AppHandle) -> Result<ExtendedAppConfig, String> {
+    let config = config::config().clone();
+
+    // Get the full database path
+    let database_full_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?
+        .join(&config.database.path)
+        .to_string_lossy()
+        .to_string();
+
+    // Try to determine config file path
+    let config_file_path = std::env::var("POD2_CONFIG_FILE").ok().or_else(|| {
+        // Try to find default config file location
+        app_handle
+            .path()
+            .app_config_dir()
+            .ok()
+            .map(|dir| dir.join("config.toml").to_string_lossy().to_string())
+    });
+
+    Ok(ExtendedAppConfig {
+        config,
+        config_file_path,
+        database_full_path,
+    })
+}
+
 /// Tauri command to get a specific config section
 #[tauri::command]
 async fn get_config_section(section: String) -> Result<serde_json::Value, String> {
@@ -291,6 +330,57 @@ fn get_build_info() -> String {
     env!("GIT_COMMIT_HASH").to_string()
 }
 
+/// Tauri command to reset the database - deletes current database and recreates it
+#[tauri::command]
+async fn reset_database(app_state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
+    // Get the database path from config (need to clone to avoid holding the guard across await)
+    let db_path_config = {
+        let config = config::config();
+        config.database.path.clone()
+    };
+
+    // Use tauri app handle to get proper app data directory
+    let state_guard = app_state.lock().await;
+    let app_handle = state_guard.app_handle.clone();
+    drop(state_guard); // Release the lock before async operations
+
+    let db_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {e}"))?
+        .join(&db_path_config);
+
+    log::info!("Resetting database at: {}", db_path.display());
+
+    // Delete the existing database file if it exists
+    if db_path.exists() {
+        std::fs::remove_file(&db_path)
+            .map_err(|e| format!("Failed to delete existing database: {e}"))?;
+        log::info!("Deleted existing database file");
+    }
+
+    // Initialize a new database
+    let new_db = init_db(db_path.to_str().unwrap())
+        .await
+        .map_err(|e| format!("Failed to recreate database: {e}"))?;
+
+    // Update the app state with the new database
+    let mut state_guard = app_state.lock().await;
+    state_guard.db = new_db;
+
+    // Reset the state data to default
+    state_guard.state_data = AppStateData::default();
+
+    // Trigger a full state sync to update the frontend
+    state_guard
+        .trigger_state_sync()
+        .await
+        .map_err(|e| format!("Failed to sync state after reset: {e}"))?;
+
+    log::info!("Database reset completed successfully");
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -468,6 +558,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Build info commands
             get_build_info,
+            // Debug commands
+            reset_database,
             // Frog commands
             frog::request_frog,
             frog::request_score,
@@ -475,6 +567,7 @@ pub fn run() {
             // Configuration commands
             get_feature_config_command,
             get_app_config,
+            get_extended_app_config,
             get_config_section,
             reload_config,
             // POD management commands
