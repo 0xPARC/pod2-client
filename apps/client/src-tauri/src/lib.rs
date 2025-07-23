@@ -547,7 +547,7 @@ pub fn run() {
                     .await
                     .expect("failed to initialize state");
 
-                if get_feature_config().frogcrypto {
+                if AppConfig::get().features.frogcrypto {
                     frog::setup_background_thread(app.handle().clone());
                 }
 
