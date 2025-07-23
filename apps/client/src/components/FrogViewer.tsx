@@ -12,6 +12,8 @@ import {
 } from "@radix-ui/react-collapsible";
 import type { SignedPod, Value } from "@pod2/pod2js";
 import type { PodInfo } from "@/lib/rpc";
+import { Switch } from "./ui/switch";
+import { listen, emit } from "@tauri-apps/api/event";
 
 interface FrogViewerProps {
   setScore: (score: number) => void;
@@ -73,6 +75,21 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     updateTimeout();
   }, []);
 
+  useEffect(() => {
+
+    const unlisten = listen("frog-background", (event) => {
+      toast(event.payload as string);
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  const toggleMining = async (b: boolean) => {
+    await emit("toggle-mining", b);
+  };
+
   const timeRemaining =
     frogTimeout === null || time >= frogTimeout
       ? 0
@@ -82,14 +99,21 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border flex flex-col">
         <Button
           variant="outline"
+          className="w-fit"
           onClick={() => requestFrogAndUpdateTimeout()}
           disabled={searchDisabled}
         >
           Search SWAMP {searchButtonWaitText}
         </Button>
+        <div className="py-4">
+        <label htmlFor="mining">
+          Mining enabled
+        </label>
+        <Switch id="mining" onCheckedChange={toggleMining} />
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full">

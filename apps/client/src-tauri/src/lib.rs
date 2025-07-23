@@ -329,6 +329,11 @@ pub fn run() {
                     .trigger_state_sync()
                     .await
                     .expect("failed to initialize state");
+
+                if get_feature_config().frogcrypto {
+                    frog::setup_background_thread(app.handle().clone());
+                }
+
                 app.manage(Mutex::new(app_state));
 
                 // Spawn cache warming task in background to avoid blocking startup
