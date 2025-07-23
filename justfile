@@ -10,11 +10,11 @@ format:
 # Client development commands
 # Default: dev mode with release build and staging servers (recommended for most development)
 client-dev:
-    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging
 
 # Dev mode with debug build (slower, better for debugging)
 client-dev-debug:
-    cd apps/client && pnpm tauri dev -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity
+    cd apps/client && pnpm tauri dev -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging
 
 # Dev mode with local servers (requires running servers-local)
 client-dev-local:
@@ -22,7 +22,7 @@ client-dev-local:
 
 # Dev mode with production servers (testing against prod)
 client-dev-prod:
-    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://api.pod2.dev --set network.identity_server=https://api.pod2.dev
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging
 
 client-build:
     cd apps/client && pnpm tauri build
