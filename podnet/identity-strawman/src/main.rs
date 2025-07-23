@@ -1,3 +1,5 @@
+mod config;
+
 use std::{
     fs,
     sync::{Arc, Mutex},
@@ -606,23 +608,22 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting PodNet Identity Server (Strawman Implementation)...");
 
-    // Load or create server keypair
-    let keypair_file = std::env::var("IDENTITY_KEYPAIR_FILE")
-        .unwrap_or_else(|_| "identity-server-keypair.json".to_string());
-    tracing::info!("Using keypair file: {}", keypair_file);
+    // Load configuration
+    let config = config::IdentityServerConfig::load();
 
-    let (server_id, server_secret_key, server_public_key) = load_or_create_keypair(&keypair_file)?;
+    // Load or create server keypair
+    tracing::info!("Using keypair file: {}", config.keypair_file);
+
+    let (server_id, server_secret_key, server_public_key) =
+        load_or_create_keypair(&config.keypair_file)?;
 
     tracing::info!("Identity Server ID: {}", server_id);
     tracing::info!("Server Public Key: {}", server_public_key);
 
     // Attempt to register with podnet-server
-    let podnet_server_url =
-        std::env::var("PODNET_SERVER_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-
     tracing::info!("Attempting to register with podnet-server...");
     if let Err(e) =
-        register_with_podnet_server(&server_id, &server_secret_key, &podnet_server_url).await
+        register_with_podnet_server(&server_id, &server_secret_key, &config.podnet_server_url).await
     {
         tracing::warn!("Failed to register with podnet-server: {}", e);
         tracing::warn!("Identity server will continue running, but won't be registered.");
@@ -630,11 +631,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Initialize database
-    let db_path =
-        std::env::var("IDENTITY_DATABASE_PATH").unwrap_or_else(|_| "identity-users.db".to_string());
-    tracing::info!("Using database file: {}", db_path);
+    tracing::info!("Using database file: {}", config.database_path);
 
-    let db_conn = initialize_database(&db_path)?;
+    let db_conn = initialize_database(&config.database_path)?;
     let db_conn = Arc::new(Mutex::new(db_conn));
 
     let state = IdentityServerState {
@@ -652,9 +651,14 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    tracing::info!("Binding to 0.0.0.0:3001...");
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    tracing::info!("Identity server running on http://localhost:3001");
+    let bind_addr = format!("{}:{}", config.host, config.port);
+    tracing::info!("Binding to {}...", bind_addr);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    tracing::info!(
+        "Identity server running on http://{}:{}",
+        config.host,
+        config.port
+    );
     tracing::info!("Available endpoints:");
     tracing::info!("  GET  /                - Server info");
     tracing::info!("  POST /user/challenge  - Request challenge for user identity");
