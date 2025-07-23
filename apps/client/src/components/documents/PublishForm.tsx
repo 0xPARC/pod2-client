@@ -5,7 +5,8 @@ import {
   PlusIcon,
   XIcon
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
+import { fetchDocument, type DocumentMetadata } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -18,7 +19,7 @@ import { PublishButton } from "./PublishButton";
 interface PublishFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
-  replyTo?: number;
+  replyTo?: string;
 }
 
 export function PublishForm({
@@ -39,6 +40,8 @@ export function PublishForm({
   const [authors, setAuthors] = useState<string[]>([]);
   const [authorInput, setAuthorInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [replyToDocument, setReplyToDocument] = useState<DocumentMetadata | null>(null);
+  const [replyToLoading, setReplyToLoading] = useState(false);
 
   const addTag = () => {
     const trimmedTag = tagInput.trim();
@@ -159,13 +162,56 @@ export function PublishForm({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  // Fetch the document being replied to
+  useEffect(() => {
+    if (replyTo) {
+      setReplyToLoading(true);
+      // Extract document_id from "post_id:document_id" format
+      const documentId = parseInt(replyTo.split(':')[1]);
+      fetchDocument(documentId)
+        .then((doc) => {
+          setReplyToDocument(doc.metadata);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch reply-to document:", error);
+        })
+        .finally(() => {
+          setReplyToLoading(false);
+        });
+    }
+  }, [replyTo]);
+
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">
-            {replyTo ? `Reply to Document #${replyTo}` : "Publish New Document"}
-          </CardTitle>
+          <div className="flex-1">
+            <CardTitle className="text-xl">
+              {replyTo ? `Reply to Document #${replyTo.split(':')[1]} (Post ${replyTo.split(':')[0]})` : "Publish New Document"}
+            </CardTitle>
+            {replyTo && replyToDocument && (
+              <div className="mt-2 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                  <MessageSquareIcon className="h-4 w-4" />
+                  <span>Replying to:</span>
+                </div>
+                <div className="font-medium text-foreground truncate">
+                  {replyToDocument.title}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  by u/{replyToDocument.uploader_id}
+                </div>
+              </div>
+            )}
+            {replyTo && replyToLoading && (
+              <div className="mt-2 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b border-current"></div>
+                  <span>Loading document details...</span>
+                </div>
+              </div>
+            )}
+          </div>
           {onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>
               <XIcon className="h-4 w-4" />

@@ -9,7 +9,8 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FileTextIcon,
-  MessageSquareIcon
+  MessageSquareIcon,
+  ReplyIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -27,9 +28,16 @@ import {
   fetchPostReplies,
   verifyDocumentPod
 } from "../../lib/documentApi";
+import { useAppStore } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+
+// Interface for threaded reply structure
+interface ThreadedReply extends DocumentMetadata {
+  children: ThreadedReply[];
+  depth: number;
+}
 
 interface DocumentDetailViewProps {
   documentId: number;
@@ -112,6 +120,7 @@ export function DocumentDetailView({
   onBack,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
+  const { setCurrentView, setReplyToDocumentId } = useAppStore();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +153,57 @@ export function DocumentDetailView({
     }
   };
 
+  // Recursively fetch all replies to build complete conversation tree
+  const fetchAllRepliesRecursively = async (
+    postId: number,
+    visited: Set<number> = new Set()
+  ): Promise<DocumentMetadata[]> => {
+    console.log(`Fetching all replies recursively for post ${postId}`);
+    
+    // Get direct replies to this post
+    const directReplies = await fetchPostReplies(postId);
+    console.log(`Found ${directReplies.length} direct replies to post ${postId}`);
+    
+    const allReplies: DocumentMetadata[] = [...directReplies];
+    
+    // For each direct reply, recursively fetch its replies
+    for (const reply of directReplies) {
+      if (!reply.id || visited.has(reply.id)) {
+        console.log(`Skipping reply ${reply.id} (already visited or no ID)`);
+        continue;
+      }
+      
+      visited.add(reply.id);
+      console.log(`Recursively fetching replies to document ${reply.id}`);
+      
+      try {
+        // Fetch replies to this specific document
+        const nestedReplies = await fetchDocumentReplies(reply.id);
+        console.log(`Found ${nestedReplies.length} replies to document ${reply.id}`);
+        
+        if (nestedReplies.length > 0) {
+          allReplies.push(...nestedReplies);
+          
+          // Recursively fetch replies to nested replies
+          for (const nestedReply of nestedReplies) {
+            if (nestedReply.id && !visited.has(nestedReply.id)) {
+              visited.add(nestedReply.id);
+              const deeperReplies = await fetchDocumentReplies(nestedReply.id);
+              console.log(`Found ${deeperReplies.length} deeper replies to document ${nestedReply.id}`);
+              allReplies.push(...deeperReplies);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch replies for document ${reply.id}:`, error);
+        // Continue with other replies even if one fails
+      }
+    }
+    
+    console.log(`Total replies found recursively: ${allReplies.length}`);
+    return allReplies;
+  };
+
   const loadReplies = async () => {
     if (!documentId || !document) return;
 
@@ -155,28 +215,28 @@ export function DocumentDetailView({
         `Loading replies for post ${document.metadata.post_id} (document ${documentId})`
       );
 
-      // Fetch replies to all versions of this post
-      const postRepliesData = await fetchPostReplies(document.metadata.post_id);
+      // Use recursive fetching to get complete conversation tree
+      const allRepliesData = await fetchAllRepliesRecursively(document.metadata.post_id);
       console.log(
-        `Found ${postRepliesData.length} replies to post ${document.metadata.post_id}:`,
-        postRepliesData
+        `Found ${allRepliesData.length} total replies (including nested) to post ${document.metadata.post_id}:`,
+        allRepliesData
       );
-      setReplies(postRepliesData);
+      setReplies(allRepliesData);
     } catch (err) {
-      // Fallback to document-specific replies if post replies fails
+      // Fallback to basic post replies if recursive fails
       try {
         console.warn(
-          "Post replies failed, falling back to document replies:",
+          "Recursive replies failed, falling back to basic post replies:",
           err
         );
-        const docRepliesData = await fetchDocumentReplies(documentId);
+        const postRepliesData = await fetchPostReplies(document.metadata.post_id);
         console.log(
-          `Fallback: Found ${docRepliesData.length} replies to document ${documentId}:`,
-          docRepliesData
+          `Fallback: Found ${postRepliesData.length} direct replies to post ${document.metadata.post_id}:`,
+          postRepliesData
         );
-        setReplies(docRepliesData);
+        setReplies(postRepliesData);
       } catch (fallbackErr) {
-        console.error("Both post and document replies failed:", fallbackErr);
+        console.error("Both recursive and basic replies failed:", fallbackErr);
         setRepliesError(
           fallbackErr instanceof Error
             ? fallbackErr.message
@@ -204,6 +264,17 @@ export function DocumentDetailView({
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleReplyToDocument = () => {
+    if (!document) return;
+    
+    // Format: "post_id:document_id"
+    const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
+    console.log("Setting replyToDocumentId to:", replyToId);
+    // Set the reply context and navigate to publish page
+    setReplyToDocumentId(replyToId);
+    setCurrentView("publish");
   };
 
   const handleUpvote = async () => {
@@ -322,6 +393,209 @@ export function DocumentDetailView({
       minute: "2-digit",
       second: "2-digit"
     });
+  };
+
+  // Build threaded reply tree from flat list
+  const buildReplyTree = (replies: DocumentMetadata[]): ThreadedReply[] => {
+    const replyMap = new Map<number, ThreadedReply>();
+    const rootReplies: ThreadedReply[] = [];
+
+    console.log("Building reply tree from", replies.length, "replies");
+    console.log("Replies data:", replies.map(r => ({
+      id: r.id,
+      title: r.title,
+      reply_to: r.reply_to
+    })));
+
+    // First pass: create all reply objects
+    replies.forEach(reply => {
+      const threadedReply: ThreadedReply = {
+        ...reply,
+        children: [],
+        depth: 0
+      };
+      replyMap.set(reply.id!, threadedReply);
+    });
+
+    console.log("Created reply map with IDs:", Array.from(replyMap.keys()));
+
+    // Second pass: build parent-child relationships
+    replies.forEach(reply => {
+      const threadedReply = replyMap.get(reply.id!)!;
+      
+      if (reply.reply_to?.document_id) {
+        console.log(`Reply ${reply.id} (${reply.title}) is replying to document ${reply.reply_to.document_id}`);
+        // This is a reply to another document
+        const parentReply = replyMap.get(reply.reply_to.document_id);
+        if (parentReply) {
+          console.log(`Found parent reply ${parentReply.id} for ${reply.id}, nesting it`);
+          // It's a reply to another reply
+          threadedReply.depth = parentReply.depth + 1;
+          parentReply.children.push(threadedReply);
+        } else {
+          console.log(`No parent found for ${reply.id}, making it root (replying to original doc)`);
+          // It's a reply to the original document (not in replies list)
+          rootReplies.push(threadedReply);
+        }
+      } else {
+        console.log(`Reply ${reply.id} has no reply_to, making it root`);
+        // Top-level reply
+        rootReplies.push(threadedReply);
+      }
+    });
+
+    console.log("Final tree structure:", rootReplies.map(r => ({
+      id: r.id,
+      title: r.title,
+      children: r.children.map(c => ({ id: c.id, title: c.title }))
+    })));
+
+    return rootReplies;
+  };
+
+  // Recursive component to render a reply and its children
+  const renderThreadedReply = (reply: ThreadedReply): JSX.Element => {
+    const isReplyToCurrentDoc = reply.reply_to?.document_id === documentId;
+    const isReplyToCurrentPost = reply.reply_to?.post_id === document?.metadata.post_id;
+    const maxDepth = 5; // Limit nesting depth for readability
+    const displayDepth = Math.min(reply.depth, maxDepth);
+
+    return (
+      <div key={reply.id} className="space-y-4">
+        <div
+          className={`border-l-2 border-muted pl-4 ${
+            displayDepth > 0 ? `ml-${Math.min(displayDepth * 4, 16)}` : ''
+          }`}
+          style={{ marginLeft: displayDepth > 0 ? `${displayDepth * 16}px` : '0' }}
+        >
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-medium text-blue-600">
+                u/{reply.uploader_id}
+              </span>
+              <span>•</span>
+              <span>{formatDate(reply.created_at)}</span>
+              <span>•</span>
+              <span className="text-orange-600">
+                #{reply.id} ({reply.upvote_count} upvotes)
+              </span>
+              {displayDepth > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    Level {displayDepth}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Show which version this reply targets */}
+          {reply.reply_to && (
+            <div className="mb-2">
+              {isReplyToCurrentDoc ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-green-50 text-green-700 border-green-200"
+                >
+                  Reply to this version
+                </Badge>
+              ) : isReplyToCurrentPost ? (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                  >
+                    Reply to different version
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onNavigateToDocument?.(reply.reply_to!.document_id)
+                    }
+                    className="text-yellow-700 hover:text-yellow-900 p-0 h-auto font-normal text-xs underline"
+                    disabled={!onNavigateToDocument}
+                  >
+                    (view version #{reply.reply_to.document_id})
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                  >
+                    Reply to #{reply.reply_to.document_id}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      onNavigateToDocument?.(reply.reply_to!.document_id)
+                    }
+                    className="text-blue-700 hover:text-blue-900 p-0 h-auto font-normal text-xs underline"
+                    disabled={!onNavigateToDocument}
+                  >
+                    (view doc #{reply.reply_to.document_id})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <h4 className="font-medium text-foreground mb-2">
+            {reply.title}
+          </h4>
+
+          {reply.tags.length > 0 && (
+            <div className="flex gap-1 mb-2">
+              {reply.tags.map((tag, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="text-xs"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {reply.authors.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+              <span>Authors:</span>
+              {reply.authors.map((author, index) => (
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className="text-xs"
+                >
+                  {author}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigateToDocument?.(reply.id!)}
+            className="text-blue-600 hover:text-blue-800 p-0 h-auto font-normal"
+            disabled={!onNavigateToDocument}
+          >
+            View full reply →
+          </Button>
+        </div>
+
+        {/* Render children recursively */}
+        {reply.children.length > 0 && (
+          <div className="space-y-4">
+            {reply.children.map(child => renderThreadedReply(child))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderContent = (content: Document["content"]) => {
@@ -760,26 +1034,36 @@ export function DocumentDetailView({
               )}
             </div>
 
-            {/* Right side - Verify POD */}
+            {/* Right side - Action buttons */}
             <div className="flex flex-col items-end gap-2">
-              <Button
-                onClick={handleVerifyDocument}
-                disabled={isVerifying}
-                variant="outline"
-                size="sm"
-              >
-                {isVerifying ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircleIcon className="h-3 w-3 mr-1" />
-                    Verify POD
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleReplyToDocument}
+                  variant="outline"
+                  size="sm"
+                >
+                  <ReplyIcon className="h-3 w-3 mr-1" />
+                  Reply
+                </Button>
+                <Button
+                  onClick={handleVerifyDocument}
+                  disabled={isVerifying}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isVerifying ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                      Verify POD
+                    </>
+                  )}
+                </Button>
+              </div>
 
               {verificationResult &&
                 verificationResult.publish_verified &&
@@ -876,134 +1160,7 @@ export function DocumentDetailView({
 
             {!repliesLoading && !repliesError && replies.length > 0 && (
               <div className="space-y-4">
-                {replies.map((reply) => {
-                  const isReplyToCurrentDoc =
-                    reply.reply_to?.document_id === documentId;
-                  const isReplyToCurrentPost =
-                    reply.reply_to?.post_id === document?.metadata.post_id;
-
-                  return (
-                    <div
-                      key={reply.id}
-                      className="border-l-2 border-muted pl-4"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="font-medium text-blue-600">
-                            u/{reply.uploader_id}
-                          </span>
-                          <span>•</span>
-                          <span>{formatDate(reply.created_at)}</span>
-                          <span>•</span>
-                          <span className="text-orange-600">
-                            #{reply.id} ({reply.upvote_count} upvotes)
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Show which version this reply targets */}
-                      {reply.reply_to && (
-                        <div className="mb-2">
-                          {isReplyToCurrentDoc ? (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-green-50 text-green-700 border-green-200"
-                            >
-                              Reply to this version
-                            </Badge>
-                          ) : isReplyToCurrentPost ? (
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
-                              >
-                                Reply to different version
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  onNavigateToDocument?.(
-                                    reply.reply_to!.document_id
-                                  )
-                                }
-                                className="text-yellow-700 hover:text-yellow-900 p-0 h-auto font-normal text-xs underline"
-                                disabled={!onNavigateToDocument}
-                              >
-                                (view version #{reply.reply_to.document_id})
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-                              >
-                                Reply to post #{reply.reply_to.post_id}
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  onNavigateToDocument?.(
-                                    reply.reply_to!.document_id
-                                  )
-                                }
-                                className="text-blue-700 hover:text-blue-900 p-0 h-auto font-normal text-xs underline"
-                                disabled={!onNavigateToDocument}
-                              >
-                                (view doc #{reply.reply_to.document_id})
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <h4 className="font-medium text-foreground mb-2">
-                        {reply.title}
-                      </h4>
-
-                      {reply.tags.length > 0 && (
-                        <div className="flex gap-1 mb-2">
-                          {reply.tags.map((tag, index) => (
-                            <Badge
-                              key={index}
-                              variant="outline"
-                              className="text-xs"
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-
-                      {reply.authors.length > 0 && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                          <span>Authors:</span>
-                          {reply.authors.map((author, index) => (
-                            <Badge
-                              key={index}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              {author}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onNavigateToDocument?.(reply.id!)}
-                        className="text-blue-600 hover:text-blue-800 p-0 h-auto font-normal"
-                        disabled={!onNavigateToDocument}
-                      >
-                        View full reply →
-                      </Button>
-                    </div>
-                  );
-                })}
+                {buildReplyTree(replies).map(reply => renderThreadedReply(reply))}
               </div>
             )}
           </CardContent>

@@ -35,7 +35,7 @@ interface PublishData {
   url?: string;
   tags?: string[];
   authors?: string[];
-  replyTo?: number;
+  replyTo?: string;
 }
 
 interface PublishButtonProps {
@@ -99,21 +99,32 @@ export function PublishButton({
         };
       }
 
-      // Call the Tauri publish command
-      const result = await invoke<{
-        success: boolean;
-        document_id: number | null;
-        error_message: string | null;
-      }>("publish_document", {
+      console.log("Publishing with data:", data);
+      console.log("Reply to being sent (raw):", data.replyTo);
+
+      const invokeParams = {
         title: data.title.trim(),
         message: data.message || null,
         file: fileData,
         url: data.url || null,
         tags: data.tags || [],
         authors: data.authors || [],
-        reply_to: null, // TODO: Update when UI supports ReplyReference
+        replyTo: data.replyTo
+          ? {
+              post_id: parseInt(data.replyTo.split(":")[0]),
+              document_id: parseInt(data.replyTo.split(":")[1])
+            }
+          : null,
         serverUrl: serverUrl
-      });
+      };
+      console.log("Full invoke parameters:", invokeParams);
+
+      // Call the Tauri publish command
+      const result = await invoke<{
+        success: boolean;
+        document_id: number | null;
+        error_message: string | null;
+      }>("publish_document", invokeParams);
 
       // Dismiss loading toast
       toast.dismiss(loadingToast);

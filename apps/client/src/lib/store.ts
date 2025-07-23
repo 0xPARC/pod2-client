@@ -53,6 +53,7 @@ interface AppStoreState {
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
   frogTimeout: number | null;
+  replyToDocumentId: string | null;
 
   // Folder State
   folders: SpaceInfo[];
@@ -80,6 +81,7 @@ interface AppStoreState {
   setSelectedFolderFilter: (filter: FolderFilter) => void;
   setSelectedPodId: (podId: string | null) => void;
   setExternalPodRequest: (request: string | undefined) => void;
+  setReplyToDocumentId: (documentId: string | null) => void;
   loadFolders: () => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
@@ -123,6 +125,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   selectedFolderFilter: "all",
   selectedPodId: null,
   externalPodRequest: undefined,
+  replyToDocumentId: null,
   folders: [],
   foldersLoading: false,
   frogTimeout: null,
@@ -211,6 +214,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setExternalPodRequest: (request: string | undefined) => {
     set({ externalPodRequest: request });
+  },
+
+  setReplyToDocumentId: (documentId: string | null) => {
+    set({ replyToDocumentId: documentId });
   },
 
   setFrogTimeout: (timeout: number | null) => {
