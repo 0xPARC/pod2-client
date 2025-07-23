@@ -1,3 +1,4 @@
+import { prettyPrintCustomPredicates } from "@/lib/features/authoring/rpc";
 import type {
   CustomPredicateRef,
   MainPod,
@@ -5,7 +6,7 @@ import type {
   ValueRef
 } from "@pod2/pod2js";
 import { ClipboardCopy, Plus } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { importPod } from "../lib/rpc";
 import { useAppStore } from "../lib/store";
@@ -18,12 +19,7 @@ interface MainPodCardProps {
   mainPod: MainPod;
   podId?: string;
   label?: string | null;
-  // onClick?: () => void; // For future "open in tab" functionality
 }
-
-// function isAnchoredKey(arg: AnchoredKey | Value): arg is AnchoredKey {
-//   return typeof arg === 'object' && 'key' in arg;
-// }
 
 function ViewStatementArg({ arg }: { arg: ValueRef }) {
   if (arg.type === "Key") {
@@ -60,6 +56,18 @@ function ViewCustomPredicate({
 
 const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
   const statementCount = mainPod.publicStatements?.length || 0;
+  const [prettyPrintedPredicates, setPrettyPrintedPredicates] =
+    useState<string>("");
+
+  useEffect(() => {
+    const fetchPrettyPrintedPredicates = async () => {
+      const prettyPrintedPredicates =
+        await prettyPrintCustomPredicates(mainPod);
+      console.log("prettyPrintedPredicates", prettyPrintedPredicates);
+      setPrettyPrintedPredicates(prettyPrintedPredicates);
+    };
+    fetchPrettyPrintedPredicates();
+  }, [mainPod]);
 
   // Get all PODs to check if this one already exists
   const { appState } = useAppStore();
@@ -92,8 +100,6 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
     }
   };
 
-  // Placeholder icon, can be replaced with an SVG or icon library component
-
   return (
     <Card className="w-full mx-auto">
       <CardHeader>
@@ -125,7 +131,7 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
           Statements:
         </h4>
         {statementCount > 0 ? (
-          <div className="border rounded-md">
+          <div className="border rounded-md mb-4">
             {mainPod.publicStatements?.map((statement, index, arr) => (
               <div
                 key={index}
@@ -159,7 +165,18 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
             No entries in this POD.
           </p>
         )}
-        {/* Display more SignedPod specific details here, e.g., proof */}
+        {prettyPrintedPredicates && (
+          <>
+            <h4 className="font-semibold mb-2 text-sm text-muted-foreground">
+              Custom Predicates:
+            </h4>
+            <div className="border rounded-md">
+              <pre className="text-sm text-muted-foreground p-4">
+                {prettyPrintedPredicates}
+              </pre>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

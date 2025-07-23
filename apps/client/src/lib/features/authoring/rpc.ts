@@ -1,9 +1,9 @@
-import type { SignedPod, Value } from "@pod2/pod2js";
 import { invokeCommand } from "@/lib/rpc";
+import type { MainPod, SignedPod, Value } from "@pod2/pod2js";
 import type {
   Diagnostic,
-  ValidateCodeResponse,
-  ExecuteCodeResponse
+  ExecuteCodeResponse,
+  ValidateCodeResponse
 } from "./types";
 
 /**
@@ -80,5 +80,18 @@ export async function executeCode(
   return invokeCommand<ExecuteCodeResponse>("execute_code_command", {
     code,
     mock
+  });
+}
+
+/**
+ * Pretty print custom predicates
+ * @param serializedMainPod - The serialized main pod
+ * @returns The pretty printed custom predicates
+ */
+export async function prettyPrintCustomPredicates(
+  mainPod: MainPod
+): Promise<string> {
+  return invokeCommand<string>("pretty_print_custom_predicates", {
+    serializedMainPod: JSON.stringify(mainPod)
   });
 }
