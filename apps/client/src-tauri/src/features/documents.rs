@@ -340,6 +340,13 @@ pub async fn publish_document(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<PublishResult, String> {
     log::info!("Publishing document to server {server_url}");
+    if let Some(ref reply_ref) = reply_to {
+        log::info!(
+            "Replying to post {} document {}",
+            reply_ref.post_id,
+            reply_ref.document_id
+        );
+    }
 
     // Validate title
     if title.trim().is_empty() {
@@ -563,16 +570,25 @@ pub async fn publish_document(
         log::info!("✓ Created published folder");
     }
 
-    pod2_db::store::import_pod(
-        &app_state.db,
-        &publish_pod_data,
-        Some(&publish_label),
-        PUBLISHED_FOLDER,
-    )
-    .await
-    .map_err(|e| format!("Failed to store publish pod locally: {e}"))?;
-
-    log::info!("✓ Publish MainPod stored locally with label: {publish_label}");
+    // Check if POD already exists before storing
+    let pod_id = publish_pod_data.id();
+    match pod2_db::store::get_pod(&app_state.db, &pod_id, PUBLISHED_FOLDER).await {
+        Ok(_) => {
+            log::info!("✓ Publish MainPod already exists locally with ID: {pod_id}");
+        }
+        Err(_) => {
+            // POD doesn't exist, store it
+            pod2_db::store::import_pod(
+                &app_state.db,
+                &publish_pod_data,
+                Some(&publish_label),
+                PUBLISHED_FOLDER,
+            )
+            .await
+            .map_err(|e| format!("Failed to store publish pod locally: {e}"))?;
+            log::info!("✓ Publish MainPod stored locally with label: {publish_label}");
+        }
+    }
 
     // Step 8: Create the publish request
     let publish_request = PublishRequest {
