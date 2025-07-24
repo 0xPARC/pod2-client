@@ -186,7 +186,6 @@ pub struct AppState {
     state_data: AppStateData,
     app_handle: AppHandle,
     p2p_node: Option<p2p_node::P2PNode>,
-    current_open_draft_id: Option<String>,
 }
 
 impl AppState {
@@ -558,7 +557,6 @@ pub fn run() {
                     state_data: AppStateData::default(),
                     app_handle,
                     p2p_node: None,
-                    current_open_draft_id: None,
                 };
                 // Initialize state
                 app_state
@@ -618,16 +616,12 @@ pub fn run() {
             documents::upvote_document,
             documents::publish_document,
             // Draft management commands
-            documents::update_draft_immediate,
-            documents::delete_current_draft,
+            documents::create_draft,
+            documents::update_draft,
             documents::list_drafts,
             documents::get_draft,
             documents::delete_draft,
             documents::publish_draft,
-            // New notification-based draft commands
-            documents::notify_draft_opened,
-            documents::notify_draft_updated,
-            documents::notify_draft_closed,
             // Identity setup commands
             identity_setup::setup_identity_server,
             identity_setup::register_username,

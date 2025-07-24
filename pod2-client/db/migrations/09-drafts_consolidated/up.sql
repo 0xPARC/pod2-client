@@ -1,5 +1,8 @@
+-- Consolidated drafts feature migration
+-- This consolidates migrations 09-12 into a single clean migration
+
 CREATE TABLE drafts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY, -- UUID stored as TEXT
     title TEXT NOT NULL,
     content_type TEXT NOT NULL CHECK (content_type IN ('message', 'file', 'url')),
     message TEXT,

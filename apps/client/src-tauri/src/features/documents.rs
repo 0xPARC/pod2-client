@@ -392,7 +392,7 @@ pub async fn publish_document(
         .map_err(|e| format!("Content validation failed: {e}"))?;
 
     // Step 2: Get user's identity pod and private key from app state
-    let mut app_state = state.lock().await;
+    let app_state = state.lock().await;
 
     // Get the app setup state to get the username and identity pod ID
     let setup_state = pod2_db::store::get_app_setup_state(&app_state.db)
@@ -635,12 +635,6 @@ pub async fn publish_document(
                 log::warn!("Failed to delete draft after successful publish: {e}");
             } else {
                 log::info!("Draft {draft_id} deleted after successful publish");
-
-                // Clear the current open draft if it was the one we just published
-                if app_state.current_open_draft_id.as_ref() == Some(draft_id) {
-                    app_state.current_open_draft_id = None;
-                    log::info!("Cleared current open draft ID after successful publish");
-                }
             }
         }
 
@@ -690,54 +684,54 @@ pub struct DraftUpdateRequest {
 }
 
 #[tauri::command]
-pub async fn update_draft_immediate(
+pub async fn create_draft(
+    request: DraftUpdateRequest,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let app_state = state.lock().await;
+
+    let create_request = pod2_db::store::CreateDraftRequest {
+        title: request.title,
+        content_type: request.content_type,
+        message: request.message,
+        file_name: request.file_name,
+        file_content: request.file_content,
+        file_mime_type: request.file_mime_type,
+        url: request.url,
+        tags: request.tags,
+        authors: request.authors,
+        reply_to: request.reply_to,
+    };
+
+    pod2_db::store::create_draft(&app_state.db, create_request)
+        .await
+        .map_err(|e| format!("Failed to create draft: {e}"))
+}
+
+#[tauri::command]
+pub async fn update_draft(
+    draft_id: String,
     request: DraftUpdateRequest,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<bool, String> {
     let app_state = state.lock().await;
 
-    if let Some(ref draft_id) = app_state.current_open_draft_id {
-        let update_request = pod2_db::store::UpdateDraftRequest {
-            title: request.title,
-            content_type: request.content_type,
-            message: request.message,
-            file_name: request.file_name,
-            file_content: request.file_content,
-            file_mime_type: request.file_mime_type,
-            url: request.url,
-            tags: request.tags,
-            authors: request.authors,
-            reply_to: request.reply_to,
-        };
+    let update_request = pod2_db::store::UpdateDraftRequest {
+        title: request.title,
+        content_type: request.content_type,
+        message: request.message,
+        file_name: request.file_name,
+        file_content: request.file_content,
+        file_mime_type: request.file_mime_type,
+        url: request.url,
+        tags: request.tags,
+        authors: request.authors,
+        reply_to: request.reply_to,
+    };
 
-        pod2_db::store::update_draft(&app_state.db, draft_id, update_request)
-            .await
-            .map_err(|e| format!("Failed to update draft: {e}"))
-    } else {
-        log::warn!("Attempted to update draft but no draft is currently open");
-        Ok(false)
-    }
-}
-
-#[tauri::command]
-pub async fn delete_current_draft(state: State<'_, Mutex<AppState>>) -> Result<bool, String> {
-    let mut app_state = state.lock().await;
-
-    if let Some(draft_id) = app_state.current_open_draft_id.clone() {
-        let result = pod2_db::store::delete_draft(&app_state.db, &draft_id)
-            .await
-            .map_err(|e| format!("Failed to delete current draft: {e}"))?;
-
-        if result {
-            app_state.current_open_draft_id = None;
-            log::info!("Deleted and closed draft with ID: {draft_id}");
-        }
-
-        Ok(result)
-    } else {
-        log::warn!("Attempted to delete current draft but no draft is currently open");
-        Ok(false)
-    }
+    pod2_db::store::update_draft(&app_state.db, &draft_id, update_request)
+        .await
+        .map_err(|e| format!("Failed to update draft: {e}"))
 }
 
 #[tauri::command]
@@ -834,96 +828,4 @@ pub async fn publish_draft(
         state,
     )
     .await
-}
-
-// --- New Notification-Based Draft Commands ---
-
-#[tauri::command]
-pub async fn notify_draft_opened(
-    draft_id: Option<String>,
-    state: State<'_, Mutex<AppState>>,
-) -> Result<(), String> {
-    let mut app_state = state.lock().await;
-
-    if let Some(id) = draft_id {
-        // Opening an existing draft
-        app_state.current_open_draft_id = Some(id.clone());
-        log::info!("Frontend notified: opened existing draft with ID: {id}");
-    } else {
-        // Starting a new draft - clear any existing draft state
-        app_state.current_open_draft_id = None;
-        log::info!("Frontend notified: starting new draft (cleared any existing open draft)");
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn notify_draft_updated(
-    request: DraftUpdateRequest,
-    state: State<'_, Mutex<AppState>>,
-) -> Result<(), String> {
-    let mut app_state = state.lock().await;
-
-    if let Some(ref draft_id) = app_state.current_open_draft_id {
-        // Update existing draft
-        let update_request = pod2_db::store::UpdateDraftRequest {
-            title: request.title,
-            content_type: request.content_type,
-            message: request.message,
-            file_name: request.file_name,
-            file_content: request.file_content,
-            file_mime_type: request.file_mime_type,
-            url: request.url,
-            tags: request.tags,
-            authors: request.authors,
-            reply_to: request.reply_to,
-        };
-
-        let success = pod2_db::store::update_draft(&app_state.db, draft_id, update_request)
-            .await
-            .map_err(|e| format!("Failed to update draft: {e}"))?;
-
-        if success {
-            log::info!("Draft {draft_id} updated successfully");
-        } else {
-            log::warn!("No rows updated for draft {draft_id}");
-        }
-    } else {
-        // Create new draft since none is currently open
-        let create_request = pod2_db::store::CreateDraftRequest {
-            title: request.title,
-            content_type: request.content_type,
-            message: request.message,
-            file_name: request.file_name,
-            file_content: request.file_content,
-            file_mime_type: request.file_mime_type,
-            url: request.url,
-            tags: request.tags,
-            authors: request.authors,
-            reply_to: request.reply_to,
-        };
-
-        let draft_id = pod2_db::store::create_draft(&app_state.db, create_request)
-            .await
-            .map_err(|e| format!("Failed to create draft: {e}"))?;
-
-        app_state.current_open_draft_id = Some(draft_id.clone());
-        log::info!("Created new draft with ID: {draft_id}");
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn notify_draft_closed(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let mut app_state = state.lock().await;
-
-    if let Some(draft_id) = app_state.current_open_draft_id.take() {
-        log::info!("Frontend notified: closed draft with ID: {draft_id}");
-    } else {
-        log::info!("Frontend notified: draft closed (no draft was open)");
-    }
-
-    Ok(())
 }

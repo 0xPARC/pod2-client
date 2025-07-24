@@ -11,27 +11,11 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { deleteDraft, DraftInfo, listDrafts } from "../../lib/documentApi";
 import { useAppStore } from "../../lib/store";
 import { formatTimeAgo } from "../../lib/timeUtils";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
-
-interface DraftInfo {
-  id: string; // UUID
-  title: string;
-  content_type: string;
-  message?: string;
-  file_name?: string;
-  file_content?: number[];
-  file_mime_type?: string;
-  url?: string;
-  tags: string[];
-  authors: string[];
-  reply_to?: string;
-  session_id?: string;
-  created_at: string;
-  updated_at: string;
-}
 
 interface DraftsViewProps {
   onEditDraft?: (draftId: string) => void; // UUID
@@ -48,7 +32,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const loadDrafts = async () => {
     try {
       setLoading(true);
-      const draftList = await invoke<DraftInfo[]>("list_drafts");
+      const draftList = await listDrafts();
       setDrafts(draftList);
     } catch (error) {
       console.error("Failed to load drafts:", error);
@@ -71,7 +55,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
 
   const handleDeleteDraft = async (draftId: string) => {
     try {
-      const success = await invoke<boolean>("delete_draft", { draftId });
+      const success = await deleteDraft(draftId);
       if (success) {
         setDrafts(drafts.filter((draft) => draft.id !== draftId));
         toast.success("Draft deleted");

@@ -165,6 +165,47 @@ pnpm lint
 - P2P messaging and chat functionality
 - SQLite with deadpool connection pooling
 
+### Tauri Frontend-Backend Communication
+
+**Type-Safe API Wrapper Pattern:**
+The POD2 Client uses a consistent pattern for type-safe communication between the TypeScript frontend and Rust Tauri backend:
+
+1. **Backend Commands** - Rust functions marked with `#[tauri::command]` in `src-tauri/src/features/`
+2. **TypeScript Types** - Shared interfaces in `apps/client/src/lib/documentApi.ts`
+3. **Wrapper Functions** - Type-safe wrapper functions that handle `invoke()` calls and error handling
+
+**Example Pattern:**
+```typescript
+// TypeScript interface matching Rust struct
+export interface DraftRequest {
+  title: string;
+  content_type: string;
+  message: string | null;
+  // ... other fields
+}
+
+// Type-safe wrapper function
+export async function createDraft(request: DraftRequest): Promise<string> {
+  try {
+    return await invoke<string>("create_draft", { request });
+  } catch (error) {
+    throw new Error(`Failed to create draft: ${error}`);
+  }
+}
+```
+
+**Benefits:**
+- Compile-time type checking between frontend and backend
+- Centralized error handling with consistent error messages
+- Easy refactoring and maintenance of IPC communication
+- Clear separation between business logic and IPC details
+
+**Usage Guidelines:**
+- Always use wrapper functions instead of direct `invoke()` calls in components
+- Define TypeScript interfaces that match Rust command parameter and return types
+- Handle errors consistently in wrapper functions with descriptive messages
+- Keep wrapper functions in dedicated API modules (e.g., `documentApi.ts`)
+
 ### Development Configuration
 
 **Mock vs Real Proofs:**
