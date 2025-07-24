@@ -73,7 +73,7 @@ fn calculate_directory_size(path: &std::path::Path) -> Result<u64, String> {
         .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
 
         if path.is_dir() {
@@ -157,7 +157,7 @@ async fn get_cache_stats(app_handle: AppHandle) -> Result<CacheStats, String> {
 
     // Calculate total size of the cache directory
     let total_size_bytes = calculate_directory_size(&pod2_cache_dir).unwrap_or_else(|e| {
-        log::warn!("Failed to calculate cache size: {}", e);
+        log::warn!("Failed to calculate cache size: {e}");
         0
     });
 
