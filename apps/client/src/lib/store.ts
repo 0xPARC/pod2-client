@@ -40,6 +40,7 @@ export type AppView =
   | "frogs"
   | "editor"
   | "publish"
+  | "drafts"
   | "debug";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
@@ -50,6 +51,7 @@ interface AppStoreState {
 
   // UI State
   currentView: AppView;
+  previousView: AppView | null;
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
@@ -122,6 +124,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   isLoading: false,
   error: null,
   currentView: loadCurrentView(),
+  previousView: null,
   selectedFilter: "all",
   selectedFolderFilter: "all",
   selectedPodId: null,
@@ -198,7 +201,12 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   setCurrentView: (view: AppView) => {
-    set({ currentView: view, selectedPodId: null }); // Clear selected pod when changing view
+    const { currentView } = get();
+    set({
+      previousView: currentView,
+      currentView: view,
+      selectedPodId: null
+    }); // Clear selected pod when changing view
     saveCurrentView(view); // Persist the view selection
   },
 

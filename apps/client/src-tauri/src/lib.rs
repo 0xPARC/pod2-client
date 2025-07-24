@@ -615,6 +615,13 @@ pub fn run() {
             documents::verify_document_pod,
             documents::upvote_document,
             documents::publish_document,
+            // Draft management commands
+            documents::create_draft,
+            documents::list_drafts,
+            documents::get_draft,
+            documents::update_draft,
+            documents::delete_draft,
+            documents::publish_draft,
             // Identity setup commands
             identity_setup::setup_identity_server,
             identity_setup::register_username,

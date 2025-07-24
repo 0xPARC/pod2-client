@@ -3,9 +3,13 @@ import {
   LinkIcon,
   MessageSquareIcon,
   PlusIcon,
-  XIcon
+  XIcon,
+  SaveIcon,
+  Trash2Icon
 } from "lucide-react";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 import { fetchDocument, type DocumentMetadata } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -16,16 +20,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 import { PublishButton } from "./PublishButton";
 
+interface DraftInfo {
+  id: number;
+  title: string;
+  content_type: string;
+  message?: string;
+  file_name?: string;
+  file_content?: number[];
+  file_mime_type?: string;
+  url?: string;
+  tags: string[];
+  authors: string[];
+  reply_to?: string;
+  session_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface PublishFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
   replyTo?: string;
+  editingDraftId?: number;
 }
 
 export function PublishForm({
   onPublishSuccess,
   onCancel,
-  replyTo
+  replyTo,
+  editingDraftId
 }: PublishFormProps) {
   const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
     "message"
@@ -43,6 +66,15 @@ export function PublishForm({
   const [replyToDocument, setReplyToDocument] =
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
+
+  // Draft-related state
+  const [currentDraftId, setCurrentDraftId] = useState<number | null>(
+    editingDraftId || null
+  );
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const formSessionId = useRef<string>(crypto.randomUUID());
 
   const addTag = () => {
     const trimmedTag = tagInput.trim();
@@ -163,6 +195,148 @@ export function PublishForm({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  // Draft management functions
+  const saveDraft = async (showToast = true) => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return; // Don't save empty drafts
+
+    // Prevent concurrent saves
+    if (isSavingDraft) return;
+
+    setIsSavingDraft(true);
+    try {
+      const draftData = {
+        title: trimmedTitle,
+        content_type: activeTab,
+        message: activeTab === "message" ? message || null : null,
+        file_name: activeTab === "file" && file ? file.name : null,
+        file_content:
+          activeTab === "file" && file
+            ? Array.from(new Uint8Array(await file.arrayBuffer()))
+            : null,
+        file_mime_type: activeTab === "file" && file ? file.type : null,
+        url: activeTab === "url" ? url || null : null,
+        tags,
+        authors,
+        reply_to: replyTo || null,
+        session_id: formSessionId.current // Include session ID to prevent duplicates
+      };
+
+      if (currentDraftId) {
+        // Update existing draft
+        const success = await invoke<boolean>("update_draft", {
+          draftId: currentDraftId,
+          request: draftData
+        });
+        if (success && showToast) {
+          toast.success("Draft updated");
+        }
+      } else {
+        // Create new draft - backend should handle duplicate prevention via session_id
+        const draftId = await invoke<number>("create_draft", {
+          request: draftData
+        });
+        setCurrentDraftId(draftId);
+        if (showToast) {
+          toast.success("Draft saved");
+        }
+      }
+      setLastSavedAt(new Date());
+    } catch (error) {
+      console.error("Failed to save draft:", error);
+      if (showToast) {
+        toast.error("Failed to save draft");
+      }
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const scheduleAutoSave = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveDraft(false); // Don't show toast for auto-save
+    }, 2000); // Auto-save after 2 seconds of inactivity
+  };
+
+  const loadDraft = async (draftId: number) => {
+    try {
+      const draft = await invoke<DraftInfo>("get_draft", { draftId });
+      setTitle(draft.title);
+      setActiveTab(draft.content_type as "message" | "file" | "url");
+      setMessage(draft.message || "");
+      setUrl(draft.url || "");
+      setTags(draft.tags);
+      setAuthors(draft.authors);
+
+      // Handle file content if present
+      if (draft.file_content && draft.file_name && draft.file_mime_type) {
+        const uint8Array = new Uint8Array(draft.file_content);
+        const blob = new Blob([uint8Array], { type: draft.file_mime_type });
+        const file = new File([blob], draft.file_name, {
+          type: draft.file_mime_type
+        });
+        setFile(file);
+      }
+
+      setCurrentDraftId(draftId);
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+      toast.error("Failed to load draft");
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!currentDraftId) return;
+
+    try {
+      const success = await invoke<boolean>("delete_draft", {
+        draftId: currentDraftId
+      });
+      if (success) {
+        toast.success("Draft deleted");
+        if (onCancel) {
+          onCancel(); // Go back to previous view
+        }
+      } else {
+        toast.error("Failed to delete draft");
+      }
+    } catch (error) {
+      console.error("Failed to delete draft:", error);
+      toast.error("Failed to delete draft");
+    }
+  };
+
+  // Load draft data if editing
+  useEffect(() => {
+    if (editingDraftId) {
+      loadDraft(editingDraftId);
+    }
+  }, [editingDraftId]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (
+      title.trim() ||
+      message.trim() ||
+      url.trim() ||
+      file ||
+      tags.length > 0 ||
+      authors.length > 0
+    ) {
+      scheduleAutoSave();
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [title, message, url, file, tags, authors, activeTab]);
+
   // Fetch the document being replied to
   useEffect(() => {
     if (replyTo) {
@@ -187,11 +361,33 @@ export function PublishForm({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <CardTitle className="text-xl">
-              {replyTo
-                ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
-                : "Publish New Document"}
-            </CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-xl">
+                {editingDraftId
+                  ? "Edit Draft"
+                  : replyTo
+                    ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
+                    : "Publish New Document"}
+              </CardTitle>
+              {currentDraftId && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <SaveIcon className="h-4 w-4" />
+                  {isSavingDraft ? (
+                    <span>Saving...</span>
+                  ) : lastSavedAt ? (
+                    <span>
+                      Saved{" "}
+                      {lastSavedAt.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </span>
+                  ) : (
+                    <span>Draft</span>
+                  )}
+                </div>
+              )}
+            </div>
             {replyTo && replyToDocument && (
               <div className="mt-2 p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -215,11 +411,6 @@ export function PublishForm({
               </div>
             )}
           </div>
-          {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              <XIcon className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </CardHeader>
 
@@ -446,18 +637,35 @@ export function PublishForm({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          {onCancel && (
-            <Button variant="outline" onClick={onCancel}>
-              Cancel
+        <div className="flex justify-between pt-4 border-t">
+          {currentDraftId && (
+            <Button
+              variant="outline"
+              onClick={deleteDraft}
+              className="flex items-center gap-2 text-destructive hover:text-destructive"
+            >
+              <Trash2Icon className="h-4 w-4" />
+              Delete Draft
             </Button>
           )}
-          <PublishButton
-            data={getPublishData()}
-            disabled={!isValid()}
-            onPublishSuccess={onPublishSuccess}
-            onSubmitAttempt={handleSubmitAttempt}
-          />
+
+          <div className="flex gap-3 ml-auto">
+            <Button
+              variant="outline"
+              onClick={() => saveDraft(true)}
+              disabled={isSavingDraft || !title.trim()}
+              className="flex items-center gap-2"
+            >
+              <SaveIcon className="h-4 w-4" />
+              {isSavingDraft ? "Saving..." : "Save Draft"}
+            </Button>
+            <PublishButton
+              data={getPublishData()}
+              disabled={!isValid()}
+              onPublishSuccess={onPublishSuccess}
+              onSubmitAttempt={handleSubmitAttempt}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

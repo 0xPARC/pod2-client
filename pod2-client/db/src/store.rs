@@ -1248,3 +1248,323 @@ pub async fn create_default_private_key(db: &Db) -> Result<SecretKey> {
     log::info!("Created default private key during setup");
     Ok(private_key)
 }
+
+// --- Draft Management ---
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+pub struct DraftInfo {
+    pub id: i64,
+    pub title: String,
+    pub content_type: String, // "message", "file", or "url"
+    pub message: Option<String>,
+    pub file_name: Option<String>,
+    pub file_content: Option<Vec<u8>>,
+    pub file_mime_type: Option<String>,
+    pub url: Option<String>,
+    pub tags: Vec<String>,
+    pub authors: Vec<String>,
+    pub reply_to: Option<String>,
+    pub session_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CreateDraftRequest {
+    pub title: String,
+    pub content_type: String,
+    pub message: Option<String>,
+    pub file_name: Option<String>,
+    pub file_content: Option<Vec<u8>>,
+    pub file_mime_type: Option<String>,
+    pub url: Option<String>,
+    pub tags: Vec<String>,
+    pub authors: Vec<String>,
+    pub reply_to: Option<String>,
+    pub session_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateDraftRequest {
+    pub title: String,
+    pub content_type: String,
+    pub message: Option<String>,
+    pub file_name: Option<String>,
+    pub file_content: Option<Vec<u8>>,
+    pub file_mime_type: Option<String>,
+    pub url: Option<String>,
+    pub tags: Vec<String>,
+    pub authors: Vec<String>,
+    pub reply_to: Option<String>,
+}
+
+/// Create a new draft
+pub async fn create_draft(db: &Db, request: CreateDraftRequest) -> Result<i64> {
+    let now = Utc::now().to_rfc3339();
+    let tags_json = serde_json::to_string(&request.tags)?;
+    let authors_json = serde_json::to_string(&request.authors)?;
+
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let draft_id = conn
+        .interact(move |conn| -> Result<i64, rusqlite::Error> {
+            // If session_id is provided, check for existing draft and update instead
+            if let Some(ref session_id) = request.session_id {
+                let existing_draft = conn
+                    .prepare("SELECT id FROM drafts WHERE session_id = ?1")?
+                    .query_row(rusqlite::params![session_id], |row| {
+                        Ok(row.get::<_, i64>(0)?)
+                    });
+
+                if let Ok(existing_id) = existing_draft {
+                    // Update existing draft instead of creating new one
+                    let mut stmt = conn.prepare(
+                        "UPDATE drafts SET title = ?1, content_type = ?2, message = ?3, 
+                         file_name = ?4, file_content = ?5, file_mime_type = ?6, url = ?7, 
+                         tags = ?8, authors = ?9, reply_to = ?10, updated_at = ?11 
+                         WHERE id = ?12",
+                    )?;
+
+                    stmt.execute(rusqlite::params![
+                        request.title,
+                        request.content_type,
+                        request.message,
+                        request.file_name,
+                        request.file_content,
+                        request.file_mime_type,
+                        request.url,
+                        tags_json,
+                        authors_json,
+                        request.reply_to,
+                        now,
+                        existing_id
+                    ])?;
+
+                    return Ok(existing_id);
+                }
+            }
+
+            // Create new draft
+            let mut stmt = conn.prepare(
+                "INSERT INTO drafts (title, content_type, message, file_name, file_content, 
+                 file_mime_type, url, tags, authors, reply_to, session_id, created_at, updated_at) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            )?;
+
+            stmt.execute(rusqlite::params![
+                request.title,
+                request.content_type,
+                request.message,
+                request.file_name,
+                request.file_content,
+                request.file_mime_type,
+                request.url,
+                tags_json,
+                authors_json,
+                request.reply_to,
+                request.session_id,
+                now,
+                now
+            ])?;
+
+            Ok(conn.last_insert_rowid())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for create_draft")??;
+
+    Ok(draft_id)
+}
+
+/// List all drafts ordered by updated_at DESC
+pub async fn list_drafts(db: &Db) -> Result<Vec<DraftInfo>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let drafts = conn
+        .interact(|conn| -> Result<Vec<DraftInfo>, rusqlite::Error> {
+            let mut stmt = conn.prepare(
+                "SELECT id, title, content_type, message, file_name, file_content, 
+                 file_mime_type, url, tags, authors, reply_to, session_id, created_at, updated_at 
+                 FROM drafts ORDER BY updated_at DESC",
+            )?;
+
+            let draft_iter = stmt.query_map([], |row| {
+                let tags_json: String = row.get(8)?;
+                let authors_json: String = row.get(9)?;
+                let tags: Vec<String> = serde_json::from_str(&tags_json).map_err(|e| {
+                    rusqlite::Error::InvalidColumnType(
+                        8,
+                        format!("JSON parse error: {}", e).into(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?;
+                let authors: Vec<String> = serde_json::from_str(&authors_json).map_err(|e| {
+                    rusqlite::Error::InvalidColumnType(
+                        9,
+                        format!("JSON parse error: {}", e).into(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?;
+
+                Ok(DraftInfo {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    content_type: row.get(2)?,
+                    message: row.get(3)?,
+                    file_name: row.get(4)?,
+                    file_content: row.get(5)?,
+                    file_mime_type: row.get(6)?,
+                    url: row.get(7)?,
+                    tags,
+                    authors,
+                    reply_to: row.get(10)?,
+                    session_id: row.get(11)?,
+                    created_at: row.get(12)?,
+                    updated_at: row.get(13)?,
+                })
+            })?;
+
+            draft_iter.collect::<Result<Vec<_>, _>>()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for list_drafts")??;
+
+    Ok(drafts)
+}
+
+/// Get a specific draft by ID
+pub async fn get_draft(db: &Db, draft_id: i64) -> Result<Option<DraftInfo>> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let draft = conn
+        .interact(move |conn| -> Result<Option<DraftInfo>, rusqlite::Error> {
+            let mut stmt = conn.prepare(
+                "SELECT id, title, content_type, message, file_name, file_content, 
+                 file_mime_type, url, tags, authors, reply_to, session_id, created_at, updated_at 
+                 FROM drafts WHERE id = ?1",
+            )?;
+
+            let mut rows = stmt.query_map([draft_id], |row| {
+                let tags_json: String = row.get(8)?;
+                let authors_json: String = row.get(9)?;
+                let tags: Vec<String> = serde_json::from_str(&tags_json).map_err(|e| {
+                    rusqlite::Error::InvalidColumnType(
+                        8,
+                        format!("JSON parse error: {}", e).into(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?;
+                let authors: Vec<String> = serde_json::from_str(&authors_json).map_err(|e| {
+                    rusqlite::Error::InvalidColumnType(
+                        9,
+                        format!("JSON parse error: {}", e).into(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?;
+
+                Ok(DraftInfo {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    content_type: row.get(2)?,
+                    message: row.get(3)?,
+                    file_name: row.get(4)?,
+                    file_content: row.get(5)?,
+                    file_mime_type: row.get(6)?,
+                    url: row.get(7)?,
+                    tags,
+                    authors,
+                    reply_to: row.get(10)?,
+                    session_id: row.get(11)?,
+                    created_at: row.get(12)?,
+                    updated_at: row.get(13)?,
+                })
+            })?;
+
+            match rows.next() {
+                Some(draft) => Ok(Some(draft?)),
+                None => Ok(None),
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for get_draft")??;
+
+    Ok(draft)
+}
+
+/// Update an existing draft
+pub async fn update_draft(db: &Db, draft_id: i64, request: UpdateDraftRequest) -> Result<bool> {
+    let now = Utc::now().to_rfc3339();
+    let tags_json = serde_json::to_string(&request.tags)?;
+    let authors_json = serde_json::to_string(&request.authors)?;
+
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let rows_affected = conn
+        .interact(move |conn| {
+            conn.execute(
+                "UPDATE drafts SET title = ?1, content_type = ?2, message = ?3, 
+                 file_name = ?4, file_content = ?5, file_mime_type = ?6, url = ?7, 
+                 tags = ?8, authors = ?9, reply_to = ?10, updated_at = ?11 
+                 WHERE id = ?12",
+                rusqlite::params![
+                    request.title,
+                    request.content_type,
+                    request.message,
+                    request.file_name,
+                    request.file_content,
+                    request.file_mime_type,
+                    request.url,
+                    tags_json,
+                    authors_json,
+                    request.reply_to,
+                    now,
+                    draft_id
+                ],
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for update_draft")??;
+
+    Ok(rows_affected > 0)
+}
+
+/// Delete a draft by ID
+pub async fn delete_draft(db: &Db, draft_id: i64) -> Result<bool> {
+    let conn = db
+        .pool()
+        .get()
+        .await
+        .context("Failed to get DB connection")?;
+
+    let rows_affected = conn
+        .interact(move |conn| {
+            conn.execute(
+                "DELETE FROM drafts WHERE id = ?1",
+                rusqlite::params![draft_id],
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .context("DB interaction failed for delete_draft")??;
+
+    Ok(rows_affected > 0)
+}
