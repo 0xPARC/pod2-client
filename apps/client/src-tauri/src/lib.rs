@@ -540,7 +540,7 @@ pub fn run() {
                 AppConfig::initialize(config.clone());
 
                 // Use config for database path with proper resolution
-                let db_path = resolve_database_path(&app.handle(), &config.database.path)
+                let db_path = resolve_database_path(app.handle(), &config.database.path)
                     .expect("Failed to resolve database path");
                 let db = init_db(db_path.to_str().unwrap())
                     .await
