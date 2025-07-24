@@ -20,7 +20,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tokio::sync::Mutex;
 
-mod cache;
 mod config;
 mod features;
 pub(crate) mod frog;
@@ -62,6 +61,33 @@ fn resolve_database_path(
     Ok(base_dir.join(&db_config.name))
 }
 
+/// Calculate the total size of a directory recursively
+fn calculate_directory_size(path: &std::path::Path) -> Result<u64, String> {
+    if !path.exists() {
+        return Ok(0);
+    }
+
+    let mut total_size = 0u64;
+
+    let entries = std::fs::read_dir(path)
+        .map_err(|e| format!("Failed to read directory {}: {}", path.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            total_size += calculate_directory_size(&path)?;
+        } else {
+            let metadata = std::fs::metadata(&path)
+                .map_err(|e| format!("Failed to get metadata for {}: {}", path.display(), e))?;
+            total_size += metadata.len();
+        }
+    }
+
+    Ok(total_size)
+}
+
 /// Tauri command to get the current feature configuration
 #[tauri::command]
 async fn get_feature_config_command() -> Result<FeatureConfig, String> {
@@ -80,6 +106,13 @@ pub struct ExtendedAppConfig {
     pub config: AppConfig,
     pub config_file_path: Option<String>,
     pub database_full_path: String,
+}
+
+/// Cache statistics for debugging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStats {
+    pub cache_path: String,
+    pub total_size_bytes: u64,
 }
 
 /// Tauri command to get extended app config with full paths
@@ -107,6 +140,69 @@ async fn get_extended_app_config(app_handle: AppHandle) -> Result<ExtendedAppCon
         config_file_path,
         database_full_path,
     })
+}
+
+/// Tauri command to get cache statistics
+#[tauri::command]
+async fn get_cache_stats(app_handle: AppHandle) -> Result<CacheStats, String> {
+    // Get the cache directory path using Tauri's path API
+    let cache_base_dir = app_handle
+        .path()
+        .cache_dir()
+        .map_err(|e| format!("Failed to get cache directory: {e}"))?;
+
+    // POD2 cache is stored in a 'pod2' subdirectory
+    let pod2_cache_dir = cache_base_dir.join("pod2");
+    let cache_path = pod2_cache_dir.to_string_lossy().to_string();
+
+    // Calculate total size of the cache directory
+    let total_size_bytes = calculate_directory_size(&pod2_cache_dir).unwrap_or_else(|e| {
+        log::warn!("Failed to calculate cache size: {e}");
+        0
+    });
+
+    Ok(CacheStats {
+        cache_path,
+        total_size_bytes,
+    })
+}
+
+/// Tauri command to clear the POD2 disk cache directory
+#[tauri::command]
+async fn clear_pod2_disk_cache(app_handle: AppHandle) -> Result<(), String> {
+    // Get the cache directory path using Tauri's path API
+    let cache_base_dir = app_handle
+        .path()
+        .cache_dir()
+        .map_err(|e| format!("Failed to get cache directory: {e}"))?;
+
+    // POD2 cache is stored in a 'pod2' subdirectory
+    let pod2_cache_dir = cache_base_dir.join("pod2");
+
+    if !pod2_cache_dir.exists() {
+        log::info!("Cache directory does not exist, nothing to clear");
+        return Ok(());
+    }
+
+    // Remove all contents of the cache directory
+    let entries = std::fs::read_dir(&pod2_cache_dir)
+        .map_err(|e| format!("Failed to read cache directory: {e}"))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read cache directory entry: {e}"))?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+                .map_err(|e| format!("Failed to remove cache directory {}: {e}", path.display()))?;
+        } else {
+            std::fs::remove_file(&path)
+                .map_err(|e| format!("Failed to remove cache file {}: {e}", path.display()))?;
+        }
+    }
+
+    log::info!("POD2 disk cache directory cleared successfully");
+    Ok(())
 }
 
 /// Tauri command to get a specific config section
@@ -570,11 +666,6 @@ pub fn run() {
                     .await
                     .expect("failed to initialize state");
                 app.manage(Mutex::new(app_state));
-
-                // Spawn cache warming task in background to avoid blocking startup
-                tokio::task::spawn_blocking(|| {
-                    cache::warm_mainpod_cache();
-                });
             });
             Ok(())
         })
@@ -593,6 +684,8 @@ pub fn run() {
             get_extended_app_config,
             get_config_section,
             reload_config,
+            get_cache_stats,
+            clear_pod2_disk_cache,
             // POD management commands
             pod_management::get_app_state,
             pod_management::trigger_sync,
