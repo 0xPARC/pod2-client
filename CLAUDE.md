@@ -77,24 +77,27 @@ POD2 Client provides user-facing tools for managing personal POD collections, cr
 
 ## Development Commands
 
-### Build & Run Everything
+### Quick Start Commands
 ```bash
-# Build entire monorepo
-cargo build
+# Install all dependencies
+pnpm install
+
+# Build and validate all code (recommended for most changes)
+pnpm build                              # Builds all JS/TS with type checking
+cargo build                             # Builds all Rust code
 
 # Format all code  
 just format
-
-# Build all JavaScript/TypeScript components
-just js-build
 ```
 
-### PodNet Platform
+### Running Applications
+
+**PodNet Platform:**
 ```bash
-# Run PodNet content server
+# Run PodNet content server (port 3000)
 just podnet-server                      # or cargo run -p podnet-server
 
-# Run identity verification service  
+# Run identity verification service (port 3001)
 just podnet-identity                     # or cargo run -p podnet-ident-strawman
 
 # Use PodNet CLI
@@ -103,7 +106,7 @@ just podnet-cli publish document.md     # Publish a document
 just podnet-cli upvote <document-id>     # Upvote a document
 ```
 
-### POD2 Client Application
+**POD2 Client Application:**
 ```bash
 # Run desktop client in development mode
 just client-dev                         # or cd apps/client && pnpm tauri dev
@@ -112,31 +115,20 @@ just client-dev                         # or cd apps/client && pnpm tauri dev
 just client-build                       # or cd apps/client && pnpm tauri build
 ```
 
-### Core Libraries
+### Development & Testing Workflows
+
+**For JavaScript/TypeScript development:**
 ```bash
-# Test shared solver engine
-cargo test -p pod2_solver
-
-# Test POD data models  
-cargo test -p podnet-models
-
-# Test utilities
-cargo test -p pod-utils
+pnpm build                              # Primary validation method
+pnpm lint                               # Code style checking
+pnpm test                               # Run test suites (when available)
 ```
 
-### Web Components
+**For Rust development:**
 ```bash
-# Install dependencies
-pnpm install
-
-# Development mode
-pnpm dev
-
-# Run tests
-pnpm test
-
-# Lint code
-pnpm lint
+cargo clippy                            # Code analysis and linting
+cargo test                              # Run test suites
+cargo test -p <specific-crate>          # Test specific crate
 ```
 
 ## Key Technical Details
@@ -165,6 +157,47 @@ pnpm lint
 - P2P messaging and chat functionality
 - SQLite with deadpool connection pooling
 
+### Tauri Frontend-Backend Communication
+
+**Type-Safe API Wrapper Pattern:**
+The POD2 Client uses a consistent pattern for type-safe communication between the TypeScript frontend and Rust Tauri backend:
+
+1. **Backend Commands** - Rust functions marked with `#[tauri::command]` in `src-tauri/src/features/`
+2. **TypeScript Types** - Shared interfaces in `apps/client/src/lib/documentApi.ts`
+3. **Wrapper Functions** - Type-safe wrapper functions that handle `invoke()` calls and error handling
+
+**Example Pattern:**
+```typescript
+// TypeScript interface matching Rust struct
+export interface DraftRequest {
+  title: string;
+  content_type: string;
+  message: string | null;
+  // ... other fields
+}
+
+// Type-safe wrapper function
+export async function createDraft(request: DraftRequest): Promise<string> {
+  try {
+    return await invoke<string>("create_draft", { request });
+  } catch (error) {
+    throw new Error(`Failed to create draft: ${error}`);
+  }
+}
+```
+
+**Benefits:**
+- Compile-time type checking between frontend and backend
+- Centralized error handling with consistent error messages
+- Easy refactoring and maintenance of IPC communication
+- Clear separation between business logic and IPC details
+
+**Usage Guidelines:**
+- Always use wrapper functions instead of direct `invoke()` calls in components
+- Define TypeScript interfaces that match Rust command parameter and return types
+- Handle errors consistently in wrapper functions with descriptive messages
+- Keep wrapper functions in dedicated API modules (e.g., `documentApi.ts`)
+
 ### Development Configuration
 
 **Mock vs Real Proofs:**
@@ -192,8 +225,35 @@ pnpm lint
 8. **Module documentation over marker structs** - Use `//!` module comments instead of empty docs
 9. **Clean re-exports** - Only re-export items that are actually consumed elsewhere
 
-## Testing
+## Testing & Validation
 
+### Frontend/TypeScript Code Changes
+
+**When updating client app or any JavaScript/TypeScript code:**
+```bash
+# From repository root - builds and type-checks all JS/TS code
+pnpm build
+```
+
+This uses Turborepo to build and type-check all JavaScript/TypeScript components across the monorepo. This is the **primary validation method** for frontend changes.
+
+**Important:** Do not try to run the client app for testing. If application functionality requires testing, ask the user to run the app and test it themselves.
+
+### Rust Code Changes
+
+**For changes in a specific crate:**
+```bash
+# Run in the specific crate directory
+cargo clippy
+```
+
+**For wide-ranging Rust changes:**
+```bash
+# From repository root
+cargo clippy
+```
+
+**Running tests (when needed):**
 ```bash
 # All Rust tests
 cargo test
@@ -203,9 +263,6 @@ cargo test -p podnet-server
 cargo test -p podnet-models  
 cargo test -p pod2_solver
 cargo test -p pod2_db
-
-# JavaScript/TypeScript tests
-pnpm test
 ```
 
 ## Configuration Files

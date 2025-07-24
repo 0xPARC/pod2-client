@@ -1,4 +1,17 @@
 #!/bin/sh
 
+if ! command -v pnpm &> /dev/null; then
+    echo "pnpm could not be found, installing..."
+    npm install -g pnpm
+fi
+
+pnpm install
+
 cd apps/client
-VITE_DOCUMENT_SERVER_URL=https://pod-server.ghost-spica.ts.net/server VITE_IDENTITY_SERVER_URL=https://pod-server.ghost-spica.ts.net/identity  RUST_LOG=trace pnpm tauri dev --release
+
+if ! command -v just &> /dev/null; then
+    echo "just could not be found, installing..."
+    cargo install just
+fi
+
+just client-dev

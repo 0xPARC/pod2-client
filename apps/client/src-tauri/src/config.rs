@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter};
 
 /// Configuration for enabling/disabling application features
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "FeatureConfig::default")]
 pub struct FeatureConfig {
     /// Core POD collection management - viewing, organizing, and basic operations
     pub pod_management: bool,
@@ -19,6 +20,8 @@ pub struct FeatureConfig {
     pub integration: bool,
     /// FrogCrypto experimental features
     pub frogcrypto: bool,
+    /// Pre-loading of pod2 artifacts
+    pub cache_warming: bool,
 }
 
 impl Default for FeatureConfig {
@@ -29,27 +32,33 @@ impl Default for FeatureConfig {
             authoring: true,
             integration: true,
             frogcrypto: true,
+            cache_warming: true,
         }
     }
 }
 
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "DatabaseConfig::default")]
 pub struct DatabaseConfig {
-    /// Path to the database file
+    /// Path to the database file or directory
     pub path: String,
+    /// Database filename (used when path is a directory)
+    pub name: String,
 }
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             path: "pod2.db".to_string(),
+            name: "pod2.db".to_string(),
         }
     }
 }
 
 /// Network configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "NetworkConfig::default")]
 pub struct NetworkConfig {
     /// Document server URL
     pub document_server: String,
@@ -74,6 +83,7 @@ impl Default for NetworkConfig {
 
 /// UI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "UiConfig::default")]
 pub struct UiConfig {
     /// Default theme (auto, light, dark)
     pub default_theme: String,
@@ -95,6 +105,7 @@ impl Default for UiConfig {
 
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "LoggingConfig::default")]
 pub struct LoggingConfig {
     /// Log level (debug, info, warn, error)
     pub level: String,
@@ -113,21 +124,17 @@ impl Default for LoggingConfig {
 
 /// Main application configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct AppConfig {
     /// Feature toggles
-    #[serde(default)]
     pub features: FeatureConfig,
     /// Database configuration
-    #[serde(default)]
     pub database: DatabaseConfig,
     /// Network configuration
-    #[serde(default)]
     pub network: NetworkConfig,
     /// UI configuration
-    #[serde(default)]
     pub ui: UiConfig,
     /// Logging configuration
-    #[serde(default)]
     pub logging: LoggingConfig,
 }
 
@@ -252,8 +259,16 @@ impl AppConfig {
                     .parse()
                     .map_err(|e| format!("Invalid frogcrypto value '{value}': {e}"))?;
             }
+            ["features", "cache_warming"] => {
+                self.features.cache_warming = value
+                    .parse()
+                    .map_err(|e| format!("Invalid cache_warming value '{value}': {e}"))?;
+            }
             ["database", "path"] => {
                 self.database.path = value.to_string();
+            }
+            ["database", "name"] => {
+                self.database.name = value.to_string();
             }
             ["logging", "level"] => {
                 if !["debug", "info", "warn", "error"].contains(&value) {
@@ -329,6 +344,9 @@ impl AppConfig {
         if self.database.path.is_empty() {
             errors.push("database.path cannot be empty".to_string());
         }
+        if self.database.name.is_empty() {
+            errors.push("database.name cannot be empty".to_string());
+        }
 
         if errors.is_empty() {
             Ok(())
@@ -371,6 +389,7 @@ mod tests {
 
         // Verify other defaults
         assert_eq!(config.database.path, "pod2.db");
+        assert_eq!(config.database.name, "pod2.db");
         assert!(config.features.pod_management);
         assert!(!config.features.p2p);
     }

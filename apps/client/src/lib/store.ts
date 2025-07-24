@@ -40,6 +40,7 @@ export type AppView =
   | "frogs"
   | "editor"
   | "publish"
+  | "drafts"
   | "debug";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
@@ -50,11 +51,16 @@ interface AppStoreState {
 
   // UI State
   currentView: AppView;
+  previousView: AppView | null;
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
   frogTimeout: number | null;
   replyToDocumentId: string | null;
+
+  // Draft coordination state
+  currentDraftId: string | null;
+  isDraftInitializing: boolean;
 
   // Folder State
   folders: SpaceInfo[];
@@ -83,6 +89,8 @@ interface AppStoreState {
   setSelectedPodId: (podId: string | null) => void;
   setExternalPodRequest: (request: string | undefined) => void;
   setReplyToDocumentId: (documentId: string | null) => void;
+  setCurrentDraftId: (draftId: string | null) => void;
+  setIsDraftInitializing: (initializing: boolean) => void;
   loadFolders: () => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
@@ -122,11 +130,14 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   isLoading: false,
   error: null,
   currentView: loadCurrentView(),
+  previousView: null,
   selectedFilter: "all",
   selectedFolderFilter: "all",
   selectedPodId: null,
   externalPodRequest: undefined,
   replyToDocumentId: null,
+  currentDraftId: null,
+  isDraftInitializing: false,
   folders: [],
   foldersLoading: false,
   frogTimeout: null,
@@ -198,7 +209,12 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   setCurrentView: (view: AppView) => {
-    set({ currentView: view, selectedPodId: null }); // Clear selected pod when changing view
+    const { currentView } = get();
+    set({
+      previousView: currentView,
+      currentView: view,
+      selectedPodId: null
+    }); // Clear selected pod when changing view
     saveCurrentView(view); // Persist the view selection
   },
 
@@ -219,6 +235,14 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setReplyToDocumentId: (documentId: string | null) => {
     set({ replyToDocumentId: documentId });
+  },
+
+  setCurrentDraftId: (draftId: string | null) => {
+    set({ currentDraftId: draftId });
+  },
+
+  setIsDraftInitializing: (initializing: boolean) => {
+    set({ isDraftInitializing: initializing });
   },
 
   setFrogTimeout: (timeout: number | null) => {
