@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter};
 
 /// Configuration for enabling/disabling application features
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "FeatureConfig::default")]
 pub struct FeatureConfig {
     /// Core POD collection management - viewing, organizing, and basic operations
     pub pod_management: bool,
@@ -35,6 +36,7 @@ impl Default for FeatureConfig {
 
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "DatabaseConfig::default")]
 pub struct DatabaseConfig {
     /// Path to the database file or directory
     pub path: String,
@@ -53,6 +55,7 @@ impl Default for DatabaseConfig {
 
 /// Network configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "NetworkConfig::default")]
 pub struct NetworkConfig {
     /// Document server URL
     pub document_server: String,
@@ -77,6 +80,7 @@ impl Default for NetworkConfig {
 
 /// UI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "UiConfig::default")]
 pub struct UiConfig {
     /// Default theme (auto, light, dark)
     pub default_theme: String,
@@ -98,6 +102,7 @@ impl Default for UiConfig {
 
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default = "LoggingConfig::default")]
 pub struct LoggingConfig {
     /// Log level (debug, info, warn, error)
     pub level: String,
@@ -116,21 +121,17 @@ impl Default for LoggingConfig {
 
 /// Main application configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct AppConfig {
     /// Feature toggles
-    #[serde(default)]
     pub features: FeatureConfig,
     /// Database configuration
-    #[serde(default)]
     pub database: DatabaseConfig,
     /// Network configuration
-    #[serde(default)]
     pub network: NetworkConfig,
     /// UI configuration
-    #[serde(default)]
     pub ui: UiConfig,
     /// Logging configuration
-    #[serde(default)]
     pub logging: LoggingConfig,
 }
 
