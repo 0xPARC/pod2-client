@@ -130,13 +130,17 @@ async fn get_auth_url(
 async fn oauth_callback(Query(params): Query<OAuthCallbackQuery>) -> Result<Redirect, StatusCode> {
     tracing::info!("OAuth callback received with code: {}", params.code);
 
+    // Get the base path for redirects (e.g., "/identity-new" for Tailscale routing)
+    let base_path = std::env::var("GITHUB_IDENTITY_BASE_PATH").unwrap_or_default();
+
     // Redirect back to the client application with the authorization code
     // The client will handle completing the identity verification
     let redirect_url = format!(
-        "/identity/complete?code={}&state={}",
-        params.code, params.state
+        "{}/identity/complete?code={}&state={}",
+        base_path, params.code, params.state
     );
 
+    tracing::info!("Redirecting to: {}", redirect_url);
     Ok(Redirect::to(&redirect_url))
 }
 
@@ -474,9 +478,22 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    tracing::info!("Binding to 0.0.0.0:3001...");
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    tracing::info!("GitHub Identity server running on http://localhost:3001");
+    // Configure server port
+    let port = std::env::var("GITHUB_IDENTITY_PORT")
+        .unwrap_or_else(|_| "3001".to_string())
+        .parse::<u16>()
+        .unwrap_or_else(|_| {
+            tracing::warn!("Invalid GITHUB_IDENTITY_PORT, using default 3001");
+            3001
+        });
+
+    let bind_addr = format!("0.0.0.0:{port}");
+    tracing::info!("Binding to {}...", bind_addr);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    tracing::info!(
+        "GitHub Identity server running on http://localhost:{}",
+        port
+    );
     tracing::info!("Available endpoints:");
     tracing::info!("  GET  /                      - Server info");
     tracing::info!("  POST /auth/github           - Get GitHub OAuth authorization URL");
