@@ -3,10 +3,20 @@ import {
   LinkIcon,
   MessageSquareIcon,
   PlusIcon,
+  Trash2Icon,
   XIcon
 } from "lucide-react";
-import { useCallback, useState, useEffect } from "react";
-import { fetchDocument, type DocumentMetadata } from "../../lib/documentApi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  createDraft,
+  deleteDraft as deleteDraftApi,
+  fetchDocument,
+  getDraft,
+  updateDraft,
+  type DocumentMetadata
+} from "../../lib/documentApi";
+import { useAppStore } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -20,13 +30,16 @@ interface PublishFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
   replyTo?: string;
+  editingDraftId?: string; // UUID
 }
 
 export function PublishForm({
   onPublishSuccess,
   onCancel,
-  replyTo
+  replyTo,
+  editingDraftId
 }: PublishFormProps) {
+  const { setCurrentView } = useAppStore();
   const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
     "message"
   );
@@ -44,16 +57,29 @@ export function PublishForm({
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
+  // Draft-related state
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [currentDraftId, setCurrentDraftId] = useState<string | undefined>(
+    editingDraftId
+  );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const setHasUnsavedChangesWithLogging = (value: boolean) => {
+    setHasUnsavedChanges(value);
+  };
+
   const addTag = () => {
     const trimmedTag = tagInput.trim();
     if (trimmedTag && !tags.includes(trimmedTag)) {
       setTags([...tags, trimmedTag]);
       setTagInput("");
+      setHasUnsavedChangesWithLogging(true);
     }
   };
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter((tag) => tag !== tagToRemove));
+    setHasUnsavedChangesWithLogging(true);
   };
 
   const addAuthor = () => {
@@ -61,11 +87,13 @@ export function PublishForm({
     if (trimmedAuthor && !authors.includes(trimmedAuthor)) {
       setAuthors([...authors, trimmedAuthor]);
       setAuthorInput("");
+      setHasUnsavedChangesWithLogging(true);
     }
   };
 
   const removeAuthor = (authorToRemove: string) => {
     setAuthors(authors.filter((author) => author !== authorToRemove));
+    setHasUnsavedChangesWithLogging(true);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent, action: () => void) => {
@@ -93,6 +121,7 @@ export function PublishForm({
     if (files.length > 0) {
       setFile(files[0]);
       setActiveTab("file");
+      setHasUnsavedChangesWithLogging(true);
     }
   }, []);
 
@@ -100,6 +129,7 @@ export function PublishForm({
     const files = e.target.files;
     if (files && files.length > 0) {
       setFile(files[0]);
+      setHasUnsavedChangesWithLogging(true);
     }
   };
 
@@ -108,7 +138,8 @@ export function PublishForm({
       title: title.trim(),
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
-      replyTo
+      replyTo,
+      draftId: currentDraftId || editingDraftId // Pass the draft ID for deletion after publish
     };
 
     switch (activeTab) {
@@ -163,6 +194,189 @@ export function PublishForm({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  const deleteDraft = async () => {
+    try {
+      const draftIdToDelete = currentDraftId || editingDraftId;
+
+      if (draftIdToDelete) {
+        const success = await deleteDraftApi(draftIdToDelete);
+
+        if (success) {
+          toast.success("Draft discarded");
+          setCurrentDraftId(undefined);
+          setHasUnsavedChangesWithLogging(false);
+        } else {
+          toast.error("Failed to discard draft");
+          return;
+        }
+      } else {
+        toast.success("Draft discarded");
+        setHasUnsavedChangesWithLogging(false);
+      }
+
+      // Navigate based on context
+      if (editingDraftId) {
+        setCurrentView("drafts");
+      } else if (onCancel) {
+        onCancel();
+      }
+    } catch (error) {
+      console.error("Failed to delete draft:", error);
+      toast.error("Failed to discard draft");
+    }
+  };
+
+  // Load existing draft if editing
+  useEffect(() => {
+    const loadDraft = async () => {
+      if (editingDraftId) {
+        try {
+          const draft = await getDraft(editingDraftId);
+          if (draft) {
+            setTitle(draft.title);
+            setActiveTab(draft.content_type as "message" | "file" | "url");
+            setMessage(draft.message || "");
+            setUrl(draft.url || "");
+            setTags(draft.tags);
+            setAuthors(draft.authors);
+
+            // Handle file content if present
+            if (draft.file_content && draft.file_name && draft.file_mime_type) {
+              const uint8Array = new Uint8Array(draft.file_content);
+              const blob = new Blob([uint8Array], {
+                type: draft.file_mime_type
+              });
+              const file = new File([blob], draft.file_name, {
+                type: draft.file_mime_type
+              });
+              setFile(file);
+            }
+
+            setLastSavedAt(new Date(draft.updated_at));
+            setHasUnsavedChangesWithLogging(false); // Draft is freshly loaded, no unsaved changes
+          }
+        } catch (error) {
+          console.error("Failed to load draft:", error);
+        }
+      }
+    };
+
+    loadDraft();
+  }, [editingDraftId]);
+
+  // Use refs to capture current state values for cleanup
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  const currentStateRef = useRef({
+    title,
+    message,
+    url,
+    file,
+    tags,
+    authors,
+    activeTab,
+    currentDraftId,
+    replyTo
+  });
+
+  // Update refs when state changes
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    currentStateRef.current = {
+      title,
+      message,
+      url,
+      file,
+      tags,
+      authors,
+      activeTab,
+      currentDraftId,
+      replyTo
+    };
+  }, [
+    title,
+    message,
+    url,
+    file,
+    tags,
+    authors,
+    activeTab,
+    currentDraftId,
+    replyTo
+  ]);
+
+  // Save draft only when component unmounts (not on every state change)
+  useEffect(() => {
+    return () => {
+      // Use ref values to get current state, not stale closure values
+      const currentHasUnsavedChanges = hasUnsavedChangesRef.current;
+      const currentState = currentStateRef.current;
+
+      // Check if we have content using current state
+      const hasCurrentContent = !!(
+        currentState.title.trim() ||
+        currentState.message.trim() ||
+        currentState.url.trim() ||
+        currentState.file ||
+        currentState.tags.length > 0 ||
+        currentState.authors.length > 0
+      );
+
+      // Only save if we have unsaved changes and meaningful content
+      if (currentHasUnsavedChanges && hasCurrentContent) {
+        // Create the draft data directly here since we can't call functions in cleanup
+        const saveDraftData = async () => {
+          try {
+            let fileContent = null;
+            if (currentState.activeTab === "file" && currentState.file) {
+              fileContent = Array.from(
+                new Uint8Array(await currentState.file.arrayBuffer())
+              );
+            }
+
+            const draftData = {
+              title: currentState.title.trim(),
+              content_type: currentState.activeTab,
+              message:
+                currentState.activeTab === "message"
+                  ? currentState.message || null
+                  : null,
+              file_name:
+                currentState.activeTab === "file" && currentState.file
+                  ? currentState.file.name
+                  : null,
+              file_content: fileContent,
+              file_mime_type:
+                currentState.activeTab === "file" && currentState.file
+                  ? currentState.file.type
+                  : null,
+              url:
+                currentState.activeTab === "url"
+                  ? currentState.url || null
+                  : null,
+              tags: currentState.tags,
+              authors: currentState.authors,
+              reply_to: currentState.replyTo || null
+            };
+
+            if (currentState.currentDraftId) {
+              await updateDraft(currentState.currentDraftId, draftData);
+            } else {
+              await createDraft(draftData);
+            }
+          } catch (error) {
+            console.error("Failed to save draft on unmount:", error);
+          }
+        };
+
+        // Fire and forget
+        saveDraftData();
+      }
+    };
+  }, []); // Empty deps - only runs on mount/unmount, safe from React Strict Mode
+
   // Fetch the document being replied to
   useEffect(() => {
     if (replyTo) {
@@ -187,11 +401,28 @@ export function PublishForm({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <CardTitle className="text-xl">
-              {replyTo
-                ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
-                : "Publish New Document"}
-            </CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-xl">
+                {editingDraftId || currentDraftId
+                  ? "Edit Draft"
+                  : replyTo
+                    ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
+                    : "Publish New Document"}
+              </CardTitle>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {lastSavedAt ? (
+                  <span>
+                    Last updated{" "}
+                    {lastSavedAt.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}
+                  </span>
+                ) : (
+                  <span>Draft</span>
+                )}
+              </div>
+            </div>
             {replyTo && replyToDocument && (
               <div className="mt-2 p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -215,11 +446,6 @@ export function PublishForm({
               </div>
             )}
           </div>
-          {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              <XIcon className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </CardHeader>
 
@@ -233,6 +459,7 @@ export function PublishForm({
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
+              setHasUnsavedChangesWithLogging(true);
             }}
             onBlur={() => setTitleTouched(true)}
             maxLength={200}
@@ -255,7 +482,10 @@ export function PublishForm({
           <Label className="text-base font-medium">Content</Label>
           <Tabs
             value={activeTab}
-            onValueChange={(value) => setActiveTab(value as any)}
+            onValueChange={(value) => {
+              setActiveTab(value as any);
+              setHasUnsavedChangesWithLogging(true);
+            }}
             className="mt-2"
           >
             <TabsList className="grid w-full grid-cols-3">
@@ -277,7 +507,10 @@ export function PublishForm({
               <Textarea
                 placeholder="Enter your message content (supports Markdown)..."
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  setHasUnsavedChangesWithLogging(true);
+                }}
                 className="min-h-[200px] resize-none"
               />
               <p className="text-sm text-muted-foreground mt-2">
@@ -313,7 +546,10 @@ export function PublishForm({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setFile(null)}
+                        onClick={() => {
+                          setFile(null);
+                          setHasUnsavedChangesWithLogging(true);
+                        }}
                       >
                         Remove File
                       </Button>
@@ -353,7 +589,10 @@ export function PublishForm({
               <Input
                 placeholder="https://example.com/document"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setHasUnsavedChangesWithLogging(true);
+                }}
                 type="url"
               />
               <p className="text-sm text-muted-foreground mt-2">
@@ -446,18 +685,24 @@ export function PublishForm({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          {onCancel && (
-            <Button variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <PublishButton
-            data={getPublishData()}
-            disabled={!isValid()}
-            onPublishSuccess={onPublishSuccess}
-            onSubmitAttempt={handleSubmitAttempt}
-          />
+        <div className="flex justify-between pt-4 border-t">
+          <Button
+            variant="outline"
+            onClick={deleteDraft}
+            className="flex items-center gap-2 text-destructive hover:text-destructive"
+          >
+            <Trash2Icon className="h-4 w-4" />
+            Discard Draft
+          </Button>
+
+          <div className="flex gap-3 ml-auto">
+            <PublishButton
+              data={getPublishData()}
+              disabled={!isValid()}
+              onPublishSuccess={onPublishSuccess}
+              onSubmitAttempt={handleSubmitAttempt}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -135,7 +135,7 @@ export function DocumentsView() {
         onPublishSuccess={(documentId) => {
           console.log("Document published with ID:", documentId);
           setShowPublishForm(false);
-          loadDocuments(); // Refresh the document list
+          loadDocuments();
         }}
       />
     );

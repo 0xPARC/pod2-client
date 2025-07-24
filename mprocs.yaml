@@ -9,7 +9,7 @@ procs:
       - podnet-server
   pod2-client:
     cwd: ./apps/client
-    shell: pnpm tauri dev --release -- -- --set network.document_server=http://localhost:3000 --set network.identity_server=http://localhost:3001
+    shell: pnpm tauri dev --release -- -- --set network.document_server=http://localhost:3000 --set network.identity_server=http://localhost:3001 --set database.path=./databases/local.db
   web-packages:
     cwd: ./
     shell: pnpm i && pnpm build --filter='./packages/**' && TURBO_UI=0 pnpm turbo watch build --filter='./packages/**'

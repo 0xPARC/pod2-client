@@ -35,6 +35,7 @@ interface PublishData {
   tags?: string[];
   authors?: string[];
   replyTo?: string;
+  draftId?: string; // UUID of draft to delete after successful publish
 }
 
 interface PublishButtonProps {
@@ -117,7 +118,8 @@ export function PublishButton({
               document_id: parseInt(data.replyTo.split(":")[1])
             }
           : null,
-        serverUrl: serverUrl
+        serverUrl: serverUrl,
+        draftId: data.draftId || null
       };
       console.log("Full invoke parameters:", invokeParams);
 

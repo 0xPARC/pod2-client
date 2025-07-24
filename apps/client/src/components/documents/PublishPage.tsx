@@ -6,9 +6,14 @@ import { PublishForm } from "./PublishForm";
 interface PublishPageProps {
   onBack?: () => void;
   onPublishSuccess?: (documentId: number) => void;
+  editingDraftId?: string | null; // UUID
 }
 
-export function PublishPage({ onBack, onPublishSuccess }: PublishPageProps) {
+export function PublishPage({
+  onBack,
+  onPublishSuccess,
+  editingDraftId
+}: PublishPageProps) {
   const { replyToDocumentId, setReplyToDocumentId } = useAppStore();
 
   const handlePublishSuccess = (documentId: number) => {
@@ -39,23 +44,11 @@ export function PublishPage({ onBack, onPublishSuccess }: PublishPageProps) {
         )}
 
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">
-              {replyToDocumentId
-                ? `Reply to Document #${replyToDocumentId.split(":")[1]} (Post ${replyToDocumentId.split(":")[0]})`
-                : "Publish Document"}
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              {replyToDocumentId
-                ? `Create a reply to document #${replyToDocumentId.split(":")[1]} with cryptographic verification.`
-                : "Create and publish a new document to the POD2 network with cryptographic verification."}
-            </p>
-          </div>
-
           <PublishForm
             onPublishSuccess={handlePublishSuccess}
             onCancel={handleCancel}
             replyTo={replyToDocumentId || undefined}
+            editingDraftId={editingDraftId || undefined}
           />
         </div>
       </div>
