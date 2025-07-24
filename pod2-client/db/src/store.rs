@@ -1568,3 +1568,517 @@ pub async fn delete_draft(db: &Db, draft_id: i64) -> Result<bool> {
 
     Ok(rows_affected > 0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MIGRATIONS;
+
+    /// Helper function to set up an in-memory test database with migrations
+    async fn setup_test_db() -> Result<Db> {
+        Db::new(None, &*MIGRATIONS).await
+    }
+
+    /// Helper function to create a sample draft request for testing
+    fn sample_draft_request() -> CreateDraftRequest {
+        CreateDraftRequest {
+            title: "Test Draft".to_string(),
+            content_type: "message".to_string(),
+            message: Some("This is a test message".to_string()),
+            file_name: None,
+            file_content: None,
+            file_mime_type: None,
+            url: None,
+            tags: vec!["test".to_string(), "sample".to_string()],
+            authors: vec!["author1".to_string()],
+            reply_to: None,
+            session_id: None,
+        }
+    }
+
+    /// Helper function to create a sample update request for testing
+    fn sample_update_request() -> UpdateDraftRequest {
+        UpdateDraftRequest {
+            title: "Updated Draft".to_string(),
+            content_type: "message".to_string(),
+            message: Some("This is an updated message".to_string()),
+            file_name: None,
+            file_content: None,
+            file_mime_type: None,
+            url: None,
+            tags: vec!["updated".to_string(), "test".to_string()],
+            authors: vec!["author2".to_string()],
+            reply_to: None,
+        }
+    }
+
+    /// Helper function to create a file-type draft request
+    fn sample_file_draft_request() -> CreateDraftRequest {
+        CreateDraftRequest {
+            title: "File Draft".to_string(),
+            content_type: "file".to_string(),
+            message: None,
+            file_name: Some("test.txt".to_string()),
+            file_content: Some(b"test file content".to_vec()),
+            file_mime_type: Some("text/plain".to_string()),
+            url: None,
+            tags: vec!["file".to_string()],
+            authors: vec!["file_author".to_string()],
+            reply_to: None,
+            session_id: None,
+        }
+    }
+
+    /// Helper function to create a URL-type draft request
+    fn sample_url_draft_request() -> CreateDraftRequest {
+        CreateDraftRequest {
+            title: "URL Draft".to_string(),
+            content_type: "url".to_string(),
+            message: None,
+            file_name: None,
+            file_content: None,
+            file_mime_type: None,
+            url: Some("https://example.com".to_string()),
+            tags: vec!["url".to_string()],
+            authors: vec!["url_author".to_string()],
+            reply_to: None,
+            session_id: None,
+        }
+    }
+
+    /// Custom assertion helper to compare draft info
+    fn assert_draft_matches(expected: &CreateDraftRequest, actual: &DraftInfo) {
+        assert_eq!(actual.title, expected.title);
+        assert_eq!(actual.content_type, expected.content_type);
+        assert_eq!(actual.message, expected.message);
+        assert_eq!(actual.file_name, expected.file_name);
+        assert_eq!(actual.file_content, expected.file_content);
+        assert_eq!(actual.file_mime_type, expected.file_mime_type);
+        assert_eq!(actual.url, expected.url);
+        assert_eq!(actual.tags, expected.tags);
+        assert_eq!(actual.authors, expected.authors);
+        assert_eq!(actual.reply_to, expected.reply_to);
+        assert_eq!(actual.session_id, expected.session_id);
+    }
+
+    // --- Draft Creation Tests ---
+
+    #[tokio::test]
+    async fn test_create_draft_success() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        assert!(draft_id > 0);
+
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+        assert_draft_matches(&request, &draft);
+        assert!(!draft.created_at.is_empty());
+        assert!(!draft.updated_at.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_draft_all_content_types() {
+        let db = setup_test_db().await.unwrap();
+
+        // Test message type
+        let message_request = sample_draft_request();
+        let message_id = create_draft(&db, message_request.clone()).await.unwrap();
+        let message_draft = get_draft(&db, message_id).await.unwrap().unwrap();
+        assert_eq!(message_draft.content_type, "message");
+        assert!(message_draft.message.is_some());
+
+        // Test file type
+        let file_request = sample_file_draft_request();
+        let file_id = create_draft(&db, file_request.clone()).await.unwrap();
+        let file_draft = get_draft(&db, file_id).await.unwrap().unwrap();
+        assert_eq!(file_draft.content_type, "file");
+        assert!(file_draft.file_name.is_some());
+        assert!(file_draft.file_content.is_some());
+
+        // Test URL type
+        let url_request = sample_url_draft_request();
+        let url_id = create_draft(&db, url_request.clone()).await.unwrap();
+        let url_draft = get_draft(&db, url_id).await.unwrap().unwrap();
+        assert_eq!(url_draft.content_type, "url");
+        assert!(url_draft.url.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_create_draft_with_tags_and_authors() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.tags = vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()];
+        request.authors = vec!["author1".to_string(), "author2".to_string()];
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.tags.len(), 3);
+        assert_eq!(draft.tags, vec!["tag1", "tag2", "tag3"]);
+        assert_eq!(draft.authors.len(), 2);
+        assert_eq!(draft.authors, vec!["author1", "author2"]);
+    }
+
+    // --- Draft Retrieval Tests ---
+
+    #[tokio::test]
+    async fn test_list_drafts_empty() {
+        let db = setup_test_db().await.unwrap();
+        let drafts = list_drafts(&db).await.unwrap();
+        assert!(drafts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_drafts_ordered_by_updated_at() {
+        let db = setup_test_db().await.unwrap();
+
+        // Create multiple drafts with slight delays to ensure different timestamps
+        let mut request1 = sample_draft_request();
+        request1.title = "First Draft".to_string();
+        let draft1_id = create_draft(&db, request1).await.unwrap();
+
+        // Small delay to ensure different timestamps
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let mut request2 = sample_draft_request();
+        request2.title = "Second Draft".to_string();
+        let _draft2_id = create_draft(&db, request2).await.unwrap();
+
+        // Update the first draft to make it more recent
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        let update_request = sample_update_request();
+        update_draft(&db, draft1_id, update_request).await.unwrap();
+
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 2);
+
+        // First draft should be first due to recent update
+        assert_eq!(drafts[0].title, "Updated Draft");
+        assert_eq!(drafts[1].title, "Second Draft");
+    }
+
+    #[tokio::test]
+    async fn test_get_draft_exists() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap();
+
+        assert!(draft.is_some());
+        let draft = draft.unwrap();
+        assert_draft_matches(&request, &draft);
+    }
+
+    #[tokio::test]
+    async fn test_get_draft_not_found() {
+        let db = setup_test_db().await.unwrap();
+        let draft = get_draft(&db, 999).await.unwrap();
+        assert!(draft.is_none());
+    }
+
+    // --- Draft Update Tests ---
+
+    #[tokio::test]
+    async fn test_update_draft_all_fields() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let original_draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        let update_request = sample_update_request();
+        let success = update_draft(&db, draft_id, update_request.clone())
+            .await
+            .unwrap();
+        assert!(success);
+
+        let updated_draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+        assert_eq!(updated_draft.title, update_request.title);
+        assert_eq!(updated_draft.message, update_request.message);
+        assert_eq!(updated_draft.tags, update_request.tags);
+        assert_eq!(updated_draft.authors, update_request.authors);
+
+        // Updated timestamp should be different
+        assert_ne!(updated_draft.updated_at, original_draft.updated_at);
+    }
+
+    #[tokio::test]
+    async fn test_update_draft_not_found() {
+        let db = setup_test_db().await.unwrap();
+        let update_request = sample_update_request();
+
+        let success = update_draft(&db, 999, update_request).await.unwrap();
+        assert!(!success);
+    }
+
+    #[tokio::test]
+    async fn test_update_draft_changes_updated_at() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let original_draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        // Add small delay to ensure timestamp difference
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let update_request = sample_update_request();
+        update_draft(&db, draft_id, update_request).await.unwrap();
+
+        let updated_draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+        assert_ne!(updated_draft.updated_at, original_draft.updated_at);
+        assert_eq!(updated_draft.created_at, original_draft.created_at); // Created timestamp should not change
+    }
+
+    // --- Draft Deletion Tests ---
+
+    #[tokio::test]
+    async fn test_delete_draft_success() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let success = delete_draft(&db, draft_id).await.unwrap();
+        assert!(success);
+
+        let draft = get_draft(&db, draft_id).await.unwrap();
+        assert!(draft.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_draft_not_found() {
+        let db = setup_test_db().await.unwrap();
+        let success = delete_draft(&db, 999).await.unwrap();
+        assert!(!success);
+    }
+
+    #[tokio::test]
+    async fn test_delete_draft_removes_from_list() {
+        let db = setup_test_db().await.unwrap();
+
+        // Create two drafts
+        let request1 = sample_draft_request();
+        let draft1_id = create_draft(&db, request1).await.unwrap();
+
+        let mut request2 = sample_draft_request();
+        request2.title = "Second Draft".to_string();
+        let _draft2_id = create_draft(&db, request2).await.unwrap();
+
+        // Verify both exist
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 2);
+
+        // Delete first draft
+        delete_draft(&db, draft1_id).await.unwrap();
+
+        // Verify only one remains
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].title, "Second Draft");
+    }
+
+    // --- Session-Based Duplicate Prevention Tests ---
+
+    #[tokio::test]
+    async fn test_session_duplicate_prevention() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.session_id = Some("test-session-123".to_string());
+
+        // Create first draft with session ID
+        let draft_id1 = create_draft(&db, request.clone()).await.unwrap();
+
+        // Modify request and create again with same session ID
+        request.title = "Updated Title".to_string();
+        request.message = Some("Updated message".to_string());
+        let draft_id2 = create_draft(&db, request.clone()).await.unwrap();
+
+        // Should return the same draft ID (updated, not created new)
+        assert_eq!(draft_id1, draft_id2);
+
+        // Verify only one draft exists
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 1);
+
+        // Verify the draft was updated, not duplicated
+        let draft = get_draft(&db, draft_id1).await.unwrap().unwrap();
+        assert_eq!(draft.title, "Updated Title");
+        assert_eq!(draft.message, Some("Updated message".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_different_sessions_create_separate_drafts() {
+        let db = setup_test_db().await.unwrap();
+
+        // Create draft with first session
+        let mut request1 = sample_draft_request();
+        request1.session_id = Some("session-1".to_string());
+        let draft_id1 = create_draft(&db, request1).await.unwrap();
+
+        // Create draft with second session
+        let mut request2 = sample_draft_request();
+        request2.session_id = Some("session-2".to_string());
+        let draft_id2 = create_draft(&db, request2).await.unwrap();
+
+        // Should create separate drafts
+        assert_ne!(draft_id1, draft_id2);
+
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_session_id_none_always_creates_new() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.session_id = None;
+
+        // Create multiple drafts without session ID
+        let draft_id1 = create_draft(&db, request.clone()).await.unwrap();
+        let draft_id2 = create_draft(&db, request.clone()).await.unwrap();
+        let draft_id3 = create_draft(&db, request.clone()).await.unwrap();
+
+        // Should create separate drafts each time
+        assert_ne!(draft_id1, draft_id2);
+        assert_ne!(draft_id2, draft_id3);
+        assert_ne!(draft_id1, draft_id3);
+
+        let drafts = list_drafts(&db).await.unwrap();
+        assert_eq!(drafts.len(), 3);
+    }
+
+    // --- Data Integrity Tests ---
+
+    #[tokio::test]
+    async fn test_tags_json_serialization() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.tags = vec![
+            "simple".to_string(),
+            "with spaces".to_string(),
+            "with-dashes".to_string(),
+            "with_underscores".to_string(),
+            "with.dots".to_string(),
+            "unicode-测试".to_string(),
+        ];
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.tags, request.tags);
+    }
+
+    #[tokio::test]
+    async fn test_authors_json_serialization() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.authors = vec![
+            "author1".to_string(),
+            "Author With Spaces".to_string(),
+            "author-with-dashes".to_string(),
+            "author_with_underscores".to_string(),
+            "unicode-作者".to_string(),
+        ];
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.authors, request.authors);
+    }
+
+    #[tokio::test]
+    async fn test_file_content_binary_storage() {
+        let db = setup_test_db().await.unwrap();
+        let binary_data = vec![0u8, 1, 2, 3, 255, 254, 253]; // Mix of binary values
+
+        let mut request = sample_file_draft_request();
+        request.file_content = Some(binary_data.clone());
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.file_content, Some(binary_data));
+    }
+
+    #[tokio::test]
+    async fn test_timestamp_handling() {
+        let db = setup_test_db().await.unwrap();
+        let request = sample_draft_request();
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        // Verify timestamps are valid RFC3339 format
+        assert!(chrono::DateTime::parse_from_rfc3339(&draft.created_at).is_ok());
+        assert!(chrono::DateTime::parse_from_rfc3339(&draft.updated_at).is_ok());
+
+        // Initially, created_at and updated_at should be the same
+        assert_eq!(draft.created_at, draft.updated_at);
+    }
+
+    // --- Edge Cases and Error Handling Tests ---
+
+    #[tokio::test]
+    async fn test_large_file_content() {
+        let db = setup_test_db().await.unwrap();
+
+        // Create 1MB of test data
+        let large_data = vec![42u8; 1024 * 1024];
+
+        let mut request = sample_file_draft_request();
+        request.file_content = Some(large_data.clone());
+
+        let draft_id = create_draft(&db, request).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.file_content, Some(large_data));
+    }
+
+    #[tokio::test]
+    async fn test_special_characters_in_fields() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+
+        // Test with various special characters and Unicode
+        request.title =
+            "Title with 特殊字符 and émojis 🚀 and \"quotes\" and 'apostrophes'".to_string();
+        request.message =
+            Some("Message with\nnewlines\tand\ttabs and unicode: 测试内容 🎉".to_string());
+        request.url = Some("https://example.com/path?param=value&other=测试".to_string());
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.title, request.title);
+        assert_eq!(draft.message, request.message);
+        assert_eq!(draft.url, request.url);
+    }
+
+    #[tokio::test]
+    async fn test_empty_collections() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.tags = vec![];
+        request.authors = vec![];
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert!(draft.tags.is_empty());
+        assert!(draft.authors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_reply_to_format() {
+        let db = setup_test_db().await.unwrap();
+        let mut request = sample_draft_request();
+        request.reply_to = Some("123:456".to_string());
+
+        let draft_id = create_draft(&db, request.clone()).await.unwrap();
+        let draft = get_draft(&db, draft_id).await.unwrap().unwrap();
+
+        assert_eq!(draft.reply_to, Some("123:456".to_string()));
+    }
+}
