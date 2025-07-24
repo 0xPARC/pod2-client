@@ -77,24 +77,27 @@ POD2 Client provides user-facing tools for managing personal POD collections, cr
 
 ## Development Commands
 
-### Build & Run Everything
+### Quick Start Commands
 ```bash
-# Build entire monorepo
-cargo build
+# Install all dependencies
+pnpm install
+
+# Build and validate all code (recommended for most changes)
+pnpm build                              # Builds all JS/TS with type checking
+cargo build                             # Builds all Rust code
 
 # Format all code  
 just format
-
-# Build all JavaScript/TypeScript components
-just js-build
 ```
 
-### PodNet Platform
+### Running Applications
+
+**PodNet Platform:**
 ```bash
-# Run PodNet content server
+# Run PodNet content server (port 3000)
 just podnet-server                      # or cargo run -p podnet-server
 
-# Run identity verification service  
+# Run identity verification service (port 3001)
 just podnet-identity                     # or cargo run -p podnet-ident-strawman
 
 # Use PodNet CLI
@@ -103,7 +106,7 @@ just podnet-cli publish document.md     # Publish a document
 just podnet-cli upvote <document-id>     # Upvote a document
 ```
 
-### POD2 Client Application
+**POD2 Client Application:**
 ```bash
 # Run desktop client in development mode
 just client-dev                         # or cd apps/client && pnpm tauri dev
@@ -112,31 +115,20 @@ just client-dev                         # or cd apps/client && pnpm tauri dev
 just client-build                       # or cd apps/client && pnpm tauri build
 ```
 
-### Core Libraries
+### Development & Testing Workflows
+
+**For JavaScript/TypeScript development:**
 ```bash
-# Test shared solver engine
-cargo test -p pod2_solver
-
-# Test POD data models  
-cargo test -p podnet-models
-
-# Test utilities
-cargo test -p pod-utils
+pnpm build                              # Primary validation method
+pnpm lint                               # Code style checking
+pnpm test                               # Run test suites (when available)
 ```
 
-### Web Components
+**For Rust development:**
 ```bash
-# Install dependencies
-pnpm install
-
-# Development mode
-pnpm dev
-
-# Run tests
-pnpm test
-
-# Lint code
-pnpm lint
+cargo clippy                            # Code analysis and linting
+cargo test                              # Run test suites
+cargo test -p <specific-crate>          # Test specific crate
 ```
 
 ## Key Technical Details
@@ -233,8 +225,35 @@ export async function createDraft(request: DraftRequest): Promise<string> {
 8. **Module documentation over marker structs** - Use `//!` module comments instead of empty docs
 9. **Clean re-exports** - Only re-export items that are actually consumed elsewhere
 
-## Testing
+## Testing & Validation
 
+### Frontend/TypeScript Code Changes
+
+**When updating client app or any JavaScript/TypeScript code:**
+```bash
+# From repository root - builds and type-checks all JS/TS code
+pnpm build
+```
+
+This uses Turborepo to build and type-check all JavaScript/TypeScript components across the monorepo. This is the **primary validation method** for frontend changes.
+
+**Important:** Do not try to run the client app for testing. If application functionality requires testing, ask the user to run the app and test it themselves.
+
+### Rust Code Changes
+
+**For changes in a specific crate:**
+```bash
+# Run in the specific crate directory
+cargo clippy
+```
+
+**For wide-ranging Rust changes:**
+```bash
+# From repository root
+cargo clippy
+```
+
+**Running tests (when needed):**
 ```bash
 # All Rust tests
 cargo test
@@ -244,9 +263,6 @@ cargo test -p podnet-server
 cargo test -p podnet-models  
 cargo test -p pod2_solver
 cargo test -p pod2_db
-
-# JavaScript/TypeScript tests
-pnpm test
 ```
 
 ## Configuration Files
