@@ -70,8 +70,8 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            document_server: "https://pod-server.ghost-spica.ts.net/server".to_string(),
-            identity_server: "https://pod-server.ghost-spica.ts.net/identity".to_string(),
+            document_server: "https://pod-server.ghost-spica.ts.net/server-new".to_string(),
+            identity_server: "https://pod-server.ghost-spica.ts.net/identity-new".to_string(),
             frogcrypto_server: "https://frog-server-q36c.onrender.com".to_string(),
             timeout_seconds: 30,
         }
