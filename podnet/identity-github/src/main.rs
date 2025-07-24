@@ -130,13 +130,17 @@ async fn get_auth_url(
 async fn oauth_callback(Query(params): Query<OAuthCallbackQuery>) -> Result<Redirect, StatusCode> {
     tracing::info!("OAuth callback received with code: {}", params.code);
 
+    // Get the base path for redirects (e.g., "/identity-new" for Tailscale routing)
+    let base_path = std::env::var("GITHUB_IDENTITY_BASE_PATH").unwrap_or_default();
+
     // Redirect back to the client application with the authorization code
     // The client will handle completing the identity verification
     let redirect_url = format!(
-        "/identity/complete?code={}&state={}",
-        params.code, params.state
+        "{}/identity/complete?code={}&state={}",
+        base_path, params.code, params.state
     );
 
+    tracing::info!("Redirecting to: {}", redirect_url);
     Ok(Redirect::to(&redirect_url))
 }
 
