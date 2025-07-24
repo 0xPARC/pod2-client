@@ -28,32 +28,38 @@ mod p2p_node;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
-/// Resolve database path with proper handling of absolute vs relative paths
+/// Resolve database path with proper handling of absolute vs relative paths and name override
 ///
-/// - If path is absolute: use as-is
-/// - If path is relative: resolve against current working directory  
-/// - If path is the default "pod2.db": resolve against app data directory (for backwards compatibility)
-fn resolve_database_path(app_handle: &AppHandle, configured_path: &str) -> Result<PathBuf, String> {
-    let path = std::path::Path::new(configured_path);
+/// - If path is absolute: use as-is (ignore name override for backward compatibility)
+/// - If path is the default "pod2.db": resolve against app data directory + use name override
+/// - If path is a relative directory: resolve against current working directory + use name override
+fn resolve_database_path(
+    app_handle: &AppHandle,
+    db_config: &config::DatabaseConfig,
+) -> Result<PathBuf, String> {
+    let path = std::path::Path::new(&db_config.path);
 
-    // Handle absolute paths - use as-is
+    // Handle absolute paths - use as-is (ignore name override for backward compatibility)
     if path.is_absolute() {
         return Ok(path.to_path_buf());
     }
 
-    // Handle the default case - preserve existing behavior for backwards compatibility
-    if configured_path == "pod2.db" {
-        return app_handle
+    // Determine the base directory and apply name override
+    let base_dir = if db_config.path == "pod2.db" {
+        // Default case - use app data directory
+        app_handle
             .path()
             .app_data_dir()
-            .map_err(|e| format!("Failed to get app data directory: {e}"))
-            .map(|dir| dir.join(configured_path));
-    }
+            .map_err(|e| format!("Failed to get app data directory: {e}"))?
+    } else {
+        // Custom relative path - treat as directory, resolve against current working directory
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current working directory: {e}"))?
+            .join(&db_config.path)
+    };
 
-    // Handle relative paths - resolve against current working directory
-    std::env::current_dir()
-        .map_err(|e| format!("Failed to get current working directory: {e}"))
-        .map(|cwd| cwd.join(configured_path))
+    // Apply name override
+    Ok(base_dir.join(&db_config.name))
 }
 
 /// Tauri command to get the current feature configuration
@@ -82,7 +88,7 @@ async fn get_extended_app_config(app_handle: AppHandle) -> Result<ExtendedAppCon
     let config = config::config().clone();
 
     // Get the full database path with proper resolution
-    let database_full_path = resolve_database_path(&app_handle, &config.database.path)?
+    let database_full_path = resolve_database_path(&app_handle, &config.database)?
         .to_string_lossy()
         .to_string();
 
@@ -357,10 +363,10 @@ fn get_build_info() -> String {
 /// Tauri command to reset the database - deletes current database and recreates it
 #[tauri::command]
 async fn reset_database(app_state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
-    // Get the database path from config (need to clone to avoid holding the guard across await)
-    let db_path_config = {
+    // Get the database config (need to clone to avoid holding the guard across await)
+    let db_config = {
         let config = config::config();
-        config.database.path.clone()
+        config.database.clone()
     };
 
     // Use tauri app handle to get proper app data directory
@@ -368,7 +374,7 @@ async fn reset_database(app_state: tauri::State<'_, Mutex<AppState>>) -> Result<
     let app_handle = state_guard.app_handle.clone();
     drop(state_guard); // Release the lock before async operations
 
-    let db_path = resolve_database_path(&app_handle, &db_path_config)?;
+    let db_path = resolve_database_path(&app_handle, &db_config)?;
 
     log::info!("Resetting database at: {}", db_path.display());
 
@@ -540,7 +546,7 @@ pub fn run() {
                 AppConfig::initialize(config.clone());
 
                 // Use config for database path with proper resolution
-                let db_path = resolve_database_path(app.handle(), &config.database.path)
+                let db_path = resolve_database_path(app.handle(), &config.database)
                     .expect("Failed to resolve database path");
                 let db = init_db(db_path.to_str().unwrap())
                     .await

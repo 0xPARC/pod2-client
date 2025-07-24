@@ -36,14 +36,17 @@ impl Default for FeatureConfig {
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseConfig {
-    /// Path to the database file
+    /// Path to the database file or directory
     pub path: String,
+    /// Database filename (used when path is a directory)
+    pub name: String,
 }
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             path: "pod2.db".to_string(),
+            name: "pod2.db".to_string(),
         }
     }
 }
@@ -255,6 +258,9 @@ impl AppConfig {
             ["database", "path"] => {
                 self.database.path = value.to_string();
             }
+            ["database", "name"] => {
+                self.database.name = value.to_string();
+            }
             ["logging", "level"] => {
                 if !["debug", "info", "warn", "error"].contains(&value) {
                     return Err(format!(
@@ -329,6 +335,9 @@ impl AppConfig {
         if self.database.path.is_empty() {
             errors.push("database.path cannot be empty".to_string());
         }
+        if self.database.name.is_empty() {
+            errors.push("database.name cannot be empty".to_string());
+        }
 
         if errors.is_empty() {
             Ok(())
@@ -371,6 +380,7 @@ mod tests {
 
         // Verify other defaults
         assert_eq!(config.database.path, "pod2.db");
+        assert_eq!(config.database.name, "pod2.db");
         assert!(config.features.pod_management);
         assert!(!config.features.p2p);
     }
