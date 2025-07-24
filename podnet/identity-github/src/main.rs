@@ -474,9 +474,19 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    tracing::info!("Binding to 0.0.0.0:3001...");
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    tracing::info!("GitHub Identity server running on http://localhost:3001");
+    // Configure server port
+    let port = std::env::var("GITHUB_IDENTITY_PORT")
+        .unwrap_or_else(|_| "3001".to_string())
+        .parse::<u16>()
+        .unwrap_or_else(|_| {
+            tracing::warn!("Invalid GITHUB_IDENTITY_PORT, using default 3001");
+            3001
+        });
+    
+    let bind_addr = format!("0.0.0.0:{}", port);
+    tracing::info!("Binding to {}...", bind_addr);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    tracing::info!("GitHub Identity server running on http://localhost:{}", port);
     tracing::info!("Available endpoints:");
     tracing::info!("  GET  /                      - Server info");
     tracing::info!("  POST /auth/github           - Get GitHub OAuth authorization URL");
