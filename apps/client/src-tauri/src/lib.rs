@@ -28,6 +28,34 @@ mod p2p_node;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
+/// Resolve database path with proper handling of absolute vs relative paths
+///
+/// - If path is absolute: use as-is
+/// - If path is relative: resolve against current working directory  
+/// - If path is the default "pod2.db": resolve against app data directory (for backwards compatibility)
+fn resolve_database_path(app_handle: &AppHandle, configured_path: &str) -> Result<PathBuf, String> {
+    let path = std::path::Path::new(configured_path);
+
+    // Handle absolute paths - use as-is
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+
+    // Handle the default case - preserve existing behavior for backwards compatibility
+    if configured_path == "pod2.db" {
+        return app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data directory: {e}"))
+            .map(|dir| dir.join(configured_path));
+    }
+
+    // Handle relative paths - resolve against current working directory
+    std::env::current_dir()
+        .map_err(|e| format!("Failed to get current working directory: {e}"))
+        .map(|cwd| cwd.join(configured_path))
+}
+
 /// Tauri command to get the current feature configuration
 #[tauri::command]
 async fn get_feature_config_command() -> Result<FeatureConfig, String> {
@@ -53,12 +81,8 @@ pub struct ExtendedAppConfig {
 async fn get_extended_app_config(app_handle: AppHandle) -> Result<ExtendedAppConfig, String> {
     let config = config::config().clone();
 
-    // Get the full database path
-    let database_full_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?
-        .join(&config.database.path)
+    // Get the full database path with proper resolution
+    let database_full_path = resolve_database_path(&app_handle, &config.database.path)?
         .to_string_lossy()
         .to_string();
 
@@ -344,11 +368,7 @@ async fn reset_database(app_state: tauri::State<'_, Mutex<AppState>>) -> Result<
     let app_handle = state_guard.app_handle.clone();
     drop(state_guard); // Release the lock before async operations
 
-    let db_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {e}"))?
-        .join(&db_path_config);
+    let db_path = resolve_database_path(&app_handle, &db_path_config)?;
 
     log::info!("Resetting database at: {}", db_path.display());
 
@@ -519,12 +539,9 @@ pub fn run() {
                 // Initialize global configuration
                 AppConfig::initialize(config.clone());
 
-                // Use config for database path
-                let db_path = app
-                    .path()
-                    .app_data_dir()
-                    .unwrap()
-                    .join(&config.database.path);
+                // Use config for database path with proper resolution
+                let db_path = resolve_database_path(&app.handle(), &config.database.path)
+                    .expect("Failed to resolve database path");
                 let db = init_db(db_path.to_str().unwrap())
                     .await
                     .expect("failed to initialize database");
