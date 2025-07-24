@@ -1,8 +1,20 @@
-import { CheckCircle, ExternalLink, Github, Loader2, Server, Shield, User } from "lucide-react";
+import {
+  CheckCircle,
+  ExternalLink,
+  Github,
+  Loader2,
+  Server,
+  Shield,
+  User
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfigSection } from "../lib/config/hooks";
-import { GitHubOAuthClient, setupGitHubIdentityServer, extractGitHubInfoFromIdentityPod } from "../lib/github-oauth";
+import {
+  GitHubOAuthClient,
+  setupGitHubIdentityServer,
+  extractGitHubInfoFromIdentityPod
+} from "../lib/github-oauth";
 import { useAppStore } from "../lib/store";
 import { Button } from "./ui/button";
 import {
@@ -49,12 +61,16 @@ export function GitHubIdentitySetupModal({
 }: GitHubIdentitySetupModalProps) {
   const { loadPrivateKeyInfo } = useAppStore();
   const networkConfig = useConfigSection("network");
-  const [currentStep, setCurrentStep] = useState<SetupStep>(SetupStep.SERVER_SETUP);
+  const [currentStep, setCurrentStep] = useState<SetupStep>(
+    SetupStep.SERVER_SETUP
+  );
   const [serverUrl, setServerUrl] = useState("");
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [serverInfo, setServerInfo] = useState<GitHubServerInfo | null>(null);
-  const [oauthClient, setOauthClient] = useState<GitHubOAuthClient | null>(null);
+  const [oauthClient, setOauthClient] = useState<GitHubOAuthClient | null>(
+    null
+  );
   const [authUrl, setAuthUrl] = useState("");
   const [oauthState, setOauthState] = useState("");
   const [authCode, setAuthCode] = useState("");
@@ -75,19 +91,22 @@ export function GitHubIdentitySetupModal({
 
     setIsLoading(true);
     try {
-      const { server_info, is_github_server } = await setupGitHubIdentityServer(serverUrl);
-      
+      const { server_info, is_github_server } =
+        await setupGitHubIdentityServer(serverUrl);
+
       const enhancedServerInfo = {
         ...server_info,
         is_github_server
       };
-      
+
       setServerInfo(enhancedServerInfo);
-      
+
       if (is_github_server) {
         setOauthClient(new GitHubOAuthClient({ server_url: serverUrl }));
         setCurrentStep(SetupStep.GITHUB_AUTH);
-        toast.success(`Connected to GitHub OAuth identity server: ${server_info.server_id}`);
+        toast.success(
+          `Connected to GitHub OAuth identity server: ${server_info.server_id}`
+        );
       } else {
         // Fall back to regular identity setup for non-GitHub servers
         setCurrentStep(SetupStep.USERNAME_REGISTRATION);
@@ -97,7 +116,6 @@ export function GitHubIdentitySetupModal({
       // Store server info in Tauri backend
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("setup_identity_server", { serverUrl });
-      
     } catch (error) {
       console.error("Server setup error:", error);
       toast.error(`Failed to connect to identity server: ${error}`);
@@ -117,22 +135,23 @@ export function GitHubIdentitySetupModal({
       // Request GitHub OAuth authorization URL via Tauri
       // The backend will handle private key creation/retrieval
       const { invoke } = await import("@tauri-apps/api/core");
-      const authResponse = await invoke('get_github_auth_url', {
+      const authResponse = (await invoke("get_github_auth_url", {
         serverUrl,
         username
-      }) as { auth_url: string; state: string };
-      
+      })) as { auth_url: string; state: string };
+
       setAuthUrl(authResponse.auth_url);
       setOauthState(authResponse.state);
-      
+
       // Open GitHub OAuth URL in browser
       if (oauthClient) {
         await oauthClient.openAuthUrl(authResponse.auth_url);
       }
-      
+
       setCurrentStep(SetupStep.OAUTH_CALLBACK);
-      toast.success("GitHub authorization opened in browser. Complete the OAuth flow and return here.");
-      
+      toast.success(
+        "GitHub authorization opened in browser. Complete the OAuth flow and return here."
+      );
     } catch (error) {
       console.error("GitHub auth error:", error);
       toast.error(`Failed to initiate GitHub OAuth: ${error}`);
@@ -151,12 +170,15 @@ export function GitHubIdentitySetupModal({
     try {
       // Complete GitHub OAuth identity verification via Tauri
       const { invoke } = await import("@tauri-apps/api/core");
-      const identityResult = await invoke('complete_github_identity_verification', {
-        serverUrl,
-        code: authCode,
-        state: oauthState,
-        username
-      }) as {
+      const identityResult = (await invoke(
+        "complete_github_identity_verification",
+        {
+          serverUrl,
+          code: authCode,
+          state: oauthState,
+          username
+        }
+      )) as {
         identity_pod: any;
         username: string;
         github_username?: string;
@@ -164,12 +186,13 @@ export function GitHubIdentitySetupModal({
       };
 
       // Extract GitHub info for display
-      const githubInfo = extractGitHubInfoFromIdentityPod(identityResult.identity_pod);
+      const githubInfo = extractGitHubInfoFromIdentityPod(
+        identityResult.identity_pod
+      );
       setIdentityInfo(githubInfo);
 
       setCurrentStep(SetupStep.SETUP_COMPLETE);
       toast.success("GitHub identity verification completed successfully!");
-      
     } catch (error) {
       console.error("OAuth callback error:", error);
       toast.error(`Failed to complete GitHub OAuth: ${error}`);
@@ -225,7 +248,9 @@ export function GitHubIdentitySetupModal({
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-blue-600">
               <Server className="h-5 w-5" />
-              <span className="font-medium">Step 1: Connect to Identity Server</span>
+              <span className="font-medium">
+                Step 1: Connect to Identity Server
+              </span>
             </div>
 
             <div className="space-y-4">
@@ -235,12 +260,15 @@ export function GitHubIdentitySetupModal({
                   id="server-url"
                   value={serverUrl}
                   onChange={(e) => setServerUrl(e.target.value)}
-                  placeholder={networkConfig ? networkConfig.identity_server : "Loading..."}
+                  placeholder={
+                    networkConfig ? networkConfig.identity_server : "Loading..."
+                  }
                   disabled={!networkConfig}
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enter the URL of your identity server. GitHub OAuth servers provide enhanced verification.
+                  Enter the URL of your identity server. GitHub OAuth servers
+                  provide enhanced verification.
                 </p>
               </div>
 
@@ -303,7 +331,8 @@ export function GitHubIdentitySetupModal({
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  This will be your display name in the identity POD. Your GitHub username will be verified separately.
+                  This will be your display name in the identity POD. Your
+                  GitHub username will be verified separately.
                 </p>
               </div>
 
@@ -340,13 +369,16 @@ export function GitHubIdentitySetupModal({
               <CardHeader>
                 <CardTitle>GitHub Authorization Required</CardTitle>
                 <CardDescription>
-                  Complete the OAuth flow in your browser, then return here with the authorization code.
+                  Complete the OAuth flow in your browser, then return here with
+                  the authorization code.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 w-full">
                 <div className="flex items-start gap-2 p-3 bg-muted rounded">
                   <Github className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span className="text-sm font-mono break-all flex-1 min-w-0">{authUrl}</span>
+                  <span className="text-sm font-mono break-all flex-1 min-w-0">
+                    {authUrl}
+                  </span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -370,7 +402,8 @@ export function GitHubIdentitySetupModal({
                   className="mt-2 w-full"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  After authorizing the app on GitHub, you'll receive an authorization code. Paste it here.
+                  After authorizing the app on GitHub, you'll receive an
+                  authorization code. Paste it here.
                 </p>
               </div>
 
@@ -431,7 +464,8 @@ export function GitHubIdentitySetupModal({
                   className="mt-2"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Choose a unique username that will be associated with your identity.
+                  Choose a unique username that will be associated with your
+                  identity.
                 </p>
               </div>
 
@@ -468,7 +502,10 @@ export function GitHubIdentitySetupModal({
                   Identity Verified
                 </CardTitle>
                 <CardDescription>
-                  Your identity has been successfully {serverInfo?.is_github_server ? 'verified with GitHub and ' : ''}
+                  Your identity has been successfully{" "}
+                  {serverInfo?.is_github_server
+                    ? "verified with GitHub and "
+                    : ""}
                   registered with the identity server.
                 </CardDescription>
               </CardHeader>
@@ -505,8 +542,12 @@ export function GitHubIdentitySetupModal({
                 <Separator />
 
                 <p className="text-sm text-muted-foreground">
-                  Your identity POD has been stored securely. You can now use the application with your 
-                  {serverInfo?.is_github_server ? ' GitHub-verified' : ' registered'} identity.
+                  Your identity POD has been stored securely. You can now use
+                  the application with your
+                  {serverInfo?.is_github_server
+                    ? " GitHub-verified"
+                    : " registered"}{" "}
+                  identity.
                 </p>
               </CardContent>
             </Card>
@@ -541,18 +582,21 @@ export function GitHubIdentitySetupModal({
       >
         <DialogHeader>
           <DialogTitle>
-            {serverInfo?.is_github_server ? 'GitHub Identity Setup' : 'Identity Setup Required'}
+            {serverInfo?.is_github_server
+              ? "GitHub Identity Setup"
+              : "Identity Setup Required"}
           </DialogTitle>
           <DialogDescription>
-            Complete the identity setup to use the application. 
-            {serverInfo?.is_github_server 
-              ? ' This server uses GitHub OAuth for enhanced verification.'
-              : ' This process will create your identity POD and register it with an identity server.'
-            }
+            Complete the identity setup to use the application.
+            {serverInfo?.is_github_server
+              ? " This server uses GitHub OAuth for enhanced verification."
+              : " This process will create your identity POD and register it with an identity server."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 max-w-full overflow-hidden">{renderStepContent()}</div>
+        <div className="py-4 max-w-full overflow-hidden">
+          {renderStepContent()}
+        </div>
       </DialogContent>
     </Dialog>
   );

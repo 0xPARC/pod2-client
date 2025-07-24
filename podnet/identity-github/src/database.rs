@@ -1,19 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use pod2::backends::plonky2::primitives::ec::curve::Point as PublicKey;
-use rusqlite::{params, Connection};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitHubUserRecord {
-    pub public_key_json: String,
-    pub username: String,          // Full name
-    pub github_username: String,   // GitHub username
-    pub github_user_id: i64,       // GitHub user ID
-    pub github_public_keys: Vec<String>, // SSH keys from GitHub
-    pub oauth_verified_at: DateTime<Utc>,
-    pub issued_at: DateTime<Utc>,
-}
+use rusqlite::{Connection, params};
 
 pub fn initialize_database(db_path: &str) -> Result<Connection> {
     tracing::info!("Initializing GitHub identity database at: {}", db_path);
@@ -81,45 +69,6 @@ pub fn insert_user_mapping(
     Ok(())
 }
 
-pub fn get_user_by_public_key(
-    conn: &Connection,
-    public_key: &PublicKey,
-) -> Result<Option<GitHubUserRecord>> {
-    let public_key_json = serde_json::to_string(public_key)?;
-
-    let mut stmt = conn.prepare(
-        "SELECT username, github_username, github_user_id, github_public_keys, oauth_verified_at, issued_at 
-         FROM users WHERE public_key_json = ?1"
-    )?;
-    
-    let mut rows = stmt.query(params![public_key_json])?;
-
-    if let Some(row) = rows.next()? {
-        let username: String = row.get(0)?;
-        let github_username: String = row.get(1)?;
-        let github_user_id: i64 = row.get(2)?;
-        let github_public_keys_json: String = row.get(3)?;
-        let oauth_verified_at_str: String = row.get(4)?;
-        let issued_at_str: String = row.get(5)?;
-
-        let github_public_keys: Vec<String> = serde_json::from_str(&github_public_keys_json)?;
-        let oauth_verified_at = DateTime::parse_from_rfc3339(&oauth_verified_at_str)?.with_timezone(&Utc);
-        let issued_at = DateTime::parse_from_rfc3339(&issued_at_str)?.with_timezone(&Utc);
-
-        Ok(Some(GitHubUserRecord {
-            public_key_json,
-            username,
-            github_username,
-            github_user_id,
-            github_public_keys,
-            oauth_verified_at,
-            issued_at,
-        }))
-    } else {
-        Ok(None)
-    }
-}
-
 pub fn get_username_by_public_key(
     conn: &Connection,
     public_key: &PublicKey,
@@ -148,10 +97,13 @@ pub fn delete_user_by_github_id(conn: &Connection, github_user_id: i64) -> Resul
         "DELETE FROM users WHERE github_user_id = ?1",
         params![github_user_id],
     )?;
-    
+
     if deleted_rows > 0 {
-        tracing::info!("✓ Deleted existing GitHub user record (ID: {})", github_user_id);
+        tracing::info!(
+            "✓ Deleted existing GitHub user record (ID: {})",
+            github_user_id
+        );
     }
-    
+
     Ok(())
 }

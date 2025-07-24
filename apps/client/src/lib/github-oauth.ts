@@ -56,19 +56,21 @@ export class GitHubOAuthClient {
    */
   async getAuthUrl(publicKey: any, username: string): Promise<AuthUrlResponse> {
     const response = await fetch(`${this.serverUrl}/auth/github`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         public_key: publicKey,
-        username: username,
-      }),
+        username: username
+      })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to get auth URL: ${response.status} - ${errorText}`);
+      throw new Error(
+        `Failed to get auth URL: ${response.status} - ${errorText}`
+      );
     }
 
     return response.json();
@@ -77,18 +79,22 @@ export class GitHubOAuthClient {
   /**
    * Complete GitHub OAuth identity verification
    */
-  async completeIdentityVerification(request: GitHubIdentityRequest): Promise<GitHubIdentityResponse> {
+  async completeIdentityVerification(
+    request: GitHubIdentityRequest
+  ): Promise<GitHubIdentityResponse> {
     const response = await fetch(`${this.serverUrl}/identity`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(request)
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to complete identity verification: ${response.status} - ${errorText}`);
+      throw new Error(
+        `Failed to complete identity verification: ${response.status} - ${errorText}`
+      );
     }
 
     return response.json();
@@ -98,7 +104,7 @@ export class GitHubOAuthClient {
    * Open GitHub OAuth URL in external browser
    */
   async openAuthUrl(authUrl: string): Promise<void> {
-    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(authUrl);
   }
 }
@@ -111,12 +117,14 @@ export async function setupGitHubIdentityServer(serverUrl: string): Promise<{
   is_github_server: boolean;
 }> {
   // Use Tauri backend to detect GitHub OAuth server
-  const is_github_server = await invoke('detect_github_oauth_server', { serverUrl }) as boolean;
-  
+  const is_github_server = (await invoke("detect_github_oauth_server", {
+    serverUrl
+  })) as boolean;
+
   // Get server info
   const client = new GitHubOAuthClient({ server_url: serverUrl });
   const server_info = await client.getServerInfo();
-  
+
   return { server_info, is_github_server };
 }
 
@@ -132,7 +140,9 @@ export async function registerWithGitHubOAuth(
   server_id: string;
 }> {
   // Get user's public key from Tauri backend
-  const privateKeyInfo = await invoke('get_private_key_info') as { public_key: any };
+  const privateKeyInfo = (await invoke("get_private_key_info")) as {
+    public_key: any;
+  };
   const publicKey = privateKeyInfo.public_key;
 
   const client = new GitHubOAuthClient({ server_url: serverUrl });
@@ -149,7 +159,11 @@ export async function registerWithGitHubOAuth(
   return new Promise((_resolve, reject) => {
     // This would be implemented with a proper OAuth callback handler
     // For now, we'll just throw an error indicating this needs to be implemented
-    reject(new Error('OAuth callback handling not yet implemented. User needs to provide authorization code manually.'));
+    reject(
+      new Error(
+        "OAuth callback handling not yet implemented. User needs to provide authorization code manually."
+      )
+    );
   });
 }
 
@@ -164,17 +178,18 @@ export function extractGitHubInfoFromIdentityPod(identityPod: any): {
   github_email?: string;
   oauth_verified_at?: string;
 } {
-  const username = identityPod.username || 'Unknown';
-  
+  const username = identityPod.username || "Unknown";
+
   // Parse GitHub data dictionary
   let githubData: any = {};
   if (identityPod.github_data) {
     try {
-      githubData = typeof identityPod.github_data === 'string' 
-        ? JSON.parse(identityPod.github_data) 
-        : identityPod.github_data;
+      githubData =
+        typeof identityPod.github_data === "string"
+          ? JSON.parse(identityPod.github_data)
+          : identityPod.github_data;
     } catch (error) {
-      console.error('Failed to parse GitHub data from identity POD:', error);
+      console.error("Failed to parse GitHub data from identity POD:", error);
     }
   }
 
@@ -184,6 +199,6 @@ export function extractGitHubInfoFromIdentityPod(identityPod: any): {
     github_user_id: githubData.github_user_id,
     github_public_keys: githubData.github_public_keys,
     github_email: githubData.github_email,
-    oauth_verified_at: githubData.oauth_verified_at,
+    oauth_verified_at: githubData.oauth_verified_at
   };
 }

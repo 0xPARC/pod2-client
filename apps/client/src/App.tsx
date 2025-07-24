@@ -130,10 +130,15 @@ function App() {
         // If setup is not completed and we have network config, check if it's a GitHub server
         if (!completed && networkConfig?.identity_server) {
           try {
-            const { is_github_server } = await setupGitHubIdentityServer(networkConfig.identity_server);
+            const { is_github_server } = await setupGitHubIdentityServer(
+              networkConfig.identity_server
+            );
             setIsGitHubServer(is_github_server);
           } catch (error) {
-            console.log("Server detection failed, will use default setup:", error);
+            console.log(
+              "Server detection failed, will use default setup:",
+              error
+            );
             setIsGitHubServer(false);
           }
         }
@@ -159,14 +164,19 @@ function App() {
   };
 
   // Show loading state while checking setup status
-  if (isSetupCompleted === null || (!isSetupCompleted && isGitHubServer === null)) {
+  if (
+    isSetupCompleted === null ||
+    (!isSetupCompleted && isGitHubServer === null)
+  ) {
     return (
       <ThemeProvider>
         <div className="h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">
-              {isSetupCompleted === null ? "Loading..." : "Detecting identity server..."}
+              {isSetupCompleted === null
+                ? "Loading..."
+                : "Detecting identity server..."}
             </p>
           </div>
         </div>

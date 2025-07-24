@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use oauth2::{
-    basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
+    TokenResponse, TokenUrl, basic::BasicClient, reqwest::async_http_client,
 };
 use pod2::backends::plonky2::primitives::ec::curve::Point as PublicKey;
 use reqwest::Client;
@@ -34,13 +34,18 @@ impl GitHubOAuthClient {
             ClientId::new(config.client_id),
             Some(ClientSecret::new(config.client_secret)),
             AuthUrl::new("https://github.com/login/oauth/authorize".to_string())?,
-            Some(TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?),
+            Some(TokenUrl::new(
+                "https://github.com/login/oauth/access_token".to_string(),
+            )?),
         )
         .set_redirect_uri(RedirectUrl::new(config.redirect_uri)?);
 
         let http_client = Client::new();
 
-        Ok(Self { client, http_client })
+        Ok(Self {
+            client,
+            http_client,
+        })
     }
 
     pub fn get_authorization_url(&self, public_key: &PublicKey) -> Result<(Url, CsrfToken)> {
@@ -88,8 +93,8 @@ impl GitHubOAuthClient {
     }
 
     pub async fn get_ssh_keys(&self, username: &str) -> Result<Vec<String>> {
-        let url = format!("https://github.com/{}.keys", username);
-        
+        let url = format!("https://github.com/{username}.keys");
+
         let response = self
             .http_client
             .get(&url)
@@ -116,32 +121,13 @@ impl GitHubOAuthClient {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OAuthState {
-    pub public_key: PublicKey,
-}
-
 pub fn parse_oauth_state(state: &str) -> Result<PublicKey> {
     let public_key: PublicKey = serde_json::from_str(state)?;
     Ok(public_key)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AuthUrlResponse {
-    pub auth_url: String,
-    pub state: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackQuery {
     pub code: String,
     pub state: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct IdentityRequest {
-    pub access_token: String,
-    pub github_user: GitHubUser,
-    pub user_challenge_signature: String, // User signs a challenge containing GitHub info
-    pub public_key: PublicKey,
 }

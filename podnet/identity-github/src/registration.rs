@@ -1,4 +1,5 @@
 use anyhow::Result;
+use pod_utils::ValueExt;
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
@@ -7,7 +8,6 @@ use pod2::{
     frontend::{SignedPod, SignedPodBuilder},
     middleware::Params,
 };
-use pod_utils::ValueExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +39,10 @@ pub async fn register_with_podnet_server(
     secret_key: &SecretKey,
     podnet_server_url: &str,
 ) -> Result<()> {
-    tracing::info!("Registering GitHub identity server with podnet-server at: {}", podnet_server_url);
+    tracing::info!(
+        "Registering GitHub identity server with podnet-server at: {}",
+        podnet_server_url
+    );
 
     let public_key = secret_key.public_key();
     let client = Client::new();
@@ -124,7 +127,9 @@ pub async fn register_with_podnet_server(
         } else {
             tracing::error!("Failed to register with podnet-server. Status: {}", status);
             tracing::error!("Error: {}", error_text);
-            Err(anyhow::anyhow!("Registration failed: {status} - {error_text}"))
+            Err(anyhow::anyhow!(
+                "Registration failed: {status} - {error_text}"
+            ))
         }
     }
 }

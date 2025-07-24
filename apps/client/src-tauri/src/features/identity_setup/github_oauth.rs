@@ -46,7 +46,7 @@ pub async fn get_github_auth_url(
     username: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<GitHubAuthUrlResponse, String> {
-    log::info!("Getting GitHub OAuth authorization URL for user: {}", username);
+    log::info!("Getting GitHub OAuth authorization URL for user: {username}");
 
     // Get or create the user's private key during setup (same as regular identity setup)
     let app_state = state.lock().await;
@@ -67,35 +67,33 @@ pub async fn get_github_auth_url(
     drop(app_state); // Release the lock before making HTTP requests
 
     let client = reqwest::Client::new();
-    let request = GitHubAuthUrlRequest { 
+    let request = GitHubAuthUrlRequest {
         public_key: serde_json::to_value(public_key)
-            .map_err(|e| format!("Failed to serialize public key: {e}"))?, 
-        username: username.clone() 
+            .map_err(|e| format!("Failed to serialize public key: {e}"))?,
+        username: username.clone(),
     };
 
     let response = client
-        .post(format!("{}/auth/github", server_url))
+        .post(format!("{server_url}/auth/github"))
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Failed to request GitHub auth URL: {}", e))?;
+        .map_err(|e| format!("Failed to request GitHub auth URL: {e}"))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
         return Err(format!(
-            "GitHub auth URL request failed: {} - {}",
-            status,
-            error_text
+            "GitHub auth URL request failed: {status} - {error_text}"
         ));
     }
 
     let auth_response: GitHubAuthUrlResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse GitHub auth URL response: {}", e))?;
+        .map_err(|e| format!("Failed to parse GitHub auth URL response: {e}"))?;
 
-    log::info!("Successfully obtained GitHub auth URL for user: {}", username);
+    log::info!("Successfully obtained GitHub auth URL for user: {username}");
     Ok(auth_response)
 }
 
@@ -108,7 +106,7 @@ pub async fn complete_github_identity_verification(
     username: String,
     app_state: State<'_, Mutex<AppState>>,
 ) -> Result<GitHubIdentityPodResult, String> {
-    log::info!("Completing GitHub OAuth identity verification for user: {}", username);
+    log::info!("Completing GitHub OAuth identity verification for user: {username}");
 
     // Get or create the user's private key during setup
     let mut state_lock = app_state.lock().await;
@@ -121,7 +119,7 @@ pub async fn complete_github_identity_verification(
             log::info!("Creating new default private key");
             pod2_db::store::create_default_private_key(&state_lock.db)
                 .await
-                .map_err(|e| format!("Failed to create private key: {}", e))?
+                .map_err(|e| format!("Failed to create private key: {e}"))?
         }
     };
 
@@ -138,30 +136,29 @@ pub async fn complete_github_identity_verification(
     };
 
     let response = client
-        .post(format!("{}/identity", server_url))
+        .post(format!("{server_url}/identity"))
         .json(&identity_request)
         .send()
         .await
-        .map_err(|e| format!("Failed to complete GitHub identity verification: {}", e))?;
+        .map_err(|e| format!("Failed to complete GitHub identity verification: {e}"))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
         return Err(format!(
-            "GitHub identity verification failed: {} - {}",
-            status,
-            error_text
+            "GitHub identity verification failed: {status} - {error_text}"
         ));
     }
 
     let identity_response: GitHubIdentityResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse GitHub identity response: {}", e))?;
+        .map_err(|e| format!("Failed to parse GitHub identity response: {e}"))?;
 
     // Convert the identity POD from JSON to the actual SignedPod type
-    let identity_pod: pod2::frontend::SignedPod = serde_json::from_value(identity_response.identity_pod.clone())
-        .map_err(|e| format!("Failed to deserialize identity POD: {}", e))?;
+    let identity_pod: pod2::frontend::SignedPod =
+        serde_json::from_value(identity_response.identity_pod.clone())
+            .map_err(|e| format!("Failed to deserialize identity POD: {e}"))?;
 
     // Extract GitHub username from the identity POD's github_data dictionary
     let github_username = identity_pod
@@ -170,13 +167,14 @@ pub async fn complete_github_identity_verification(
             TypedValue::String(s) => {
                 // Parse the GitHub data JSON
                 if let Ok(github_data) = serde_json::from_str::<serde_json::Value>(s.as_str()) {
-                    github_data.get("github_username")
+                    github_data
+                        .get("github_username")
                         .and_then(|u| u.as_str())
                         .map(|u| u.to_string())
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         });
 
@@ -192,7 +190,7 @@ pub async fn complete_github_identity_verification(
     {
         pod2_db::store::create_space(&state_lock.db, IDENTITY_FOLDER)
             .await
-            .map_err(|e| format!("Failed to create identity folder: {}", e))?;
+            .map_err(|e| format!("Failed to create identity folder: {e}"))?;
         log::info!("✓ Created identity folder");
     }
 
@@ -203,18 +201,20 @@ pub async fn complete_github_identity_verification(
         Some("GitHub Identity POD"),
     )
     .await
-    .map_err(|e| format!("Failed to store identity POD: {}", e))?;
+    .map_err(|e| format!("Failed to store identity POD: {e}"))?;
 
     // Update setup state with username and identity POD ID
     pod2_db::store::update_identity_info(&state_lock.db, &username, &identity_pod_id)
         .await
-        .map_err(|e| format!("Failed to update identity info: {}", e))?;
+        .map_err(|e| format!("Failed to update identity info: {e}"))?;
 
     // Trigger state sync to refresh UI with new identity POD
-    state_lock.trigger_state_sync().await
-        .map_err(|e| format!("Failed to trigger state sync: {}", e))?;
+    state_lock
+        .trigger_state_sync()
+        .await
+        .map_err(|e| format!("Failed to trigger state sync: {e}"))?;
 
-    log::info!("Successfully completed GitHub OAuth identity verification for user: {}", username);
+    log::info!("Successfully completed GitHub OAuth identity verification for user: {username}");
 
     Ok(GitHubIdentityPodResult {
         identity_pod: identity_response.identity_pod,
@@ -230,14 +230,14 @@ pub async fn detect_github_oauth_server(
     server_url: String,
     _state: State<'_, Mutex<AppState>>,
 ) -> Result<bool, String> {
-    log::info!("Detecting if server is GitHub OAuth server: {}", server_url);
+    log::info!("Detecting if server is GitHub OAuth server: {server_url}");
 
     let client = reqwest::Client::new();
     let response = client
         .get(&server_url)
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to server: {}", e))?;
+        .map_err(|e| format!("Failed to connect to server: {e}"))?;
 
     if !response.status().is_success() {
         return Ok(false);
@@ -255,6 +255,6 @@ pub async fn detect_github_oauth_server(
         .map(|id| id == "github-identity-server")
         .unwrap_or(false);
 
-    log::info!("Server GitHub OAuth detection result: {}", is_github_server);
+    log::info!("Server GitHub OAuth detection result: {is_github_server}");
     Ok(is_github_server)
 }

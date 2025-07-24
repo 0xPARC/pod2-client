@@ -4,11 +4,11 @@ use std::{
 };
 
 use axum::{
+    Router,
     extract::{Query, State},
     http::StatusCode,
     response::{Json, Redirect},
     routing::{get, post},
-    Router,
 };
 use chrono::Utc;
 use pod2::backends::plonky2::primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey};
@@ -22,9 +22,15 @@ mod github;
 mod identity;
 mod registration;
 
-use database::{delete_user_by_github_id, get_username_by_public_key, initialize_database, insert_user_mapping, user_exists_by_github_id};
+use database::{
+    delete_user_by_github_id, get_username_by_public_key, initialize_database, insert_user_mapping,
+    user_exists_by_github_id,
+};
 use github::{GitHubOAuthClient, GitHubOAuthConfig, OAuthCallbackQuery, parse_oauth_state};
-use identity::{create_identity_pod, IdentityResponse, ServerInfo, UsernameLookupRequest, UsernameLookupResponse};
+use identity::{
+    IdentityResponse, ServerInfo, UsernameLookupRequest, UsernameLookupResponse,
+    create_identity_pod,
+};
 use registration::register_with_podnet_server;
 
 // Server state
@@ -45,9 +51,12 @@ impl Clone for GitHubIdentityServerState {
             db_conn: Arc::clone(&self.db_conn),
             oauth_client: GitHubOAuthClient::new(GitHubOAuthConfig {
                 client_id: std::env::var("GITHUB_CLIENT_ID").expect("GITHUB_CLIENT_ID must be set"),
-                client_secret: std::env::var("GITHUB_CLIENT_SECRET").expect("GITHUB_CLIENT_SECRET must be set"),
-                redirect_uri: std::env::var("GITHUB_REDIRECT_URI").expect("GITHUB_REDIRECT_URI must be set"),
-            }).expect("Failed to create OAuth client"),
+                client_secret: std::env::var("GITHUB_CLIENT_SECRET")
+                    .expect("GITHUB_CLIENT_SECRET must be set"),
+                redirect_uri: std::env::var("GITHUB_REDIRECT_URI")
+                    .expect("GITHUB_REDIRECT_URI must be set"),
+            })
+            .expect("Failed to create OAuth client"),
         }
     }
 }
@@ -69,7 +78,7 @@ pub struct AuthUrlResponse {
 pub struct IdentityRequest {
     pub code: String,
     pub state: String,
-    pub username: String, // Full name provided by user
+    pub username: String,            // Full name provided by user
     pub challenge_signature: String, // User signs challenge containing GitHub info + their name
 }
 
@@ -118,18 +127,16 @@ async fn get_auth_url(
 }
 
 // Step 2: Handle OAuth callback (redirect endpoint)
-async fn oauth_callback(
-    Query(params): Query<OAuthCallbackQuery>,
-) -> Result<Redirect, StatusCode> {
+async fn oauth_callback(Query(params): Query<OAuthCallbackQuery>) -> Result<Redirect, StatusCode> {
     tracing::info!("OAuth callback received with code: {}", params.code);
-    
+
     // Redirect back to the client application with the authorization code
     // The client will handle completing the identity verification
     let redirect_url = format!(
         "/identity/complete?code={}&state={}",
         params.code, params.state
     );
-    
+
     Ok(Redirect::to(&redirect_url))
 }
 
@@ -138,7 +145,7 @@ async fn oauth_complete_page(
     Query(params): Query<OAuthCallbackQuery>,
 ) -> Result<axum::response::Html<String>, StatusCode> {
     tracing::info!("OAuth completion page requested with code: {}", params.code);
-    
+
     // Return a simple HTML page that displays the authorization code
     // The user can copy this code back to the client application
     let html = format!(
@@ -184,7 +191,7 @@ async fn oauth_complete_page(
         "#,
         params.code
     );
-    
+
     Ok(axum::response::Html(html))
 }
 
@@ -228,7 +235,10 @@ async fn issue_identity(
             tracing::error!("Database error checking GitHub user: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })? {
-            tracing::info!("GitHub user {} already has an identity, removing old record", github_user.login);
+            tracing::info!(
+                "GitHub user {} already has an identity, removing old record",
+                github_user.login
+            );
             delete_user_by_github_id(&conn, github_user.id).map_err(|e| {
                 tracing::error!("Failed to delete existing GitHub user record: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
