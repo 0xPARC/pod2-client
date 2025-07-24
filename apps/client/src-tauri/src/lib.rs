@@ -566,9 +566,11 @@ pub fn run() {
                 app.manage(Mutex::new(app_state));
 
                 // Spawn cache warming task in background to avoid blocking startup
-                tokio::task::spawn_blocking(|| {
-                    cache::warm_mainpod_cache();
-                });
+                if config.features.cache_warming {
+                    tokio::task::spawn_blocking(|| {
+                        cache::warm_mainpod_cache();
+                    });
+                }
             });
             Ok(())
         })
