@@ -1,21 +1,22 @@
 import { useState } from "react";
-import { useAppStore } from "../lib/store";
-import { PodViewer } from "./PodViewer";
-import { InboxView } from "./InboxView";
-import { ChatView } from "./ChatView";
-import { FrogCrypto } from "./FrogCrypto";
-import { DocumentsView } from "./documents/DocumentsView";
-import { PublishPage } from "./documents/PublishPage";
-import { DraftsView } from "./documents/DraftsView";
-import { EditorView } from "./editor/EditorView";
-import { DebugView } from "./DebugView";
 import { FeatureGate } from "../lib/features/config";
+import { useAppStore } from "../lib/store";
+import { ChatView } from "./ChatView";
+import { DebugView } from "./DebugView";
+import { FrogCrypto } from "./FrogCrypto";
+import { InboxView } from "./InboxView";
+import { PodViewer } from "./PodViewer";
+import { DocumentsView } from "./documents/DocumentsView";
+import { DraftsView } from "./documents/DraftsView";
+import { PublishPage } from "./documents/PublishPage";
+import { EditorView } from "./editor/EditorView";
 
 export function MainContent() {
   const { currentView, previousView, setCurrentView } = useAppStore();
-  const [editingDraftId, setEditingDraftId] = useState<number | null>(null);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null); // UUID
 
-  const handleEditDraft = (draftId: number) => {
+  const handleEditDraft = (draftId: string) => {
+    // UUID
     setEditingDraftId(draftId);
     setCurrentView("publish");
   };
@@ -43,6 +44,10 @@ export function MainContent() {
         <PublishPage
           onBack={handleBackFromPublish}
           editingDraftId={editingDraftId}
+          onPublishSuccess={(_documentId) => {
+            setEditingDraftId(null);
+            setCurrentView("drafts");
+          }}
         />
       );
     case "drafts":

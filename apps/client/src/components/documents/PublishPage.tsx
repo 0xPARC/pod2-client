@@ -6,7 +6,7 @@ import { PublishForm } from "./PublishForm";
 interface PublishPageProps {
   onBack?: () => void;
   onPublishSuccess?: (documentId: number) => void;
-  editingDraftId?: number | null;
+  editingDraftId?: string | null; // UUID
 }
 
 export function PublishPage({

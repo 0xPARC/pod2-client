@@ -17,7 +17,7 @@ import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 
 interface DraftInfo {
-  id: number;
+  id: string; // UUID
   title: string;
   content_type: string;
   message?: string;
@@ -34,16 +34,16 @@ interface DraftInfo {
 }
 
 interface DraftsViewProps {
-  onEditDraft?: (draftId: number) => void;
+  onEditDraft?: (draftId: string) => void; // UUID
 }
 
 export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const [drafts, setDrafts] = useState<DraftInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [publishingDrafts, setPublishingDrafts] = useState<Set<number>>(
+  const [publishingDrafts, setPublishingDrafts] = useState<Set<string>>(
     new Set()
   );
-  const { setCurrentView } = useAppStore();
+  const { currentView, setCurrentView } = useAppStore();
 
   const loadDrafts = async () => {
     try {
@@ -62,7 +62,14 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     loadDrafts();
   }, []);
 
-  const handleDeleteDraft = async (draftId: number) => {
+  // Reload drafts when navigating back to the drafts view
+  useEffect(() => {
+    if (currentView === "drafts") {
+      loadDrafts();
+    }
+  }, [currentView]);
+
+  const handleDeleteDraft = async (draftId: string) => {
     try {
       const success = await invoke<boolean>("delete_draft", { draftId });
       if (success) {
@@ -77,7 +84,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     }
   };
 
-  const handlePublishDraft = async (draftId: number) => {
+  const handlePublishDraft = async (draftId: string) => {
     try {
       setPublishingDrafts((prev) => new Set(prev).add(draftId));
 
@@ -192,7 +199,11 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
                       <div className="flex items-center gap-2 mb-1">
                         {getContentIcon(draft.content_type)}
                         <h3 className="font-medium text-base line-clamp-1">
-                          {draft.title}
+                          {draft.title || (
+                            <span className="text-muted-foreground italic">
+                              Untitled
+                            </span>
+                          )}
                         </h3>
                       </div>
 

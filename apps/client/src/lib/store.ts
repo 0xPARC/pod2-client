@@ -58,6 +58,10 @@ interface AppStoreState {
   frogTimeout: number | null;
   replyToDocumentId: string | null;
 
+  // Draft coordination state
+  currentDraftId: string | null;
+  isDraftInitializing: boolean;
+
   // Folder State
   folders: SpaceInfo[];
   foldersLoading: boolean;
@@ -85,6 +89,8 @@ interface AppStoreState {
   setSelectedPodId: (podId: string | null) => void;
   setExternalPodRequest: (request: string | undefined) => void;
   setReplyToDocumentId: (documentId: string | null) => void;
+  setCurrentDraftId: (draftId: string | null) => void;
+  setIsDraftInitializing: (initializing: boolean) => void;
   loadFolders: () => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
@@ -130,6 +136,8 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   selectedPodId: null,
   externalPodRequest: undefined,
   replyToDocumentId: null,
+  currentDraftId: null,
+  isDraftInitializing: false,
   folders: [],
   foldersLoading: false,
   frogTimeout: null,
@@ -227,6 +235,14 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setReplyToDocumentId: (documentId: string | null) => {
     set({ replyToDocumentId: documentId });
+  },
+
+  setCurrentDraftId: (draftId: string | null) => {
+    set({ currentDraftId: draftId });
+  },
+
+  setIsDraftInitializing: (initializing: boolean) => {
+    set({ isDraftInitializing: initializing });
   },
 
   setFrogTimeout: (timeout: number | null) => {
