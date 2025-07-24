@@ -22,7 +22,7 @@ mod github;
 mod identity;
 mod registration;
 
-use database::{get_username_by_public_key, initialize_database, insert_user_mapping, user_exists_by_github_id};
+use database::{delete_user_by_github_id, get_username_by_public_key, initialize_database, insert_user_mapping, user_exists_by_github_id};
 use github::{GitHubOAuthClient, GitHubOAuthConfig, OAuthCallbackQuery, parse_oauth_state};
 use identity::{create_identity_pod, IdentityResponse, ServerInfo, UsernameLookupRequest, UsernameLookupResponse};
 use registration::register_with_podnet_server;
@@ -221,15 +221,18 @@ async fn issue_identity(
             StatusCode::BAD_REQUEST
         })?;
 
-    // Check if this GitHub user already has an identity
+    // Check if this GitHub user already has an identity and remove it if so
     {
         let conn = state.db_conn.lock().unwrap();
         if user_exists_by_github_id(&conn, github_user.id).map_err(|e| {
             tracing::error!("Database error checking GitHub user: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })? {
-            tracing::error!("GitHub user {} already has an identity", github_user.login);
-            return Err(StatusCode::CONFLICT);
+            tracing::info!("GitHub user {} already has an identity, removing old record", github_user.login);
+            delete_user_by_github_id(&conn, github_user.id).map_err(|e| {
+                tracing::error!("Failed to delete existing GitHub user record: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         }
     }
 

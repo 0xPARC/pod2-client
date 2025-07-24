@@ -142,3 +142,16 @@ pub fn user_exists_by_github_id(conn: &Connection, github_user_id: i64) -> Resul
     let mut rows = stmt.query(params![github_user_id])?;
     Ok(rows.next()?.is_some())
 }
+
+pub fn delete_user_by_github_id(conn: &Connection, github_user_id: i64) -> Result<()> {
+    let deleted_rows = conn.execute(
+        "DELETE FROM users WHERE github_user_id = ?1",
+        params![github_user_id],
+    )?;
+    
+    if deleted_rows > 0 {
+        tracing::info!("✓ Deleted existing GitHub user record (ID: {})", github_user_id);
+    }
+    
+    Ok(())
+}
