@@ -482,11 +482,14 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!("Invalid GITHUB_IDENTITY_PORT, using default 3001");
             3001
         });
-    
-    let bind_addr = format!("0.0.0.0:{}", port);
+
+    let bind_addr = format!("0.0.0.0:{port}");
     tracing::info!("Binding to {}...", bind_addr);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    tracing::info!("GitHub Identity server running on http://localhost:{}", port);
+    tracing::info!(
+        "GitHub Identity server running on http://localhost:{}",
+        port
+    );
     tracing::info!("Available endpoints:");
     tracing::info!("  GET  /                      - Server info");
     tracing::info!("  POST /auth/github           - Get GitHub OAuth authorization URL");
