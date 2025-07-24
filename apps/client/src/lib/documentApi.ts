@@ -73,6 +73,55 @@ export interface DocumentVerificationResult {
 }
 
 // =============================================================================
+// Draft Types
+// =============================================================================
+
+/**
+ * Draft information from the database
+ */
+export interface DraftInfo {
+  id: string; // UUID
+  title: string;
+  content_type: string; // "message", "file", or "url"
+  message?: string;
+  file_name?: string;
+  file_content?: number[]; // File bytes as array
+  file_mime_type?: string;
+  url?: string;
+  tags: string[]; // Parsed from JSON
+  authors: string[]; // Parsed from JSON
+  reply_to?: string; // Format: "post_id:document_id"
+  session_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Draft update/create request data
+ */
+export interface DraftRequest {
+  title: string;
+  content_type: string;
+  message: string | null;
+  file_name: string | null;
+  file_content: number[] | null;
+  file_mime_type: string | null;
+  url: string | null;
+  tags: string[];
+  authors: string[];
+  reply_to: string | null;
+}
+
+/**
+ * Publish result from backend
+ */
+export interface PublishResult {
+  success: boolean;
+  document_id?: number;
+  error_message?: string;
+}
+
+// =============================================================================
 // Document Server API Client
 // =============================================================================
 
@@ -215,5 +264,94 @@ export async function verifyDocumentPod(
     console.error("Failed to verify document POD:", error);
     console.error("Document passed:", document);
     throw new Error(`Failed to verify document POD: ${error}`);
+  }
+}
+
+// =============================================================================
+// Draft API
+// =============================================================================
+
+/**
+ * Create a new draft
+ * @param request - Draft data to create
+ * @returns Promise resolving to the draft ID (UUID)
+ */
+export async function createDraft(request: DraftRequest): Promise<string> {
+  try {
+    return await invoke<string>("create_draft", { request });
+  } catch (error) {
+    throw new Error(`Failed to create draft: ${error}`);
+  }
+}
+
+/**
+ * Update an existing draft
+ * @param draftId - The draft ID (UUID) to update
+ * @param request - Updated draft data
+ * @returns Promise resolving to success status
+ */
+export async function updateDraft(
+  draftId: string,
+  request: DraftRequest
+): Promise<boolean> {
+  try {
+    return await invoke<boolean>("update_draft", { draftId, request });
+  } catch (error) {
+    throw new Error(`Failed to update draft: ${error}`);
+  }
+}
+
+/**
+ * List all drafts
+ * @returns Promise resolving to array of draft info
+ */
+export async function listDrafts(): Promise<DraftInfo[]> {
+  try {
+    return await invoke<DraftInfo[]>("list_drafts");
+  } catch (error) {
+    throw new Error(`Failed to list drafts: ${error}`);
+  }
+}
+
+/**
+ * Get a specific draft by ID
+ * @param draftId - The draft ID (UUID) to retrieve
+ * @returns Promise resolving to draft info or null if not found
+ */
+export async function getDraft(draftId: string): Promise<DraftInfo | null> {
+  try {
+    return await invoke<DraftInfo | null>("get_draft", { draftId });
+  } catch (error) {
+    throw new Error(`Failed to get draft: ${error}`);
+  }
+}
+
+/**
+ * Delete a draft by ID
+ * @param draftId - The draft ID (UUID) to delete
+ * @returns Promise resolving to success status
+ */
+export async function deleteDraft(draftId: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>("delete_draft", { draftId });
+  } catch (error) {
+    throw new Error(`Failed to delete draft: ${error}`);
+  }
+}
+
+/**
+ * Publish a draft as a document
+ * @param draftId - The draft ID (UUID) to publish
+ * @param serverUrl - The document server URL
+ * @returns Promise resolving to publish result
+ */
+export async function publishDraft(
+  draftId: string,
+  serverUrl: string
+): Promise<PublishResult> {
+  try {
+    return await invoke<PublishResult>("publish_draft", { draftId, serverUrl });
+  } catch (error) {
+    throw new Error(`Failed to publish draft: ${error}`);
   }
 }

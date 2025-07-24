@@ -4,12 +4,12 @@ procs:
     shell: RUST_LOG=info cargo run --profile release-with-debug -p podnet-server
   podnet-identity:
     cwd: ./
-    shell: RUST_LOG=info sleep 1 && cargo run --profile release-with-debug -p podnet-ident-strawman
+    shell: RUST_LOG=info sleep 1 && cargo run --profile release-with-debug -p identity-github
     depends_on:
       - podnet-server
   pod2-client:
     cwd: ./apps/client
-    shell: pnpm tauri dev --release -- -- --set network.document_server=http://localhost:3000 --set network.identity_server=http://localhost:3001
+    shell: pnpm tauri dev --release -- -- --set network.document_server=http://localhost:3000 --set network.identity_server=http://localhost:3001 --set database.name=local.db
   web-packages:
     cwd: ./
     shell: pnpm i && pnpm build --filter='./packages/**' && TURBO_UI=0 pnpm turbo watch build --filter='./packages/**'

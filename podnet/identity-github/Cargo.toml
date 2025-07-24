@@ -1,0 +1,29 @@
+[package]
+name = "identity-github"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace dependencies (shared)
+pod2.workspace = true
+pod-utils.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+hex.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+num-bigint.workspace = true
+axum.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tower-http = { workspace = true, features = ["cors"] }
+rusqlite.workspace = true
+oauth2.workspace = true
+url.workspace = true
+
+# Project-specific dependencies
+rand = "0.9.1"

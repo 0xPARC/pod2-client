@@ -44,8 +44,8 @@ import {
   ImportIcon,
   InboxIcon,
   MessageSquareIcon,
-  SettingsIcon,
-  UploadIcon
+  PencilLineIcon,
+  SettingsIcon
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -210,11 +210,11 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => setCurrentView("publish")}
-                  isActive={currentView === "publish"}
+                  onClick={() => setCurrentView("drafts")}
+                  isActive={currentView === "drafts"}
                 >
-                  <UploadIcon />
-                  Publish
+                  <PencilLineIcon />
+                  Drafts
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

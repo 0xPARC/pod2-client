@@ -10,7 +10,7 @@ members = [
     "pod2-client/db", 
     "apps/client/src-tauri",
     "packages/pod2-node"
-]
+, "podnet/identity-github"]
 
 [workspace.dependencies]
 pod2 = { git = "https://github.com/0xPARC/pod2", rev = "2f0c414542cf091bbf4dbbc9d61535aa55cdefc0", features = [
@@ -54,6 +54,8 @@ tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "env-filter"] }
 reqwest = { version = "0.11", features = ["json"] }
+oauth2 = "4.4"
+url = "2.4"
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git" }
 
 # Common workspace metadata
