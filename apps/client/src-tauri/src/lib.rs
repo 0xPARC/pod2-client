@@ -628,6 +628,10 @@ pub fn run() {
             identity_setup::complete_identity_setup,
             identity_setup::is_setup_completed,
             identity_setup::get_app_setup_state,
+            // GitHub OAuth identity setup commands
+            identity_setup::get_github_auth_url,
+            identity_setup::complete_github_identity_verification,
+            identity_setup::detect_github_oauth_server,
             // Integration commands
             integration::submit_pod_request
         ])

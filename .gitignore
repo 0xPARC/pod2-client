@@ -15,6 +15,7 @@ mprocs.log
 *.secret
 content
 identity-server-keypair.json
+*-keypair.json
 
 # User-specific configuration files
 user.toml
