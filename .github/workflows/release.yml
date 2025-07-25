@@ -153,7 +153,6 @@ jobs:
             - Windows: `podnet-cli.exe --help`
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
           dryRun: ${{ inputs.dry_run }}
 
       - name: Upload CLI binary to release
