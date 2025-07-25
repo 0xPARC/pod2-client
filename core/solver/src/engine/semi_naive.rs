@@ -42,6 +42,7 @@ pub enum FactSource {
     Native(NativeOperation),
     Copy,
     Special,
+    NewEntry,
 }
 
 /// A single, concrete fact, represented as a tuple of values, with its source.

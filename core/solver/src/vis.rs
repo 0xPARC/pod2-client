@@ -77,6 +77,15 @@ pub fn graphviz_dot(proof: &Proof) -> String {
 
         match &node.justification {
             Justification::Fact => {}
+            Justification::NewEntry => {
+                let op_id = format!("op_{}", *op_counter);
+                *op_counter += 1;
+                writeln!(dot, "  {op_id} [label=\"NewEntry\", shape=ellipse, style=filled, fillcolor=lightgrey];").unwrap();
+                let edge = (op_id.clone(), stmt_id.clone());
+                if edges_declared.insert(edge.clone()) {
+                    writeln!(dot, "  {op_id} -> {stmt_id};").unwrap();
+                }
+            }
             Justification::ValueComparison(op) | Justification::Special(op) => {
                 let op_id = format!("op_{}", *op_counter);
                 *op_counter += 1;
@@ -217,6 +226,14 @@ pub fn mermaid_markdown(proof: &Proof) -> String {
 
         match &node.justification {
             Justification::Fact => {}
+            Justification::NewEntry => {
+                let op_id = format!("OP{}", *op_counter);
+                *op_counter += 1;
+                writeln!(md, "  {op_id}(\"NewEntry\");",).unwrap();
+                if edges_declared.insert((op_id.clone(), stmt_id.clone())) {
+                    writeln!(md, "  {op_id} --> {stmt_id};").unwrap();
+                }
+            }
             Justification::ValueComparison(op) => {
                 let op_id = format!("OP{}", *op_counter);
                 *op_counter += 1;

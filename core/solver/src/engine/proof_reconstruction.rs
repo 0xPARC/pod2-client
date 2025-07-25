@@ -5,7 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use pod2::middleware::{
-    AnchoredKey as MWAnchoredKey, CustomPredicateRef, PodId, Predicate, Statement,
+    AnchoredKey as MWAnchoredKey, CustomPredicateRef, NativeOperation, PodId, Predicate, Statement,
     StatementTmplArg, Value, ValueRef, Wildcard,
 };
 
@@ -75,6 +75,10 @@ impl<'a> ProofReconstructor<'a> {
             FactSource::Copy => Arc::new(ProofNode {
                 statement: conclusion,
                 justification: Justification::Fact,
+            }),
+            FactSource::NewEntry => Arc::new(ProofNode {
+                statement: conclusion,
+                justification: Justification::NewEntry,
             }),
             FactSource::Custom => {
                 let key = (pid.clone(), fact.args.clone());

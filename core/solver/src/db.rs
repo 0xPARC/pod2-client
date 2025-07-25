@@ -19,6 +19,7 @@ use pod2::{
     frontend::{MainPod, SignedPod},
     middleware::{
         self, AnchoredKey, Hash, Key, PodId, RawValue, Statement, StatementArg, Value, ValueRef,
+        SELF,
     },
 };
 
@@ -263,10 +264,17 @@ impl FactDB {
     }
 
     pub fn get_pod_ids_with_key(&self, key: &Key) -> HashSet<PodId> {
-        self.key_to_anchored_keys
-            .get(key)
-            .map(|aks| aks.iter().map(|ak| ak.pod_id).collect())
-            .unwrap_or_default()
+        let self_ak = AnchoredKey {
+            pod_id: SELF,
+            key: key.clone(),
+        };
+
+        let existing_aks_iter = self.key_to_anchored_keys.get(key).into_iter().flatten();
+
+        existing_aks_iter
+            .chain(std::iter::once(&self_ak))
+            .map(|ak| ak.pod_id)
+            .collect()
     }
 
     pub fn get_aks_with_key(&self, key: &Key) -> &HashSet<AnchoredKey> {

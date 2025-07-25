@@ -7,8 +7,8 @@ use std::{
 
 use itertools::Itertools;
 use pod2::middleware::{
-    self, AnchoredKey, CustomPredicateRef, Hash, PodId, Predicate, StatementTmplArg, TypedValue,
-    Value, ValueRef,
+    self, AnchoredKey, CustomPredicateRef, Hash, NativePredicate, PodId, Predicate,
+    StatementTmplArg, TypedValue, Value, ValueRef, SELF,
 };
 
 use crate::{
@@ -289,8 +289,25 @@ impl<'a> Materializer {
                         crate::pretty_print::PrettyValueRefVec(&candidate_args),
                         native_pred
                     );
-                    let new_rel = handler.materialize(&candidate_args, &self.db);
-                    rel.extend(new_rel);
+                    // Hack
+                    if *native_pred == NativePredicate::Equal {
+                        if let Some(ValueRef::Key(ak)) = &candidate_args[0] {
+                            if ak.pod_id == SELF {
+                                rel.insert(Fact {
+                                    source: FactSource::NewEntry,
+                                    args: candidate_args
+                                        .clone()
+                                        .into_iter()
+                                        .map(|arg| arg.unwrap())
+                                        .collect(),
+                                });
+                                continue;
+                            }
+                        }
+                    } else {
+                        let new_rel = handler.materialize(&candidate_args, &self.db);
+                        rel.extend(new_rel);
+                    }
                 }
 
                 rel

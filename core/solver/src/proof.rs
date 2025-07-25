@@ -54,6 +54,9 @@ impl ProofNode {
             Justification::Fact => {
                 writeln!(f, "{because_prefix}- by Fact")?;
             }
+            Justification::NewEntry => {
+                writeln!(f, "{because_prefix}- by NewEntry")?;
+            }
             Justification::ValueComparison(op) => {
                 writeln!(f, "{}- by {:?}", because_prefix, *op)?;
             }
@@ -89,6 +92,7 @@ pub enum Justification {
     /// The premises for the custom predicate's body are the child nodes.
     Custom(CustomPredicateRef, Vec<Arc<ProofNode>>),
     Special(NativeOperation),
+    NewEntry,
 }
 
 impl Proof {
@@ -128,6 +132,13 @@ impl Proof {
                 let is_public = public_nodes.contains(&Arc::as_ptr(&node));
 
                 let ops: Vec<Operation> = match &node.justification {
+                    Justification::NewEntry => {
+                        vec![Operation(
+                            OperationType::Native(NativeOperation::NewEntry),
+                            vec![], // TODO extract args from statement
+                            OperationAux::None,
+                        )]
+                    }
                     Justification::Fact => {
                         vec![Operation(
                             OperationType::Native(NativeOperation::CopyStatement),
