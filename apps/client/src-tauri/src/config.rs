@@ -368,11 +368,11 @@ mod tests {
         assert!(!config.network.frogcrypto_server.is_empty());
         assert_eq!(
             config.network.document_server,
-            "https://pod-server.ghost-spica.ts.net/server"
+            "https://pod-server.ghost-spica.ts.net/server-new"
         );
         assert_eq!(
             config.network.identity_server,
-            "https://pod-server.ghost-spica.ts.net/identity"
+            "https://pod-server.ghost-spica.ts.net/identity-new"
         );
         assert_eq!(
             config.network.frogcrypto_server,
