@@ -2,10 +2,18 @@
 js-build:
     pnpm build
 
-# Format all code (JavaScript and Rust)
+# Format and lint all code (JavaScript/TypeScript and Rust)
 format:
+    echo "🎨 Formatting and linting all code..."
+    echo "📄 Formatting JavaScript/TypeScript files..."
     pnpm format
-    cargo fmt
+    echo "🔍 Linting JavaScript/TypeScript files..."
+    pnpm lint
+    echo "🚀 Formatting Rust code..."
+    cargo fmt --all
+    echo "🔧 Linting Rust code..."
+    cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
+    echo "✅ All formatting and linting complete!"
 
 # Client development commands
 # Default: dev mode with release build and staging servers (recommended for most development)
