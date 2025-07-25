@@ -47,8 +47,8 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            path: "pod2_jul_25.db".to_string(),
-            name: "pod2_jul_25.db".to_string(),
+            path: "pod2.db".to_string(),
+            name: "pod2.db".to_string(),
         }
     }
 }
@@ -70,8 +70,8 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            document_server: "https://pod-server.ghost-spica.ts.net/server-new".to_string(),
-            identity_server: "https://pod-server.ghost-spica.ts.net/identity-new".to_string(),
+            document_server: "https://pod-server.ghost-spica.ts.net/server".to_string(),
+            identity_server: "https://pod-server.ghost-spica.ts.net/identity".to_string(),
             frogcrypto_server: "https://frog-server-q36c.onrender.com".to_string(),
             timeout_seconds: 30,
         }
@@ -368,11 +368,11 @@ mod tests {
         assert!(!config.network.frogcrypto_server.is_empty());
         assert_eq!(
             config.network.document_server,
-            "https://pod-server.ghost-spica.ts.net/server-new"
+            "https://pod-server.ghost-spica.ts.net/server"
         );
         assert_eq!(
             config.network.identity_server,
-            "https://pod-server.ghost-spica.ts.net/identity-new"
+            "https://pod-server.ghost-spica.ts.net/identity"
         );
         assert_eq!(
             config.network.frogcrypto_server,
@@ -380,8 +380,8 @@ mod tests {
         );
 
         // Verify other defaults
-        assert_eq!(config.database.path, "pod2_jul_25.db");
-        assert_eq!(config.database.name, "pod2_jul_25.db");
+        assert_eq!(config.database.path, "pod2.db");
+        assert_eq!(config.database.name, "pod2.db");
         assert!(config.features.pod_management);
         assert!(!config.features.p2p);
     }
