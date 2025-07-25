@@ -95,19 +95,6 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
-      - name: Build PodNet CLI
-        run: cargo build --release --bin podnet-cli
-
-      - name: Prepare CLI binary for upload
-        shell: bash
-        run: |
-          mkdir -p cli-dist
-          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            cp target/release/podnet-cli.exe cli-dist/
-          else
-            cp target/release/podnet-cli cli-dist/
-          fi
-
       - name: Build Tauri application
         uses: tauri-apps/tauri-action@v0
         env:
@@ -152,13 +139,3 @@ jobs:
           releaseDraft: true
           prerelease: false
           dryRun: ${{ inputs.dry_run }}
-
-      - name: Upload CLI binary to release
-        if: ${{ !inputs.dry_run }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            cli-dist/podnet-cli*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
