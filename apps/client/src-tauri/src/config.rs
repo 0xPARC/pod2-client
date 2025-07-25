@@ -47,8 +47,8 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            path: "pod2.db".to_string(),
-            name: "pod2.db".to_string(),
+            path: "pod2_jul_25.db".to_string(),
+            name: "pod2_jul_25.db".to_string(),
         }
     }
 }
@@ -380,8 +380,8 @@ mod tests {
         );
 
         // Verify other defaults
-        assert_eq!(config.database.path, "pod2.db");
-        assert_eq!(config.database.name, "pod2.db");
+        assert_eq!(config.database.path, "pod2_jul_25.db");
+        assert_eq!(config.database.name, "pod2_jul_25.db");
         assert!(config.features.pod_management);
         assert!(!config.features.p2p);
     }
