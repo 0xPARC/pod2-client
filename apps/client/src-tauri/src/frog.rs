@@ -26,7 +26,7 @@ use tokio::sync::Mutex;
 use crate::{config::config, AppState};
 
 fn server_url(path: &str) -> String {
-    let domain = config().network.frogcrypto_server.clone();
+    let domain = &config().network.frogcrypto_server;
     format!("{domain}/{path}")
 }
 
@@ -153,10 +153,10 @@ pub async fn request_leaderboard(
         .map_err(|e| e.to_string())
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 struct WorkerData {
     biome: i64,
-    public_key: Point,
+    private_key: SecretKey,
 }
 
 struct WorkerSync {
@@ -175,11 +175,15 @@ impl WorkerSync {
 
 struct FrogSearch {
     kvs: std::collections::HashMap<RawValue, RawValue>,
+    biome: i64,
     max_depth: usize,
     nonce_key: RawValue,
 }
 
 const MAX_TRIES_BEFORE_POLLING: u64 = 1000;
+
+const MINING_ZEROS_NEEDED: u64 = 12;
+const MINING_ZERO_MASK: u64 = !((1 << (64 - MINING_ZEROS_NEEDED)) - 1);
 
 impl FrogSearch {
     fn new(data: &WorkerData) -> Self {
@@ -187,21 +191,22 @@ impl FrogSearch {
         let type_key: RawValue = hash_str(KEY_TYPE).into();
         let type_value: RawValue = (PodType::Signed as i64).into();
         let signer_key: RawValue = hash_str(KEY_SIGNER).into();
-        let signer_value: RawValue = (&TypedValue::PublicKey(data.public_key)).into();
+        let signer_value: RawValue = (&TypedValue::PublicKey(data.private_key.public_key())).into();
         let biome_key: RawValue = hash_str("biome").into();
         let biome_value: RawValue = data.biome.into();
         let nonce_key: RawValue = hash_str("nonce").into();
         let nonce_i64: i64 = OsRng.gen();
-        let seed_value: RawValue = nonce_i64.into();
+        let nonce_value: RawValue = nonce_i64.into();
         kvs.insert(type_key, type_value);
         kvs.insert(signer_key, signer_value);
         kvs.insert(biome_key, biome_value);
-        kvs.insert(nonce_key, seed_value);
+        kvs.insert(nonce_key, nonce_value);
         let max_depth = Params::default().max_depth_mt_containers;
         FrogSearch {
             kvs,
             max_depth,
             nonce_key,
+            biome: data.biome,
         }
     }
 
@@ -212,7 +217,7 @@ impl FrogSearch {
     fn search_one(&mut self) -> bool {
         self.kvs.get_mut(&self.nonce_key).unwrap().0[3].0 += 1;
         let root = self.pod_hash();
-        root.0[0].0 & 0xFFFFFC0000000000 == 0
+        root.0[0].0 & MINING_ZERO_MASK == 0
     }
 
     fn search(&mut self) -> bool {
@@ -222,6 +227,14 @@ impl FrogSearch {
             }
         }
         return false;
+    }
+
+    fn generate_pod(&self, private_key: SecretKey) -> Result<SignedPod, String> {
+        let mut builder = SignedPodBuilder::new(&Default::default());
+        builder.insert("biome", self.biome);
+        builder.insert("nonce", *self.kvs.get(&self.nonce_key).unwrap());
+        let signer = Signer(private_key);
+        builder.sign(&signer).map_err(|e| e.to_string())
     }
 }
 
@@ -243,11 +256,12 @@ pub(crate) fn setup_background_thread<R: Runtime>(app_handle: AppHandle<R>) {
             };
             let worker_data = private_key.map(|sk| WorkerData {
                 biome,
-                public_key: sk.public_key(),
+                private_key: sk,
             });
             let mut worker_data_shared = sync_ui_clone.state.lock().unwrap();
+            let enabled = worker_data.is_some();
             *worker_data_shared = worker_data;
-            if worker_data.is_some() {
+            if enabled {
                 sync_ui_clone.cond.notify_one();
             }
         });
@@ -261,13 +275,36 @@ pub(crate) fn setup_background_thread<R: Runtime>(app_handle: AppHandle<R>) {
             while worker_data_shared.is_none() {
                 worker_data_shared = sync_background.cond.wait(worker_data_shared).unwrap();
             }
-            let worker_data = *worker_data_shared;
+            let worker_data = worker_data_shared.clone();
             drop(worker_data_shared);
             if worker_data != old_worker_data {
-                old_worker_data = worker_data;
+                old_worker_data = worker_data.clone();
                 search = worker_data.as_ref().map(FrogSearch::new);
             }
-            if !search.as_mut().unwrap().search() {
+            let search_ref = search.as_mut().unwrap();
+            if search_ref.search() {
+                match search_ref.generate_pod(worker_data.unwrap().private_key) {
+                    Ok(pod) => {
+                        let app_handle_clone = app_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let state = app_handle_clone.state::<Mutex<AppState>>();
+                            let app_state = state.lock().await;
+                            store::import_pod(
+                                &app_state.db,
+                                &PodData::Signed(Box::new(pod.into())),
+                                None,
+                                "frogs",
+                            )
+                            .await
+                            .map_err(|e| e.to_string())?;
+                            app_handle_clone
+                                .emit("frog-background", format!("Found something in the mines!"))
+                                .map_err(|e| e.to_string())
+                        });
+                    }
+                    Err(e) => log::error!("{e}"),
+                }
+            } else {
                 if let Err(e) = app_handle.emit("frog-background", format!("test message {count}"))
                 {
                     log::error!("{e}");
@@ -312,6 +349,8 @@ fn compute_frog_stats(biome: i64, id: Hash) -> FrogStats {
 
 #[cfg(test)]
 mod test {
+    use std::path::PathBuf;
+
     use pod2::{
         backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
         frontend::SignedPodBuilder,
@@ -319,14 +358,17 @@ mod test {
     };
     use reqwest::Client;
 
-    use crate::frog::{download_frog, FrogSearch, WorkerData};
+    use crate::{
+        config::AppConfig,
+        frog::{download_frog, FrogSearch, WorkerData},
+    };
 
     #[test]
     fn test_pod_hash() {
         let sk = SecretKey::new_rand();
         let biome = 1;
         let search = FrogSearch::new(&WorkerData {
-            public_key: sk.public_key(),
+            private_key: sk.clone(),
             biome,
         });
         let search_id = PodId(search.pod_hash());
@@ -341,6 +383,9 @@ mod test {
     #[ignore]
     #[tokio::test]
     async fn test_request_frog() -> Result<(), String> {
+        let config_file = std::env::var("POD2_CONFIG_FILE").ok().map(PathBuf::from);
+        let config = AppConfig::load_from_file(config_file).unwrap();
+        AppConfig::initialize(config);
         let client = Client::new();
         let private_key = SecretKey::new_rand();
         let response = download_frog(&client, private_key).await?;
