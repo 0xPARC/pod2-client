@@ -180,9 +180,9 @@ struct FrogSearch {
     nonce_key: RawValue,
 }
 
-const MAX_TRIES_BEFORE_POLLING: u64 = 1000;
+const MAX_TRIES_BEFORE_POLLING: u64 = 50000;
 
-const MINING_ZEROS_NEEDED: u64 = 12;
+const MINING_ZEROS_NEEDED: u64 = 18;
 const MINING_ZERO_MASK: u64 = !((1 << (64 - MINING_ZEROS_NEEDED)) - 1);
 
 impl FrogSearch {
@@ -328,7 +328,7 @@ struct FrogStats {
 fn compute_frog_stats(biome: i64, id: Hash) -> FrogStats {
     match biome {
         _ => {
-            let val = id.0[0].0;
+            let val = id.0[1].0;
             let (val, temperament) = val.div_rem_euclid(&7);
             let (val, beauty) = val.div_rem_euclid(&8);
             let (val, intelligence) = val.div_rem_euclid(&8);
