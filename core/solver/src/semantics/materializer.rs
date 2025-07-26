@@ -289,10 +289,14 @@ impl<'a> Materializer {
                         crate::pretty_print::PrettyValueRefVec(&candidate_args),
                         native_pred
                     );
+
+                    let new_rel = handler.materialize(&candidate_args, &self.db);
+                    rel.extend(new_rel);
+
                     // Hack
                     if *native_pred == NativePredicate::Equal {
                         if let Some(ValueRef::Key(ak)) = &candidate_args[0] {
-                            if ak.pod_id == SELF {
+                            if ak.pod_id == SELF && candidate_args[1].is_some() {
                                 rel.insert(Fact {
                                     source: FactSource::NewEntry,
                                     args: candidate_args
@@ -301,12 +305,8 @@ impl<'a> Materializer {
                                         .map(|arg| arg.unwrap())
                                         .collect(),
                                 });
-                                continue;
                             }
                         }
-                    } else {
-                        let new_rel = handler.materialize(&candidate_args, &self.db);
-                        rel.extend(new_rel);
                     }
                 }
 

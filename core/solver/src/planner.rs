@@ -359,39 +359,28 @@ impl Planner {
                         .filter(|&&b| b == Binding::Bound)
                         .count();
 
-                    // Give extra priority to arithmetic predicates that can propagate constraints
-                    if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                    let mut score = bound_args;
+
+                    if let ir::PredicateIdentifier::Normal(Predicate::Native(p)) =
                         &literal.predicate
                     {
-                        let propagated_vars = propagate_arithmetic_constraints(
-                            native_pred,
-                            &currently_bound,
-                            &literal.terms,
-                        );
-                        if !propagated_vars.is_empty() {
-                            // High priority for arithmetic predicates that can bind new variables
-                            return 1000 + bound_args;
+                        // Check if this literal can bind *more* variables via arithmetic.
+                        let arithmetically_bound =
+                            propagate_arithmetic_constraints(p, &currently_bound, &literal.terms);
+                        let new_arithmetic_vars = arithmetically_bound
+                            .difference(&currently_bound)
+                            .collect::<HashSet<_>>();
+                        score += new_arithmetic_vars.len() as usize;
+
+                        // Prefer `Equal` predicates as they are good at generating bindings from EDB.
+                        if *p == NativePredicate::Equal {
+                            score += 3;
                         }
                     }
 
-                    // Also prioritize during the native phase
-                    if picking_native_phase {
-                        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
-                            &literal.predicate
-                        {
-                            let propagated_vars = propagate_arithmetic_constraints(
-                                native_pred,
-                                &currently_bound,
-                                &literal.terms,
-                            );
-                            if !propagated_vars.is_empty() {
-                                // High priority for arithmetic predicates that can bind new variables
-                                return 1000 + bound_args;
-                            }
-                        }
-                    }
-
-                    bound_args
+                    // Penalize literals with more variables overall.
+                    // This is a weak heuristic to prefer simpler literals first.
+                    score
                 })
                 .map(|(i, _)| i);
 

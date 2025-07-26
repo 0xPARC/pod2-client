@@ -5,7 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use pod2::middleware::{
-    AnchoredKey as MWAnchoredKey, CustomPredicateRef, NativeOperation, PodId, Predicate, Statement,
+    AnchoredKey as MWAnchoredKey, CustomPredicateRef, PodId, Predicate, Statement,
     StatementTmplArg, Value, ValueRef, Wildcard,
 };
 

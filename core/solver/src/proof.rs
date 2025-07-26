@@ -133,9 +133,20 @@ impl Proof {
 
                 let ops: Vec<Operation> = match &node.justification {
                     Justification::NewEntry => {
+                        let (StatementArg::Key(ak), StatementArg::Literal(v)) = (
+                            node.statement.args()[0].clone(),
+                            node.statement.args()[1].clone(),
+                        ) else {
+                            panic!(
+                                "NewEntry justification with invalid args: {:?}",
+                                node.statement.args()
+                            );
+                        };
+                        let op_args =
+                            vec![OperationArg::Entry(ak.key.name().to_string(), v.clone())];
                         vec![Operation(
                             OperationType::Native(NativeOperation::NewEntry),
-                            vec![], // TODO extract args from statement
+                            op_args,
                             OperationAux::None,
                         )]
                     }
