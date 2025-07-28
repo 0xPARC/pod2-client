@@ -19,6 +19,7 @@ import {
   listSpaces,
   triggerSync,
   type AppStateData,
+  type FrogPod,
   type PodInfo,
   type PodLists,
   type PodStats,
@@ -55,7 +56,6 @@ interface AppStoreState {
   selectedFolderFilter: FolderFilter;
   selectedPodId: string | null;
   externalPodRequest: string | undefined;
-  frogTimeout: number | null;
   replyToDocumentId: string | null;
 
   // Draft coordination state
@@ -79,6 +79,10 @@ interface AppStoreState {
   executionError: string | null;
   isExecuting: boolean;
   isValidating: boolean;
+
+  // FrogCrypto state
+  frogTimeout: number | null;
+  frogs: FrogPod [];
 
   // Actions
   initialize: () => Promise<void>;

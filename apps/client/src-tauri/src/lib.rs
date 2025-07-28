@@ -1,3 +1,5 @@
+#![feature(test)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;
@@ -680,6 +682,7 @@ pub fn run() {
             // Debug commands
             reset_database,
             // Frog commands
+            frog::list_frogs,
             frog::request_frog,
             frog::request_score,
             frog::request_leaderboard,

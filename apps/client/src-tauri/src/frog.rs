@@ -10,13 +10,16 @@ use pod2::{
         },
         signedpod::Signer,
     },
-    frontend::{SignedPod, SignedPodBuilder},
+    frontend::{SerializedSignedPod, SignedPod, SignedPodBuilder},
     middleware::{
-        hash_fields, hash_str, hash_values, Hash, HashOut, Params, PodType, RawValue, TypedValue,
-        Value, KEY_SIGNER, KEY_TYPE,
+        hash_fields, hash_str, hash_values, Hash, HashOut, Params, PodId, PodType, RawValue,
+        TypedValue, Value, KEY_SIGNER, KEY_TYPE,
     },
 };
-use pod2_db::store::{self, create_space, get_default_private_key, space_exists, PodData};
+use pod2_db::{
+    store::{self, create_space, get_default_private_key, space_exists, PodData, PodInfo},
+    Db,
+};
 use rand::{rngs::OsRng, Rng};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
@@ -74,6 +77,184 @@ async fn download_frog(client: &Client, private_key: SecretKey) -> Result<Respon
         .send()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+pub struct FrogDesc {
+    frog_id: i64,
+    name: String,
+    description: String,
+    image_url: String,
+}
+
+#[derive(Serialize)]
+pub struct FrogData {
+    #[serde(flatten)]
+    desc: FrogDesc,
+    #[serde(flatten)]
+    stats: FrogStats,
+}
+
+#[derive(Serialize)]
+pub struct FrogPod {
+    pod_id: PodId,
+    data: Option<FrogData>,
+}
+
+trait AsTyped {
+    fn as_str(&self) -> Option<&str>;
+    fn as_int(&self) -> Option<i64>;
+}
+
+impl AsTyped for Value {
+    fn as_str(&self) -> Option<&str> {
+        match self.typed() {
+            TypedValue::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn as_int(&self) -> Option<i64> {
+        match self.typed() {
+            TypedValue::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
+fn frog_data_for(pod: &SignedPod, desc: &SignedPod) -> Option<FrogData> {
+    let frog_id = desc.get("frog_id")?.as_int()?;
+    let name = desc.get("name")?.as_str()?.to_owned();
+    let description = desc.get("description")?.as_str()?.to_owned();
+    let image_url = desc.get("image_url")?.as_str()?.to_owned();
+    let desc = FrogDesc {
+        frog_id,
+        name,
+        description,
+        image_url,
+    };
+    let stats = compute_frog_stats(frog_id, pod.id().0);
+    Some(FrogData { desc, stats })
+}
+
+#[tauri::command]
+pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod>, String> {
+    let app_state = state.lock().await;
+    let frog_pods = frog_pods(&app_state.db).await?;
+    let frog_descs = description_pods(&app_state.db).await?;
+    let frogs = frog_pods
+        .into_iter()
+        .map(|pod| {
+            let desc = description_for(&pod, &frog_descs);
+            let data = desc.and_then(|d| frog_data_for(&pod, d));
+            FrogPod {
+                pod_id: pod.id(),
+                data,
+            }
+        })
+        .collect();
+    Ok(frogs)
+}
+
+async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> Result<(), String> {
+    if !space_exists(&app_state.db, space)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        create_space(&app_state.db, space)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    store::import_pod(
+        &app_state.db,
+        &PodData::Signed(Box::new(pod.into())),
+        None,
+        space,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    app_state.trigger_state_sync().await
+}
+
+fn as_signed(pod: &PodInfo) -> Option<&SerializedSignedPod> {
+    match &pod.data {
+        PodData::Signed(p) => Some(p),
+        PodData::Main(_) => None,
+    }
+}
+
+fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
+    match pod.data {
+        PodData::Signed(p) => Some(*p),
+        PodData::Main(_) => None,
+    }
+}
+
+fn description_for<'a>(frog: &'_ SignedPod, descs: &'a [SignedPod]) -> Option<&'a SignedPod> {
+    let biome = frog.get("biome")?;
+    let id = frog.id().0 .0[0].0;
+    for desc in descs {
+        if desc.get("biome") == Some(biome) {
+            let RawValue([lo, hi, _, _]) = desc.get("seed_range")?.raw();
+            if id >= lo.0 && id <= hi.0 {
+                return Some(desc);
+            }
+        }
+    }
+    None
+}
+
+async fn frog_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
+    store::list_pods(db, "frogs")
+        .await
+        .map(|infos| {
+            infos
+                .into_iter()
+                .filter_map(|info| SignedPod::try_from(as_signed_owned(info)?).ok())
+                .collect()
+        })
+        .map_err(|e| e.to_string())
+}
+
+async fn description_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
+    store::list_pods(db, "frog-descriptions")
+        .await
+        .map(|infos| {
+            infos
+                .into_iter()
+                .filter_map(|info| SignedPod::try_from(as_signed_owned(info)?).ok())
+                .collect()
+        })
+        .map_err(|e| e.to_string())
+}
+
+async fn request_frog_description(pod: SignedPod, app_handle: AppHandle) -> Result<(), String> {
+    let client = Client::new();
+    let url = server_url("desc");
+    let desc: SignedPod = client
+        .post(&url)
+        .json(&pod)
+        .send()
+        .await
+        .map_err(connection_failed)?
+        .json()
+        .await
+        .map_err(connection_failed)?;
+    let state = app_handle.state::<Mutex<AppState>>();
+    let mut app_state = state.lock().await;
+    register_pod(&mut app_state, desc, "frog-descriptions").await
+}
+
+async fn register_frog(app_state: &mut AppState, pod: SignedPod) -> Result<(), String> {
+    let frog_descriptions = description_pods(&app_state.db).await?;
+    if description_for(&pod, &frog_descriptions).is_none() {
+        tauri::async_runtime::spawn(request_frog_description(
+            pod.clone(),
+            app_state.app_handle.clone(),
+        ));
+    }
+    register_pod(app_state, pod, "frogs").await?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -186,7 +367,7 @@ const MINING_ZEROS_NEEDED: u64 = 18;
 const MINING_ZERO_MASK: u64 = !((1 << (64 - MINING_ZEROS_NEEDED)) - 1);
 
 impl FrogSearch {
-    fn new(data: &WorkerData) -> Self {
+    pub fn new(data: &WorkerData) -> Self {
         let mut kvs = std::collections::HashMap::new();
         let type_key: RawValue = hash_str(KEY_TYPE).into();
         let type_value: RawValue = (PodType::Signed as i64).into();
@@ -220,13 +401,13 @@ impl FrogSearch {
         root.0[0].0 & MINING_ZERO_MASK == 0
     }
 
-    fn search(&mut self) -> bool {
+    pub fn search(&mut self) -> bool {
         for _ in 0..MAX_TRIES_BEFORE_POLLING {
             if self.search_one() {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn generate_pod(&self, private_key: SecretKey) -> Result<SignedPod, String> {
@@ -238,7 +419,7 @@ impl FrogSearch {
     }
 }
 
-pub(crate) fn setup_background_thread<R: Runtime>(app_handle: AppHandle<R>) {
+pub(crate) fn setup_background_thread(app_handle: AppHandle) {
     let sync_ui = Arc::new(WorkerSync::new());
     let sync_background = sync_ui.clone();
     let app_handle_clone = app_handle.clone();
@@ -288,36 +469,29 @@ pub(crate) fn setup_background_thread<R: Runtime>(app_handle: AppHandle<R>) {
                         let app_handle_clone = app_handle.clone();
                         tauri::async_runtime::spawn(async move {
                             let state = app_handle_clone.state::<Mutex<AppState>>();
-                            let app_state = state.lock().await;
-                            store::import_pod(
-                                &app_state.db,
-                                &PodData::Signed(Box::new(pod.into())),
-                                None,
-                                "frogs",
-                            )
-                            .await
-                            .map_err(|e| e.to_string())?;
+                            let mut app_state = state.lock().await;
+                            register_frog(&mut app_state, pod)
+                                .await
+                                .map_err(|e| e.to_string())?;
                             app_handle_clone
-                                .emit("frog-background", format!("Found something in the mines!"))
+                                .emit("frog-alert", format!("Found something in the mines!"))
                                 .map_err(|e| e.to_string())
                         });
                     }
                     Err(e) => log::error!("{e}"),
                 }
             } else {
-                if let Err(e) = app_handle.emit("frog-background", format!("test message {count}"))
-                {
+                count += 50;
+                if let Err(e) = app_handle.emit("frog-background", count) {
                     log::error!("{e}");
-                } else {
-                    count += 1;
                 }
             }
         }
     });
 }
 
-struct FrogStats {
-    frog_id: u64,
+#[derive(Serialize)]
+pub struct FrogStats {
     jump: u64,
     speed: u64,
     intelligence: u64,
@@ -325,18 +499,26 @@ struct FrogStats {
     temperament: u64,
 }
 
-fn compute_frog_stats(biome: i64, id: Hash) -> FrogStats {
-    match biome {
+const DEFAULT_TEMPERAMENTS: [u64; 7] = [2, 3, 4, 7, 10, 16, 18];
+
+fn compute_frog_stats(frog_id: i64, id: Hash) -> FrogStats {
+    let val = id.0[1].0;
+    match frog_id {
+        81..=90 => FrogStats {
+            jump: 0,
+            speed: 0,
+            intelligence: 0,
+            beauty: val.rem_euclid(8) + 8,
+            temperament: 1,
+        },
         _ => {
-            let val = id.0[1].0;
-            let (val, temperament) = val.div_rem_euclid(&7);
+            let (val, temperament_index) = val.div_rem_euclid(&7);
+            let temperament = DEFAULT_TEMPERAMENTS[temperament_index as usize];
             let (val, beauty) = val.div_rem_euclid(&8);
             let (val, intelligence) = val.div_rem_euclid(&8);
             let (val, speed) = val.div_rem_euclid(&8);
-            let (val, jump) = val.div_rem_euclid(&8);
-            let frog_id = val % 40 + 1;
+            let jump = val.rem_euclid(8);
             FrogStats {
-                frog_id,
                 jump,
                 speed,
                 intelligence,
@@ -362,6 +544,8 @@ mod test {
         config::AppConfig,
         frog::{download_frog, FrogSearch, WorkerData},
     };
+
+    extern crate test;
 
     #[test]
     fn test_pod_hash() {
