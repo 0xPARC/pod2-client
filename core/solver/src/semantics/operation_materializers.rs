@@ -22,7 +22,8 @@ use crate::{
 /// Each variant corresponds directly to a NativeOperation type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperationMaterializer {
-    // Core native operations
+    // Core native operations. This mirrors NativeOperation, but allows us to defer
+    // supporting new operations until we have working implementations.
     None,
     NewEntry,
     CopyStatement,
@@ -38,12 +39,9 @@ pub enum OperationMaterializer {
     ProductOf,
     MaxOf,
     HashOf,
-    // Note: Syntactic sugar operations (DictContains, etc.) are handled by
-    // the frontend compiler and don't need materializers
 }
 
 impl OperationMaterializer {
-    /// Returns the OperationType that this materializer produces
     pub fn operation_type(&self) -> OperationType {
         let native_op = match self {
             Self::None => NativeOperation::None,
@@ -87,16 +85,16 @@ impl OperationMaterializer {
             NativePredicate::ProductOf => &[Self::ProductOf, Self::CopyStatement],
             NativePredicate::MaxOf => &[Self::MaxOf, Self::CopyStatement],
             NativePredicate::HashOf => &[Self::HashOf, Self::CopyStatement],
-            // Syntactic sugar predicates are handled by frontend compiler
             NativePredicate::None => &[Self::None],
             NativePredicate::False => &[], // No operations can produce False
-            NativePredicate::DictContains => &[], // Syntactic sugar
-            NativePredicate::DictNotContains => &[], // Syntactic sugar
-            NativePredicate::SetContains => &[], // Syntactic sugar
-            NativePredicate::SetNotContains => &[], // Syntactic sugar
-            NativePredicate::ArrayContains => &[], // Syntactic sugar
-            NativePredicate::Gt => &[],    // Syntactic sugar
-            NativePredicate::GtEq => &[],  // Syntactic sugar
+            // Syntactic sugar predicates are transformed by frontend compiler, so we don't need materializers for them.
+            NativePredicate::DictContains => &[],
+            NativePredicate::DictNotContains => &[],
+            NativePredicate::SetContains => &[],
+            NativePredicate::SetNotContains => &[],
+            NativePredicate::ArrayContains => &[],
+            NativePredicate::Gt => &[],
+            NativePredicate::GtEq => &[],
         }
     }
 
@@ -142,14 +140,16 @@ impl OperationMaterializer {
 
 // Individual materializer functions
 // Each function contains both precondition checks and materialization logic
+//
+// Three categories of operations:
+// 1. VALUE-BASED COMPUTATIONS: Compare resolved values (e.g., EqualFromEntries, LtFromEntries)
+// 2. STATEMENT COPYING: Look up existing statements (CopyStatement)
+// 3. STATEMENT DERIVATIONS: Derive new statements from existing ones (e.g., LtToNotEqual, TransitiveEqualFromStatements)
 
 fn materialize_none(_args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
     // None operation doesn't materialize any facts
     None
 }
-
-// TODO: Implement remaining materializer functions
-// These will be extracted from the current PredicateHandler implementations
 
 fn materialize_new_entry(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
     // NewEntry operation only applies to Equal statements where first arg is SELF-referencing
@@ -421,21 +421,30 @@ fn materialize_transitive_equal_from_statements(
     }
 }
 
-fn materialize_lt_to_not_equal(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
+fn materialize_lt_to_not_equal(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
     if args.len() != 2 {
         return None;
     }
 
-    let (_vr0, _vr1) = match (&args[0], &args[1]) {
+    let (vr0, vr1) = match (&args[0], &args[1]) {
         (Some(vr0), Some(vr1)) => (vr0, vr1),
         _ => return None, // Both args must be bound
     };
 
-    // Lt -> NotEqual can only be derived if Lt statement already exists,
-    // but we can't check that here since only CopyStatement does lookups.
-    // This operation requires special handling or should be handled differently.
-    // For now, return None - this may need architectural reconsideration.
-    None
+    // LtToNotEqual is a statement derivation operation: Lt(A,B) → NotEqual(A,B)
+    // We need to check if Lt(A,B) exists to derive NotEqual(A,B)
+    if let Some(index) = db.get_binary_statement_index(&NativePredicate::Lt) {
+        if index.contains_key(&[vr0.clone(), vr1.clone()]) {
+            Some(Fact {
+                source: FactSource::Native(NativeOperation::LtToNotEqual),
+                args: vec![vr0.clone(), vr1.clone()],
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 fn materialize_contains_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
