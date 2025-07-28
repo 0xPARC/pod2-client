@@ -270,8 +270,9 @@ impl<'a> Materializer {
                     self.candidate_statement_args_from_bindings(&args, bindings);
 
                 // For each candidate argument combination, try each materializer
+                // Materializers are already restricted to those which can produce this predicate type
                 for candidate_args in candidate_args_iter {
-                    log::info!(
+                    log::debug!(
                         "Materializing {} for {:?}",
                         crate::pretty_print::PrettyValueRefVec(&candidate_args),
                         native_pred
@@ -292,18 +293,6 @@ impl<'a> Materializer {
                 unimplemented!("BatchSelf is not implemented")
             }
         };
-
-        // Conditional DEBUG log for empty results to help debug materialization failures
-        if let Predicate::Custom(_cpr) = &predicate {
-            log::debug!(
-                "{}",
-                crate::pretty_print::PrettyMaterializationResult {
-                    predicate: &crate::ir::PredicateIdentifier::Normal(predicate.clone()),
-                    bindings,
-                    result_count: rel.len(),
-                }
-            );
-        }
 
         Ok(rel)
     }
