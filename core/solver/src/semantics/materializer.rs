@@ -7,15 +7,15 @@ use std::{
 
 use itertools::Itertools;
 use pod2::middleware::{
-    self, AnchoredKey, CustomPredicateRef, Hash, NativePredicate, PodId, Predicate,
-    StatementTmplArg, TypedValue, Value, ValueRef, SELF,
+    self, AnchoredKey, CustomPredicateRef, Hash, PodId, Predicate, StatementTmplArg, TypedValue,
+    Value, ValueRef,
 };
 
 use crate::{
     db::FactDB,
     engine::semi_naive::{Bindings, Fact, FactSource, Relation},
     error::SolverError,
-    semantics::predicates::PredicateHandler,
+    semantics::operation_materializers::OperationMaterializer,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -261,28 +261,15 @@ impl<'a> Materializer {
             Predicate::Native(native_pred) => {
                 let mut rel = Relation::new();
 
-                // At this point, our binding vector can contain, in each slot:
-                // - Nothing (None)
-                // - A ValueRef resolving to an anchored key
-                // - A Value
-                //
-                // From this, we can look up existing statements that match the pattern.
-                // For example, Equal(?a["foo"], ?b["bar"]) will match a statement which
-                // has those keys in those positions. If ?a and ?b are unbound, then we
-                // will find all such statements. After doing so, we need to check that
-                // the statements are true! If values for both anchored keys are known,
-                // then we can do a value comparison. If not, then we can try other
-                // strategies:
-                // - If a matching statement exists in the DB, we can copy it
-                // - For Equal, we can also attempt to construct a transitive equality
-                //   path
+                // Get all operation materializers that can produce this predicate type
+                let materializers =
+                    OperationMaterializer::materializers_for_predicate(*native_pred);
 
+                // Generate candidate argument combinations based on bindings
                 let candidate_args_iter =
                     self.candidate_statement_args_from_bindings(&args, bindings);
 
-                // Ok, now we have our candidate args. We need to dispatch to the handler.
-                let handler = PredicateHandler::for_native_predicate(*native_pred);
-
+                // For each candidate argument combination, try each materializer
                 for candidate_args in candidate_args_iter {
                     log::info!(
                         "Materializing {} for {:?}",
@@ -290,22 +277,9 @@ impl<'a> Materializer {
                         native_pred
                     );
 
-                    let new_rel = handler.materialize(&candidate_args, &self.db);
-                    rel.extend(new_rel);
-
-                    // Hack
-                    if *native_pred == NativePredicate::Equal {
-                        if let Some(ValueRef::Key(ak)) = &candidate_args[0] {
-                            if ak.pod_id == SELF && candidate_args[1].is_some() {
-                                rel.insert(Fact {
-                                    source: FactSource::NewEntry,
-                                    args: candidate_args
-                                        .clone()
-                                        .into_iter()
-                                        .map(|arg| arg.unwrap())
-                                        .collect(),
-                                });
-                            }
+                    for materializer in materializers {
+                        if let Some(fact) = materializer.materialize(&candidate_args, &self.db) {
+                            rel.insert(fact);
                         }
                     }
                 }
