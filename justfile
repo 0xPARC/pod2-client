@@ -35,6 +35,39 @@ client-dev-prod:
 client-build:
     cd apps/client && pnpm tauri build
 
+# Release management
+release VERSION:
+    #!/bin/bash
+    set -e
+    echo "🚀 Starting release process for version {{VERSION}}..."
+    
+    # Check for clean working directory
+    if [[ -n $(git status --porcelain) ]]; then
+        echo "❌ Error: You have unstaged changes. Please commit or stash them before releasing."
+        echo ""
+        echo "Unstaged changes:"
+        git status --short
+        exit 1
+    fi
+    
+    # Run version bump script
+    ./scripts/bump-version.sh {{VERSION}}
+    
+    # Stage all changes
+    git add -A
+    
+    # Commit version changes
+    git commit -m "Bump version to {{VERSION}}"
+    
+    # Create git tag
+    git tag v{{VERSION}}
+    
+    echo "✅ Release {{VERSION}} tagged successfully!"
+    echo ""
+    echo "Next steps:"
+    echo "  just client-build  # Build the release"
+    echo "  git push origin main --tags  # Push to remote"
+
 # Server management commands
 # Run both document and identity servers locally (for client-dev-local)
 servers-local:
