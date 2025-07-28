@@ -682,6 +682,8 @@ pub fn run() {
             // Debug commands
             reset_database,
             // Frog commands
+            frog::fix_frog_descriptions,
+            frog::get_frogedex,
             frog::list_frogs,
             frog::request_frog,
             frog::request_score,

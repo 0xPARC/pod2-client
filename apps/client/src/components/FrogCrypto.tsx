@@ -3,7 +3,7 @@ import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
 import { Leaderboard } from "./Leaderboard";
 import { Button } from "./ui/button";
-import { requestScore } from "@/lib/rpc";
+import { requestScore, fixFrogDescriptions } from "@/lib/rpc";
 import { useEffect } from "react";
 
 enum View {
@@ -54,6 +54,14 @@ export function FrogCrypto() {
           leaderboard
         </Button>
       </div>
+      <Button
+        className="max-w-48"
+        variant="outline"
+        onClick={() => fixFrogDescriptions()}
+      >
+        reload frog descriptions
+      </Button>
+
       {frogView && <FrogViewer setScore={setScore} />}
       {frogedexView && <Frogedex />}
       {leaderboardView && <Leaderboard />}

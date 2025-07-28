@@ -3,7 +3,13 @@ import { useAppStore } from "../lib/store";
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { requestFrog, requestScore, listFrogs, FrogPod, FrogData } from "@/lib/rpc";
+import {
+  requestFrog,
+  requestScore,
+  listFrogs,
+  FrogPod,
+  FrogData
+} from "@/lib/rpc";
 import { toast } from "sonner";
 import {
   Collapsible,
@@ -40,8 +46,15 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   const { setFrogTimeout, frogTimeout } = useAppStore();
 
   const [time, setTime] = useState(new Date().getTime());
-  const [frogs, setFrogs] = useState<FrogPod []>([]);
+  const [frogs, setFrogs] = useState<FrogPod[]>([]);
   const [hashesChecked, setHashesChecked] = useState("");
+
+  async function updateFrogs() {
+    try {
+      const frogList = await listFrogs();
+      setFrogs(frogList);
+    } catch (e) {}
+  }
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date().getTime()), 1000);
@@ -51,12 +64,6 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   }, []);
 
   useEffect(() => {
-    async function updateFrogs() {
-      try {
-        const frogList = await listFrogs();
-        setFrogs(frogList);
-      } catch (e) {}
-    }
     updateFrogs();
   }, []);
 
@@ -84,7 +91,6 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   }, []);
 
   useEffect(() => {
-
     const unlisten = listen("frog-alert", (event) => {
       toast(event.payload as string);
     });
@@ -95,15 +101,24 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   }, []);
 
   useEffect(() => {
-
     const unlisten = listen("frog-background", (event) => {
-      setHashesChecked(`${event.payload}K hashes checked`)
+      setHashesChecked(`${event.payload}K hashes checked`);
     });
 
     return () => {
       unlisten.then((f) => f());
     };
-  }, []);  
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen("refresh-frogs", () => {
+      updateFrogs();
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   const toggleMining = async (b: boolean) => {
     await emit("toggle-mining", b);
@@ -128,11 +143,9 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
           Search SWAMP {searchButtonWaitText}
         </Button>
         <div className="py-4">
-        <label htmlFor="mining">
-          Mining enabled
-        </label>
-        <Switch id="mining" onCheckedChange={toggleMining} />
-        {hashesChecked}
+          <label htmlFor="mining">Mining enabled</label>
+          <Switch id="mining" onCheckedChange={toggleMining} />
+          {hashesChecked}
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -165,18 +178,16 @@ function FrogCard({ pod }: FrogCardProps) {
 
   const haveDesc = pod.data != null;
 
-  console.log(pod);
-
   return (
-    <Card
-      className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm"
-    >
+    <Card className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm">
       <CardContent className="p-3 flex flex-col text-center justify-center items-center">
         <div className="space-y-2">
-          {haveDesc && <img
-            src={(pod.data as FrogData).image_url}
-            className="max-w-xs"
-          ></img>}
+          {haveDesc && (
+            <img
+              src={(pod.data as FrogData).image_url}
+              className="max-w-xs"
+            ></img>
+          )}
           <h2>{(pod.data?.name ?? "???").toUpperCase()}</h2>
         </div>
         <div>
@@ -201,14 +212,16 @@ function FrogCard({ pod }: FrogCardProps) {
             </tbody>
           </table>
         </div>
-        {haveDesc && <Collapsible open={expanded} onOpenChange={setExpanded}>
-          <CollapsibleTrigger asChild>
-            {expanded ? <span>Collapse</span> : <span>See more</span>}
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            {(pod.data as FrogData).description}
-          </CollapsibleContent>
-        </Collapsible>}
+        {haveDesc && (
+          <Collapsible open={expanded} onOpenChange={setExpanded}>
+            <CollapsibleTrigger asChild>
+              {expanded ? <span>Collapse</span> : <span>See more</span>}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {(pod.data as FrogData).description}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </CardContent>
     </Card>
   );

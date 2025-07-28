@@ -174,6 +174,21 @@ export async function listFrogs(): RpcResult<FrogPod[]> {
   return invokeCommand<FrogPod[]>("list_frogs");
 }
 
+export interface FrogedexEntry {
+  frog_id: number;
+  rarity: number;
+  name: string;
+  image_url: string;
+}
+
+export async function getFrogedex(): RpcResult<FrogedexEntry[]> {
+  return invokeCommand<FrogedexEntry[]>("get_frogedex");
+}
+
+export async function fixFrogDescriptions(): RpcResult<FrogPod[]> {
+  return invokeCommand<FrogPod[]>("fix_frog_descriptions");
+}
+
 export interface ScoreResponse {
   score: number;
   timeout: number;
