@@ -278,7 +278,9 @@ impl<'a> Materializer {
                     );
 
                     for materializer in materializers {
-                        if let Some(fact) = materializer.materialize(&candidate_args, &self.db) {
+                        if let Some(fact) =
+                            materializer.materialize(&candidate_args, &self.db, *native_pred)
+                        {
                             rel.insert(fact);
                         }
                     }

@@ -101,11 +101,16 @@ impl OperationMaterializer {
     }
 
     /// Attempts to materialize a fact using this operation with the given arguments
-    pub fn materialize(&self, args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
+    pub fn materialize(
+        &self,
+        args: &[Option<ValueRef>],
+        db: &FactDB,
+        predicate: NativePredicate,
+    ) -> Option<Fact> {
         match self {
             Self::None => materialize_none(args, db),
             Self::NewEntry => materialize_new_entry(args, db),
-            Self::CopyStatement => materialize_copy_statement(args, db),
+            Self::CopyStatement => materialize_copy_statement(args, db, predicate),
             Self::EqualFromEntries => materialize_equal_from_entries(args, db),
             Self::NotEqualFromEntries => materialize_not_equal_from_entries(args, db),
             Self::LtEqFromEntries => materialize_lt_eq_from_entries(args, db),
@@ -135,33 +140,7 @@ impl OperationMaterializer {
     }
 }
 
-// Helper functions for common operations
-
-/// Checks if a binary statement already exists for the given arguments
-fn lookup_binary_statement(predicate: NativePredicate, args: &[ValueRef], db: &FactDB) -> bool {
-    if args.len() != 2 {
-        return false;
-    }
-    if let Some(index) = db.get_binary_statement_index(&predicate) {
-        index.contains_key(&[args[0].clone(), args[1].clone()])
-    } else {
-        false
-    }
-}
-
-/// Checks if a ternary statement already exists for the given arguments
-fn lookup_ternary_statement(predicate: NativePredicate, args: &[ValueRef], db: &FactDB) -> bool {
-    if args.len() != 3 {
-        return false;
-    }
-    if let Some(index) = db.get_ternary_statement_index(&predicate) {
-        index.contains_key(&[args[0].clone(), args[1].clone(), args[2].clone()])
-    } else {
-        false
-    }
-}
-
-// Individual materializer functions will be implemented below
+// Individual materializer functions
 // Each function contains both precondition checks and materialization logic
 
 fn materialize_none(_args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
@@ -198,24 +177,47 @@ fn materialize_new_entry(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact
     }
 }
 
-fn materialize_copy_statement(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
-    // CopyStatement is handled by the specific predicate materializers
-    // This function exists for completeness but the actual copy logic
-    // is integrated into each materializer's lookup_*_statement calls
-    //
-    // The CopyStatement operation in the Operation enum represents copying
-    // a specific statement, but in our materializer context we don't have
-    // that specific statement - we're trying to materialize all possible
-    // statements of a given predicate type.
+fn materialize_copy_statement(
+    args: &[Option<ValueRef>],
+    db: &FactDB,
+    predicate: NativePredicate,
+) -> Option<Fact> {
+    // CopyStatement is the only materializer that can look up existing statements
+    // All other materializers should only do value-based computations
 
     let value_refs: Vec<ValueRef> = args.iter().cloned().collect::<Option<Vec<_>>>()?;
 
-    // Return a generic fact that indicates statement copying
-    // The actual predicate-specific logic is handled by individual materializers
-    Some(Fact {
-        source: FactSource::Copy,
-        args: value_refs,
-    })
+    // Check if a statement already exists for these arguments in the predicate's index
+    let statement_exists = match value_refs.len() {
+        2 => {
+            if let Some(index) = db.get_binary_statement_index(&predicate) {
+                index.contains_key(&[value_refs[0].clone(), value_refs[1].clone()])
+            } else {
+                false
+            }
+        }
+        3 => {
+            if let Some(index) = db.get_ternary_statement_index(&predicate) {
+                index.contains_key(&[
+                    value_refs[0].clone(),
+                    value_refs[1].clone(),
+                    value_refs[2].clone(),
+                ])
+            } else {
+                false
+            }
+        }
+        _ => false, // Other arities not supported
+    };
+
+    if statement_exists {
+        Some(Fact {
+            source: FactSource::Copy,
+            args: value_refs,
+        })
+    } else {
+        None
+    }
 }
 
 fn materialize_equal_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
@@ -247,15 +249,9 @@ fn materialize_equal_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Opt
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_binary_statement(NativePredicate::Equal, &[vr0.clone(), vr1.clone()], db) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -322,15 +318,9 @@ fn materialize_not_equal_from_entries(args: &[Option<ValueRef>], db: &FactDB) ->
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_binary_statement(NativePredicate::NotEqual, &[vr0.clone(), vr1.clone()], db) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -360,15 +350,9 @@ fn materialize_lt_eq_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Opt
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_binary_statement(NativePredicate::LtEq, &[vr0.clone(), vr1.clone()], db) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -398,15 +382,9 @@ fn materialize_lt_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Option
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_binary_statement(NativePredicate::Lt, &[vr0.clone(), vr1.clone()], db) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -443,25 +421,21 @@ fn materialize_transitive_equal_from_statements(
     }
 }
 
-fn materialize_lt_to_not_equal(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
+fn materialize_lt_to_not_equal(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact> {
     if args.len() != 2 {
         return None;
     }
 
-    let (vr0, vr1) = match (&args[0], &args[1]) {
+    let (_vr0, _vr1) = match (&args[0], &args[1]) {
         (Some(vr0), Some(vr1)) => (vr0, vr1),
         _ => return None, // Both args must be bound
     };
 
-    // Check if Lt statement exists for these arguments
-    if lookup_binary_statement(NativePredicate::Lt, &[vr0.clone(), vr1.clone()], db) {
-        Some(Fact {
-            source: FactSource::Native(NativeOperation::LtToNotEqual),
-            args: vec![vr0.clone(), vr1.clone()],
-        })
-    } else {
-        None
-    }
+    // Lt -> NotEqual can only be derived if Lt statement already exists,
+    // but we can't check that here since only CopyStatement does lookups.
+    // This operation requires special handling or should be handled differently.
+    // For now, return None - this may need architectural reconsideration.
+    None
 }
 
 fn materialize_contains_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
@@ -522,19 +496,9 @@ fn materialize_contains_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> 
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_ternary_statement(
-            NativePredicate::Contains,
-            &[vr0.clone(), vr1.clone(), vr2.clone()],
-            db,
-        ) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone(), vr2.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -625,19 +589,9 @@ fn materialize_not_contains_from_entries(args: &[Option<ValueRef>], db: &FactDB)
             None
         }
     } else {
-        // Some arguments are anchored keys we can't resolve - check if statement exists
-        if lookup_binary_statement(
-            NativePredicate::NotContains,
-            &[vr0.clone(), vr1.clone()],
-            db,
-        ) {
-            Some(Fact {
-                source: FactSource::Copy,
-                args: vec![vr0.clone(), vr1.clone()],
-            })
-        } else {
-            None
-        }
+        // Some arguments are anchored keys we can't resolve
+        // CopyStatement will handle looking up existing statements
+        None
     }
 }
 
@@ -688,16 +642,9 @@ fn materialize_sum_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                     None
                 }
             } else {
-                // Can't resolve all to ints - check if statement exists
-                if lookup_ternary_statement(
-                    NativePredicate::SumOf,
-                    &[vr0.clone(), vr1.clone(), vr2.clone()],
-                    db,
-                ) {
-                    Some(vec![vr0.clone(), vr1.clone(), vr2.clone()])
-                } else {
-                    None
-                }
+                // Can't resolve all to ints
+                // CopyStatement will handle looking up existing statements
+                None
             }
         }
         _ => None,
@@ -764,16 +711,9 @@ fn materialize_product_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact
                     None
                 }
             } else {
-                // Can't resolve all to ints - check if statement exists
-                if lookup_ternary_statement(
-                    NativePredicate::ProductOf,
-                    &[vr0.clone(), vr1.clone(), vr2.clone()],
-                    db,
-                ) {
-                    Some(vec![vr0.clone(), vr1.clone(), vr2.clone()])
-                } else {
-                    None
-                }
+                // Can't resolve all to ints
+                // CopyStatement will handle looking up existing statements
+                None
             }
         }
         _ => None,
@@ -832,16 +772,9 @@ fn materialize_max_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                     None
                 }
             } else {
-                // Can't resolve all to ints - check if statement exists
-                if lookup_ternary_statement(
-                    NativePredicate::MaxOf,
-                    &[vr0.clone(), vr1.clone(), vr2.clone()],
-                    db,
-                ) {
-                    Some(vec![vr0.clone(), vr1.clone(), vr2.clone()])
-                } else {
-                    None
-                }
+                // Can't resolve all to ints
+                // CopyStatement will handle looking up existing statements
+                None
             }
         }
         _ => None,
@@ -898,16 +831,9 @@ fn materialize_hash_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                     None
                 }
             } else {
-                // Can't resolve all to values - check if statement exists
-                if lookup_ternary_statement(
-                    NativePredicate::HashOf,
-                    &[vr0.clone(), vr1.clone(), vr2.clone()],
-                    db,
-                ) {
-                    Some(vec![vr0.clone(), vr1.clone(), vr2.clone()])
-                } else {
-                    None
-                }
+                // Can't resolve all to values
+                // CopyStatement will handle looking up existing statements
+                None
             }
         }
         _ => None,

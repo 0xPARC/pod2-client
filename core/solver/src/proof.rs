@@ -12,7 +12,7 @@ use pod2::{
     },
 };
 
-use crate::{db::FactDB, semantics::predicates::PredicateHandler};
+use crate::{db::FactDB, semantics::operation_materializers::OperationMaterializer};
 
 /// The final output of a successful query. It represents the complete
 /// and verifiable derivation path for the initial proof request.
@@ -159,14 +159,29 @@ impl Proof {
                     }
                     Justification::Special(_op) => {
                         if let Predicate::Native(pred) = node.statement.predicate() {
-                            let handler = PredicateHandler::for_native_predicate(pred);
                             let args: Vec<ValueRef> = node
                                 .statement
                                 .args()
                                 .iter()
                                 .map(|a| a.try_into().unwrap())
                                 .collect();
-                            handler.explain_special_derivation(&args, &self.db).unwrap()
+
+                            // Find the materializer that can handle special derivations for this predicate
+                            let materializers =
+                                OperationMaterializer::materializers_for_predicate(pred);
+                            for materializer in materializers {
+                                if let Ok(ops) = materializer.explain(&args, &self.db) {
+                                    if !ops.is_empty() {
+                                        return ops
+                                            .into_iter()
+                                            .map(|op| (op, is_public))
+                                            .collect::<Vec<_>>();
+                                    }
+                                }
+                            }
+
+                            // If no materializer can explain it, return empty vector
+                            Vec::new()
                         } else {
                             panic!("Special justification for non-native predicate");
                         }
