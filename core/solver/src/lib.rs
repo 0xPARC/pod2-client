@@ -142,9 +142,9 @@ mod tests {
         examples::{
             attest_eth_friend, custom::eth_dos_batch, zu_kyc_sign_pod_builders, MOCK_VD_SET,
         },
-        frontend::MainPodBuilder,
+        frontend::{MainPodBuilder, OperationArg},
         lang::parse,
-        middleware::Params,
+        middleware::{NativeOperation, OperationType, Params},
     };
 
     use super::*;
@@ -326,5 +326,45 @@ mod tests {
         let kyc = builder.prove(&prover, &params).unwrap();
 
         println!("{kyc}");
+    }
+
+    #[test]
+    fn test_public_key_of() {
+        let params = Params::default();
+        let sk = SecretKey::new_rand();
+        let pk = sk.public_key();
+        let request = parse(
+            &format!(
+                "REQUEST(PublicKeyOf({}, ?b))",
+                Value::from(pk).to_podlang_string()
+            ),
+            &params,
+            &[],
+        )
+        .unwrap();
+        let request = request.request_templates;
+        let context = SolverContext::new(&[], &[]);
+        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        assert!(solve_result.is_err());
+
+        let sks = vec![sk.clone()];
+        let context = SolverContext::new(&[], &sks);
+        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        assert!(solve_result.is_ok());
+        let (proof, _) = solve_result.unwrap();
+        let (pod_ids, ops) = proof.to_inputs();
+        assert_eq!(pod_ids.len(), 0);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(
+            ops[0].0 .0,
+            OperationType::Native(NativeOperation::PublicKeyOf)
+        ));
+        assert!(matches!(
+            ops[0].0.1.as_slice(),
+            [
+                OperationArg::Literal(pk_val),
+                OperationArg::Literal(sk_val)
+            ] if pk_val == &Value::from(pk) && sk_val == &Value::from(sk.clone())
+        ));
     }
 }
