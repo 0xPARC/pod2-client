@@ -55,6 +55,16 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
         </span>
       );
     }
+    if ("SecretKey" in value) {
+      return (
+        <span className="font-mono text-red-600 dark:text-red-400 flex items-center gap-2">
+          <div className="h-[32px] w-[32px] flex items-center justify-center">
+            <div className="text-lg">🤫</div>
+          </div>
+          {value.SecretKey}
+        </span>
+      );
+    }
     if ("array" in value) {
       let arr = value as PodArray;
       if (arr.array.length === 0)
