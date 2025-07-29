@@ -20,8 +20,6 @@ pub struct FeatureConfig {
     pub integration: bool,
     /// FrogCrypto experimental features
     pub frogcrypto: bool,
-    /// Pre-loading of pod2 artifacts
-    pub cache_warming: bool,
 }
 
 impl Default for FeatureConfig {
@@ -32,7 +30,6 @@ impl Default for FeatureConfig {
             authoring: true,
             integration: true,
             frogcrypto: true,
-            cache_warming: true,
         }
     }
 }
@@ -258,11 +255,6 @@ impl AppConfig {
                 self.features.frogcrypto = value
                     .parse()
                     .map_err(|e| format!("Invalid frogcrypto value '{value}': {e}"))?;
-            }
-            ["features", "cache_warming"] => {
-                self.features.cache_warming = value
-                    .parse()
-                    .map_err(|e| format!("Invalid cache_warming value '{value}': {e}"))?;
             }
             ["database", "path"] => {
                 self.database.path = value.to_string();

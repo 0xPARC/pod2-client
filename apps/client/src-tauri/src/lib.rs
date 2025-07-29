@@ -1,5 +1,3 @@
-#![feature(test)]
-
 use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;

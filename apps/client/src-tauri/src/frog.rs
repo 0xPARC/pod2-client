@@ -611,8 +611,6 @@ mod test {
         frog::{download_frog, FrogSearch, WorkerData},
     };
 
-    extern crate test;
-
     #[test]
     fn test_pod_hash() {
         let sk = SecretKey::new_rand();
