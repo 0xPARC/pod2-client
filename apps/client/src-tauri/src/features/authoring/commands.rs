@@ -8,7 +8,7 @@ use pod2::{
     middleware::{Params, PodProver, PodType, Value as PodValue, DEFAULT_VD_SET},
 };
 use pod2_db::{store, store::PodData};
-use pod2_solver::{self, db::IndexablePod, metrics::MetricsLevel};
+use pod2_solver::{self, db::IndexablePod, metrics::MetricsLevel, SolverContext};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
@@ -272,15 +272,20 @@ pub async fn execute_code_command(
 
     let request_templates = processed_output.request_templates;
 
+    let sk = store::get_default_private_key(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to get private key: {e}"))?
+        .clone();
+    let sks = vec![sk];
+    let context = SolverContext::new(&all_pods_for_facts, &sks);
     // Solve the query
-    let (proof, _) =
-        match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
-            Ok(solution) => solution,
-            Err(e) => {
-                log::error!("Solver error: {e:?}");
-                return Err(format!("Solver error: {e}"));
-            }
-        };
+    let (proof, _) = match pod2_solver::solve(&request_templates, &context, MetricsLevel::None) {
+        Ok(solution) => solution,
+        Err(e) => {
+            log::error!("Solver error: {e:?}");
+            return Err(format!("Solver error: {e}"));
+        }
+    };
 
     let (pod_ids, ops) = proof.to_inputs();
 

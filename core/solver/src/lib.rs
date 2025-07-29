@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pod2::{
+    backends::plonky2::primitives::ec::schnorr::SecretKey,
     lang::PrettyPrint,
     middleware::{StatementTmpl, Value},
 };
@@ -32,6 +33,18 @@ pub mod semantics;
 pub mod trace;
 pub mod vis;
 
+#[derive(Debug, Clone)]
+pub struct SolverContext<'a> {
+    pods: &'a [IndexablePod],
+    keys: &'a [SecretKey],
+}
+
+impl<'a> SolverContext<'a> {
+    pub fn new(pods: &'a [IndexablePod], keys: &'a [SecretKey]) -> Self {
+        Self { pods, keys }
+    }
+}
+
 /// The main entry point for the solver.
 ///
 /// Takes a proof request, a set of pods containing asserted facts, and runtime
@@ -39,12 +52,16 @@ pub mod vis;
 /// different levels of metrics during execution.
 pub fn solve(
     request: &[StatementTmpl],
-    pods: &[IndexablePod],
+    context: &SolverContext,
     metrics_level: MetricsLevel,
 ) -> Result<(Proof, MetricsReport), SolverError> {
     // Common setup logic that is independent of the metrics level.
-    let db = Arc::new(FactDB::build(pods).unwrap());
-    let materializer = Materializer::new(db.clone());
+    let mut db = FactDB::build(context.pods).unwrap();
+    for key in context.keys {
+        db.add_keypair(key.clone());
+    }
+    let wrapped_db = Arc::new(db);
+    let materializer = Materializer::new(wrapped_db.clone());
     let planner = Planner::new();
 
     // Dispatch to the appropriate generic implementation based on the desired
@@ -168,12 +185,12 @@ mod tests {
             .unwrap()
             .request_templates;
 
-        let (result, _metrics) = solve(
-            &request,
-            &[IndexablePod::signed_pod(&alice_attestation)],
-            MetricsLevel::Counters,
-        )
-        .unwrap();
+        let context = SolverContext {
+            pods: &[IndexablePod::signed_pod(&alice_attestation)],
+            keys: &[],
+        };
+
+        let (result, _metrics) = solve(&request, &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -211,15 +228,7 @@ mod tests {
             .unwrap()
             .request_templates;
 
-        let (result, _metrics) = solve(
-            &request,
-            &[
-                IndexablePod::main_pod(&alice_bob_pod),
-                IndexablePod::signed_pod(&bob_attestation),
-            ],
-            MetricsLevel::Counters,
-        )
-        .unwrap();
+        let (result, _metrics) = solve(&request, &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -283,7 +292,12 @@ mod tests {
             IndexablePod::signed_pod(&sanction_list),
         ];
 
-        let (result, _) = solve(&request, &pods, MetricsLevel::Counters).unwrap();
+        let context = SolverContext {
+            pods: &pods,
+            keys: &[],
+        };
+
+        let (result, _) = solve(&request, &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]

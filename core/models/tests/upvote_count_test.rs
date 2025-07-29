@@ -6,7 +6,9 @@ use pod2::{
     lang::parse,
     middleware::{Hash, Params, Value},
 };
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+use pod2_solver::{
+    SolverContext, db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
+};
 
 //#[test]
 //fn test_full_upvote_count() {
@@ -115,8 +117,9 @@ fn test_simple_upvote_count() {
 
     // Solve for the base case
     let pods = [IndexablePod::signed_pod(&signed_pod)];
+    let context = SolverContext::new(&pods, &[]);
     let (proof, _metrics) =
-        solve(&request, &pods, MetricsLevel::Debug).expect("Failed to solve base case");
+        solve(&request, &context, MetricsLevel::Debug).expect("Failed to solve base case");
 
     println!("Base case solved successfully!");
     println!("Proof root nodes: {:?}", proof.root_nodes);
@@ -155,8 +158,9 @@ fn test_simple_upvote_count() {
         IndexablePod::signed_pod(&signed_pod),
         IndexablePod::signed_pod(&signed_pod2),
     ];
+    let context_inductive = SolverContext::new(&pods_inductive, &[]);
     let (proof_inductive, _metrics) =
-        solve(&inductive_request, &pods_inductive, MetricsLevel::Debug)
+        solve(&inductive_request, &context_inductive, MetricsLevel::Debug)
             .expect("Failed to solve inductive case");
 
     println!("Inductive case solved successfully!");

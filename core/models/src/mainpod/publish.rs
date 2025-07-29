@@ -7,7 +7,9 @@ use pod2::{
     middleware::{KEY_SIGNER, Params, Value, containers::Dictionary},
 };
 // Import solver dependencies
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+use pod2_solver::{
+    SolverContext, db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
+};
 
 use super::{MainPodError, MainPodResult};
 use crate::get_publish_verification_predicate;
@@ -206,7 +208,8 @@ pub fn prove_publish_verification_with_solver(
     ];
 
     // Let the solver find the proof
-    let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
+    let context = SolverContext::new(&pods, &[]);
+    let (proof, _metrics) = solve(&request, &context, MetricsLevel::Counters)
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
@@ -279,7 +282,8 @@ pub fn verify_publish_verification_with_solver(
     let pods = [IndexablePod::main_pod(main_pod)];
 
     // Let the solver find the proof
-    let (proof, _metrics) = solve(&request, &pods, MetricsLevel::Counters)
+    let context = SolverContext::new(&pods, &[]);
+    let (proof, _metrics) = solve(&request, &context, MetricsLevel::Counters)
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
     println!("GOT PROOF: {proof}");
 
