@@ -130,3 +130,13 @@ check-quick:
     cargo fmt --check
     cargo clippy --all-targets -- -D warnings
     pnpm lint
+
+# Generate JSON schemas
+generate-schemas:
+    cargo run --release -p pod-jsonschema > packages/pod2js/src/schemas.json
+
+update-ts-types:
+    # generate schemas
+    just generate-schemas
+    # update ts types
+    cd packages/pod2js && pnpm gen-types

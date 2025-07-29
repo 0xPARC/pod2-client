@@ -1,0 +1,17 @@
+[package]
+name = "pod-jsonschema"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pod-jsonschema"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+pod2.workspace = true
+pod2_db.workspace = true
+log.workspace = true
+schemars.workspace = true
+serde_json.workspace = true
+serde.workspace = true

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "core/jsonschema",
     "core/models", 
     "core/utils", 
     "core/solver",
