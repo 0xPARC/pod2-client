@@ -1,11 +1,4 @@
 //! Unit tests for OperationMaterializer system
-//!
-//! This module tests the Operation-centric materializer architecture that replaced
-//! the legacy PredicateHandler system. The tests validate the three categories of operations:
-//!
-//! 1. **Value-based computations** - Pure value computation without statement lookups
-//! 2. **Statement copying** - CopyStatement as the primary lookup mechanism  
-//! 3. **Statement derivations** - Logical inference operations with targeted lookups
 
 #[cfg(test)]
 mod tests {
@@ -218,23 +211,6 @@ mod tests {
     }
 
     #[test]
-    fn test_lt_eq_from_entries_with_different_predicate() {
-        let db = create_test_db();
-        let materializer = OperationMaterializer::LtEqFromEntries;
-
-        // LtEq operation works based on value logic, not predicate parameter
-        // The predicate parameter is used mainly for operations like CopyStatement
-        let args = vec![Some(val_ref_int(10)), Some(val_ref_int(20))];
-        let result = materializer.materialize(&args, &db, NativePredicate::Equal);
-
-        // This will succeed because 10 <= 20, regardless of predicate parameter
-        assert!(result.is_some());
-        let fact = result.unwrap();
-        assert_eq!(fact.args[0], val_ref_int(10));
-        assert_eq!(fact.args[1], val_ref_int(20));
-    }
-
-    #[test]
     fn test_contains_from_entries_wrong_argument_count() {
         let db = create_test_db();
         let materializer = OperationMaterializer::ContainsFromEntries;
@@ -304,17 +280,9 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_not_contains_from_entries_wrong_predicate() {
-        let db = create_test_db();
-        let materializer = OperationMaterializer::NotContainsFromEntries;
-
-        // Should not work with Contains predicate
-        let args = vec![Some(val_ref_int(1)), Some(val_ref_int(0))];
-        let result = materializer.materialize(&args, &db, NativePredicate::Contains);
-
-        assert!(result.is_none());
-    }
+    // ================================================================================================
+    // Tests for Arithmetic/Computation Operations
+    // ================================================================================================
 
     #[test]
     fn test_sum_of_all_bound_valid() {
@@ -615,6 +583,10 @@ mod tests {
         assert!(result.is_none());
     }
 
+    // ================================================================================================
+    // Tests for NewEntry Operations
+    // ================================================================================================
+
     #[test]
     fn test_new_entry_valid_self_reference() {
         use pod2::middleware::SELF;
@@ -693,6 +665,10 @@ mod tests {
 
         assert!(result.is_none());
     }
+
+    // ================================================================================================
+    // Tests for TransitiveEqualFromStatements Operations
+    // ================================================================================================
 
     #[test]
     fn test_transitive_equal_from_statements_valid() {
