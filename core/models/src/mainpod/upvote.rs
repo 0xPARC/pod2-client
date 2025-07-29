@@ -7,9 +7,7 @@ use pod2::{
     lang::parse,
     middleware::{Hash, KEY_SIGNER, Value},
 };
-use pod2_solver::{
-    SolverContext, db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
-};
+use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
 
 use super::{MainPodError, MainPodResult, verify_mainpod_basics};
 use crate::get_upvote_verification_predicate;
@@ -119,16 +117,11 @@ pub fn prove_upvote_verification_with_solver(
     // Start with the upvote verification predicate definitions and append REQUEST
     let mut query = get_upvote_verification_predicate();
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(username.clone());
-    let content_hash_literal = value_to_podlang_literal(content_hash.clone());
-    let identity_server_pk_literal = value_to_podlang_literal(identity_server_pk.clone());
-
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            upvote_verification({username_literal}, {content_hash_literal}, {identity_server_pk_literal})
+            upvote_verification({username}, {content_hash}, {identity_server_pk})
         )
         "#
     ));
@@ -199,16 +192,14 @@ pub fn verify_upvote_verification_with_solver(
     // Start with the upvote verification predicate definitions and append REQUEST
     let mut query = get_upvote_verification_predicate();
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(Value::from(expected_username));
-    let content_hash_literal = value_to_podlang_literal(Value::from(*expected_content_hash));
-    let identity_server_pk_literal = value_to_podlang_literal(expected_identity_server_pk.clone());
+    let username_value = Value::from(expected_username);
+    let content_hash_value = Value::from(*expected_content_hash);
 
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            upvote_verification({username_literal}, {content_hash_literal}, {identity_server_pk_literal})
+            upvote_verification({username_value}, {content_hash_value}, {expected_identity_server_pk})
         )
         "#
     ));
@@ -276,14 +267,13 @@ pub fn prove_upvote_count_base_with_solver(
     // Then parse the upvote count predicate batch, providing the verification batch as a dependency
     let mut upvote_count_query = crate::get_upvote_count_predicate(upvote_verification_batch.id());
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let content_hash_literal = value_to_podlang_literal(Value::from(*params.content_hash));
+    let content_hash_value = Value::from(*params.content_hash);
 
     upvote_count_query.push_str(&format!(
         r#"
 
         REQUEST(
-            upvote_count(0, {content_hash_literal})
+            upvote_count(0, {content_hash_value})
         )
         "#
     ));
@@ -371,15 +361,14 @@ pub fn prove_upvote_count_inductive_with_solver(
     // Then parse the upvote count predicate batch, providing the verification batch as a dependency
     let mut upvote_count_query = crate::get_upvote_count_predicate(upvote_verification_batch.id());
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let content_hash_literal = value_to_podlang_literal(Value::from(*params.content_hash));
+    let content_hash_value = Value::from(*params.content_hash);
     let new_count = params.previous_count + 1;
 
     upvote_count_query.push_str(&format!(
         r#"
 
         REQUEST(
-            upvote_count({new_count}, {content_hash_literal})
+            upvote_count({new_count}, {content_hash_value})
         )
         "#
     ));
@@ -462,14 +451,13 @@ pub fn verify_upvote_count_with_solver(
     // Then parse the upvote count predicate batch, providing the verification batch as a dependency
     let mut upvote_count_query = crate::get_upvote_count_predicate(upvote_verification_batch.id());
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let content_hash_literal = value_to_podlang_literal(Value::from(*expected_content_hash));
+    let content_hash_value = Value::from(*expected_content_hash);
 
     upvote_count_query.push_str(&format!(
         r#"
 
         REQUEST(
-            upvote_count({expected_count}, {content_hash_literal})
+            upvote_count({expected_count}, {content_hash_value})
         )
         "#
     ));

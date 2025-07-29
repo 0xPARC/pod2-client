@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use pod2::{
-    backends::plonky2::primitives::ec::schnorr::SecretKey,
-    lang::PrettyPrint,
-    middleware::{StatementTmpl, Value},
-};
+use pod2::{backends::plonky2::primitives::ec::schnorr::SecretKey, middleware::StatementTmpl};
 
 use crate::{
     db::{FactDB, IndexablePod},
@@ -128,10 +124,6 @@ pub fn solve_with_tracing(
     Ok((proof, MetricsReport::Trace(metrics)))
 }
 
-pub fn value_to_podlang_literal(value: Value) -> String {
-    value.to_podlang_string()
-}
-
 #[cfg(test)]
 mod tests {
     use hex::ToHex;
@@ -144,7 +136,7 @@ mod tests {
         },
         frontend::{MainPodBuilder, OperationArg},
         lang::parse,
-        middleware::{NativeOperation, OperationType, Params},
+        middleware::{NativeOperation, OperationType, Params, Value},
     };
 
     use super::*;
@@ -177,8 +169,8 @@ mod tests {
       )
       "#,
             batch.id().encode_hex::<String>(),
-            value_to_podlang_literal(alice.public_key()),
-            value_to_podlang_literal(bob.public_key())
+            alice.public_key(),
+            bob.public_key()
         );
 
         let request = parse(&req1, &params, std::slice::from_ref(&batch))
@@ -220,8 +212,8 @@ mod tests {
       )
       "#,
             batch.id().encode_hex::<String>(),
-            value_to_podlang_literal(alice.public_key()),
-            value_to_podlang_literal(charlie.public_key())
+            alice.public_key(),
+            charlie.public_key()
         );
 
         let request = parse(&req2, &params, std::slice::from_ref(&batch))
@@ -341,10 +333,7 @@ mod tests {
         let sk = SecretKey::new_rand();
         let pk = sk.public_key();
         let request = parse(
-            &format!(
-                "REQUEST(PublicKeyOf({}, ?b))",
-                Value::from(pk).to_podlang_string()
-            ),
+            &format!("REQUEST(PublicKeyOf({}, ?b))", Value::from(pk)),
             &params,
             &[],
         )

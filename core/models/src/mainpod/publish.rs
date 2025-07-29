@@ -7,9 +7,7 @@ use pod2::{
     middleware::{KEY_SIGNER, Params, Value, containers::Dictionary},
 };
 // Import solver dependencies
-use pod2_solver::{
-    SolverContext, db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal,
-};
+use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
 
 use super::{MainPodError, MainPodResult};
 use crate::get_publish_verification_predicate;
@@ -180,16 +178,11 @@ pub fn prove_publish_verification_with_solver(
     // Start with the existing predicate definitions and append REQUEST
     let mut query = get_publish_verification_predicate();
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(username.clone());
-    let data_literal = value_to_podlang_literal(data.clone());
-    let identity_server_pk_literal = value_to_podlang_literal(identity_server_pk.clone());
-
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            publish_verified({username_literal}, {data_literal}, {identity_server_pk_literal})
+            publish_verified({username}, {data}, {identity_server_pk})
         )
         "#
     ));
@@ -257,16 +250,14 @@ pub fn verify_publish_verification_with_solver(
     // Start with the existing predicate definitions and append REQUEST
     let mut query = get_publish_verification_predicate();
 
-    // Format the expected values for the query using value_to_podlang_literal
-    let username_literal = value_to_podlang_literal(Value::from(expected_username));
-    let data_literal = value_to_podlang_literal(Value::from(expected_data.clone()));
-    let identity_server_pk_literal = value_to_podlang_literal(expected_identity_server_pk.clone());
+    let username_value = Value::from(expected_username);
+    let data_value = Value::from(expected_data.clone());
 
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            publish_verified({username_literal}, {data_literal}, {identity_server_pk_literal})
+            publish_verified({username_value}, {data_value}, {expected_identity_server_pk})
         )
         "#
     ));
