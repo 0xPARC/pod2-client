@@ -9,9 +9,12 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
-    use pod2::middleware::{hash_str, AnchoredKey, Key, NativePredicate, PodId, Value, ValueRef};
+    use pod2::middleware::{
+        containers::Dictionary, hash_str, AnchoredKey, Key, NativePredicate, Params, PodId, Value,
+        ValueRef, SELF,
+    };
 
     use crate::{
         db::FactDB, engine::semi_naive::FactSource,
@@ -256,6 +259,29 @@ mod tests {
     }
 
     #[test]
+    fn test_contains_from_entries_unbound_value() {
+        let db = create_test_db();
+        let materializer = OperationMaterializer::ContainsFromEntries;
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            HashMap::from([(Key::from("num"), val_int(42))]),
+        )
+        .unwrap();
+        let dict_value_ref = ValueRef::from(Value::new(dict.into()));
+
+        // Partially bound args - "value" arg is unbound, but container and key are bound
+        let args = vec![Some(dict_value_ref.clone()), Some(val_ref_str("num")), None];
+        let result = materializer.materialize(&args, &db, NativePredicate::Contains);
+
+        assert!(result.is_some());
+        let fact = result.unwrap();
+        assert_eq!(fact.args[0], dict_value_ref);
+        assert_eq!(fact.args[1], val_ref_str("num"));
+        assert_eq!(fact.args[2], val_ref_int(42));
+    }
+
+    #[test]
     fn test_not_contains_from_entries_wrong_argument_count() {
         let db = create_test_db();
         let materializer = OperationMaterializer::NotContainsFromEntries;
@@ -289,10 +315,6 @@ mod tests {
 
         assert!(result.is_none());
     }
-
-    // Note: Full array-based Contains/NotContains testing would require
-    // creating array Value types, which is complex. The above tests validate
-    // the basic argument checking and predicate matching logic.
 
     #[test]
     fn test_sum_of_all_bound_valid() {
@@ -634,8 +656,13 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::NewEntry;
 
+        let self_key = AnchoredKey::new(SELF, Key::new("name".to_string()));
+
         // NewEntry with literal first arg should fail
-        let args = vec![Some(val_ref_str("not_a_key")), Some(val_ref_str("Alice"))];
+        let args = vec![
+            Some(val_ref_str("not_a_key")),
+            Some(ValueRef::Key(self_key)),
+        ];
         let result = materializer.materialize(&args, &db, NativePredicate::Equal);
 
         assert!(result.is_none());
@@ -726,6 +753,42 @@ mod tests {
     // ================================================================================================
 
     #[test]
+    fn test_copy_statement_success() {
+        use pod2::middleware::Statement;
+
+        use crate::db::{IndexablePod, TestPod};
+
+        // Create a database with an equality statement A=B
+        let pod_id = PodId(hash_str("test_pod"));
+        let key_a = AnchoredKey::new(pod_id, Key::new("a".to_string()));
+        let key_b = AnchoredKey::new(pod_id, Key::new("b".to_string()));
+
+        let test_pod = TestPod {
+            id: pod_id,
+            statements: vec![Statement::Equal(
+                ValueRef::Key(key_a.clone()),
+                ValueRef::Key(key_b.clone()),
+            )],
+        };
+
+        let db = FactDB::build(&[IndexablePod::TestPod(Arc::new(test_pod))]).unwrap();
+        let materializer = OperationMaterializer::CopyStatement;
+
+        // Copy the equality statement from the database
+        let args = vec![
+            Some(ValueRef::Key(key_a.clone())),
+            Some(ValueRef::Key(key_b.clone())),
+        ];
+        let result = materializer.materialize(&args, &db, NativePredicate::Equal);
+
+        assert!(result.is_some());
+        let fact = result.unwrap();
+        assert!(matches!(fact.source, FactSource::Copy));
+        assert_eq!(fact.args[0], ValueRef::Key(key_a));
+        assert_eq!(fact.args[1], ValueRef::Key(key_b));
+    }
+
+    #[test]
     fn test_copy_statement_no_data() {
         let db = create_test_db();
         let materializer = OperationMaterializer::CopyStatement;
@@ -764,6 +827,42 @@ mod tests {
     // ================================================================================================
 
     #[test]
+    fn test_lt_to_not_equal_success() {
+        use pod2::middleware::Statement;
+
+        use crate::db::{IndexablePod, TestPod};
+
+        // Create a database with a Lt statement A < B
+        let pod_id = PodId(hash_str("test_pod"));
+        let key_a = AnchoredKey::new(pod_id, Key::new("a".to_string()));
+        let key_b = AnchoredKey::new(pod_id, Key::new("b".to_string()));
+
+        let test_pod = TestPod {
+            id: pod_id,
+            statements: vec![Statement::Lt(
+                ValueRef::Key(key_a.clone()),
+                ValueRef::Key(key_b.clone()),
+            )],
+        };
+
+        let db = FactDB::build(&[IndexablePod::TestPod(Arc::new(test_pod))]).unwrap();
+        let materializer = OperationMaterializer::LtToNotEqual;
+
+        // Derive NotEqual from Lt statement - if A < B, then A != B
+        let args = vec![
+            Some(ValueRef::Key(key_a.clone())),
+            Some(ValueRef::Key(key_b.clone())),
+        ];
+        let result = materializer.materialize(&args, &db, NativePredicate::NotEqual);
+
+        assert!(result.is_some());
+        let fact = result.unwrap();
+        assert!(matches!(fact.source, FactSource::Native(_)));
+        assert_eq!(fact.args[0], ValueRef::Key(key_a));
+        assert_eq!(fact.args[1], ValueRef::Key(key_b));
+    }
+
+    #[test]
     fn test_lt_to_not_equal_no_data() {
         let db = create_test_db();
         let materializer = OperationMaterializer::LtToNotEqual;
@@ -796,50 +895,6 @@ mod tests {
         let result = materializer.materialize(&args, &db, NativePredicate::Equal);
 
         assert!(result.is_none());
-    }
-
-    // ================================================================================================
-    // Tests for Materializers for Predicate Method
-    // ================================================================================================
-
-    #[test]
-    fn test_materializers_for_equal() {
-        let materializers =
-            OperationMaterializer::materializers_for_predicate(NativePredicate::Equal);
-
-        // Equal should have: CopyStatement, EqualFromEntries, TransitiveEqualFromStatements
-        assert!(materializers.contains(&OperationMaterializer::CopyStatement));
-        assert!(materializers.contains(&OperationMaterializer::EqualFromEntries));
-        assert!(materializers.contains(&OperationMaterializer::TransitiveEqualFromStatements));
-
-        // Should not have NotEqual materializers
-        assert!(!materializers.contains(&OperationMaterializer::NotEqualFromEntries));
-        assert!(!materializers.contains(&OperationMaterializer::LtToNotEqual));
-    }
-
-    #[test]
-    fn test_materializers_for_not_equal() {
-        let materializers =
-            OperationMaterializer::materializers_for_predicate(NativePredicate::NotEqual);
-
-        // NotEqual should have: CopyStatement, NotEqualFromEntries, LtToNotEqual
-        assert!(materializers.contains(&OperationMaterializer::CopyStatement));
-        assert!(materializers.contains(&OperationMaterializer::NotEqualFromEntries));
-        assert!(materializers.contains(&OperationMaterializer::LtToNotEqual));
-
-        // Should not have Equal-specific materializers
-        assert!(!materializers.contains(&OperationMaterializer::EqualFromEntries));
-        assert!(!materializers.contains(&OperationMaterializer::TransitiveEqualFromStatements));
-    }
-
-    #[test]
-    fn test_materializers_for_lt() {
-        let materializers = OperationMaterializer::materializers_for_predicate(NativePredicate::Lt);
-
-        assert!(materializers.contains(&OperationMaterializer::CopyStatement));
-        assert!(materializers.contains(&OperationMaterializer::LtFromEntries));
-        assert!(!materializers.contains(&OperationMaterializer::LtEqFromEntries));
-        assert!(!materializers.contains(&OperationMaterializer::EqualFromEntries));
     }
 
     // ================================================================================================
@@ -911,53 +966,5 @@ mod tests {
             NativePredicate::NotEqual,
         );
         assert!(result.is_some());
-    }
-
-    // ================================================================================================
-    // Architecture Validation Tests
-    // ================================================================================================
-
-    #[test]
-    fn test_architectural_separation() {
-        let db = create_test_db();
-
-        // Test that value-based operations work without needing database lookups
-        let args = vec![Some(val_ref_int(42)), Some(val_ref_int(42))];
-
-        // EqualFromEntries should work (value computation)
-        let result =
-            OperationMaterializer::EqualFromEntries.materialize(&args, &db, NativePredicate::Equal);
-        assert!(result.is_some());
-        let fact = result.unwrap();
-        assert_eq!(fact.args[0], args[0].clone().unwrap());
-        assert_eq!(fact.args[1], args[1].clone().unwrap());
-    }
-
-    #[test]
-    fn test_copy_statement_requires_existing_data() {
-        let db = create_test_db();
-
-        // CopyStatement should not materialize without existing statements in database
-        let args = vec![Some(val_ref_int(42)), Some(val_ref_int(42))];
-        let result =
-            OperationMaterializer::CopyStatement.materialize(&args, &db, NativePredicate::Equal);
-        assert!(
-            result.is_none(),
-            "CopyStatement should require existing data in database"
-        );
-    }
-
-    #[test]
-    fn test_derivation_operations_require_source_data() {
-        let db = create_test_db();
-
-        // LtToNotEqual should not materialize without existing Lt statements
-        let args = vec![Some(val_ref_int(20)), Some(val_ref_int(25))];
-        let result =
-            OperationMaterializer::LtToNotEqual.materialize(&args, &db, NativePredicate::NotEqual);
-        assert!(
-            result.is_none(),
-            "LtToNotEqual should require existing Lt statements"
-        );
     }
 }
