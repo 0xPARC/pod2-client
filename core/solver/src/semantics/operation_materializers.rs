@@ -39,6 +39,7 @@ pub enum OperationMaterializer {
     ProductOf,
     MaxOf,
     HashOf,
+    PublicKeyOf,
 }
 
 impl OperationMaterializer {
@@ -59,6 +60,7 @@ impl OperationMaterializer {
             Self::ProductOf => NativeOperation::ProductOf,
             Self::MaxOf => NativeOperation::MaxOf,
             Self::HashOf => NativeOperation::HashOf,
+            Self::PublicKeyOf => NativeOperation::PublicKeyOf,
         };
         OperationType::Native(native_op)
     }
@@ -85,6 +87,7 @@ impl OperationMaterializer {
             NativePredicate::ProductOf => &[Self::ProductOf, Self::CopyStatement],
             NativePredicate::MaxOf => &[Self::MaxOf, Self::CopyStatement],
             NativePredicate::HashOf => &[Self::HashOf, Self::CopyStatement],
+            NativePredicate::PublicKeyOf => &[Self::PublicKeyOf, Self::CopyStatement],
             NativePredicate::None => &[Self::None],
             NativePredicate::False => &[], // No operations can produce False
             // Syntactic sugar predicates are transformed by frontend compiler, so we don't need materializers for them.
@@ -123,6 +126,7 @@ impl OperationMaterializer {
             Self::ProductOf => materialize_product_of(args, db),
             Self::MaxOf => materialize_max_of(args, db),
             Self::HashOf => materialize_hash_of(args, db),
+            Self::PublicKeyOf => materialize_public_key_of(args, db),
         }
     }
 
@@ -852,6 +856,52 @@ fn materialize_hash_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
         source: FactSource::Native(NativeOperation::HashOf),
         args,
     })
+}
+
+fn materialize_public_key_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
+    if args.len() != 2 {
+        return None;
+    }
+
+    match (&args[0], &args[1]) {
+        (Some(vr0), Some(vr1)) => {
+            if let (Some(val0), Some(val1)) =
+                (db.value_ref_to_value(vr0), db.value_ref_to_value(vr1))
+            {
+                if let (TypedValue::PublicKey(pk), TypedValue::SecretKey(sk)) =
+                    (val0.typed(), val1.typed())
+                {
+                    if sk.public_key() == *pk {
+                        Some(Fact {
+                            source: FactSource::Native(NativeOperation::PublicKeyOf),
+                            args: vec![vr0.clone(), vr1.clone()],
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        (Some(vr0), None) => {
+            if let Some(val0) = db.value_ref_to_value(vr0) {
+                if let TypedValue::PublicKey(pk) = val0.typed() {
+                    db.get_secret_key(&pk.to_string()).map(|sk| Fact {
+                        source: FactSource::Native(NativeOperation::PublicKeyOf),
+                        args: vec![vr0.clone(), ValueRef::from(sk.clone())],
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
 }
 
 fn explain_transitive_equal_from_statements(

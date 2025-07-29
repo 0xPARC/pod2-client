@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use hex::ToHex;
-use itertools::Itertools;
-use pod2::middleware::{StatementTmpl, TypedValue, Value};
+use pod2::{
+    lang::PrettyPrint,
+    middleware::{StatementTmpl, Value},
+};
 
 use crate::{
     db::{FactDB, IndexablePod},
@@ -111,40 +112,7 @@ pub fn solve_with_tracing(
 }
 
 pub fn value_to_podlang_literal(value: Value) -> String {
-    match value.typed() {
-        TypedValue::Int(i) => i.to_string(),
-        TypedValue::String(s) => format!("\"{}\"", s.clone()),
-        TypedValue::Bool(b) => b.to_string(),
-        TypedValue::Array(a) => format!(
-            "[{}]",
-            a.array()
-                .iter()
-                .map(|v| value_to_podlang_literal(v.clone()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::Dictionary(d) => format!(
-            "{{ {} }}",
-            d.kvs()
-                .iter()
-                .sorted_by_key(|(k, _)| k.name())
-                .map(|(k, v)| format!("{}: {}", k, value_to_podlang_literal(v.clone())))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::Set(s) => format!(
-            "#[{}]",
-            s.set()
-                .iter()
-                .sorted() // Ensure deterministic output
-                .map(|v| value_to_podlang_literal(v.clone()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::PublicKey(p) => format!("PublicKey({p})"),
-        TypedValue::PodId(p) => format!("0x{}", p.0.encode_hex::<String>()),
-        TypedValue::Raw(r) => format!("Raw(0x{})", r.encode_hex::<String>()),
-    }
+    value.to_podlang_string()
 }
 
 #[cfg(test)]

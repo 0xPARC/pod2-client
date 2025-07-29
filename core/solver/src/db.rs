@@ -16,6 +16,7 @@ use petgraph::{
     visit::{Bfs, Reversed},
 };
 use pod2::{
+    backends::plonky2::primitives::ec::schnorr::SecretKey,
     frontend::{MainPod, SignedPod},
     middleware::{
         self, AnchoredKey, Hash, Key, PodId, RawValue, Statement, StatementArg, Value, ValueRef,
@@ -117,6 +118,9 @@ pub struct FactDB {
     anchored_key_to_value: HashMap<AnchoredKey, Value>,
 
     pub statement_index: StatementIndex,
+
+    // Stringified public keys to secret keys
+    keypairs: HashMap<String, SecretKey>,
 }
 
 #[derive(Debug)]
@@ -256,7 +260,17 @@ impl FactDB {
             raw_value_to_anchored_keys: HashMap::new(),
             statement_index: StatementIndex::new(),
             anchored_key_to_value: HashMap::new(),
+            keypairs: HashMap::new(),
         }
+    }
+
+    pub fn get_secret_key(&self, public_key_string: &str) -> Option<&SecretKey> {
+        self.keypairs.get(public_key_string)
+    }
+
+    pub fn add_keypair(&mut self, secret_key: SecretKey) {
+        self.keypairs
+            .insert(secret_key.public_key().to_string(), secret_key);
     }
 
     pub fn get_pod(&self, pod_id: PodId) -> Option<&IndexablePod> {

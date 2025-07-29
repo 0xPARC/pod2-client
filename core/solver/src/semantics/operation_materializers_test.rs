@@ -4,9 +4,12 @@
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use pod2::middleware::{
-        containers::Dictionary, hash_str, AnchoredKey, Key, NativePredicate, Params, PodId, Value,
-        ValueRef, SELF,
+    use pod2::{
+        backends::plonky2::primitives::ec::schnorr::SecretKey,
+        middleware::{
+            containers::Dictionary, hash_str, AnchoredKey, Key, NativePredicate, Params, PodId,
+            Value, ValueRef, SELF,
+        },
     };
 
     use crate::{
@@ -870,6 +873,69 @@ mod tests {
         let args = vec![Some(val_ref_int(20)), Some(val_ref_int(25))];
         let result = materializer.materialize(&args, &db, NativePredicate::Equal);
 
+        assert!(result.is_none());
+    }
+
+    // ================================================================================================
+    // Tests for PublicKeyOf Operations
+    // ================================================================================================
+
+    #[test]
+    fn test_public_key_of_success() {
+        let mut db = create_test_db();
+        let sk = SecretKey::new_rand();
+        db.add_keypair(sk.clone());
+        let materializer = OperationMaterializer::PublicKeyOf;
+
+        let args = vec![
+            Some(ValueRef::from(sk.public_key())),
+            Some(ValueRef::from(sk)),
+        ];
+
+        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_public_key_of_with_unbound_secret_key() {
+        let mut db = create_test_db();
+        let sk = SecretKey::new_rand();
+        db.add_keypair(sk.clone());
+        let materializer = OperationMaterializer::PublicKeyOf;
+
+        let args = vec![Some(ValueRef::from(sk.public_key())), None];
+
+        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
+        assert!(result.is_some());
+        let fact = result.unwrap();
+        assert_eq!(fact.args[0], ValueRef::from(sk.public_key()));
+        assert_eq!(fact.args[1], ValueRef::from(sk));
+    }
+
+    #[test]
+    fn test_public_key_of_with_mismatched_public_key() {
+        let db = create_test_db();
+        let materializer = OperationMaterializer::PublicKeyOf;
+
+        let args = vec![
+            Some(ValueRef::from(SecretKey::new_rand().public_key())),
+            Some(ValueRef::from(SecretKey::new_rand())),
+        ];
+
+        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_public_key_of_with_unknown_public_key() {
+        let db = create_test_db();
+        let materializer = OperationMaterializer::PublicKeyOf;
+        let args = vec![
+            // Public key is not in the database
+            Some(ValueRef::from(SecretKey::new_rand().public_key())),
+            None,
+        ];
+        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
         assert!(result.is_none());
     }
 

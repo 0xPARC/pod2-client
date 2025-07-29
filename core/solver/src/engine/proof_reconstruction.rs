@@ -223,6 +223,7 @@ impl<'a> ProofReconstructor<'a> {
                         (NP::ProductOf, [a, b, c]) => ProductOf(a.clone(), b.clone(), c.clone()),
                         (NP::MaxOf, [a, b, c]) => MaxOf(a.clone(), b.clone(), c.clone()),
                         (NP::HashOf, [a, b, c]) => HashOf(a.clone(), b.clone(), c.clone()),
+                        (NP::PublicKeyOf, [a, b]) => PublicKeyOf(a.clone(), b.clone()),
                         _ => {
                             return Err(SolverError::Internal(
                                 "Unsupported native predicate".into(),
