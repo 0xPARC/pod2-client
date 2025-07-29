@@ -12,7 +12,7 @@ use pod2::{
     },
 };
 
-use crate::{db::FactDB, semantics::predicates::PredicateHandler};
+use crate::{db::FactDB, semantics::operation_materializers::OperationMaterializer};
 
 /// The final output of a successful query. It represents the complete
 /// and verifiable derivation path for the initial proof request.
@@ -54,6 +54,9 @@ impl ProofNode {
             Justification::Fact => {
                 writeln!(f, "{because_prefix}- by Fact")?;
             }
+            Justification::NewEntry => {
+                writeln!(f, "{because_prefix}- by NewEntry")?;
+            }
             Justification::ValueComparison(op) => {
                 writeln!(f, "{}- by {:?}", because_prefix, *op)?;
             }
@@ -89,6 +92,7 @@ pub enum Justification {
     /// The premises for the custom predicate's body are the child nodes.
     Custom(CustomPredicateRef, Vec<Arc<ProofNode>>),
     Special(NativeOperation),
+    NewEntry,
 }
 
 impl Proof {
@@ -128,6 +132,24 @@ impl Proof {
                 let is_public = public_nodes.contains(&Arc::as_ptr(&node));
 
                 let ops: Vec<Operation> = match &node.justification {
+                    Justification::NewEntry => {
+                        let (StatementArg::Key(ak), StatementArg::Literal(v)) = (
+                            node.statement.args()[0].clone(),
+                            node.statement.args()[1].clone(),
+                        ) else {
+                            panic!(
+                                "NewEntry justification with invalid args: {:?}",
+                                node.statement.args()
+                            );
+                        };
+                        let op_args =
+                            vec![OperationArg::Entry(ak.key.name().to_string(), v.clone())];
+                        vec![Operation(
+                            OperationType::Native(NativeOperation::NewEntry),
+                            op_args,
+                            OperationAux::None,
+                        )]
+                    }
                     Justification::Fact => {
                         vec![Operation(
                             OperationType::Native(NativeOperation::CopyStatement),
@@ -137,14 +159,29 @@ impl Proof {
                     }
                     Justification::Special(_op) => {
                         if let Predicate::Native(pred) = node.statement.predicate() {
-                            let handler = PredicateHandler::for_native_predicate(pred);
                             let args: Vec<ValueRef> = node
                                 .statement
                                 .args()
                                 .iter()
                                 .map(|a| a.try_into().unwrap())
                                 .collect();
-                            handler.explain_special_derivation(&args, &self.db).unwrap()
+
+                            // Find the materializer that can handle special derivations for this predicate
+                            let materializers =
+                                OperationMaterializer::materializers_for_predicate(pred);
+                            for materializer in materializers {
+                                if let Ok(ops) = materializer.explain(&args, &self.db) {
+                                    if !ops.is_empty() {
+                                        return ops
+                                            .into_iter()
+                                            .map(|op| (op, is_public))
+                                            .collect::<Vec<_>>();
+                                    }
+                                }
+                            }
+
+                            // If no materializer can explain it, return empty vector
+                            Vec::new()
                         } else {
                             panic!("Special justification for non-native predicate");
                         }

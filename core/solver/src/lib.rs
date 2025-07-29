@@ -300,6 +300,7 @@ mod tests {
             Lt(?gov["dateOfBirth"], {const_18y})
             Equal(?pay["startDate"], {const_1y})
             Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
+            Equal(?self["watermark"], 0)
         )
         "#
         );
@@ -324,6 +325,7 @@ mod tests {
 
         for (op, public) in ops {
             if public {
+                println!("public op: {op:?}");
                 builder.pub_op(op).unwrap();
             } else {
                 builder.priv_op(op).unwrap();

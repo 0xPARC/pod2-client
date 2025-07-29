@@ -1,2 +1,5 @@
 pub mod materializer;
-pub mod predicates;
+pub mod operation_materializers;
+
+#[cfg(test)]
+mod operation_materializers_test;

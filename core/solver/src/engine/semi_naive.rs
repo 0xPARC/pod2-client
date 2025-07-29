@@ -42,6 +42,7 @@ pub enum FactSource {
     Native(NativeOperation),
     Copy,
     Special,
+    NewEntry,
 }
 
 /// A single, concrete fact, represented as a tuple of values, with its source.
@@ -916,7 +917,7 @@ mod tests {
         lang::parse,
         middleware::{
             hash_str, AnchoredKey, OperationType, Params, PodId, Predicate, RawValue, Statement,
-            TypedValue, Value, ValueRef,
+            TypedValue, Value, ValueRef, SELF,
         },
     };
 
@@ -1046,17 +1047,23 @@ mod tests {
         let db = Arc::new(FactDB::build(&pods).unwrap());
         let materializer = Materializer::new(db);
 
+        let self_hex = SELF.0.encode_hex::<String>();
+
         // 2. Define podlog and create plan
-        let podlog = r#"
+        let podlog = format!(
+            r#"
             are_friends(A, B) = AND(
                 Equal(?A["id"], ?B["friend_id"])
+                NotEqual(?A, Raw(0x{self_hex}))
+                NotEqual(?B, Raw(0x{self_hex}))
             )
             REQUEST(
                 are_friends(?P1, ?P2)
             )
-        "#;
+        "#
+        );
         let params = Params::default();
-        let processed = parse(podlog, &params, &[]).unwrap();
+        let processed = parse(&podlog, &params, &[]).unwrap();
         let request = processed.request_templates;
 
         let planner = Planner::new();

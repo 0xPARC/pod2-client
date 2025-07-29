@@ -144,9 +144,6 @@ impl<'a> MissingFactFinder<'a> {
         set
     }
 
-    // ------------------------------------------------------------
-    // helpers (all borrowed from existing engine code)
-    // ------------------------------------------------------------
     fn fetch_relation(&self, atom: &Atom, b: &Bindings) -> Vec<Fact> {
         match &atom.predicate {
             PredicateIdentifier::Normal(pred) => {

@@ -76,6 +76,10 @@ impl<'a> ProofReconstructor<'a> {
                 statement: conclusion,
                 justification: Justification::Fact,
             }),
+            FactSource::NewEntry => Arc::new(ProofNode {
+                statement: conclusion,
+                justification: Justification::NewEntry,
+            }),
             FactSource::Custom => {
                 let key = (pid.clone(), fact.args.clone());
                 let (rule, bindings) = self.provenance.get(&key).ok_or_else(|| {
