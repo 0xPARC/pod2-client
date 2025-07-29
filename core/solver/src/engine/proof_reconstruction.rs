@@ -212,21 +212,67 @@ impl<'a> ProofReconstructor<'a> {
                 Predicate::Native(np) => {
                     use pod2::middleware::NativePredicate as NP;
                     use Statement::*;
-                    let s = match (np, fact.args.as_slice()) {
-                        (NP::Equal, [a, b]) => Equal(a.clone(), b.clone()),
-                        (NP::NotEqual, [a, b]) => NotEqual(a.clone(), b.clone()),
-                        (NP::LtEq, [a, b]) => LtEq(a.clone(), b.clone()),
-                        (NP::Lt, [a, b]) => Lt(a.clone(), b.clone()),
-                        (NP::Contains, [r, k, v]) => Contains(r.clone(), k.clone(), v.clone()),
-                        (NP::NotContains, [r, k]) => NotContains(r.clone(), k.clone()),
-                        (NP::SumOf, [a, b, c]) => SumOf(a.clone(), b.clone(), c.clone()),
-                        (NP::ProductOf, [a, b, c]) => ProductOf(a.clone(), b.clone(), c.clone()),
-                        (NP::MaxOf, [a, b, c]) => MaxOf(a.clone(), b.clone(), c.clone()),
-                        (NP::HashOf, [a, b, c]) => HashOf(a.clone(), b.clone(), c.clone()),
-                        _ => {
-                            return Err(SolverError::Internal(
-                                "Unsupported native predicate".into(),
-                            ))
+
+                    let args = fact.args.as_slice();
+                    let s = match np {
+                        NP::Equal => match args {
+                            [a, b] => Equal(a.clone(), b.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        NP::NotEqual => match args {
+                            [a, b] => NotEqual(a.clone(), b.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        NP::LtEq => match args {
+                            [a, b] => LtEq(a.clone(), b.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        NP::Lt => match args {
+                            [a, b] => Lt(a.clone(), b.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        NP::Contains => match args {
+                            [r, k, v] => Contains(r.clone(), k.clone(), v.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 3, args.len())),
+                        },
+                        NP::NotContains => match args {
+                            [r, k] => NotContains(r.clone(), k.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        NP::SumOf => match args {
+                            [a, b, c] => SumOf(a.clone(), b.clone(), c.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 3, args.len())),
+                        },
+                        NP::ProductOf => match args {
+                            [a, b, c] => ProductOf(a.clone(), b.clone(), c.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 3, args.len())),
+                        },
+                        NP::MaxOf => match args {
+                            [a, b, c] => MaxOf(a.clone(), b.clone(), c.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 3, args.len())),
+                        },
+                        NP::HashOf => match args {
+                            [a, b, c] => HashOf(a.clone(), b.clone(), c.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 3, args.len())),
+                        },
+                        NP::PublicKeyOf => match args {
+                            [a, b] => PublicKeyOf(a.clone(), b.clone()),
+                            _ => return Err(SolverError::arg_mismatch(*np, 2, args.len())),
+                        },
+                        // Syntactic sugar predicates can't be used here
+                        NP::ArrayContains
+                        | NP::SetContains
+                        | NP::DictContains
+                        | NP::SetNotContains
+                        | NP::DictNotContains
+                        | NP::GtEq
+                        | NP::Gt
+                        // We never produce None or False statements
+                        | NP::None
+                        | NP::False => {
+                            return Err(SolverError::Internal(format!(
+                                "Native Predicate not supported: {np:?}"
+                            )));
                         }
                     };
                     Ok(s)

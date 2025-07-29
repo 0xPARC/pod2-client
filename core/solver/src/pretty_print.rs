@@ -38,8 +38,12 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
-use pod2::middleware::{
-    CustomPredicateRef, Hash, Predicate, StatementTmpl, StatementTmplArg, Value, ValueRef, Wildcard,
+use pod2::{
+    lang::PrettyPrint,
+    middleware::{
+        CustomPredicateRef, Hash, Predicate, StatementTmpl, StatementTmplArg, Value, ValueRef,
+        Wildcard,
+    },
 };
 
 use crate::{
@@ -49,32 +53,7 @@ use crate::{
 
 /// Pretty-print a Value, showing only the essential typed information
 pub fn format_value(value: &Value) -> String {
-    match value.typed() {
-        pod2::middleware::TypedValue::Int(i) => i.to_string(),
-        pod2::middleware::TypedValue::String(s) => format!("\"{s}\""),
-        pod2::middleware::TypedValue::Bool(b) => b.to_string(),
-        pod2::middleware::TypedValue::Array(a) => {
-            let items: Vec<String> = a.array().iter().map(format_value).collect();
-            format!("[{}]", items.join(", "))
-        }
-        pod2::middleware::TypedValue::Dictionary(d) => {
-            let items: Vec<String> = d
-                .kvs()
-                .iter()
-                .map(|(k, v)| format!("{}: {}", k, format_value(v)))
-                .collect();
-            format!("{{{}}}", items.join(", "))
-        }
-        pod2::middleware::TypedValue::Set(s) => {
-            let items: Vec<String> = s.set().iter().map(format_value).collect();
-            format!("#{{{}}}", items.join(", "))
-        }
-        pod2::middleware::TypedValue::PublicKey(pk) => format!("PublicKey({pk})"),
-        pod2::middleware::TypedValue::PodId(id) => format!("PodId({})", format_hash(&id.0)),
-        pod2::middleware::TypedValue::Raw(raw) => {
-            format!("Raw({})", format_hash(&Hash::from(*raw)))
-        }
-    }
+    value.to_podlang_string()
 }
 
 /// Pretty-print a Hash, showing only the first 8 characters
