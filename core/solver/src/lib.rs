@@ -228,6 +228,13 @@ mod tests {
             .unwrap()
             .request_templates;
 
+        let context = SolverContext {
+            pods: &[
+                IndexablePod::main_pod(&alice_bob_pod),
+                IndexablePod::signed_pod(&bob_attestation),
+            ],
+            keys: &[],
+        };
         let (result, _metrics) = solve(&request, &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
