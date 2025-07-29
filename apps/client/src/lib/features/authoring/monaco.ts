@@ -21,6 +21,12 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
     "REQUEST",
     "AND",
     "OR",
+    "use",
+    "from",
+    "SELF",
+    "Raw",
+    "PublicKey",
+    "SecretKey",
     "ValueOf",
     "Equal",
     "NotEqual",
@@ -38,7 +44,8 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
     "DictNotContains",
     "ArrayContains",
     "SetContains",
-    "SetNotContains"
+    "SetNotContains",
+    "PublicKeyOf"
   ],
 
   operators: ["="],
@@ -53,15 +60,32 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
       // Whitespace and comments
       { include: "@whitespace" },
 
-      // Specific keywords with symbols or specific prefixes first
+      // Complex literals must come first to avoid partial matches
+      // Raw Literals
+      [/Raw\(0x[0-9a-fA-F]{64}\)/, "constant.other.raw.Podlang"],
+
+      // PublicKey Literals (base58 characters: 1-9, A-H, J-N, P-Z, a-k, m-z)
+      [
+        /PublicKey\([1-9A-HJ-NP-Za-km-z]+\)/,
+        "constant.other.publickey.Podlang"
+      ],
+
+      // SecretKey Literals (base64 characters: a-z, A-Z, 0-9, +, /, =)
+      [/SecretKey\([a-zA-Z0-9+/=]+\)/, "constant.other.secretkey.Podlang"],
+
+      // Specific keywords with symbols or specific prefixes
       [/private:/, "keyword"],
 
-      // --- Literals ---
+      // Import statements: "use ... from ..."
+      [/\\buse\\b/, "keyword.control.import.Podlang"],
+      [/\\bfrom\\b/, "keyword.control.import.Podlang"],
+
       // Boolean Literals (placed before general identifiers)
       [/\\b(true|false)\\b/, "constant.language.boolean.Podlang"],
 
       // Number Literals
-      [/0[xX][0-9a-fA-F]+/, "constant.numeric.hex.Podlang"], // Hex
+      [/0x[0-9a-fA-F]{64}/, "constant.numeric.hash.Podlang"], // Hash hex (exactly 64 hex digits)
+      [/0[xX][0-9a-fA-F]+/, "constant.numeric.hex.Podlang"], // General hex
       [/-?\\d+/, "constant.numeric.integer.Podlang"], // Integer
 
       // String Literals
@@ -82,6 +106,9 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
         }
       ],
 
+      // Anchored Keys: ?var["key"]
+      [/\\?[a-zA-Z_][a-zA-Z0-9_]*\\["[^"]*"\\]/, "variable.anchored.Podlang"],
+
       // Variables: start with '?', use explicit char class
       [/\\?[a-zA-Z_][a-zA-Z0-9_]*/, "variable.name.Podlang"],
 
@@ -97,6 +124,7 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
       ],
 
       // Delimiters and brackets
+      [/#\[/, "delimiter.set.open.Podlang"],
       [/[\\[\\]]/, "delimiter.square.Podlang"], // For arrays/sets
       [/[\\{\\}]/, "delimiter.curly.Podlang"], // For dictionaries
       [/[()]/, "delimiter.parenthesis.Podlang"],
