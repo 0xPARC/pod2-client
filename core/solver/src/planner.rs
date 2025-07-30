@@ -155,20 +155,18 @@ fn propagate_arithmetic_constraints(
         }
 
         NativePredicate::PublicKeyOf => {
-            // PublicKeyOf(?pk, ?sk): if ?pk is bound, ?sk becomes bound
-            if args.len() == 2 {
-                let pk_is_bound = match &args[0] {
-                    StatementTmplArg::Literal(_) => true,
-                    StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
-                    _ => false,
-                };
-
-                if pk_is_bound {
-                    if let Some(w_sk) = &arg_wildcards[1] {
-                        if !bound_vars.contains(w_sk) {
-                            newly_bound.insert(w_sk.clone());
-                        }
-                    }
+            if let (StatementTmplArg::Wildcard(w_pk), StatementTmplArg::Wildcard(w_sk)) =
+                (&args[0], &args[1])
+            {
+                if !bound_vars.contains(w_pk) && bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_pk.clone()); // pk = f(sk)
+                }
+                if bound_vars.contains(w_pk) && !bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_sk.clone()); // sk = db_lookup(pk)
+                }
+                if !bound_vars.contains(w_pk) && !bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_pk.clone());
+                    newly_bound.insert(w_sk.clone());
                 }
             }
         }
