@@ -324,7 +324,7 @@ pub async fn execute_code_command(
     };
 
     let result_main_pod = builder
-        .prove(&*prover, &params)
+        .prove(&*prover)
         .map_err(|e| format!("Failed to prove: {e}"))?;
 
     let result = ExecuteCodeResponse {

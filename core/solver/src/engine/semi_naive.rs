@@ -1470,7 +1470,7 @@ mod tests {
         builder.add_signed_pod(&alice_attestation);
         builder.add_signed_pod(&bob_attestation);
 
-        let result = builder.prove(&prover, &params);
+        let result = builder.prove(&prover);
         assert!(result.is_ok(), "Should prove");
         let pod = result.unwrap();
         let bindings = request.exact_match_pod(&*pod.pod).unwrap();

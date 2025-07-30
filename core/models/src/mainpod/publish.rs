@@ -235,7 +235,7 @@ pub fn prove_publish_verification_with_solver(
     }
 
     let main_pod = builder
-        .prove(&*prover, &pod_params)
+        .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
