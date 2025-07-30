@@ -928,7 +928,6 @@ mod tests {
         metrics::{DebugMetrics, NoOpMetrics},
         planner::Planner,
         proof::Justification,
-        vis,
     };
 
     fn pod_id_from_name(name: &str) -> PodId {
@@ -976,10 +975,10 @@ mod tests {
         "#;
         let params = Params::default();
         let processed = parse(podlog, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
         let mut combined_rules = plan.magic_rules.clone();
         combined_rules.extend(plan.guarded_rules.clone());
 
@@ -1064,10 +1063,10 @@ mod tests {
         );
         let params = Params::default();
         let processed = parse(&podlog, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
         let mut combined_rules = plan.magic_rules.clone();
         combined_rules.extend(plan.guarded_rules.clone());
 
@@ -1179,10 +1178,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(&podlog, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // 3. Execute plan – run magic and guarded rules together so that
         // recursive dependencies between data and magic predicates are
@@ -1286,10 +1285,10 @@ mod tests {
         "#;
 
         let processed = parse(program, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         let mut engine = SemiNaiveEngine::new(NoOpMetrics);
         let result = engine.execute(&plan, &materializer);
@@ -1344,10 +1343,10 @@ mod tests {
         "#;
         let params = Params::default();
         let processed = parse(podlog, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // 4. Execute plan
         let mut engine = SemiNaiveEngine::new(NoOpMetrics);
@@ -1409,10 +1408,10 @@ mod tests {
         let materializer = Materializer::new(db.clone());
 
         let processed = parse(&req1, &params, std::slice::from_ref(&batch)).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // 4. Execute plan
         let mut engine = SemiNaiveEngine::new(NoOpMetrics);
@@ -1473,8 +1472,10 @@ mod tests {
 
         let result = builder.prove(&prover, &params);
         assert!(result.is_ok(), "Should prove");
-        println!("Main pod: {}", result.unwrap());
-        println!("{}", vis::mermaid_markdown(&proof));
+        let pod = result.unwrap();
+        let bindings = request.exact_match_pod(&*pod.pod).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings.get("Distance").unwrap(), &Value::from(2));
     }
 
     #[test]
@@ -1570,10 +1571,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(&podlog, &params, &[]).unwrap();
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // --- Execute plan ---
         let mut engine = SemiNaiveEngine::new(DebugMetrics::default());

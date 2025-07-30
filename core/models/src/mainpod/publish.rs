@@ -192,7 +192,7 @@ pub fn prove_publish_verification_with_solver(
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
         .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-        .request_templates;
+        .request;
 
     // Provide all three pods as facts
     let pods = [
@@ -202,7 +202,7 @@ pub fn prove_publish_verification_with_solver(
 
     // Let the solver find the proof
     let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(&request, &context, MetricsLevel::Counters)
+    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
@@ -267,14 +267,14 @@ pub fn verify_publish_verification_with_solver(
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
         .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-        .request_templates;
+        .request;
 
     // Provide all three pods as facts
     let pods = [IndexablePod::main_pod(main_pod)];
 
     // Let the solver find the proof
     let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(&request, &context, MetricsLevel::Counters)
+    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
     println!("GOT PROOF: {proof}");
 

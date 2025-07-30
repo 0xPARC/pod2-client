@@ -107,7 +107,7 @@ pub async fn submit_pod_request(
         original_main_pods.insert(main_pod_ref.id(), main_pod_ref);
     }
 
-    let request_templates = pod_request.request_templates;
+    let request_templates = pod_request.request.templates();
 
     let sk = store::get_default_private_key(&app_state.db)
         .await
@@ -115,7 +115,7 @@ pub async fn submit_pod_request(
         .clone();
     let sks = vec![sk];
     let context = SolverContext::new(&all_pods_for_facts, &sks);
-    let (proof, _) = match pod2_solver::solve(&request_templates, &context, MetricsLevel::None) {
+    let (proof, _) = match pod2_solver::solve(request_templates, &context, MetricsLevel::None) {
         Ok(solution) => solution,
         Err(e) => {
             log::error!("Solver error: {e:?}");

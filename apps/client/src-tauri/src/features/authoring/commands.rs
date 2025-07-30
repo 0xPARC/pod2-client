@@ -202,7 +202,7 @@ pub async fn execute_code_command(
         }
     };
 
-    if processed_output.request_templates.is_empty() {
+    if processed_output.request.templates().is_empty() {
         return Err("Program does not contain a POD Request".to_string());
     }
 
@@ -270,7 +270,7 @@ pub async fn execute_code_command(
         all_pods_for_facts.push(IndexablePod::main_pod(main_pod_ref));
     }
 
-    let request_templates = processed_output.request_templates;
+    let request_templates = processed_output.request.templates();
 
     let sk = store::get_default_private_key(&app_state.db)
         .await
@@ -279,7 +279,7 @@ pub async fn execute_code_command(
     let sks = vec![sk];
     let context = SolverContext::new(&all_pods_for_facts, &sks);
     // Solve the query
-    let (proof, _) = match pod2_solver::solve(&request_templates, &context, MetricsLevel::None) {
+    let (proof, _) = match pod2_solver::solve(request_templates, &context, MetricsLevel::None) {
         Ok(solution) => solution,
         Err(e) => {
             log::error!("Solver error: {e:?}");

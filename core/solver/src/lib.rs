@@ -126,6 +126,8 @@ pub fn solve_with_tracing(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use hex::ToHex;
     use pod2::{
         backends::plonky2::{
@@ -133,10 +135,11 @@ mod tests {
         },
         examples::{
             attest_eth_friend, custom::eth_dos_batch, zu_kyc_sign_pod_builders, MOCK_VD_SET,
+            ZU_KYC_NOW_MINUS_18Y, ZU_KYC_NOW_MINUS_1Y, ZU_KYC_SANCTION_LIST,
         },
         frontend::{MainPodBuilder, OperationArg},
         lang::parse,
-        middleware::{NativeOperation, OperationType, Params, Value},
+        middleware::{containers::Set, NativeOperation, OperationType, Params, Value},
     };
 
     use super::*;
@@ -175,14 +178,15 @@ mod tests {
 
         let request = parse(&req1, &params, std::slice::from_ref(&batch))
             .unwrap()
-            .request_templates;
+            .request;
 
         let context = SolverContext {
             pods: &[IndexablePod::signed_pod(&alice_attestation)],
             keys: &[],
         };
 
-        let (result, _metrics) = solve(&request, &context, MetricsLevel::Counters).unwrap();
+        let (result, _metrics) =
+            solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -201,6 +205,9 @@ mod tests {
         builder.add_signed_pod(&alice_attestation);
 
         let alice_bob_pod = builder.prove(&prover, &params).unwrap();
+        let bindings = request.exact_match_pod(&*alice_bob_pod.pod).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings.get("Distance").unwrap(), &Value::from(1));
         println!("{alice_bob_pod}");
 
         let req2 = format!(
@@ -218,7 +225,7 @@ mod tests {
 
         let request = parse(&req2, &params, std::slice::from_ref(&batch))
             .unwrap()
-            .request_templates;
+            .request;
 
         let context = SolverContext {
             pods: &[
@@ -227,7 +234,8 @@ mod tests {
             ],
             keys: &[],
         };
-        let (result, _metrics) = solve(&request, &context, MetricsLevel::Counters).unwrap();
+        let (result, _metrics) =
+            solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -248,6 +256,9 @@ mod tests {
         builder.add_recursive_pod(alice_bob_pod);
 
         let bob_charlie_pod = builder.prove(&prover, &params).unwrap();
+        let bindings = request.exact_match_pod(&*bob_charlie_pod.pod).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings.get("Distance").unwrap(), &Value::from(2));
         println!("{bob_charlie_pod}");
     }
 
@@ -256,23 +267,26 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
         let params = Params::default();
 
-        let const_18y = 1169909388;
-        let const_1y = 1706367566;
+        let const_18y = ZU_KYC_NOW_MINUS_18Y;
+        let const_1y = ZU_KYC_NOW_MINUS_1Y;
+        let sanctions_values: HashSet<Value> = ZU_KYC_SANCTION_LIST
+            .iter()
+            .map(|s| Value::from(*s))
+            .collect();
+        let sanction_set =
+            Value::from(Set::new(params.max_depth_mt_containers, sanctions_values).unwrap());
 
-        let (gov_id, pay_stub, sanction_list) = zu_kyc_sign_pod_builders(&params);
+        let (gov_id, pay_stub) = zu_kyc_sign_pod_builders(&params);
         let signer = Signer(SecretKey::new_rand());
         let gov_id = gov_id.sign(&signer).unwrap();
 
         let signer = Signer(SecretKey::new_rand());
         let pay_stub = pay_stub.sign(&signer).unwrap();
 
-        let signer = Signer(SecretKey::new_rand());
-        let sanction_list = sanction_list.sign(&signer).unwrap();
-
         let zukyc_request = format!(
             r#"
         REQUEST(
-            NotContains(?sanctions["sanctionList"], ?gov["idNumber"])
+            NotContains({sanction_set}, ?gov["idNumber"])
             Lt(?gov["dateOfBirth"], {const_18y})
             Equal(?pay["startDate"], {const_1y})
             Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
@@ -281,14 +295,11 @@ mod tests {
         "#
         );
 
-        let request = parse(&zukyc_request, &params, &[])
-            .unwrap()
-            .request_templates;
+        let request = parse(&zukyc_request, &params, &[]).unwrap().request;
 
         let pods = [
             IndexablePod::signed_pod(&gov_id),
             IndexablePod::signed_pod(&pay_stub),
-            IndexablePod::signed_pod(&sanction_list),
         ];
 
         let context = SolverContext {
@@ -296,7 +307,7 @@ mod tests {
             keys: &[],
         };
 
-        let (result, _) = solve(&request, &context, MetricsLevel::Counters).unwrap();
+        let (result, _) = solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -338,14 +349,14 @@ mod tests {
             &[],
         )
         .unwrap();
-        let request = request.request_templates;
+        let request = request.request;
         let context = SolverContext::new(&[], &[]);
-        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
         assert!(solve_result.is_err());
 
         let sks = vec![sk.clone()];
         let context = SolverContext::new(&[], &sks);
-        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
         assert!(solve_result.is_ok());
         let (proof, _) = solve_result.unwrap();
         let (pod_ids, ops) = proof.to_inputs();
@@ -388,10 +399,10 @@ REQUEST(
             &[],
         )
         .unwrap();
-        let request = request.request_templates;
+        let request = request.request;
         let sks = vec![sk.clone()];
         let context = SolverContext::new(&[], &sks);
-        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
         assert!(solve_result.is_ok());
         let (proof, _) = solve_result.unwrap();
         let (_pod_ids, ops) = proof.to_inputs();
