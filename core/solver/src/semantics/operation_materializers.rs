@@ -167,7 +167,7 @@ fn materialize_new_entry(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact
     };
 
     // Check if first arg is SELF-referencing anchored key
-    if let ValueRef::Key(ak) = vr0 {
+    if let (ValueRef::Key(ak), ValueRef::Literal(_)) = (vr0, vr1) {
         if ak.pod_id == SELF {
             Some(Fact {
                 source: FactSource::NewEntry,
