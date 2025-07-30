@@ -112,6 +112,11 @@ impl Proof {
     /// Walks the proof graph in post-order and produces an `Operation` for each
     /// justification. The resulting vector of operations is ordered such that
     /// any operation's premises are guaranteed to have appeared earlier in the list.
+    ///
+    /// Handles duplicate operations by:
+    /// - If the same operation appears multiple times, only the first occurrence is kept
+    /// - If any occurrence is public, all instances become public
+    /// - Later duplicates are removed while preserving post-order semantics
     pub fn to_operations(&self) -> Vec<(Operation, bool)> {
         // Identify nodes that correspond to the *direct premises* of the synthetic
         // `_request_goal` root.  Those should become **public** operations.
@@ -126,7 +131,9 @@ impl Proof {
             }
         }
 
-        self.walk_post_order()
+        // First, collect all operations with their visibility flags
+        let all_operations: Vec<(Operation, bool)> = self
+            .walk_post_order()
             .into_iter()
             .flat_map(|node| {
                 let is_public = public_nodes.contains(&Arc::as_ptr(&node));
@@ -226,7 +233,36 @@ impl Proof {
                     .map(|op| (op, is_public))
                     .collect::<Vec<_>>()
             })
-            .collect()
+            .collect();
+
+        // Now deduplicate operations, applying visibility conflict resolution
+        // Since Operation doesn't implement Hash/Eq, we'll use manual deduplication
+        let mut result: Vec<(Operation, bool)> = Vec::new();
+
+        for (operation, is_public) in all_operations {
+            // Check if we've already seen this operation
+            let mut found_duplicate = false;
+
+            for (existing_op, existing_public) in result.iter_mut() {
+                // Manual equality check using Debug representation as a proxy
+                // This is not ideal but works for deduplication purposes
+                if format!("{existing_op:?}") == format!("{operation:?}") {
+                    // Apply precedence rule: if any instance is public, make it public
+                    if is_public {
+                        *existing_public = true;
+                    }
+                    found_duplicate = true;
+                    break;
+                }
+            }
+
+            // If no duplicate found, add this operation
+            if !found_duplicate {
+                result.push((operation, is_public));
+            }
+        }
+
+        result
     }
 
     fn post_order_traverse(

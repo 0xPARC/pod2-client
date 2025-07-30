@@ -363,4 +363,53 @@ mod tests {
             ] if pk_val == &Value::from(pk) && sk_val == &Value::from(sk.clone())
         ));
     }
+
+    #[test]
+    fn test_repeated_statements() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let params = Params::default();
+        let sk = SecretKey::new_rand();
+        let pk = Value::from(sk.public_key());
+        let request = parse(
+            &format!(
+                r#"
+owned_public_key(pk, pod_id, private: sk) = AND(
+    PublicKeyOf(?pk, ?sk)
+    Equal(?pod_id, SELF)
+)
+
+REQUEST(
+    PublicKeyOf({pk}, ?sk)
+    owned_public_key({pk}, SELF)
+)
+            "#
+            ),
+            &params,
+            &[],
+        )
+        .unwrap();
+        let request = request.request_templates;
+        let sks = vec![sk.clone()];
+        let context = SolverContext::new(&[], &sks);
+        let solve_result = solve(&request, &context, MetricsLevel::Counters);
+        assert!(solve_result.is_ok());
+        let (proof, _) = solve_result.unwrap();
+        let (_pod_ids, ops) = proof.to_inputs();
+
+        let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
+
+        for (op, public) in ops {
+            if public {
+                builder.pub_op(op).unwrap();
+            } else {
+                builder.priv_op(op).unwrap();
+            }
+        }
+
+        let prover = MockProver {};
+        let pod = builder.prove(&prover, &params).unwrap();
+
+        assert_eq!(pod.public_statements.len(), 3); // Including the _type statement
+        println!("{pod}");
+    }
 }

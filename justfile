@@ -18,7 +18,7 @@ format:
 # Client development commands
 # Default: dev mode with release build and staging servers (recommended for most development)
 client-dev:
-    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging --set database.name=staging.db
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging --set database.name=staging.db --set logging.level="debug"
 
 # Dev mode with debug build (slower, better for debugging)
 client-dev-debug:

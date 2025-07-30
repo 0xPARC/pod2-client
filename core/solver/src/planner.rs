@@ -154,6 +154,25 @@ fn propagate_arithmetic_constraints(
             }
         }
 
+        NativePredicate::PublicKeyOf => {
+            // PublicKeyOf(?pk, ?sk): if ?pk is bound, ?sk becomes bound
+            if args.len() == 2 {
+                let pk_is_bound = match &args[0] {
+                    StatementTmplArg::Literal(_) => true,
+                    StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
+                    _ => false,
+                };
+
+                if pk_is_bound {
+                    if let Some(w_sk) = &arg_wildcards[1] {
+                        if !bound_vars.contains(w_sk) {
+                            newly_bound.insert(w_sk.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         _ => {
             // For other predicates, no constraint propagation
         }
