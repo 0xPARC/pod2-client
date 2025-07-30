@@ -7,13 +7,14 @@ mod tests {
     use pod2::{
         backends::plonky2::primitives::ec::schnorr::SecretKey,
         middleware::{
-            containers::Dictionary, hash_str, AnchoredKey, Key, NativePredicate, Params, PodId,
-            Value, ValueRef, SELF,
+            containers::Dictionary, hash_str, AnchoredKey, Key, NativeOperation, NativePredicate,
+            Params, PodId, Value, ValueRef, SELF,
         },
     };
 
     use crate::{
-        db::FactDB, engine::semi_naive::FactSource,
+        db::FactDB,
+        engine::semi_naive::{Fact, FactSource},
         semantics::operation_materializers::OperationMaterializer,
     };
 
@@ -889,11 +890,14 @@ mod tests {
 
         let args = vec![
             Some(ValueRef::from(sk.public_key())),
-            Some(ValueRef::from(sk)),
+            Some(ValueRef::from(sk.clone())),
         ];
 
-        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
-        assert!(result.is_some());
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert_eq!(relation.len(), 1);
+        let fact = relation.iter().next().unwrap();
+        assert_eq!(fact.args[0], ValueRef::from(sk.public_key()));
+        assert_eq!(fact.args[1], ValueRef::from(sk));
     }
 
     #[test]
@@ -905,11 +909,60 @@ mod tests {
 
         let args = vec![Some(ValueRef::from(sk.public_key())), None];
 
-        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
-        assert!(result.is_some());
-        let fact = result.unwrap();
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert_eq!(relation.len(), 1);
+        let fact = relation.iter().next().unwrap();
         assert_eq!(fact.args[0], ValueRef::from(sk.public_key()));
         assert_eq!(fact.args[1], ValueRef::from(sk));
+    }
+
+    #[test]
+    fn test_public_key_of_deduce_pk() {
+        let mut db = create_test_db();
+        let sk = SecretKey::new_rand();
+        db.add_keypair(sk.clone());
+        let materializer = OperationMaterializer::PublicKeyOf;
+
+        let args = vec![None, Some(ValueRef::from(sk.clone()))];
+
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert_eq!(relation.len(), 1);
+        let fact = relation.iter().next().unwrap();
+        assert_eq!(fact.args[0], ValueRef::from(sk.public_key()));
+        assert_eq!(fact.args[1], ValueRef::from(sk));
+    }
+
+    #[test]
+    fn test_public_key_of_unbound_produces_all_pairs() {
+        let mut db = create_test_db();
+        let sk1 = SecretKey::new_rand();
+        let sk2 = SecretKey::new_rand();
+        db.add_keypair(sk1.clone());
+        db.add_keypair(sk2.clone());
+        let materializer = OperationMaterializer::PublicKeyOf;
+
+        let args = vec![None, None];
+
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert_eq!(relation.len(), 2);
+
+        let fact1 = Fact {
+            source: FactSource::Native(NativeOperation::PublicKeyOf),
+            args: vec![
+                ValueRef::from(sk1.public_key()),
+                ValueRef::from(sk1.clone()),
+            ],
+        };
+        let fact2 = Fact {
+            source: FactSource::Native(NativeOperation::PublicKeyOf),
+            args: vec![
+                ValueRef::from(sk2.public_key()),
+                ValueRef::from(sk2.clone()),
+            ],
+        };
+
+        assert!(relation.contains(&fact1));
+        assert!(relation.contains(&fact2));
     }
 
     #[test]
@@ -922,8 +975,8 @@ mod tests {
             Some(ValueRef::from(SecretKey::new_rand())),
         ];
 
-        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
-        assert!(result.is_none());
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert!(relation.is_empty());
     }
 
     #[test]
@@ -935,8 +988,8 @@ mod tests {
             Some(ValueRef::from(SecretKey::new_rand().public_key())),
             None,
         ];
-        let result = materializer.materialize(&args, &db, NativePredicate::PublicKeyOf);
-        assert!(result.is_none());
+        let relation = materializer.materialize_relation(&args, &db, NativePredicate::PublicKeyOf);
+        assert!(relation.is_empty());
     }
 
     // ================================================================================================

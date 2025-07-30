@@ -14,7 +14,7 @@ use pod2::{
 
 use crate::{
     db::FactDB,
-    engine::semi_naive::{Fact, FactSource},
+    engine::semi_naive::{Fact, FactSource, Relation},
     error::SolverError,
 };
 
@@ -87,7 +87,7 @@ impl OperationMaterializer {
             NativePredicate::ProductOf => &[Self::ProductOf, Self::CopyStatement],
             NativePredicate::MaxOf => &[Self::MaxOf, Self::CopyStatement],
             NativePredicate::HashOf => &[Self::HashOf, Self::CopyStatement],
-            NativePredicate::PublicKeyOf => &[Self::PublicKeyOf, Self::CopyStatement],
+            NativePredicate::PublicKeyOf => &[Self::PublicKeyOf],
             NativePredicate::None => &[Self::None],
             NativePredicate::False => &[], // No operations can produce False
             // Syntactic sugar predicates are transformed by frontend compiler, so we don't need materializers for them.
@@ -102,6 +102,21 @@ impl OperationMaterializer {
     }
 
     /// Attempts to materialize a fact using this operation with the given arguments
+    pub fn materialize_relation(
+        &self,
+        args: &[Option<ValueRef>],
+        db: &FactDB,
+        predicate: NativePredicate,
+    ) -> Relation {
+        match self {
+            OperationMaterializer::PublicKeyOf => materialize_public_key_of(args, db),
+            m => m
+                .materialize(args, db, predicate)
+                .into_iter()
+                .collect::<Relation>(),
+        }
+    }
+
     pub fn materialize(
         &self,
         args: &[Option<ValueRef>],
@@ -126,7 +141,7 @@ impl OperationMaterializer {
             Self::ProductOf => materialize_product_of(args, db),
             Self::MaxOf => materialize_max_of(args, db),
             Self::HashOf => materialize_hash_of(args, db),
-            Self::PublicKeyOf => materialize_public_key_of(args, db),
+            Self::PublicKeyOf => unimplemented!("PublicKeyOf should use materialize_relation"),
         }
     }
 
@@ -854,12 +869,13 @@ fn materialize_hash_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
     })
 }
 
-fn materialize_public_key_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
+fn materialize_public_key_of(args: &[Option<ValueRef>], db: &FactDB) -> Relation {
     if args.len() != 2 {
-        return None;
+        return Relation::new();
     }
 
     match (&args[0], &args[1]) {
+        // Both PK and SK are bound: check if they match.
         (Some(vr0), Some(vr1)) => {
             if let (Some(val0), Some(val1)) =
                 (db.value_ref_to_value(vr0), db.value_ref_to_value(vr1))
@@ -868,35 +884,56 @@ fn materialize_public_key_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<F
                     (val0.typed(), val1.typed())
                 {
                     if sk.public_key() == *pk {
-                        Some(Fact {
+                        return std::iter::once(Fact {
                             source: FactSource::Native(NativeOperation::PublicKeyOf),
                             args: vec![vr0.clone(), vr1.clone()],
                         })
-                    } else {
-                        None
+                        .collect();
                     }
-                } else {
-                    None
                 }
-            } else {
-                None
             }
+            Relation::new()
         }
-        (Some(vr0), None) => {
-            if let Some(val0) = db.value_ref_to_value(vr0) {
-                if let TypedValue::PublicKey(pk) = val0.typed() {
-                    db.get_secret_key(&pk.to_string()).map(|sk| Fact {
+
+        // Only SK is bound: deduce PK.
+        (None, Some(vr1)) => {
+            if let Some(val1) = db.value_ref_to_value(vr1) {
+                if let TypedValue::SecretKey(sk) = val1.typed() {
+                    let pk = sk.public_key();
+                    let pk_val = Value::from(TypedValue::PublicKey(pk));
+                    return std::iter::once(Fact {
                         source: FactSource::Native(NativeOperation::PublicKeyOf),
-                        args: vec![vr0.clone(), ValueRef::from(sk.clone())],
+                        args: vec![ValueRef::Literal(pk_val), vr1.clone()],
                     })
-                } else {
-                    None
+                    .collect();
                 }
-            } else {
-                None
             }
+            Relation::new()
         }
-        _ => None,
+
+        // Unbound or only PK is bound: iterate all known keypairs.
+        _ => db
+            .keypairs_iter()
+            .filter_map(|sk| {
+                let pk = sk.public_key();
+                let pk_val = Value::from(TypedValue::PublicKey(pk));
+                let sk_val = Value::from(TypedValue::SecretKey(sk.clone()));
+                let pk_vr = ValueRef::Literal(pk_val);
+                let sk_vr = ValueRef::Literal(sk_val);
+
+                // If PK is bound, check if it matches.
+                if let Some(vr0) = &args[0] {
+                    if vr0 != &pk_vr {
+                        return None;
+                    }
+                }
+
+                Some(Fact {
+                    source: FactSource::Native(NativeOperation::PublicKeyOf),
+                    args: vec![pk_vr, sk_vr],
+                })
+            })
+            .collect(),
     }
 }
 

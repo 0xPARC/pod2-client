@@ -268,6 +268,10 @@ impl FactDB {
         self.keypairs.get(public_key_string)
     }
 
+    pub fn keypairs_iter(&self) -> impl Iterator<Item = &SecretKey> {
+        self.keypairs.values()
+    }
+
     pub fn add_keypair(&mut self, secret_key: SecretKey) {
         self.keypairs
             .insert(secret_key.public_key().to_string(), secret_key);
