@@ -123,6 +123,9 @@ export type ValueRef =
  */
 export type Value =
   | {
+      PodId: Hash;
+    }
+  | {
       /**
        * An i64 represented as a string.
        */

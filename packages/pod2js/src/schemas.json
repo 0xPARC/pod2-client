@@ -1057,6 +1057,17 @@
         {
           "type": "object",
           "required": [
+            "PodId"
+          ],
+          "properties": {
+            "PodId": {
+              "$ref": "#/definitions/PodId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
             "Int"
           ],
           "properties": {

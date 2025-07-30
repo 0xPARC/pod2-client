@@ -1,13 +1,13 @@
 import {
-  ChevronDown,
-  ChevronUp,
+  AlertTriangle,
   CheckCircle,
-  AlertTriangle
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
-import { Button } from "../ui/button";
 import { useAppStore } from "../../lib/store";
 import MainPodCard from "../MainPodCard";
+import { Button } from "../ui/button";
 
 interface EditorResultsProps {
   isOpen: boolean;
@@ -112,7 +112,7 @@ export function EditorResults({
 
   return (
     <div
-      className={`bg-sidebar border-t border-sidebar-border ${className || ""}`}
+      className={`bg-sidebar border-t border-sidebar-border overflow-scroll max-h-full ${className || ""}`}
     >
       {/* Results Header */}
       <div className="flex items-center justify-between p-3 bg-sidebar border-b border-sidebar-border">
@@ -142,7 +142,7 @@ export function EditorResults({
       </div>
 
       {/* Results Content */}
-      {isOpen && <div className="max-h-96 overflow-scroll">{content}</div>}
+      {isOpen && <div>{content}</div>}
     </div>
   );
 }

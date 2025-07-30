@@ -323,7 +323,9 @@ pub async fn execute_code_command(
         Box::new(Prover {})
     };
 
-    let result_main_pod = builder.prove(&*prover, &params).unwrap();
+    let result_main_pod = builder
+        .prove(&*prover, &params)
+        .map_err(|e| format!("Failed to prove: {e}"))?;
 
     let result = ExecuteCodeResponse {
         main_pod: result_main_pod,
