@@ -18,7 +18,7 @@ format:
 # Client development commands
 # Default: dev mode with release build and staging servers (recommended for most development)
 client-dev:
-    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging --set database.name=staging.db
+    cd apps/client && pnpm tauri dev --release -- -- --set network.document_server=https://pod-server.ghost-spica.ts.net/server-staging --set network.identity_server=https://pod-server.ghost-spica.ts.net/identity-staging --set database.name=staging.db --set logging.level="debug"
 
 # Dev mode with debug build (slower, better for debugging)
 client-dev-debug:
@@ -130,3 +130,13 @@ check-quick:
     cargo fmt --check
     cargo clippy --all-targets -- -D warnings
     pnpm lint
+
+# Generate JSON schemas
+generate-schemas:
+    cargo run --release -p pod-jsonschema > packages/pod2js/src/schemas.json
+
+update-ts-types:
+    # generate schemas
+    just generate-schemas
+    # update ts types
+    cd packages/pod2js && pnpm gen-types

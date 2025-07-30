@@ -51,11 +51,6 @@ use crate::{
     ir::{Atom, PredicateIdentifier, Rule},
 };
 
-/// Pretty-print a Value, showing only the essential typed information
-pub fn format_value(value: &Value) -> String {
-    value.to_podlang_string()
-}
-
 /// Pretty-print a Hash, showing only the first 8 characters
 pub fn format_hash(hash: &Hash) -> String {
     let hex = hex::ToHex::encode_hex::<String>(hash);
@@ -70,7 +65,7 @@ pub fn format_wildcard(wildcard: &Wildcard) -> String {
 /// Pretty-print a StatementTmplArg
 pub fn format_statement_arg(arg: &StatementTmplArg) -> String {
     match arg {
-        StatementTmplArg::Literal(value) => format_value(value),
+        StatementTmplArg::Literal(value) => value.to_podlang_string(),
         StatementTmplArg::Wildcard(wildcard) => format_wildcard(wildcard),
         StatementTmplArg::AnchoredKey(wildcard, key) => {
             format!("{}[{}]", format_wildcard(wildcard), key)
@@ -141,7 +136,7 @@ pub fn format_statement_template(stmt: &StatementTmpl) -> String {
 pub fn format_bindings(bindings: &HashMap<Wildcard, Value>) -> String {
     let mut items: Vec<String> = bindings
         .iter()
-        .map(|(wildcard, value)| format!("{}: {}", format_wildcard(wildcard), format_value(value)))
+        .map(|(wildcard, value)| format!("{}: {}", format_wildcard(wildcard), value))
         .collect();
     items.sort(); // Consistent ordering
     format!("{{{}}}", items.join(", "))
@@ -176,7 +171,7 @@ pub fn format_fact_store(facts: &FactStore) -> String {
 /// Pretty-print a ValueRef
 pub fn format_value_ref(value_ref: &ValueRef) -> String {
     match value_ref {
-        ValueRef::Literal(value) => format_value(value),
+        ValueRef::Literal(value) => value.to_podlang_string(),
         ValueRef::Key(ak) => format!("{}[{}]", ak.pod_id, ak.key.name()),
     }
 }
@@ -186,7 +181,7 @@ pub fn format_value_vec(values: &[Option<Value>]) -> String {
     let formatted: Vec<String> = values
         .iter()
         .map(|opt_val| match opt_val {
-            Some(val) => format_value(val),
+            Some(val) => val.to_podlang_string(),
             None => "None".to_string(),
         })
         .collect();
@@ -264,7 +259,7 @@ pub struct PrettyValue<'a>(pub &'a Value);
 
 impl Display for PrettyValue<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{}", format_value(self.0))
+        write!(f, "{}", self.0)
     }
 }
 
@@ -367,7 +362,7 @@ impl Display for PrettyDatabaseQuery<'_> {
             self.binding_vector
                 .iter()
                 .map(|opt_val| match opt_val {
-                    Some(val) => format_value(val),
+                    Some(val) => val.to_podlang_string(),
                     None => "?".to_string(),
                 })
                 .collect::<Vec<_>>()
@@ -398,18 +393,6 @@ mod tests {
     use pod2::middleware::Value;
 
     use super::*;
-
-    #[test]
-    fn test_format_value() {
-        let int_val = Value::from(42i64);
-        assert_eq!(format_value(&int_val), "42");
-
-        let string_val = Value::from("hello");
-        assert_eq!(format_value(&string_val), "\"hello\"");
-
-        let bool_val = Value::from(true);
-        assert_eq!(format_value(&bool_val), "true");
-    }
 
     #[test]
     fn test_format_wildcard() {

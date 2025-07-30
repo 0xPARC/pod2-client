@@ -98,6 +98,14 @@ export type Statement =
        * @minItems 2
        * @maxItems 2
        */
+      args: [ValueRef, ValueRef];
+      predicate: "PublicKeyOf";
+    }
+  | {
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
       args: [CustomPredicateRef, Value[]];
       predicate: "Custom";
     };
@@ -115,6 +123,9 @@ export type ValueRef =
  */
 export type Value =
   | {
+      PodId: Hash;
+    }
+  | {
       /**
        * An i64 represented as a string.
        */
@@ -125,6 +136,9 @@ export type Value =
     }
   | {
       PublicKey: string;
+    }
+  | {
+      SecretKey: string;
     }
   | Array
   | Dictionary
@@ -179,6 +193,7 @@ export type NativePredicate =
   | "ProductOf"
   | "MaxOf"
   | "HashOf"
+  | "PublicKeyOf"
   | "DictContains"
   | "DictNotContains"
   | "SetContains"
@@ -196,10 +211,10 @@ export type PodData =
       pod_data_variant: "Main";
     };
 
-export interface SchemaContainer {
-  mainpod: MainPod;
+export interface JsonTypes {
+  main_pod: MainPod;
   pod_info: PodInfo;
-  signedpod: SignedPod;
+  signed_pod: SignedPod;
   space_info: SpaceInfo;
 }
 export interface MainPod {

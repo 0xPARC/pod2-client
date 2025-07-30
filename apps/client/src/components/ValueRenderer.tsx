@@ -5,12 +5,30 @@ import type {
   RawValue,
   Value
 } from "@pod2/pod2js";
-import React from "react";
+import React, { useState } from "react";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
+import { Badge } from "./ui/badge";
 
 interface ValueRendererProps {
   value: Value;
 }
+
+const SecretKeyRenderer: React.FC<{ secretKey: string }> = ({ secretKey }) => {
+  const [isHidden, setIsHidden] = useState(true);
+  const toggleHidden = () => setIsHidden(!isHidden);
+
+  return (
+    <span className="font-mono text-red-600 dark:text-red-400 flex items-center gap-2">
+      <div className="h-[32px] w-[32px] flex items-center justify-center">
+        <div className="text-lg">🤫</div>
+      </div>
+      {isHidden ? "*".repeat(secretKey.length) : secretKey}
+      <button onClick={toggleHidden} className="text-xs text-muted-foreground">
+        {isHidden ? "Show" : "Hide"}
+      </button>
+    </span>
+  );
+};
 
 const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
   if (value === null || value === undefined) {
@@ -52,6 +70,17 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
         <span className="font-mono text-blue-600 dark:text-blue-400 flex items-center gap-2">
           <PublicKeyAvatar publicKey={value.PublicKey} size={32} />
           {value.PublicKey}
+        </span>
+      );
+    }
+    if ("SecretKey" in value) {
+      return <SecretKeyRenderer secretKey={value.SecretKey} />;
+    }
+    if ("PodId" in value) {
+      return (
+        <span className="font-mono text-blue-600 dark:text-blue-400 flex items-center gap-2">
+          <Badge className="px-1 w-[32px]">POD</Badge>
+          0x{value.PodId}
         </span>
       );
     }

@@ -24,6 +24,8 @@ pub struct ProofReconstructor<'a> {
     all_facts: &'a FactStore,
     provenance: &'a ProvenanceStore,
     materializer: &'a Materializer,
+    /// Cache for memoizing already-constructed proof nodes.
+    memo: HashMap<(ir::PredicateIdentifier, Vec<ValueRef>), Arc<ProofNode>>,
     /// Guard against cycles in recursive rules.
     visited: HashSet<(ir::PredicateIdentifier, Vec<ValueRef>)>,
 }
@@ -38,6 +40,7 @@ impl<'a> ProofReconstructor<'a> {
             all_facts,
             provenance,
             materializer,
+            memo: HashMap::new(),
             visited: HashSet::new(),
         }
     }
@@ -56,7 +59,12 @@ impl<'a> ProofReconstructor<'a> {
         pid: &ir::PredicateIdentifier,
         fact: &Fact,
     ) -> Result<Arc<ProofNode>, SolverError> {
-        if !self.visited.insert((pid.clone(), fact.args.clone())) {
+        let key = (pid.clone(), fact.args.clone());
+        if let Some(node) = self.memo.get(&key) {
+            return Ok(node.clone());
+        }
+
+        if !self.visited.insert(key.clone()) {
             // Already constructing this node – break cycle.
             return Ok(Arc::new(ProofNode {
                 statement: Statement::None,
@@ -178,6 +186,8 @@ impl<'a> ProofReconstructor<'a> {
             }
         };
 
+        self.visited.remove(&key);
+        self.memo.insert(key, node.clone());
         Ok(node)
     }
 

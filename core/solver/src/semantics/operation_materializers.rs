@@ -240,11 +240,7 @@ fn materialize_equal_from_entries(args: &[Option<ValueRef>], db: &FactDB) -> Opt
     if let (Some(val0), Some(val1)) = (db.value_ref_to_value(vr0), db.value_ref_to_value(vr1)) {
         // Do direct value comparison
         if val0 == val1 {
-            trace!(
-                "EqualFromEntries: {} == {}",
-                crate::pretty_print::format_value(&val0),
-                crate::pretty_print::format_value(&val1)
-            );
+            trace!("EqualFromEntries: {val0} == {val1}");
             Some(Fact {
                 source: FactSource::Native(NativeOperation::EqualFromEntries),
                 args: vec![vr0.clone(), vr1.clone()],

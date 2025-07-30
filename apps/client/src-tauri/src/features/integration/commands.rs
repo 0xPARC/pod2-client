@@ -8,7 +8,7 @@ use pod2::{
     middleware::{Params, DEFAULT_VD_SET},
 };
 use pod2_db::store;
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel};
+use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, SolverContext};
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -107,16 +107,21 @@ pub async fn submit_pod_request(
         original_main_pods.insert(main_pod_ref.id(), main_pod_ref);
     }
 
-    let request_templates = pod_request.request_templates;
+    let request_templates = pod_request.request.templates();
 
-    let (proof, _) =
-        match pod2_solver::solve(&request_templates, &all_pods_for_facts, MetricsLevel::None) {
-            Ok(solution) => solution,
-            Err(e) => {
-                log::error!("Solver error: {e:?}");
-                return Err(format!("Solver error: {e:?}, request: {request}"));
-            }
-        };
+    let sk = store::get_default_private_key(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to get private key: {e}"))?
+        .clone();
+    let sks = vec![sk];
+    let context = SolverContext::new(&all_pods_for_facts, &sks);
+    let (proof, _) = match pod2_solver::solve(request_templates, &context, MetricsLevel::None) {
+        Ok(solution) => solution,
+        Err(e) => {
+            log::error!("Solver error: {e:?}");
+            return Err(format!("Solver error: {e:?}, request: {request}"));
+        }
+    };
 
     let (pod_ids, ops) = proof.to_inputs();
 

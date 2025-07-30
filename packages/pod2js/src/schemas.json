@@ -1,16 +1,21 @@
 {
-  "$schema": "https://json-schema.org/draft/2019-09/schema",
-  "title": "SchemaContainer",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JsonTypes",
   "type": "object",
-  "required": ["mainpod", "pod_info", "signedpod", "space_info"],
+  "required": [
+    "main_pod",
+    "pod_info",
+    "signed_pod",
+    "space_info"
+  ],
   "properties": {
-    "mainpod": {
+    "main_pod": {
       "$ref": "#/definitions/MainPod"
     },
     "pod_info": {
       "$ref": "#/definitions/PodInfo"
     },
-    "signedpod": {
+    "signed_pod": {
       "$ref": "#/definitions/SignedPod"
     },
     "space_info": {
@@ -20,7 +25,10 @@
   "definitions": {
     "AnchoredKey": {
       "type": "object",
-      "required": ["key", "podId"],
+      "required": [
+        "key",
+        "podId"
+      ],
       "properties": {
         "key": {
           "$ref": "#/definitions/Key"
@@ -33,7 +41,10 @@
     "Array": {
       "description": "Array: the elements are placed at the value field of each leaf, and the key field is just the array index (integer). leaf.key=i leaf.value=original_value",
       "type": "object",
-      "required": ["array", "max_depth"],
+      "required": [
+        "array",
+        "max_depth"
+      ],
       "properties": {
         "array": {
           "type": "array",
@@ -88,7 +99,11 @@
     },
     "CustomPredicateBatch": {
       "type": "object",
-      "required": ["id", "name", "predicates"],
+      "required": [
+        "id",
+        "name",
+        "predicates"
+      ],
       "properties": {
         "id": {
           "$ref": "#/definitions/Hash"
@@ -106,7 +121,10 @@
     },
     "CustomPredicateRef": {
       "type": "object",
-      "required": ["batch", "index"],
+      "required": [
+        "batch",
+        "index"
+      ],
       "properties": {
         "batch": {
           "$ref": "#/definitions/CustomPredicateBatch"
@@ -121,7 +139,10 @@
     "Dictionary": {
       "description": "Dictionary: the user original keys and values are hashed to be used in the leaf. leaf.key=hash(original_key) leaf.value=hash(original_value)",
       "type": "object",
-      "required": ["kvs", "max_depth"],
+      "required": [
+        "kvs",
+        "max_depth"
+      ],
       "properties": {
         "kvs": {
           "type": "object",
@@ -202,6 +223,7 @@
         "ProductOf",
         "MaxOf",
         "HashOf",
+        "PublicKeyOf",
         "DictContains",
         "DictNotContains",
         "SetContains",
@@ -325,27 +347,37 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["pod_data_payload", "pod_data_variant"],
+          "required": [
+            "pod_data_payload",
+            "pod_data_variant"
+          ],
           "properties": {
             "pod_data_payload": {
               "$ref": "#/definitions/SignedPod"
             },
             "pod_data_variant": {
               "type": "string",
-              "enum": ["Signed"]
+              "enum": [
+                "Signed"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["pod_data_payload", "pod_data_variant"],
+          "required": [
+            "pod_data_payload",
+            "pod_data_variant"
+          ],
           "properties": {
             "pod_data_payload": {
               "$ref": "#/definitions/MainPod"
             },
             "pod_data_variant": {
               "type": "string",
-              "enum": ["Main"]
+              "enum": [
+                "Main"
+              ]
             }
           }
         }
@@ -356,7 +388,13 @@
     },
     "PodInfo": {
       "type": "object",
-      "required": ["created_at", "data", "id", "pod_type", "space"],
+      "required": [
+        "created_at",
+        "data",
+        "id",
+        "pod_type",
+        "space"
+      ],
       "properties": {
         "created_at": {
           "type": "string"
@@ -368,7 +406,10 @@
           "type": "string"
         },
         "label": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "pod_type": {
           "type": "string"
@@ -382,11 +423,16 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Native"]
+              "enum": [
+                "Native"
+              ]
             },
             "value": {
               "$ref": "#/definitions/NativePredicate"
@@ -395,11 +441,16 @@
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["BatchSelf"]
+              "enum": [
+                "BatchSelf"
+              ]
             },
             "value": {
               "type": "integer",
@@ -410,11 +461,16 @@
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Custom"]
+              "enum": [
+                "Custom"
+              ]
             },
             "value": {
               "$ref": "#/definitions/CustomPredicateRef"
@@ -430,7 +486,10 @@
     "Set": {
       "description": "Set: the value field of the leaf is unused, and the key contains the hash of the element. leaf.key=hash(original_value) leaf.value=0",
       "type": "object",
-      "required": ["max_depth", "set"],
+      "required": [
+        "max_depth",
+        "set"
+      ],
       "properties": {
         "max_depth": {
           "type": "integer",
@@ -448,7 +507,12 @@
     },
     "SignedPod": {
       "type": "object",
-      "required": ["data", "entries", "id", "podType"],
+      "required": [
+        "data",
+        "entries",
+        "id",
+        "podType"
+      ],
       "properties": {
         "data": true,
         "entries": {
@@ -479,7 +543,10 @@
     },
     "SpaceInfo": {
       "type": "object",
-      "required": ["created_at", "id"],
+      "required": [
+        "created_at",
+        "id"
+      ],
       "properties": {
         "created_at": {
           "type": "string"
@@ -494,40 +561,24 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["predicate"],
+          "required": [
+            "predicate"
+          ],
           "properties": {
             "predicate": {
               "type": "string",
-              "enum": ["None"]
+              "enum": [
+                "None"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
-          "properties": {
-            "args": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/definitions/ValueRef"
-                },
-                {
-                  "$ref": "#/definitions/ValueRef"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            },
-            "predicate": {
-              "type": "string",
-              "enum": ["Equal"]
-            }
-          }
-        },
-        {
-          "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -544,13 +595,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["NotEqual"]
+              "enum": [
+                "Equal"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -567,13 +623,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["LtEq"]
+              "enum": [
+                "NotEqual"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -590,13 +651,46 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["Lt"]
+              "enum": [
+                "LtEq"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "Lt"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -616,13 +710,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["Contains"]
+              "enum": [
+                "Contains"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -639,13 +738,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["NotContains"]
+              "enum": [
+                "NotContains"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -665,13 +769,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["SumOf"]
+              "enum": [
+                "SumOf"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -691,13 +800,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["ProductOf"]
+              "enum": [
+                "ProductOf"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -717,13 +831,18 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["MaxOf"]
+              "enum": [
+                "MaxOf"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -743,13 +862,46 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["HashOf"]
+              "enum": [
+                "HashOf"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["args", "predicate"],
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "PublicKeyOf"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
           "properties": {
             "args": {
               "type": "array",
@@ -769,7 +921,9 @@
             },
             "predicate": {
               "type": "string",
-              "enum": ["Custom"]
+              "enum": [
+                "Custom"
+              ]
             }
           }
         }
@@ -778,7 +932,10 @@
     "StatementTmpl": {
       "description": "Statement Template for a Custom Predicate",
       "type": "object",
-      "required": ["args", "pred"],
+      "required": [
+        "args",
+        "pred"
+      ],
       "properties": {
         "args": {
           "type": "array",
@@ -795,21 +952,30 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["type"],
+          "required": [
+            "type"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["None"]
+              "enum": [
+                "None"
+              ]
             }
           }
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Literal"]
+              "enum": [
+                "Literal"
+              ]
             },
             "value": {
               "$ref": "#/definitions/Value"
@@ -818,11 +984,16 @@
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["AnchoredKey"]
+              "enum": [
+                "AnchoredKey"
+              ]
             },
             "value": {
               "type": "array",
@@ -841,11 +1012,16 @@
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Wildcard"]
+              "enum": [
+                "Wildcard"
+              ]
             },
             "value": {
               "$ref": "#/definitions/Wildcard"
@@ -857,7 +1033,10 @@
     "VDSet": {
       "description": "VDSet is the set of the allowed verifier_data hashes. When proving a MainPod, the circuit will enforce that all the used verifier_datas for verifying the recursive proofs of previous PODs appears in the VDSet. The VDSet struct that allows to get the specific merkle proofs for the given verifier_data.",
       "type": "object",
-      "required": ["tree_depth", "vds_hashes"],
+      "required": [
+        "tree_depth",
+        "vds_hashes"
+      ],
       "properties": {
         "tree_depth": {
           "type": "integer",
@@ -877,7 +1056,20 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["Int"],
+          "required": [
+            "PodId"
+          ],
+          "properties": {
+            "PodId": {
+              "$ref": "#/definitions/PodId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Int"
+          ],
           "properties": {
             "Int": {
               "description": "An i64 represented as a string.",
@@ -887,7 +1079,9 @@
         },
         {
           "type": "object",
-          "required": ["Raw"],
+          "required": [
+            "Raw"
+          ],
           "properties": {
             "Raw": {
               "$ref": "#/definitions/RawValue"
@@ -896,9 +1090,22 @@
         },
         {
           "type": "object",
-          "required": ["PublicKey"],
+          "required": [
+            "PublicKey"
+          ],
           "properties": {
             "PublicKey": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "SecretKey"
+          ],
+          "properties": {
+            "SecretKey": {
               "type": "string"
             }
           }
@@ -924,11 +1131,16 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Literal"]
+              "enum": [
+                "Literal"
+              ]
             },
             "value": {
               "$ref": "#/definitions/Value"
@@ -937,11 +1149,16 @@
         },
         {
           "type": "object",
-          "required": ["type", "value"],
+          "required": [
+            "type",
+            "value"
+          ],
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["Key"]
+              "enum": [
+                "Key"
+              ]
             },
             "value": {
               "$ref": "#/definitions/AnchoredKey"
@@ -952,7 +1169,10 @@
     },
     "Wildcard": {
       "type": "object",
-      "required": ["index", "name"],
+      "required": [
+        "index",
+        "name"
+      ],
       "properties": {
         "index": {
           "type": "integer",

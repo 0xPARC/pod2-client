@@ -154,6 +154,25 @@ fn propagate_arithmetic_constraints(
             }
         }
 
+        NativePredicate::PublicKeyOf => {
+            // PublicKeyOf(?pk, ?sk): if ?pk is bound, ?sk becomes bound
+            if args.len() == 2 {
+                let pk_is_bound = match &args[0] {
+                    StatementTmplArg::Literal(_) => true,
+                    StatementTmplArg::Wildcard(w) => bound_vars.contains(w),
+                    _ => false,
+                };
+
+                if pk_is_bound {
+                    if let Some(w_sk) = &arg_wildcards[1] {
+                        if !bound_vars.contains(w_sk) {
+                            newly_bound.insert(w_sk.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         _ => {
             // For other predicates, no constraint propagation
         }
@@ -858,18 +877,19 @@ impl Planner {
             let wildcard_names: Vec<_> = head_wildcards.iter().map(|w| w.name.clone()).collect();
 
             // Create a synthetic CustomPredicateRef to represent our implicit goal.
+            let params = Params {
+                max_custom_predicate_arity: 20,
+                ..Params::default()
+            };
             let synth_pred_def = CustomPredicate::and(
-                &Params::default(),
+                &params,
                 synthetic_pred_name.clone(),
                 request.to_vec(),
                 head_wildcards.len(),
                 wildcard_names.clone(),
             )
-            .unwrap();
-            let params = Params {
-                max_custom_predicate_arity: 12,
-                ..Params::default()
-            };
+            .map_err(|e| SolverError::Internal(e.to_string()))?;
+
             let synth_batch = CustomPredicateBatch::new(
                 &params,
                 "SyntheticRequestBatch".to_string(),
@@ -1185,10 +1205,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         assert_eq!(plan.magic_rules.len(), 2);
         assert_eq!(plan.guarded_rules.len(), 2);
@@ -1265,10 +1285,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         assert_eq!(plan.magic_rules.len(), 2);
         assert_eq!(plan.guarded_rules.len(), 2);
@@ -1352,10 +1372,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // Expected outcome analysis:
         // - 1 seed rule for _request_goal(?End) -> magic__request_goal_f().
