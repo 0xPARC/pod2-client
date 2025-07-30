@@ -8,10 +8,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 // Import from feature modules
-import * as podManagementFeature from "./features/pod-management";
-import * as networkingFeature from "./features/networking";
 import * as authoringFeature from "./features/authoring";
-import * as integrationFeature from "./features/integration";
+import * as podManagementFeature from "./features/pod-management";
 
 // =============================================================================
 // Configuration Types
@@ -23,9 +21,7 @@ import * as integrationFeature from "./features/integration";
  */
 export interface FeatureConfig {
   pod_management: boolean;
-  networking: boolean;
   authoring: boolean;
-  integration: boolean;
   frogcrypto: boolean;
 }
 
@@ -43,11 +39,11 @@ export async function getBuildInfo(): Promise<string> {
 
 // Re-export types from feature modules
 export type {
+  AppStateData,
   PodInfo,
-  SpaceInfo,
-  PodStats,
   PodLists,
-  AppStateData
+  PodStats,
+  SpaceInfo
 } from "./features/pod-management";
 
 export type { PrivateKeyInfo } from "./features/authoring";
@@ -82,9 +78,7 @@ export async function getFeatureConfig(): Promise<FeatureConfig> {
     // Return default configuration as fallback
     return {
       pod_management: true,
-      networking: true,
       authoring: true,
-      integration: true,
       frogcrypto: false
     };
   }
@@ -102,21 +96,9 @@ export const deletePod = podManagementFeature.deletePod;
 export const listSpaces = podManagementFeature.listSpaces;
 export const insertZuKycPods = podManagementFeature.insertZuKycPods;
 
-// Networking operations
-export const startP2pNode = networkingFeature.startP2pNode;
-export const sendPodToPeer = networkingFeature.sendPodToPeer;
-export const sendMessageAsPod = networkingFeature.sendMessageAsPod;
-export const getInboxMessages = networkingFeature.getInboxMessages;
-export const acceptInboxMessage = networkingFeature.acceptInboxMessage;
-export const getChats = networkingFeature.getChats;
-export const getChatMessages = networkingFeature.getChatMessages;
-
 // Authoring operations
 export const signPod = authoringFeature.signPod;
 export const getPrivateKeyInfo = authoringFeature.getPrivateKeyInfo;
-
-// Integration operations
-export const submitPodRequest = integrationFeature.submitPodRequest;
 
 /**
  * Handle and format RPC errors consistently
@@ -184,15 +166,10 @@ export async function requestLeaderboard(): RpcResult<LeaderboardItem[]> {
 // =============================================================================
 
 // Re-export the existing functions with their original names
-export { signPod as signPodLegacy, importPod as importPodLegacy };
+export { importPod as importPodLegacy, signPod as signPodLegacy };
 
 // =============================================================================
 // Feature modules for direct import
 // =============================================================================
 
-export {
-  podManagementFeature,
-  networkingFeature,
-  authoringFeature,
-  integrationFeature
-};
+export { authoringFeature, podManagementFeature };

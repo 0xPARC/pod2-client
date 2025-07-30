@@ -2,9 +2,7 @@
 
 export interface FeatureConfig {
   pod_management: boolean;
-  networking: boolean;
   authoring: boolean;
-  integration: boolean;
   frogcrypto: boolean;
 }
 

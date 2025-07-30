@@ -4,13 +4,13 @@
 // including default state, validation helpers, and content management.
 
 import { getDefaultEditorContent } from "./monaco";
-import { DiagnosticSeverity } from "./types";
 import type {
-  EditorState,
-  EditorActions,
   Diagnostic,
+  EditorActions,
+  EditorState,
   ExecuteCodeResponse
 } from "./types";
+import { DiagnosticSeverity } from "./types";
 
 /**
  * Create initial editor state
