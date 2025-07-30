@@ -355,3 +355,42 @@ export async function publishDraft(
     throw new Error(`Failed to publish draft: ${error}`);
   }
 }
+
+/**
+ * Delete result from backend
+ */
+export interface DeleteResult {
+  success: boolean;
+  document_id?: number;
+  error_message?: string;
+}
+
+/**
+ * Delete a document by ID
+ * @param documentId - The document ID to delete
+ * @param serverUrl - The document server URL
+ * @returns Promise resolving to delete result
+ */
+export async function deleteDocument(
+  documentId: number,
+  serverUrl: string
+): Promise<DeleteResult> {
+  try {
+    return await invoke<DeleteResult>("delete_document", { documentId, serverUrl });
+  } catch (error) {
+    throw new Error(`Failed to delete document: ${error}`);
+  }
+}
+
+/**
+ * Get current user's username
+ * @returns Promise resolving to username or null if not set up
+ */
+export async function getCurrentUsername(): Promise<string | null> {
+  try {
+    return await invoke<string | null>("get_current_username");
+  } catch (error) {
+    console.error("Failed to get current username:", error);
+    return null;
+  }
+}

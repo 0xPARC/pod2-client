@@ -1,3 +1,4 @@
+pub mod delete;
 pub mod documents;
 pub mod identity;
 pub mod keygen;

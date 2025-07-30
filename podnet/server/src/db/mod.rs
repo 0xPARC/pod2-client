@@ -801,6 +801,53 @@ impl Database {
         Ok(count > 0)
     }
 
+    /// Delete a document and return the uploader username for verification
+    pub fn delete_document(&self, document_id: i64) -> Result<String> {
+        let conn = self.conn.lock().unwrap();
+
+        // First get the document to verify it exists and get uploader info
+        let uploader_id: String = conn.query_row(
+            "SELECT uploader_id FROM documents WHERE id = ?1",
+            [&document_id.to_string()],
+            |row| row.get(0),
+        )?;
+
+        // Delete the document
+        let deleted_rows = conn.execute(
+            "DELETE FROM documents WHERE id = ?1",
+            [&document_id.to_string()],
+        )?;
+
+        if deleted_rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
+        // Also delete associated upvotes
+        conn.execute(
+            "DELETE FROM upvotes WHERE document_id = ?1",
+            [&document_id.to_string()],
+        )?;
+
+        log::info!("Deleted document {} and associated upvotes", document_id);
+        Ok(uploader_id)
+    }
+
+    /// Get uploader username for a document
+    pub fn get_document_uploader(&self, document_id: i64) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT uploader_id FROM documents WHERE id = ?1",
+            [&document_id.to_string()],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(uploader_id) => Ok(Some(uploader_id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn update_upvote_count_pod(&self, document_id: i64, upvote_count_pod: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(

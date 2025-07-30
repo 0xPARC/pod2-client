@@ -32,19 +32,163 @@ pub struct IdentityRequest {
     pub user_response_pod: SignedPod,
 }
 
-pub async fn get_identity(
-    keypair_file: &str,
+// GitHub Identity Server structures
+#[derive(Debug, Deserialize)]
+pub struct ServerInfo {
+    pub server_id: String,
+    pub public_key: PublicKey,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitHubAuthUrlRequest {
+    pub public_key: PublicKey,
+    pub username: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubAuthUrlResponse {
+    pub auth_url: String,
+    pub state: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitHubIdentityRequest {
+    pub code: String,
+    pub state: String,
+    pub username: String,
+    pub challenge_signature: String, // For now, we'll use an empty string
+}
+
+#[derive(Debug)]
+pub enum IdentityServerType {
+    Standard,
+    GitHub,
+}
+
+async fn detect_identity_server_type(
+    client: &reqwest::Client,
+    identity_server_url: &str,
+) -> Result<IdentityServerType, Box<dyn std::error::Error>> {
+    println!("Detecting identity server type...");
+    
+    // Try to get server info from root endpoint
+    let response = client
+        .get(format!("{identity_server_url}/"))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err("Failed to connect to identity server".into());
+    }
+
+    let server_info: ServerInfo = response.json().await?;
+    
+    if server_info.server_id.contains("github") {
+        println!("✓ Detected GitHub Identity Server");
+        Ok(IdentityServerType::GitHub)
+    } else {
+        println!("✓ Detected Standard Identity Server");
+        Ok(IdentityServerType::Standard)
+    }
+}
+
+async fn get_github_identity(
+    client: &reqwest::Client,
     identity_server_url: &str,
     username: &str,
+    public_key: PublicKey,
     output_file: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Getting identity from identity server...");
-    println!("Username: {username}");
-    println!("Identity Server: {identity_server_url}");
+    println!("Starting GitHub OAuth flow...");
 
-    // Load keypair from file
-    let file = File::open(keypair_file)?;
-    let keypair_data: KeypairData = serde_json::from_reader(file)?;
+    // Step 1: Get GitHub OAuth authorization URL
+    let auth_request = GitHubAuthUrlRequest {
+        public_key,
+        username: username.to_string(),
+    };
+
+    let auth_response = client
+        .post(format!("{identity_server_url}/auth/github"))
+        .header("Content-Type", "application/json")
+        .json(&auth_request)
+        .send()
+        .await?;
+
+    if !auth_response.status().is_success() {
+        let status = auth_response.status();
+        let error_text = auth_response.text().await?;
+        handle_error_response(status, &error_text, "get GitHub auth URL");
+        return Ok(());
+    }
+
+    let auth_data: GitHubAuthUrlResponse = auth_response.json().await?;
+
+    println!("✓ GitHub OAuth URL generated");
+    println!("Please visit the following URL to authorize with GitHub:");
+    println!();
+    println!("{}", auth_data.auth_url);
+    println!();
+    println!("After authorizing, you will be redirected to a page with an authorization code.");
+    println!("Please copy the authorization code and paste it here:");
+
+    // Read authorization code from user input
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let auth_code = input.trim().to_string();
+
+    if auth_code.is_empty() {
+        return Err("Authorization code is required".into());
+    }
+
+    println!("✓ Authorization code received");
+
+    // Step 2: Complete identity verification
+    let identity_request = GitHubIdentityRequest {
+        code: auth_code,
+        state: auth_data.state,
+        username: username.to_string(),
+        challenge_signature: String::new(), // Empty for now - server doesn't validate this yet
+    };
+
+    let identity_response = client
+        .post(format!("{identity_server_url}/identity"))
+        .header("Content-Type", "application/json")
+        .json(&identity_request)
+        .send()
+        .await?;
+
+    if !identity_response.status().is_success() {
+        let status = identity_response.status();
+        let error_text = identity_response.text().await?;
+        handle_error_response(status, &error_text, "complete GitHub identity verification");
+        return Ok(());
+    }
+
+    let identity_data: IdentityResponse = identity_response.json().await?;
+
+    // Verify the identity pod
+    identity_data.identity_pod.verify()?;
+    println!("✓ GitHub identity pod verification successful");
+
+    // Save identity pod to file
+    let identity_json = serde_json::to_string_pretty(&identity_data.identity_pod)?;
+    std::fs::write(output_file, identity_json)?;
+
+    println!("✓ GitHub identity pod saved to: {output_file}");
+    println!("✓ GitHub identity acquired successfully!");
+    println!("Username: {username}");
+
+    Ok(())
+}
+
+async fn get_standard_identity(
+    client: &reqwest::Client,
+    identity_server_url: &str,
+    username: &str,
+    keypair_data: &KeypairData,
+    output_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Using standard identity server flow...");
 
     let public_key = keypair_data.public_key;
 
@@ -56,7 +200,6 @@ pub async fn get_identity(
         user_public_key: public_key,
     };
 
-    let client = reqwest::Client::new();
     let challenge_response = client
         .post(format!("{identity_server_url}/user/challenge"))
         .header("Content-Type", "application/json")
@@ -156,4 +299,33 @@ pub async fn get_identity(
     }
 
     Ok(())
+}
+
+pub async fn get_identity(
+    keypair_file: &str,
+    identity_server_url: &str,
+    username: &str,
+    output_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Getting identity from identity server...");
+    println!("Username: {username}");
+    println!("Identity Server: {identity_server_url}");
+
+    // Load keypair from file
+    let file = File::open(keypair_file)?;
+    let keypair_data: KeypairData = serde_json::from_reader(file)?;
+
+    let client = reqwest::Client::new();
+
+    // Detect server type
+    let server_type = detect_identity_server_type(&client, identity_server_url).await?;
+
+    match server_type {
+        IdentityServerType::GitHub => {
+            get_github_identity(&client, identity_server_url, username, keypair_data.public_key, output_file).await
+        }
+        IdentityServerType::Standard => {
+            get_standard_identity(&client, identity_server_url, username, &keypair_data, output_file).await
+        }
+    }
 }

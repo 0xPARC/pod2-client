@@ -18,10 +18,10 @@ function AnimatedDots() {
   return <span>{".".repeat(dotCount)}</span>;
 }
 
-function PublishLoadingToast() {
+function PublishLoadingToast({ isEditing }: { isEditing: boolean }) {
   return (
     <div className="flex items-center">
-      <span>Publishing document</span>
+      <span>{isEditing ? "Updating document" : "Publishing document"}</span>
       <AnimatedDots />
     </div>
   );
@@ -36,6 +36,7 @@ interface PublishData {
   authors?: string[];
   replyTo?: string;
   draftId?: string; // UUID of draft to delete after successful publish
+  postId?: number; // Optional post ID for creating revisions (editing documents)
 }
 
 interface PublishButtonProps {
@@ -80,7 +81,7 @@ export function PublishButton({
     setIsLoading(true);
 
     // Show loading toast with animated component
-    const loadingToast = toast(<PublishLoadingToast />, {
+    const loadingToast = toast(<PublishLoadingToast isEditing={!!data.postId} />, {
       duration: Infinity // Keep it open until we dismiss it
     });
 
@@ -104,6 +105,7 @@ export function PublishButton({
 
       console.log("Publishing with data:", data);
       console.log("Reply to being sent (raw):", data.replyTo);
+      console.log("Post ID for editing:", data.postId);
 
       const invokeParams = {
         title: data.title.trim(),
@@ -119,7 +121,8 @@ export function PublishButton({
             }
           : null,
         serverUrl: serverUrl,
-        draftId: data.draftId || null
+        draftId: data.draftId || null,
+        postId: data.postId || null
       };
       console.log("Full invoke parameters:", invokeParams);
 
@@ -135,7 +138,7 @@ export function PublishButton({
 
       if (result.success && result.document_id !== null) {
         // Success - show success message and callback
-        toast.success("Document published successfully!");
+        toast.success(data.postId ? "Document updated successfully!" : "Document published successfully!");
 
         if (onPublishSuccess) {
           onPublishSuccess(result.document_id);
@@ -165,7 +168,12 @@ export function PublishButton({
       className={`flex items-center gap-2 ${className}`}
     >
       <SendIcon className={`h-4 w-4 ${isLoading ? "opacity-50" : ""}`} />
-      <span>{isLoading ? "Publishing..." : "Publish Document"}</span>
+      <span>
+        {isLoading 
+          ? (data.postId ? "Updating..." : "Publishing...") 
+          : (data.postId ? "Update Document" : "Publish Document")
+        }
+      </span>
     </Button>
   );
 }

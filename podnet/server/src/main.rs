@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -70,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
             "/documents/:id/replies",
             get(handlers::get_document_replies),
         )
+        .route("/documents/:id", delete(handlers::delete_document))
         // Publishing route
         .route("/publish", post(handlers::publish_document))
         // Identity server routes
@@ -94,10 +95,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("  GET  /                       - Root endpoint");
     tracing::info!("  GET  /posts                  - List all posts");
     tracing::info!("  GET  /posts/:id              - Get post with documents");
-    tracing::info!("  GET  /documents              - List all documents");
-    tracing::info!("  GET  /documents/:id          - Get specific document");
-    tracing::info!("  GET  /documents/:id/replies  - Get replies to a document");
-    tracing::info!("  POST /publish                - Publish new document");
+    tracing::info!("  GET    /documents              - List all documents");
+    tracing::info!("  GET    /documents/:id          - Get specific document");
+    tracing::info!("  GET    /documents/:id/replies  - Get replies to a document");
+    tracing::info!("  DELETE /documents/:id          - Delete specific document");
+    tracing::info!("  POST   /publish                - Publish new document");
     tracing::info!("  POST /identity/challenge     - Request challenge for identity server");
     tracing::info!("  POST /identity/register      - Register identity server");
     tracing::info!("  POST /documents/:id/upvote   - Upvote a document");

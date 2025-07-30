@@ -342,6 +342,32 @@ pub struct PublishRequest {
     pub main_pod: MainPod,
 }
 
+/// Request structure for deleting a document
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteRequest {
+    pub document_id: i64,    // ID of the document to delete
+    pub username: String,    // Expected username from identity verification
+    /// MainPod that cryptographically proves the user's identity and authorization to delete:
+    ///
+    /// Uses similar approach to PublishRequest with:
+    /// - identity_verified(username, private: identity_pod)
+    /// - delete_verified(username, document_id, identity_server_pk, private: identity_pod, document_pod)
+    ///
+    /// The MainPod proves:
+    /// - Identity verification: identity pod was signed by registered identity server
+    /// - Document verification: document pod was signed by user from identity pod
+    /// - Cross verification: document signer matches identity user_public_key
+    /// - Authorization: user has the right to delete this specific document
+    ///
+    /// Public data exposed by main pod:
+    /// - username: String (verified username from identity pod)
+    /// - document_id: i64 (ID of document to delete)
+    /// - identity_server_pk: Point (verified identity server public key)
+    ///
+    /// This enables trustless document deletion with verified ownership.
+    pub main_pod: MainPod,
+}
+
 #[derive(Debug, Serialize)]
 pub struct MarkdownResponse {
     pub html: String,
@@ -450,23 +476,6 @@ pub struct UpvoteRequest {
 
 /// Shared predicate definitions for publish verification
 pub fn get_publish_verification_predicate() -> String {
-    // TODO: is there a better strategy for many args in the predicates?
-    //
-    //    document_verified(content_hash, post_id, tags, authors, reply_to, private: document_pod) = AND(
-    //        Equal(?document_pod["{key_type}"], {signed_pod_type})
-    //        Equal(?document_pod["content_hash"], ?content_hash)
-    //        Equal(?document_pod["tags"], ?tags)
-    //        Equal(?document_pod["authors"], ?authors)
-    //        Equal(?document_pod["post_id"], ?post_id)
-    //        Equal(?document_pod["reply_to"], ?reply_to)
-    //    )
-
-    //    publish_verification(username, content_hash, identity_server_pk, post_id, tags, authors, reply_to, private: identity_pod, document_pod) = AND(
-    //        identity_verified(?username)
-    //        document_verified(?content_hash, ?post_id, ?tags, ?authors, ?reply_to)
-    //        Equal(?identity_pod["{key_signer}"], ?identity_server_pk)
-    //        Equal(?identity_pod["user_public_key"], ?document_pod["{key_signer}"])
-    //    )
     format!(
         r#"
         identity_verified(username, private: identity_pod) = AND(
