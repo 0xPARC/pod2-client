@@ -18,9 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 interface AppConfig {
   features: {
     pod_management: boolean;
-    p2p: boolean;
     authoring: boolean;
-    integration: boolean;
     frogcrypto: boolean;
   };
   database: {

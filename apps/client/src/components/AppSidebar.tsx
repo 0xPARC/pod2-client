@@ -33,7 +33,6 @@ import {
   BugIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  CodeIcon,
   DatabaseIcon,
   EditIcon,
   FilePenLineIcon,
@@ -42,8 +41,6 @@ import {
   Folders,
   Github,
   ImportIcon,
-  InboxIcon,
-  MessageSquareIcon,
   PencilLineIcon,
   SettingsIcon
 } from "lucide-react";
@@ -221,35 +218,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <FeatureGate feature="networking">
-          <SidebarGroup>
-            <SidebarGroupLabel>Messages</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setCurrentView("inbox")}
-                    isActive={currentView === "inbox"}
-                  >
-                    <InboxIcon />
-                    Inbox
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setCurrentView("chats")}
-                    isActive={currentView === "chats"}
-                  >
-                    <MessageSquareIcon />
-                    Chats
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </FeatureGate>
-
         <FeatureGate feature="authoring">
           <SidebarGroup>
             <SidebarGroupLabel>Authoring</SidebarGroupLabel>
@@ -298,21 +266,6 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton onClick={() => setCurrentView("frogs")}>
                     FrogCrypto
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </FeatureGate>
-        <FeatureGate feature="networking">
-          <SidebarGroup>
-            <SidebarGroupLabel>Actions</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton>
-                    <CodeIcon />
-                    POD Request
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>

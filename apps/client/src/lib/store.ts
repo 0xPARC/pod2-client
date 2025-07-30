@@ -35,8 +35,6 @@ export type { PodInfo } from "./rpc";
 export type AppView =
   | "pods"
   | "documents"
-  | "inbox"
-  | "chats"
   | "frogs"
   | "editor"
   | "publish"

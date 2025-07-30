@@ -12,12 +12,8 @@ use tauri::{AppHandle, Emitter};
 pub struct FeatureConfig {
     /// Core POD collection management - viewing, organizing, and basic operations
     pub pod_management: bool,
-    /// P2P communication and messaging
-    pub p2p: bool,
     /// Creating and signing new PODs
     pub authoring: bool,
-    /// External POD Request handling and protocol integration
-    pub integration: bool,
     /// FrogCrypto experimental features
     pub frogcrypto: bool,
 }
@@ -26,9 +22,7 @@ impl Default for FeatureConfig {
     fn default() -> Self {
         Self {
             pod_management: true,
-            p2p: false,
             authoring: true,
-            integration: true,
             frogcrypto: true,
         }
     }
@@ -236,20 +230,10 @@ impl AppConfig {
                     .parse()
                     .map_err(|e| format!("Invalid pod_management value '{value}': {e}"))?;
             }
-            ["features", "p2p"] => {
-                self.features.p2p = value
-                    .parse()
-                    .map_err(|e| format!("Invalid p2p value '{value}': {e}"))?;
-            }
             ["features", "authoring"] => {
                 self.features.authoring = value
                     .parse()
                     .map_err(|e| format!("Invalid authoring value '{value}': {e}"))?;
-            }
-            ["features", "integration"] => {
-                self.features.integration = value
-                    .parse()
-                    .map_err(|e| format!("Invalid integration value '{value}': {e}"))?;
             }
             ["features", "frogcrypto"] => {
                 self.features.frogcrypto = value
@@ -383,7 +367,6 @@ mod tests {
         assert_eq!(config.database.path, "pod2.db");
         assert_eq!(config.database.name, "pod2.db");
         assert!(config.features.pod_management);
-        assert!(!config.features.p2p);
     }
 
     #[test]

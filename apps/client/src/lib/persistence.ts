@@ -8,7 +8,7 @@ const CURRENT_VIEW_KEY = "pod2-client-current-view";
 export function loadCurrentView(): AppView {
   try {
     const stored = localStorage.getItem(CURRENT_VIEW_KEY);
-    if (stored && ["pods", "inbox", "chats", "editor"].includes(stored)) {
+    if (stored && ["pods", "editor"].includes(stored)) {
       return stored as AppView;
     }
   } catch (error) {

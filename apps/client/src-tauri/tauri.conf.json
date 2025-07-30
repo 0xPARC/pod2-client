@@ -35,21 +35,6 @@
     ]
   },
   "plugins": {
-    "deep-link": {
-      "mobile": [
-        {
-          "host": "localhost",
-          "pathPrefix": [
-            "/open"
-          ]
-        }
-      ],
-      "desktop": {
-        "schemes": [
-          "pod2"
-        ]
-      }
-    },
     "cli": {
       "description": "POD2 Client - A desktop application for managing cryptographic PODs",
       "args": [

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   getFeatureConfig as getFeatureConfigRpc,
   type FeatureConfig
-} from "../rpc";
+} from "../../lib/rpc";
 
 /**
  * React context for feature configuration
@@ -32,9 +32,7 @@ export function FeatureConfigProvider({
         // Set default configuration on error
         setConfig({
           pod_management: true,
-          networking: true,
           authoring: true,
-          integration: true,
           frogcrypto: false
         });
       })
