@@ -708,6 +708,8 @@ pub fn run() {
             documents::verify_document_pod,
             documents::upvote_document,
             documents::publish_document,
+            documents::delete_document,
+            documents::get_current_username,
             // Draft management commands
             documents::create_draft,
             documents::update_draft,

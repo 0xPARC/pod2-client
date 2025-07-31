@@ -3,6 +3,7 @@
 //! This module provides consolidated prove and verify functions for all MainPod types
 //! used in PodNet, eliminating code duplication and providing consistent interfaces.
 
+pub mod delete;
 pub mod publish;
 pub mod upvote;
 //pub mod upvote_count;

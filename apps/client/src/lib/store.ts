@@ -42,6 +42,24 @@ export type AppView =
   | "debug";
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
+export interface EditDocumentData {
+  documentId: number;
+  postId: number;
+  title: string;
+  content: {
+    message?: string;
+    file?: {
+      name: string;
+      content: number[];
+      mime_type: string;
+    };
+    url?: string;
+  };
+  tags: string[];
+  authors: string[];
+  replyTo: string | null;
+}
+
 interface AppStoreState {
   appState: AppStateData;
   isLoading: boolean;
@@ -59,6 +77,9 @@ interface AppStoreState {
   // Draft coordination state
   currentDraftId: string | null;
   isDraftInitializing: boolean;
+
+  // Edit document state
+  editDocumentData: EditDocumentData | null;
 
   // Folder State
   folders: SpaceInfo[];
@@ -89,6 +110,7 @@ interface AppStoreState {
   setReplyToDocumentId: (documentId: string | null) => void;
   setCurrentDraftId: (draftId: string | null) => void;
   setIsDraftInitializing: (initializing: boolean) => void;
+  setEditDocumentData: (data: EditDocumentData | null) => void;
   loadFolders: () => Promise<void>;
   setFrogTimeout: (timeout: number | null) => void;
   deletePod: (podId: string, spaceId: string) => Promise<void>;
@@ -136,6 +158,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   replyToDocumentId: null,
   currentDraftId: null,
   isDraftInitializing: false,
+  editDocumentData: null,
   folders: [],
   foldersLoading: false,
   frogTimeout: null,
@@ -241,6 +264,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   setIsDraftInitializing: (initializing: boolean) => {
     set({ isDraftInitializing: initializing });
+  },
+
+  setEditDocumentData: (data: EditDocumentData | null) => {
+    set({ editDocumentData: data });
   },
 
   setFrogTimeout: (timeout: number | null) => {
