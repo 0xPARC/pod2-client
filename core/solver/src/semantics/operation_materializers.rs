@@ -183,7 +183,7 @@ fn materialize_new_entry(args: &[Option<ValueRef>], _db: &FactDB) -> Option<Fact
 
     // Check if first arg is SELF-referencing anchored key
     if let (ValueRef::Key(ak), ValueRef::Literal(_)) = (vr0, vr1) {
-        if ak.pod_id == SELF {
+        if ak.pod_id == SELF && ak.key.name() != "_type" && ak.key.name() != "_signer" {
             Some(Fact {
                 source: FactSource::NewEntry,
                 args: vec![vr0.clone(), vr1.clone()],
