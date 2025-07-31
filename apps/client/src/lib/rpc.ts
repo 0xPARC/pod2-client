@@ -150,6 +150,7 @@ export interface FrogData {
   intelligence: number;
   beauty: number;
   temperament: number;
+  rarity: number;
 }
 
 export async function listFrogs(): RpcResult<FrogPod[]> {
@@ -161,6 +162,7 @@ export interface FrogedexEntry {
   rarity: number;
   name: string;
   image_url: string;
+  seen: boolean;
 }
 
 export async function getFrogedex(): RpcResult<FrogedexEntry[]> {

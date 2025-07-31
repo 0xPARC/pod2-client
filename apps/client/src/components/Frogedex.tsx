@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { getFrogedex, FrogedexEntry } from "@/lib/rpc";
 import { listen } from "@tauri-apps/api/event";
+import { RARITY_TEXT_COLORS, RARITY_BG_COLORS } from "./FrogCrypto";
 
 const RARITY_NAMES = ["NORM", "RARE", "EPIC", "LGND", "MYTH"];
 
@@ -56,7 +57,7 @@ export function Frogedex() {
               {frogedex.map((entry) => (
                 <tr key={entry.frog_id}>
                   <td>{entry.frog_id}</td>
-                  <td>{RARITY_NAMES[entry.rarity]}</td>
+                  <td className={entry.seen ? `${RARITY_BG_COLORS[entry.rarity]} text-white` : `${RARITY_TEXT_COLORS[entry.rarity]}`}>{RARITY_NAMES[entry.rarity]}</td>
                   <td>{entry.name}</td>
                 </tr>
               ))}
@@ -73,7 +74,7 @@ export function Frogedex() {
                     className="w-48 h-48 object-cover mx-auto"
                   />
                 </div>
-                <div>{entry.name}</div>
+                <div className={RARITY_TEXT_COLORS[entry.rarity]}>{entry.name}</div>
               </div>
             ))}
           </div>

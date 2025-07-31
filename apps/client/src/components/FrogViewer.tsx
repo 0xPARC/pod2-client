@@ -18,6 +18,7 @@ import {
 } from "@radix-ui/react-collapsible";
 import { Switch } from "./ui/switch";
 import { listen, emit } from "@tauri-apps/api/event";
+import { RARITY_SHADOW_COLORS } from "./FrogCrypto";
 
 interface FrogViewerProps {
   setScore: (score: number) => void;
@@ -185,7 +186,7 @@ function FrogCard({ pod }: FrogCardProps) {
           {haveDesc && (
             <img
               src={(pod.data as FrogData).image_url}
-              className="max-w-xs"
+              className={`max-w-xs drop-shadow-xl ${RARITY_SHADOW_COLORS[(pod.data as FrogData).rarity]}`}
             ></img>
           )}
           <h2>{(pod.data?.name ?? "???").toUpperCase()}</h2>

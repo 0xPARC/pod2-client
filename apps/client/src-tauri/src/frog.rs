@@ -77,6 +77,7 @@ async fn download_frog(client: &Client, private_key: SecretKey) -> Result<Respon
 #[derive(Serialize)]
 pub struct FrogDesc {
     frog_id: i64,
+    rarity: i64,
     name: String,
     description: String,
     image_url: String,
@@ -102,6 +103,7 @@ pub struct FrogedexEntry {
     rarity: i64,
     name: String,
     image_url: String,
+    seen: bool,
 }
 
 const FROG_RARITIES: [i64; 80] = [
@@ -133,6 +135,11 @@ impl AsTyped for Value {
 
 fn frog_data_for(pod: &SignedPod, desc: &SignedPod) -> Option<FrogData> {
     let frog_id = desc.get("frog_id")?.as_int()?;
+    let rarity = if (1..=80).contains(&frog_id) {
+        FROG_RARITIES[(frog_id - 1) as usize]
+    } else {
+        1
+    };
     let name = desc.get("name")?.as_str()?.to_owned();
     let description = desc.get("description")?.as_str()?.to_owned();
     let image_url = desc.get("image_url")?.as_str()?.to_owned();
@@ -141,6 +148,7 @@ fn frog_data_for(pod: &SignedPod, desc: &SignedPod) -> Option<FrogData> {
         name,
         description,
         image_url,
+        rarity,
     };
     let stats = compute_frog_stats(frog_id, pod.id().0);
     Some(FrogData { desc, stats })
@@ -185,6 +193,7 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
             rarity,
             name: "???".to_string(),
             image_url: "https://frogcrypto.vercel.app/images/pixel_frog.png".to_string(),
+            seen: false,
         })
         .collect();
     for desc in frog_descs {
@@ -193,6 +202,7 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
                 let index = (frog_id - 1) as usize;
                 entries[index].name = name;
                 entries[index].image_url = image_url;
+                entries[index].seen = true;
             }
         }
     }
@@ -231,17 +241,20 @@ fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
 }
 
 fn description_for<'a>(frog: &'_ SignedPod, descs: &'a [SignedPod]) -> Option<&'a SignedPod> {
-    let biome = frog.get("biome")?;
-    let id = frog.id().0 .0[0].0;
-    for desc in descs {
-        if desc.get("biome") == Some(biome) {
-            let RawValue([lo, hi, _, _]) = desc.get("seed_range")?.raw();
-            if id >= lo.0 && id <= hi.0 {
-                return Some(desc);
+    match frog.get("biome")?.typed() {
+        TypedValue::Int(biome) if (0..=1).contains(biome) => {
+            let offset = 2 * (*biome as usize);
+            let id = frog.id().0 .0[0].0;
+            for desc in descs {
+                let RawValue(arr) = desc.get("seed_range")?.raw();
+                if id >= arr[offset].0 && id <= arr[offset + 1].0 {
+                    return Some(desc);
+                }
             }
+            None
         }
+        _ => None,
     }
-    None
 }
 
 async fn frog_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
@@ -306,38 +319,6 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
         .json()
         .await
         .map_err(|e| e.to_string())?;
-    /*
-    if !space_exists(&app_state.db, "frogs")
-        .await
-        .map_err(|e| e.to_string())?
-    {
-        create_space(&app_state.db, "frogs")
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-    */
-    /*
-    let name = match frog_response
-        .pod
-        .get("name")
-        .map(pod2::middleware::Value::typed)
-    {
-        Some(TypedValue::String(s)) => Some(s.clone()),
-        _ => None,
-    };
-    */
-    /*
-    store::import_pod(
-        &app_state.db,
-        &PodData::Signed(Box::new(frog_response.pod.into())),
-        None,
-        //name.as_deref(),
-        "frogs",
-    )
-    .await
-    .map_err(|e| format!("Failed to save POD: {e}"))?;
-    app_state.trigger_state_sync().await?;
-    */
     register_frog(&mut app_state, frog_response.pod).await?;
     Ok(frog_response.score)
 }
@@ -429,7 +410,7 @@ struct FrogSearch {
 
 const MAX_TRIES_BEFORE_POLLING: u64 = 50000;
 
-const MINING_ZEROS_NEEDED: u64 = 27;
+const MINING_ZEROS_NEEDED: u64 = 29;
 const MINING_ZERO_MASK: u64 = !((1 << (64 - MINING_ZEROS_NEEDED)) - 1);
 
 impl FrogSearch {
