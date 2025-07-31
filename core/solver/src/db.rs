@@ -16,9 +16,11 @@ use petgraph::{
     visit::{Bfs, Reversed},
 };
 use pod2::{
+    backends::plonky2::primitives::ec::schnorr::SecretKey,
     frontend::{MainPod, SignedPod},
     middleware::{
         self, AnchoredKey, Hash, Key, PodId, RawValue, Statement, StatementArg, Value, ValueRef,
+        SELF,
     },
 };
 
@@ -116,6 +118,9 @@ pub struct FactDB {
     anchored_key_to_value: HashMap<AnchoredKey, Value>,
 
     pub statement_index: StatementIndex,
+
+    // Stringified public keys to secret keys
+    keypairs: HashMap<String, SecretKey>,
 }
 
 #[derive(Debug)]
@@ -255,7 +260,21 @@ impl FactDB {
             raw_value_to_anchored_keys: HashMap::new(),
             statement_index: StatementIndex::new(),
             anchored_key_to_value: HashMap::new(),
+            keypairs: HashMap::new(),
         }
+    }
+
+    pub fn get_secret_key(&self, public_key_string: &str) -> Option<&SecretKey> {
+        self.keypairs.get(public_key_string)
+    }
+
+    pub fn keypairs_iter(&self) -> impl Iterator<Item = &SecretKey> {
+        self.keypairs.values()
+    }
+
+    pub fn add_keypair(&mut self, secret_key: SecretKey) {
+        self.keypairs
+            .insert(secret_key.public_key().to_string(), secret_key);
     }
 
     pub fn get_pod(&self, pod_id: PodId) -> Option<&IndexablePod> {
@@ -263,10 +282,17 @@ impl FactDB {
     }
 
     pub fn get_pod_ids_with_key(&self, key: &Key) -> HashSet<PodId> {
-        self.key_to_anchored_keys
-            .get(key)
-            .map(|aks| aks.iter().map(|ak| ak.pod_id).collect())
-            .unwrap_or_default()
+        let self_ak = AnchoredKey {
+            pod_id: SELF,
+            key: key.clone(),
+        };
+
+        let existing_aks_iter = self.key_to_anchored_keys.get(key).into_iter().flatten();
+
+        existing_aks_iter
+            .chain(std::iter::once(&self_ak))
+            .map(|ak| ak.pod_id)
+            .collect()
     }
 
     pub fn get_aks_with_key(&self, key: &Key) -> &HashSet<AnchoredKey> {

@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { FeatureGate } from "../lib/features/config";
 import { useAppStore } from "../lib/store";
-import { ChatView } from "./ChatView";
 import { DebugView } from "./DebugView";
 import { FrogCrypto } from "./FrogCrypto";
-import { InboxView } from "./InboxView";
 import { PodViewer } from "./PodViewer";
 import { DocumentsView } from "./documents/DocumentsView";
 import { DraftsView } from "./documents/DraftsView";
@@ -52,10 +50,6 @@ export function MainContent() {
       );
     case "drafts":
       return <DraftsView onEditDraft={handleEditDraft} />;
-    case "inbox":
-      return <InboxView />;
-    case "chats":
-      return <ChatView />;
     case "frogs":
       return <FrogCrypto />;
     case "editor":

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use hex::ToHex;
-use itertools::Itertools;
-use pod2::middleware::{StatementTmpl, TypedValue, Value};
+use pod2::{backends::plonky2::primitives::ec::schnorr::SecretKey, middleware::StatementTmpl};
 
 use crate::{
     db::{FactDB, IndexablePod},
@@ -31,6 +29,18 @@ pub mod semantics;
 pub mod trace;
 pub mod vis;
 
+#[derive(Debug, Clone)]
+pub struct SolverContext<'a> {
+    pods: &'a [IndexablePod],
+    keys: &'a [SecretKey],
+}
+
+impl<'a> SolverContext<'a> {
+    pub fn new(pods: &'a [IndexablePod], keys: &'a [SecretKey]) -> Self {
+        Self { pods, keys }
+    }
+}
+
 /// The main entry point for the solver.
 ///
 /// Takes a proof request, a set of pods containing asserted facts, and runtime
@@ -38,12 +48,16 @@ pub mod vis;
 /// different levels of metrics during execution.
 pub fn solve(
     request: &[StatementTmpl],
-    pods: &[IndexablePod],
+    context: &SolverContext,
     metrics_level: MetricsLevel,
 ) -> Result<(Proof, MetricsReport), SolverError> {
     // Common setup logic that is independent of the metrics level.
-    let db = Arc::new(FactDB::build(pods).unwrap());
-    let materializer = Materializer::new(db.clone());
+    let mut db = FactDB::build(context.pods).unwrap();
+    for key in context.keys {
+        db.add_keypair(key.clone());
+    }
+    let wrapped_db = Arc::new(db);
+    let materializer = Materializer::new(wrapped_db.clone());
     let planner = Planner::new();
 
     // Dispatch to the appropriate generic implementation based on the desired
@@ -110,45 +124,10 @@ pub fn solve_with_tracing(
     Ok((proof, MetricsReport::Trace(metrics)))
 }
 
-pub fn value_to_podlang_literal(value: Value) -> String {
-    match value.typed() {
-        TypedValue::Int(i) => i.to_string(),
-        TypedValue::String(s) => format!("\"{}\"", s.clone()),
-        TypedValue::Bool(b) => b.to_string(),
-        TypedValue::Array(a) => format!(
-            "[{}]",
-            a.array()
-                .iter()
-                .map(|v| value_to_podlang_literal(v.clone()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::Dictionary(d) => format!(
-            "{{ {} }}",
-            d.kvs()
-                .iter()
-                .sorted_by_key(|(k, _)| k.name())
-                .map(|(k, v)| format!("{}: {}", k, value_to_podlang_literal(v.clone())))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::Set(s) => format!(
-            "#[{}]",
-            s.set()
-                .iter()
-                .sorted() // Ensure deterministic output
-                .map(|v| value_to_podlang_literal(v.clone()))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        TypedValue::PublicKey(p) => format!("PublicKey({p})"),
-        TypedValue::PodId(p) => format!("0x{}", p.0.encode_hex::<String>()),
-        TypedValue::Raw(r) => format!("Raw(0x{})", r.encode_hex::<String>()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use hex::ToHex;
     use pod2::{
         backends::plonky2::{
@@ -156,10 +135,11 @@ mod tests {
         },
         examples::{
             attest_eth_friend, custom::eth_dos_batch, zu_kyc_sign_pod_builders, MOCK_VD_SET,
+            ZU_KYC_NOW_MINUS_18Y, ZU_KYC_NOW_MINUS_1Y, ZU_KYC_SANCTION_LIST,
         },
-        frontend::MainPodBuilder,
+        frontend::{MainPodBuilder, OperationArg},
         lang::parse,
-        middleware::Params,
+        middleware::{containers::Set, NativeOperation, OperationType, Params, Value},
     };
 
     use super::*;
@@ -192,20 +172,21 @@ mod tests {
       )
       "#,
             batch.id().encode_hex::<String>(),
-            value_to_podlang_literal(alice.public_key()),
-            value_to_podlang_literal(bob.public_key())
+            alice.public_key(),
+            bob.public_key()
         );
 
         let request = parse(&req1, &params, std::slice::from_ref(&batch))
             .unwrap()
-            .request_templates;
+            .request;
 
-        let (result, _metrics) = solve(
-            &request,
-            &[IndexablePod::signed_pod(&alice_attestation)],
-            MetricsLevel::Counters,
-        )
-        .unwrap();
+        let context = SolverContext {
+            pods: &[IndexablePod::signed_pod(&alice_attestation)],
+            keys: &[],
+        };
+
+        let (result, _metrics) =
+            solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -223,7 +204,10 @@ mod tests {
 
         builder.add_signed_pod(&alice_attestation);
 
-        let alice_bob_pod = builder.prove(&prover, &params).unwrap();
+        let alice_bob_pod = builder.prove(&prover).unwrap();
+        let bindings = request.exact_match_pod(&*alice_bob_pod.pod).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings.get("Distance").unwrap(), &Value::from(1));
         println!("{alice_bob_pod}");
 
         let req2 = format!(
@@ -235,23 +219,23 @@ mod tests {
       )
       "#,
             batch.id().encode_hex::<String>(),
-            value_to_podlang_literal(alice.public_key()),
-            value_to_podlang_literal(charlie.public_key())
+            alice.public_key(),
+            charlie.public_key()
         );
 
         let request = parse(&req2, &params, std::slice::from_ref(&batch))
             .unwrap()
-            .request_templates;
+            .request;
 
-        let (result, _metrics) = solve(
-            &request,
-            &[
+        let context = SolverContext {
+            pods: &[
                 IndexablePod::main_pod(&alice_bob_pod),
                 IndexablePod::signed_pod(&bob_attestation),
             ],
-            MetricsLevel::Counters,
-        )
-        .unwrap();
+            keys: &[],
+        };
+        let (result, _metrics) =
+            solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -271,7 +255,10 @@ mod tests {
         builder.add_signed_pod(&bob_attestation);
         builder.add_recursive_pod(alice_bob_pod);
 
-        let bob_charlie_pod = builder.prove(&prover, &params).unwrap();
+        let bob_charlie_pod = builder.prove(&prover).unwrap();
+        let bindings = request.exact_match_pod(&*bob_charlie_pod.pod).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings.get("Distance").unwrap(), &Value::from(2));
         println!("{bob_charlie_pod}");
     }
 
@@ -280,41 +267,47 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
         let params = Params::default();
 
-        let const_18y = 1169909388;
-        let const_1y = 1706367566;
+        let const_18y = ZU_KYC_NOW_MINUS_18Y;
+        let const_1y = ZU_KYC_NOW_MINUS_1Y;
+        let sanctions_values: HashSet<Value> = ZU_KYC_SANCTION_LIST
+            .iter()
+            .map(|s| Value::from(*s))
+            .collect();
+        let sanction_set =
+            Value::from(Set::new(params.max_depth_mt_containers, sanctions_values).unwrap());
 
-        let (gov_id, pay_stub, sanction_list) = zu_kyc_sign_pod_builders(&params);
+        let (gov_id, pay_stub) = zu_kyc_sign_pod_builders(&params);
         let signer = Signer(SecretKey::new_rand());
         let gov_id = gov_id.sign(&signer).unwrap();
 
         let signer = Signer(SecretKey::new_rand());
         let pay_stub = pay_stub.sign(&signer).unwrap();
 
-        let signer = Signer(SecretKey::new_rand());
-        let sanction_list = sanction_list.sign(&signer).unwrap();
-
         let zukyc_request = format!(
             r#"
         REQUEST(
-            NotContains(?sanctions["sanctionList"], ?gov["idNumber"])
+            NotContains({sanction_set}, ?gov["idNumber"])
             Lt(?gov["dateOfBirth"], {const_18y})
             Equal(?pay["startDate"], {const_1y})
             Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
+            Equal(?self["watermark"], 0)
         )
         "#
         );
 
-        let request = parse(&zukyc_request, &params, &[])
-            .unwrap()
-            .request_templates;
+        let request = parse(&zukyc_request, &params, &[]).unwrap().request;
 
         let pods = [
             IndexablePod::signed_pod(&gov_id),
             IndexablePod::signed_pod(&pay_stub),
-            IndexablePod::signed_pod(&sanction_list),
         ];
 
-        let (result, _) = solve(&request, &pods, MetricsLevel::Counters).unwrap();
+        let context = SolverContext {
+            pods: &pods,
+            keys: &[],
+        };
+
+        let (result, _) = solve(request.templates(), &context, MetricsLevel::Counters).unwrap();
 
         let prover = MockProver {};
         #[allow(clippy::borrow_interior_mutable_const)]
@@ -324,6 +317,7 @@ mod tests {
 
         for (op, public) in ops {
             if public {
+                println!("public op: {op:?}");
                 builder.pub_op(op).unwrap();
             } else {
                 builder.priv_op(op).unwrap();
@@ -339,8 +333,94 @@ mod tests {
             }
         }
 
-        let kyc = builder.prove(&prover, &params).unwrap();
+        let kyc = builder.prove(&prover).unwrap();
 
         println!("{kyc}");
+    }
+
+    #[test]
+    fn test_public_key_of() {
+        let params = Params::default();
+        let sk = SecretKey::new_rand();
+        let pk = sk.public_key();
+        let request = parse(
+            &format!("REQUEST(PublicKeyOf({}, ?b))", Value::from(pk)),
+            &params,
+            &[],
+        )
+        .unwrap();
+        let request = request.request;
+        let context = SolverContext::new(&[], &[]);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
+        assert!(solve_result.is_err());
+
+        let sks = vec![sk.clone()];
+        let context = SolverContext::new(&[], &sks);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
+        assert!(solve_result.is_ok());
+        let (proof, _) = solve_result.unwrap();
+        let (pod_ids, ops) = proof.to_inputs();
+        assert_eq!(pod_ids.len(), 0);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(
+            ops[0].0 .0,
+            OperationType::Native(NativeOperation::PublicKeyOf)
+        ));
+        assert!(matches!(
+            ops[0].0.1.as_slice(),
+            [
+                OperationArg::Literal(pk_val),
+                OperationArg::Literal(sk_val)
+            ] if pk_val == &Value::from(pk) && sk_val == &Value::from(sk.clone())
+        ));
+    }
+
+    #[test]
+    fn test_repeated_statements() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let params = Params::default();
+        let sk = SecretKey::new_rand();
+        let pk = Value::from(sk.public_key());
+        let request = parse(
+            &format!(
+                r#"
+owned_public_key(pk, pod_id, private: sk) = AND(
+    PublicKeyOf(?pk, ?sk)
+    Equal(?pod_id, SELF)
+)
+
+REQUEST(
+    PublicKeyOf({pk}, ?sk)
+    owned_public_key({pk}, SELF)
+)
+            "#
+            ),
+            &params,
+            &[],
+        )
+        .unwrap();
+        let request = request.request;
+        let sks = vec![sk.clone()];
+        let context = SolverContext::new(&[], &sks);
+        let solve_result = solve(request.templates(), &context, MetricsLevel::Counters);
+        assert!(solve_result.is_ok());
+        let (proof, _) = solve_result.unwrap();
+        let (_pod_ids, ops) = proof.to_inputs();
+
+        let mut builder = MainPodBuilder::new(&params, &MOCK_VD_SET);
+
+        for (op, public) in ops {
+            if public {
+                builder.pub_op(op).unwrap();
+            } else {
+                builder.priv_op(op).unwrap();
+            }
+        }
+
+        let prover = MockProver {};
+        let pod = builder.prove(&prover).unwrap();
+
+        assert_eq!(pod.public_statements.len(), 3); // Including the _type statement
+        println!("{pod}");
     }
 }

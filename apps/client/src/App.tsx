@@ -1,101 +1,18 @@
-import { submitPodRequest } from "./lib/rpc";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { AppSidebar } from "./components/AppSidebar";
-import { MainContent } from "./components/MainContent";
 import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
-import { Button } from "./components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "./components/ui/dialog";
+import { MainContent } from "./components/MainContent";
+import { ThemeProvider } from "./components/theme-provider";
 import { SidebarProvider } from "./components/ui/sidebar";
-import { Textarea } from "./components/ui/textarea";
 import { Toaster } from "./components/ui/sonner";
-import { useAppStore } from "./lib/store";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
 import { FeatureConfigProvider } from "./lib/features/config";
-import { ThemeProvider } from "./components/theme-provider";
-
-type ResultStatus = "success" | "error" | "pending";
-
-function PodRequestDialog() {
-  const { externalPodRequest, setExternalPodRequest } = useAppStore(
-    (state) => state
-  );
-  const [resultStatus, setResultStatus] = useState<ResultStatus | undefined>(
-    undefined
-  );
-
-  const submitPodRequestHandler = useCallback(async (requestText: string) => {
-    try {
-      setResultStatus("pending");
-      const result = await submitPodRequest(requestText);
-      await writeText(JSON.stringify(result));
-      setResultStatus("success");
-    } catch (error) {
-      console.error(error);
-      setResultStatus("error");
-    }
-  }, []);
-
-  const handleSubmit = () => {
-    if (externalPodRequest) {
-      submitPodRequestHandler(externalPodRequest);
-    }
-  };
-  return (
-    <Dialog
-      open={externalPodRequest !== undefined}
-      onOpenChange={(open) => {
-        if (!open) {
-          setExternalPodRequest(undefined);
-        }
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>POD Request</DialogTitle>
-        </DialogHeader>
-        <DialogDescription>Enter your POD request here.</DialogDescription>
-        <Textarea
-          id="pod-request"
-          rows={10}
-          value={externalPodRequest}
-          onChange={(e) => setExternalPodRequest(e.target.value)}
-        />
-        {resultStatus === "success" && (
-          <div className="text-green-500">
-            POD created! Result copied to clipboard.
-          </div>
-        )}
-        {resultStatus === "error" && (
-          <div className="text-red-500">Request failed</div>
-        )}
-        {resultStatus === "pending" && (
-          <div className="text-yellow-500">
-            Please wait while we create your POD...
-          </div>
-        )}
-        <DialogFooter>
-          <Button onClick={handleSubmit} disabled={resultStatus === "pending"}>
-            Submit
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { useAppStore } from "./lib/store";
 
 function App() {
-  const { setExternalPodRequest, initialize } = useAppStore((state) => state);
+  const { initialize } = useAppStore((state) => state);
   const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(
     null
   );
@@ -103,18 +20,6 @@ function App() {
 
   // Initialize config store
   useConfigInitialization();
-
-  useEffect(() => {
-    onOpenUrl((urls) => {
-      if (urls.length > 0) {
-        const url = new URL(urls[0]);
-        const request = url.searchParams.get("request");
-        if (request) {
-          setExternalPodRequest(request);
-        }
-      }
-    });
-  }, []);
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
@@ -174,7 +79,6 @@ function App() {
           <SidebarProvider className="h-screen">
             <AppSidebar />
             <MainContent />
-            <PodRequestDialog />
           </SidebarProvider>
           <Toaster />
 

@@ -154,6 +154,23 @@ fn propagate_arithmetic_constraints(
             }
         }
 
+        NativePredicate::PublicKeyOf => {
+            if let (StatementTmplArg::Wildcard(w_pk), StatementTmplArg::Wildcard(w_sk)) =
+                (&args[0], &args[1])
+            {
+                if !bound_vars.contains(w_pk) && bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_pk.clone()); // pk = f(sk)
+                }
+                if bound_vars.contains(w_pk) && !bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_sk.clone()); // sk = db_lookup(pk)
+                }
+                if !bound_vars.contains(w_pk) && !bound_vars.contains(w_sk) {
+                    newly_bound.insert(w_pk.clone());
+                    newly_bound.insert(w_sk.clone());
+                }
+            }
+        }
+
         _ => {
             // For other predicates, no constraint propagation
         }
@@ -359,39 +376,28 @@ impl Planner {
                         .filter(|&&b| b == Binding::Bound)
                         .count();
 
-                    // Give extra priority to arithmetic predicates that can propagate constraints
-                    if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
+                    let mut score = bound_args;
+
+                    if let ir::PredicateIdentifier::Normal(Predicate::Native(p)) =
                         &literal.predicate
                     {
-                        let propagated_vars = propagate_arithmetic_constraints(
-                            native_pred,
-                            &currently_bound,
-                            &literal.terms,
-                        );
-                        if !propagated_vars.is_empty() {
-                            // High priority for arithmetic predicates that can bind new variables
-                            return 1000 + bound_args;
+                        // Check if this literal can bind *more* variables via arithmetic.
+                        let arithmetically_bound =
+                            propagate_arithmetic_constraints(p, &currently_bound, &literal.terms);
+                        let new_arithmetic_vars = arithmetically_bound
+                            .difference(&currently_bound)
+                            .collect::<HashSet<_>>();
+                        score += new_arithmetic_vars.len() as usize;
+
+                        // Prefer `Equal` predicates as they are good at generating bindings from EDB.
+                        if *p == NativePredicate::Equal {
+                            score += 3;
                         }
                     }
 
-                    // Also prioritize during the native phase
-                    if picking_native_phase {
-                        if let ir::PredicateIdentifier::Normal(Predicate::Native(native_pred)) =
-                            &literal.predicate
-                        {
-                            let propagated_vars = propagate_arithmetic_constraints(
-                                native_pred,
-                                &currently_bound,
-                                &literal.terms,
-                            );
-                            if !propagated_vars.is_empty() {
-                                // High priority for arithmetic predicates that can bind new variables
-                                return 1000 + bound_args;
-                            }
-                        }
-                    }
-
-                    bound_args
+                    // Penalize literals with more variables overall.
+                    // This is a weak heuristic to prefer simpler literals first.
+                    score
                 })
                 .map(|(i, _)| i);
 
@@ -869,18 +875,19 @@ impl Planner {
             let wildcard_names: Vec<_> = head_wildcards.iter().map(|w| w.name.clone()).collect();
 
             // Create a synthetic CustomPredicateRef to represent our implicit goal.
+            let params = Params {
+                max_custom_predicate_arity: 20,
+                ..Params::default()
+            };
             let synth_pred_def = CustomPredicate::and(
-                &Params::default(),
+                &params,
                 synthetic_pred_name.clone(),
                 request.to_vec(),
                 head_wildcards.len(),
                 wildcard_names.clone(),
             )
-            .unwrap();
-            let params = Params {
-                max_custom_predicate_arity: 12,
-                ..Params::default()
-            };
+            .map_err(|e| SolverError::Internal(e.to_string()))?;
+
             let synth_batch = CustomPredicateBatch::new(
                 &params,
                 "SyntheticRequestBatch".to_string(),
@@ -1196,10 +1203,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         assert_eq!(plan.magic_rules.len(), 2);
         assert_eq!(plan.guarded_rules.len(), 2);
@@ -1276,10 +1283,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         assert_eq!(plan.magic_rules.len(), 2);
         assert_eq!(plan.guarded_rules.len(), 2);
@@ -1363,10 +1370,10 @@ mod tests {
 
         let params = Params::default();
         let processed = parse(podlog, &params, &[])?;
-        let request = processed.request_templates;
+        let request = processed.request;
 
         let planner = Planner::new();
-        let plan = planner.create_plan(&request).unwrap();
+        let plan = planner.create_plan(request.templates()).unwrap();
 
         // Expected outcome analysis:
         // - 1 seed rule for _request_goal(?End) -> magic__request_goal_f().

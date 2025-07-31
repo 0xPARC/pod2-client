@@ -140,7 +140,7 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
                 <div className="w-1/3 font-medium text-gray-700 dark:text-gray-300 break-all pr-2">
                   {statement.predicate}
                 </div>
-                <div className="w-2/3 text-gray-900 dark:text-gray-100 break-all">
+                <div className="w-2/3 text-gray-900 dark:text-gray-100 break-all flex flex-col gap-0.5">
                   {statement.predicate !== "Custom" &&
                     statement.predicate !== "None" &&
                     statement.args.map((arg, index) => (

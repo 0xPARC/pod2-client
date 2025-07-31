@@ -6,7 +6,7 @@ use pod2::{
     lang::parse,
     middleware::{Hash, Params, Value},
 };
-use pod2_solver::{db::IndexablePod, metrics::MetricsLevel, solve, value_to_podlang_literal};
+use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
 
 //#[test]
 //fn test_full_upvote_count() {
@@ -92,15 +92,15 @@ fn test_simple_upvote_count() {
         parse(simple_predicate, &pod_params, &[]).expect("Failed to parse upvote count predicate");
 
     // Create the query for base case: upvote_count_base(0, content_hash, private: _)
-    let content_hash_literal = value_to_podlang_literal(Value::from(content_hash));
+    let content_hash_value = Value::from(content_hash);
     let mut query = simple_predicate.to_string();
-    query.push_str(&format!("REQUEST(upvote_count(0, {content_hash_literal}))"));
+    query.push_str(&format!("REQUEST(upvote_count(0, {content_hash_value}))"));
     println!("Base case query: {query}");
 
     // Parse the query
     let request = parse(&query, &pod_params, &[])
         .expect("Failed to parse query")
-        .request_templates;
+        .request;
 
     // Create a signed pod with the data
     let mut signed_pod_builder = SignedPodBuilder::new(&pod_params);
@@ -115,8 +115,9 @@ fn test_simple_upvote_count() {
 
     // Solve for the base case
     let pods = [IndexablePod::signed_pod(&signed_pod)];
-    let (proof, _metrics) =
-        solve(&request, &pods, MetricsLevel::Debug).expect("Failed to solve base case");
+    let context = SolverContext::new(&pods, &[]);
+    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Debug)
+        .expect("Failed to solve base case");
 
     println!("Base case solved successfully!");
     println!("Proof root nodes: {:?}", proof.root_nodes);
@@ -141,23 +142,27 @@ fn test_simple_upvote_count() {
     // Query for inductive case: upvote_count_ind(1, content_hash, 0, private: _)
     let mut inductive_query = simple_predicate.to_string();
     inductive_query.push_str(&format!(
-        "REQUEST(upvote_count_ind(1, {content_hash_literal}))"
+        "REQUEST(upvote_count_ind(1, {content_hash_value}))"
     ));
     println!("Inductive query: {inductive_query}");
 
     // Parse the inductive query
     let inductive_request = parse(&inductive_query, &pod_params, &[])
         .expect("Failed to parse inductive query")
-        .request_templates;
+        .request;
 
     // For inductive case, we need both the base case proof and the new pod
     let pods_inductive = [
         IndexablePod::signed_pod(&signed_pod),
         IndexablePod::signed_pod(&signed_pod2),
     ];
-    let (proof_inductive, _metrics) =
-        solve(&inductive_request, &pods_inductive, MetricsLevel::Debug)
-            .expect("Failed to solve inductive case");
+    let context_inductive = SolverContext::new(&pods_inductive, &[]);
+    let (proof_inductive, _metrics) = solve(
+        inductive_request.templates(),
+        &context_inductive,
+        MetricsLevel::Debug,
+    )
+    .expect("Failed to solve inductive case");
 
     println!("Inductive case solved successfully!");
     println!(

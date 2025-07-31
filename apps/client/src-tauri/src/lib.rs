@@ -23,7 +23,6 @@ use tokio::sync::Mutex;
 mod config;
 mod features;
 pub(crate) mod frog;
-mod p2p_node;
 
 const DEFAULT_SPACE_ID: &str = "default";
 
@@ -287,7 +286,6 @@ pub struct AppState {
     db: Db,
     state_data: AppStateData,
     app_handle: AppHandle,
-    p2p_node: Option<p2p_node::P2PNode>,
 }
 
 impl AppState {
@@ -369,15 +367,12 @@ pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
     let params_for_test = Params::default();
     let gov_signer = Signer(SecretKey(BigUint::from(1u32)));
     let pay_signer = Signer(SecretKey(BigUint::from(2u32)));
-    let sanction_signer = Signer(SecretKey(BigUint::from(3u32)));
 
-    let (gov_id_builder, pay_stub_builder, sanction_list_builder) =
-        zu_kyc_sign_pod_builders(&params_for_test);
+    let (gov_id_builder, pay_stub_builder) = zu_kyc_sign_pod_builders(&params_for_test);
 
     let sign_results = [
         gov_id_builder.sign(&gov_signer),
         pay_stub_builder.sign(&pay_signer),
-        sanction_list_builder.sign(&sanction_signer),
     ];
 
     let all_signed: Result<Vec<_>, _> = sign_results.into_iter().collect();
@@ -658,7 +653,6 @@ pub fn run() {
                     db,
                     state_data: AppStateData::default(),
                     app_handle,
-                    p2p_node: None,
                 };
                 // Initialize state
                 app_state
@@ -705,14 +699,6 @@ pub fn run() {
             // Blockies commands
             blockies::commands::generate_blockies,
             blockies::commands::get_blockies_data,
-            // P2P commands
-            p2p::start_p2p_node,
-            p2p::send_pod_to_peer,
-            p2p::send_message_as_pod,
-            p2p::get_inbox_messages,
-            p2p::accept_inbox_message,
-            p2p::get_chats,
-            p2p::get_chat_messages,
             // Authoring commands
             authoring::get_private_key_info,
             authoring::sign_pod,
@@ -739,8 +725,6 @@ pub fn run() {
             identity_setup::get_github_auth_url,
             identity_setup::complete_github_identity_verification,
             identity_setup::detect_github_oauth_server,
-            // Integration commands
-            integration::submit_pod_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
