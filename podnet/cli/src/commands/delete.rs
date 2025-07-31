@@ -8,9 +8,7 @@ use pod2::{
 };
 use podnet_models::{
     DeleteRequest, Document,
-    mainpod::delete::{
-        DeleteProofParams, prove_delete,
-    },
+    mainpod::delete::{DeleteProofParams, prove_delete},
     signed_pod,
 };
 
@@ -23,14 +21,15 @@ pub async fn delete_document(
     identity_pod_file: &str,
     use_mock: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Deleting document {} from server using main pod verification...", document_id);
+    println!("Deleting document {document_id} from server using main pod verification...");
 
     // Parse document ID
-    let document_id_num: i64 = document_id.parse()
-        .map_err(|_| format!("Invalid document ID: {}", document_id))?;
+    let document_id_num: i64 = document_id
+        .parse()
+        .map_err(|_| format!("Invalid document ID: {document_id}"))?;
 
     // Load and verify identity pod
-    println!("Loading identity pod from: {}", identity_pod_file);
+    println!("Loading identity pod from: {identity_pod_file}");
     let identity_pod_json = std::fs::read_to_string(identity_pod_file)?;
     let identity_pod: SignedPod = serde_json::from_str(&identity_pod_json)?;
 
@@ -45,7 +44,7 @@ pub async fn delete_document(
         .ok_or("Identity pod missing username")?
         .to_string();
 
-    println!("Username: {}", username);
+    println!("Username: {username}");
 
     // Load keypair from file
     let file = File::open(keypair_file)?;
@@ -62,10 +61,10 @@ pub async fn delete_document(
     println!("Public key: {}", keypair_data["public_key"]);
 
     // Fetch the document from server to get the actual document pod and timestamp pod
-    println!("Fetching document {} from server...", document_id_num);
+    println!("Fetching document {document_id_num} from server...");
     let client = reqwest::Client::new();
     let document_response = client
-        .get(format!("{}/documents/{}", server_url, document_id_num))
+        .get(format!("{server_url}/documents/{document_id_num}"))
         .send()
         .await?;
 
@@ -91,7 +90,7 @@ pub async fn delete_document(
 
     // Extract the original data from the publish MainPod to use in delete pod
     let publish_main_pod = document.metadata.pod.get()?;
-    
+
     // The publish MainPod contains the verified data structure - we need to extract it
     // The data is in the public statements of the MainPod
     let publish_verified_statement = &publish_main_pod.public_statements[1]; // publish_verified statement
@@ -109,7 +108,7 @@ pub async fn delete_document(
         "data" => original_data.clone(),
         "timestamp_pod" => timestamp_pod.id(),
     });
-    
+
     // Verify the delete document pod
     delete_document_pod.verify()?;
     println!("✓ Delete document pod created and verified");
@@ -118,11 +117,11 @@ pub async fn delete_document(
     let delete_params = DeleteProofParams {
         identity_pod: &identity_pod,
         document_pod: &delete_document_pod,
-        timestamp_pod: &timestamp_pod,
+        timestamp_pod,
         use_mock_proofs: use_mock,
     };
     let main_pod = prove_delete(delete_params)
-        .map_err(|e| format!("Failed to generate delete verification MainPod: {}", e))?;
+        .map_err(|e| format!("Failed to generate delete verification MainPod: {e}"))?;
 
     println!("✓ Main pod created and verified");
 
@@ -135,7 +134,7 @@ pub async fn delete_document(
 
     println!("Sending delete request");
     let response = client
-        .delete(format!("{}/documents/{}", server_url, document_id_num))
+        .delete(format!("{server_url}/documents/{document_id_num}"))
         .header("Content-Type", "application/json")
         .json(&delete_request)
         .send()

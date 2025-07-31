@@ -345,8 +345,8 @@ pub struct PublishRequest {
 /// Request structure for deleting a document
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteRequest {
-    pub document_id: i64,    // ID of the document to delete
-    pub username: String,    // Expected username from identity verification
+    pub document_id: i64, // ID of the document to delete
+    pub username: String, // Expected username from identity verification
     /// MainPod that cryptographically proves the user's identity and authorization to delete:
     ///
     /// Uses similar approach to PublishRequest with:

@@ -81,9 +81,12 @@ export function PublishButton({
     setIsLoading(true);
 
     // Show loading toast with animated component
-    const loadingToast = toast(<PublishLoadingToast isEditing={!!data.postId} />, {
-      duration: Infinity // Keep it open until we dismiss it
-    });
+    const loadingToast = toast(
+      <PublishLoadingToast isEditing={!!data.postId} />,
+      {
+        duration: Infinity // Keep it open until we dismiss it
+      }
+    );
 
     try {
       // Get server URL from configuration
@@ -138,7 +141,11 @@ export function PublishButton({
 
       if (result.success && result.document_id !== null) {
         // Success - show success message and callback
-        toast.success(data.postId ? "Document updated successfully!" : "Document published successfully!");
+        toast.success(
+          data.postId
+            ? "Document updated successfully!"
+            : "Document published successfully!"
+        );
 
         if (onPublishSuccess) {
           onPublishSuccess(result.document_id);
@@ -169,10 +176,13 @@ export function PublishButton({
     >
       <SendIcon className={`h-4 w-4 ${isLoading ? "opacity-50" : ""}`} />
       <span>
-        {isLoading 
-          ? (data.postId ? "Updating..." : "Publishing...") 
-          : (data.postId ? "Update Document" : "Publish Document")
-        }
+        {isLoading
+          ? data.postId
+            ? "Updating..."
+            : "Publishing..."
+          : data.postId
+            ? "Update Document"
+            : "Publish Document"}
       </span>
     </Button>
   );

@@ -828,7 +828,7 @@ impl Database {
             [&document_id.to_string()],
         )?;
 
-        log::info!("Deleted document {} and associated upvotes", document_id);
+        log::info!("Deleted document {document_id} and associated upvotes");
         Ok(uploader_id)
     }
 

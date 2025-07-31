@@ -370,10 +370,7 @@ pub async fn delete_document(
     State(state): State<Arc<crate::AppState>>,
     Json(payload): Json<DeleteRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    log::info!(
-        "Starting document deletion with main pod verification for document {}",
-        id
-    );
+    log::info!("Starting document deletion with main pod verification for document {id}");
 
     // Verify the document ID matches the request
     if payload.document_id != id {
@@ -400,7 +397,7 @@ pub async fn delete_document(
         .db
         .get_document(id, &state.storage)
         .map_err(|e| {
-            log::error!("Database error retrieving document {}: {e}", id);
+            log::error!("Database error retrieving document {id}: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -512,16 +509,13 @@ pub async fn delete_document(
     );
 
     // Delete the document
-    log::info!("Deleting document {}", id);
+    log::info!("Deleting document {id}");
     let deleted_uploader = state.db.delete_document(id).map_err(|e| {
-        log::error!("Failed to delete document {}: {e}", id);
+        log::error!("Failed to delete document {id}: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    log::info!(
-        "Document deletion completed successfully for document {}",
-        id
-    );
+    log::info!("Document deletion completed successfully for document {id}");
 
     Ok(Json(serde_json::json!({
         "success": true,

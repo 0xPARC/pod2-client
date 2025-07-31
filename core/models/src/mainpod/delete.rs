@@ -9,11 +9,11 @@
 //! 3. Document exists and is accessible for deletion
 //! 4. All cryptographic proofs are valid
 
-use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
+use pod_utils::prover_setup::PodNetProverSetup;
 use pod2::{
     frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::parse,
-    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Key, Params, PodType, Value},
+    middleware::{KEY_SIGNER, KEY_TYPE, Params, PodType, Value},
 };
 use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
 
@@ -142,10 +142,10 @@ pub fn prove_delete(params: DeleteProofParams) -> MainPodResult<MainPod> {
     }
 
     let main_pod = builder
-        .prove(&*prover, &pod_params)
+        .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
-    println!("GOT MAINPOD: {}", main_pod);
+    println!("GOT MAINPOD: {main_pod}");
     main_pod.pod.verify().map_err(|e| {
         MainPodError::ProofGeneration(format!("MainPod verification failed: {e:?}"))
     })?;
@@ -192,20 +192,8 @@ pub fn verify_delete_verification_with_solver(
         .map_err(|e| MainPodError::Verification(format!("Solver error: {e:?}")))?;
     println!("GOT DELETE PROOF: {proof}");
 
-    log::info!(
-        "✓ Delete verification succeeded for user {}",
-        expected_username
-    );
+    log::info!("✓ Delete verification succeeded for user {expected_username}");
     Ok(())
-}
-
-/// Extract delete arguments from MainPod (simplified version for now)
-pub fn extract_delete_args(main_pod: &MainPod) -> MainPodResult<(String, i64, Value)> {
-    // For now, return a placeholder - this would need proper implementation
-    // using the same pattern as publish verification
-    Err(MainPodError::Verification(
-        "extract_delete_args not yet implemented".to_string(),
-    ))
 }
 
 #[cfg(test)]

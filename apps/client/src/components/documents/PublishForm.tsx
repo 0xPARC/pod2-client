@@ -39,7 +39,8 @@ export function PublishForm({
   replyTo,
   editingDraftId
 }: PublishFormProps) {
-  const { setCurrentView, editDocumentData, setEditDocumentData } = useAppStore();
+  const { setCurrentView, editDocumentData, setEditDocumentData } =
+    useAppStore();
   const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
     "message"
   );
@@ -135,7 +136,7 @@ export function PublishForm({
 
   const getPublishData = () => {
     console.log("getPublishData called, editDocumentData:", editDocumentData);
-    
+
     const data: any = {
       title: title.trim(),
       tags: tags.length > 0 ? tags : undefined,
@@ -273,10 +274,11 @@ export function PublishForm({
   // Load document data if editing a document
   useEffect(() => {
     const loadEditDocument = async () => {
-      if (editDocumentData && !editingDraftId) { // Only load if not editing a draft
+      if (editDocumentData && !editingDraftId) {
+        // Only load if not editing a draft
         try {
           console.log("Loading edit document data:", editDocumentData);
-          
+
           setTitle(editDocumentData.title);
           setTags(editDocumentData.tags);
           setAuthors(editDocumentData.authors);
@@ -288,7 +290,9 @@ export function PublishForm({
           } else if (editDocumentData.content.file) {
             setActiveTab("file");
             // Recreate File object from stored data
-            const uint8Array = new Uint8Array(editDocumentData.content.file.content);
+            const uint8Array = new Uint8Array(
+              editDocumentData.content.file.content
+            );
             const blob = new Blob([uint8Array], {
               type: editDocumentData.content.file.mime_type
             });

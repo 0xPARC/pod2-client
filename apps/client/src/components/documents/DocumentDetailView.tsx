@@ -24,7 +24,6 @@ import {
   DocumentFile,
   DocumentMetadata,
   DocumentVerificationResult,
-  DeleteResult,
   fetchDocument,
   fetchDocumentReplies,
   fetchPostReplies,
@@ -124,7 +123,8 @@ export function DocumentDetailView({
   onBack,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { setCurrentView, setReplyToDocumentId, setEditDocumentData } = useAppStore();
+  const { setCurrentView, setReplyToDocumentId, setEditDocumentData } =
+    useAppStore();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -326,7 +326,11 @@ export function DocumentDetailView({
     if (!document || isDeleting) return;
 
     // Confirm deletion
-    if (!confirm("Are you sure you want to delete this document? This action cannot be undone.")) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this document? This action cannot be undone."
+      )
+    ) {
       return;
     }
 
@@ -359,8 +363,9 @@ export function DocumentDetailView({
     } catch (error) {
       // Dismiss loading toast
       toast.dismiss(loadingToast);
-      
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete document";
+
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete document";
       console.error("Delete error:", error);
       toast.error(errorMessage);
     } finally {
@@ -375,11 +380,13 @@ export function DocumentDetailView({
     setEditDocumentData({
       documentId: document.metadata.id!,
       postId: document.metadata.post_id,
-      title: document.metadata.title || '',
+      title: document.metadata.title || "",
       content: document.content,
       tags: document.metadata.tags,
       authors: document.metadata.authors,
-      replyTo: document.metadata.reply_to ? `${document.metadata.reply_to.post_id}:${document.metadata.reply_to.document_id}` : null,
+      replyTo: document.metadata.reply_to
+        ? `${document.metadata.reply_to.post_id}:${document.metadata.reply_to.document_id}`
+        : null
     });
 
     // Navigate to publish view in edit mode
@@ -1108,39 +1115,41 @@ export function DocumentDetailView({
                   )}
                 </Button>
                 {/* Edit button - only show for document owner */}
-                {currentUsername && document.metadata.uploader_id === currentUsername && (
-                  <Button
-                    onClick={handleEditDocument}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                  >
-                    <EditIcon className="h-3 w-3 mr-1" />
-                    Edit
-                  </Button>
-                )}
+                {currentUsername &&
+                  document.metadata.uploader_id === currentUsername && (
+                    <Button
+                      onClick={handleEditDocument}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                    >
+                      <EditIcon className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )}
                 {/* Delete button - only show for document owner */}
-                {currentUsername && document.metadata.uploader_id === currentUsername && (
-                  <Button
-                    onClick={handleDeleteDocument}
-                    disabled={isDeleting}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <TrashIcon className="h-3 w-3 mr-1" />
-                        Delete
-                      </>
-                    )}
-                  </Button>
-                )}
+                {currentUsername &&
+                  document.metadata.uploader_id === currentUsername && (
+                    <Button
+                      onClick={handleDeleteDocument}
+                      disabled={isDeleting}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <TrashIcon className="h-3 w-3 mr-1" />
+                          Delete
+                        </>
+                      )}
+                    </Button>
+                  )}
               </div>
 
               {verificationResult &&

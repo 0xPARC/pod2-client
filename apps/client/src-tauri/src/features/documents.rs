@@ -12,7 +12,8 @@ use pod2::{
 };
 use pod2_db::store::PodData;
 use podnet_models::{
-    DeleteRequest, Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference, UpvoteRequest,
+    DeleteRequest, Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference,
+    UpvoteRequest,
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -338,11 +339,11 @@ pub async fn publish_document(
     reply_to: Option<ReplyReference>,
     server_url: String,
     draft_id: Option<String>, // UUID of draft to delete after successful publish
-    post_id: Option<i64>, // Optional post ID for creating revisions (editing documents)
+    post_id: Option<i64>,     // Optional post ID for creating revisions (editing documents)
     state: State<'_, Mutex<AppState>>,
 ) -> Result<PublishResult, String> {
     log::info!("Publishing document to server {server_url}");
-    log::info!("Post ID for revision: {:?}", post_id);
+    log::info!("Post ID for revision: {post_id:?}");
     if let Some(ref reply_ref) = reply_to {
         log::info!(
             "Replying to post {} document {}",
@@ -606,7 +607,10 @@ pub async fn publish_document(
     };
 
     log::info!("Sending publish request to server...");
-    log::info!("PublishRequest post_id field: {:?}", publish_request.post_id);
+    log::info!(
+        "PublishRequest post_id field: {:?}",
+        publish_request.post_id
+    );
 
     // Step 9: Submit PublishRequest to server
     let client = reqwest::Client::new();
@@ -828,7 +832,7 @@ pub async fn publish_draft(
         reply_to,
         server_url,
         Some(draft_id), // Pass draft_id for automatic deletion
-        None, // No post_id for draft publishing (creates new document)
+        None,           // No post_id for draft publishing (creates new document)
         state,
     )
     .await
@@ -914,7 +918,10 @@ pub async fn delete_document(
         return Ok(DeleteResult {
             success: false,
             document_id: Some(document_id),
-            error_message: Some(format!("Failed to fetch document: {}", document_response.status())),
+            error_message: Some(format!(
+                "Failed to fetch document: {}",
+                document_response.status()
+            )),
         });
     }
 
@@ -927,20 +934,27 @@ pub async fn delete_document(
 
     // Extract only the timestamp pod from the server response
     // We'll create our own document pod for the delete request
-    let timestamp_pod = document.metadata.timestamp_pod.get()
+    let timestamp_pod = document
+        .metadata
+        .timestamp_pod
+        .get()
         .map_err(|e| format!("Failed to get timestamp pod: {e}"))?;
 
     log::info!("✓ Timestamp pod extracted from server");
 
     // Verify the timestamp pod
-    timestamp_pod.verify()
+    timestamp_pod
+        .verify()
         .map_err(|e| format!("Timestamp pod verification failed: {e}"))?;
     log::info!("✓ Timestamp pod verification successful");
 
     // Extract the original data from the publish MainPod to use in delete pod
-    let publish_main_pod = document.metadata.pod.get()
+    let publish_main_pod = document
+        .metadata
+        .pod
+        .get()
         .map_err(|e| format!("Failed to get publish MainPod: {e}"))?;
-    
+
     // The publish MainPod contains the verified data structure - we need to extract it
     // The data is in the public statements of the MainPod
     let publish_verified_statement = &publish_main_pod.public_statements[1]; // publish_verified statement
@@ -961,9 +975,10 @@ pub async fn delete_document(
     let delete_document_pod = delete_document_builder
         .sign(&Signer(private_key))
         .map_err(|e| format!("Failed to sign delete document pod: {e}"))?;
-    
+
     // Verify the delete document pod
-    delete_document_pod.verify()
+    delete_document_pod
+        .verify()
         .map_err(|e| format!("Delete document pod verification failed: {e}"))?;
     log::info!("✓ Delete document pod created and verified");
 
@@ -971,7 +986,7 @@ pub async fn delete_document(
     let delete_params = podnet_models::mainpod::delete::DeleteProofParams {
         identity_pod: &identity_pod,
         document_pod: &delete_document_pod,
-        timestamp_pod: &timestamp_pod,
+        timestamp_pod,
         use_mock_proofs: false, // Use real proofs for production
     };
     let main_pod = podnet_models::mainpod::delete::prove_delete(delete_params)
@@ -1002,7 +1017,10 @@ pub async fn delete_document(
             .map_err(|e| format!("Failed to parse delete response: {e}"))?;
 
         log::info!("✓ Successfully deleted document from server using main pod verification!");
-        log::info!("Server response: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
+        log::info!(
+            "Server response: {}",
+            serde_json::to_string_pretty(&result).unwrap_or_default()
+        );
 
         // Trigger state sync to update the UI
         drop(app_state);

@@ -36,7 +36,7 @@ pub struct IdentityRequest {
 #[derive(Debug, Deserialize)]
 pub struct ServerInfo {
     pub server_id: String,
-    pub public_key: PublicKey,
+    pub _public_key: PublicKey,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,19 +70,16 @@ async fn detect_identity_server_type(
     identity_server_url: &str,
 ) -> Result<IdentityServerType, Box<dyn std::error::Error>> {
     println!("Detecting identity server type...");
-    
+
     // Try to get server info from root endpoint
-    let response = client
-        .get(format!("{identity_server_url}/"))
-        .send()
-        .await?;
+    let response = client.get(format!("{identity_server_url}/")).send().await?;
 
     if !response.status().is_success() {
         return Err("Failed to connect to identity server".into());
     }
 
     let server_info: ServerInfo = response.json().await?;
-    
+
     if server_info.server_id.contains("github") {
         println!("✓ Detected GitHub Identity Server");
         Ok(IdentityServerType::GitHub)
@@ -322,10 +319,24 @@ pub async fn get_identity(
 
     match server_type {
         IdentityServerType::GitHub => {
-            get_github_identity(&client, identity_server_url, username, keypair_data.public_key, output_file).await
+            get_github_identity(
+                &client,
+                identity_server_url,
+                username,
+                keypair_data.public_key,
+                output_file,
+            )
+            .await
         }
         IdentityServerType::Standard => {
-            get_standard_identity(&client, identity_server_url, username, &keypair_data, output_file).await
+            get_standard_identity(
+                &client,
+                identity_server_url,
+                username,
+                &keypair_data,
+                output_file,
+            )
+            .await
         }
     }
 }

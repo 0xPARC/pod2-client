@@ -376,7 +376,10 @@ export async function deleteDocument(
   serverUrl: string
 ): Promise<DeleteResult> {
   try {
-    return await invoke<DeleteResult>("delete_document", { documentId, serverUrl });
+    return await invoke<DeleteResult>("delete_document", {
+      documentId,
+      serverUrl
+    });
   } catch (error) {
     throw new Error(`Failed to delete document: ${error}`);
   }
