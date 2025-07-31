@@ -12,7 +12,8 @@ use pod2::{
 };
 use pod2_db::store::PodData;
 use podnet_models::{
-    Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference, UpvoteRequest,
+    DeleteRequest, Document, DocumentContent, DocumentFile, PublishRequest, ReplyReference,
+    UpvoteRequest,
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -338,9 +339,11 @@ pub async fn publish_document(
     reply_to: Option<ReplyReference>,
     server_url: String,
     draft_id: Option<String>, // UUID of draft to delete after successful publish
+    post_id: Option<i64>,     // Optional post ID for creating revisions (editing documents)
     state: State<'_, Mutex<AppState>>,
 ) -> Result<PublishResult, String> {
     log::info!("Publishing document to server {server_url}");
+    log::info!("Post ID for revision: {post_id:?}");
     if let Some(ref reply_ref) = reply_to {
         log::info!(
             "Replying to post {} document {}",
@@ -511,7 +514,7 @@ pub async fn publish_document(
             (Key::from("authors"), Value::from(authors_set)),
             (Key::from("content_hash"), Value::from(content_hash)),
             (Key::from("tags"), Value::from(tag_set)),
-            (Key::from("post_id"), Value::from(-1i64)), // Will be assigned by server
+            (Key::from("post_id"), Value::from(post_id.unwrap_or(-1i64))), // Use provided post_id for edits, or -1 for new documents
             (Key::from("reply_to"), reply_to_value),
         ]),
     )
@@ -598,12 +601,16 @@ pub async fn publish_document(
         tags: document_tags,
         authors: document_authors,
         reply_to,
-        post_id: None, // Will be assigned by server
+        post_id, // Use provided post_id for revisions, or None for new documents
         username: username.clone(),
         main_pod: publish_main_pod,
     };
 
     log::info!("Sending publish request to server...");
+    log::info!(
+        "PublishRequest post_id field: {:?}",
+        publish_request.post_id
+    );
 
     // Step 9: Submit PublishRequest to server
     let client = reqwest::Client::new();
@@ -825,7 +832,238 @@ pub async fn publish_draft(
         reply_to,
         server_url,
         Some(draft_id), // Pass draft_id for automatic deletion
+        None,           // No post_id for draft publishing (creates new document)
         state,
     )
     .await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteResult {
+    pub success: bool,
+    pub document_id: Option<i64>,
+    pub error_message: Option<String>,
+}
+
+#[tauri::command]
+pub async fn delete_document(
+    document_id: i64,
+    server_url: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<DeleteResult, String> {
+    log::info!("Deleting document {document_id} from server {server_url}");
+
+    // Get user's identity pod and private key from app state
+    let app_state = state.lock().await;
+
+    // Get the app setup state to get the username and identity pod ID
+    let setup_state = pod2_db::store::get_app_setup_state(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to get app setup state: {e}"))?;
+
+    if !setup_state.setup_completed {
+        return Err(
+            "Identity setup not completed. Please complete identity setup first.".to_string(),
+        );
+    }
+
+    let username = setup_state
+        .username
+        .ok_or("Username not found in setup state")?;
+
+    let identity_pod_id = setup_state
+        .identity_pod_id
+        .ok_or("Identity pod ID not found in setup state")?;
+
+    log::info!("Looking for identity pod with ID: {identity_pod_id}");
+
+    // Get the identity pod from the database
+    let identity_pod_info = pod2_db::store::get_pod(&app_state.db, "identity", &identity_pod_id)
+        .await
+        .map_err(|e| format!("Failed to get identity pod: {e}"))?
+        .ok_or(format!(
+            "Identity pod not found in database with ID: {identity_pod_id}"
+        ))?;
+
+    let identity_pod: pod2::frontend::SignedPod = match identity_pod_info.data {
+        PodData::Signed(pod) => (*pod)
+            .try_into()
+            .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
+        PodData::Main(_) => {
+            return Err("Expected signed pod for identity, got main pod".to_string())
+        }
+    };
+
+    // Verify the identity pod
+    identity_pod
+        .verify()
+        .map_err(|e| format!("Identity pod verification failed: {e}"))?;
+    log::info!("✓ Identity pod verification successful");
+
+    // Get the user's private key
+    let private_key = pod2_db::store::get_default_private_key_raw(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to get private key: {e}"))?;
+
+    // First, fetch the document from server to get the actual document pod and timestamp pod
+    log::info!("Fetching document {document_id} from server...");
+    let client = reqwest::Client::new();
+    let document_response = client
+        .get(format!("{server_url}/documents/{document_id}"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch document: {e}"))?;
+
+    if !document_response.status().is_success() {
+        return Ok(DeleteResult {
+            success: false,
+            document_id: Some(document_id),
+            error_message: Some(format!(
+                "Failed to fetch document: {}",
+                document_response.status()
+            )),
+        });
+    }
+
+    let document: Document = document_response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse document response: {e}"))?;
+
+    log::info!("✓ Document fetched successfully");
+
+    // Extract only the timestamp pod from the server response
+    // We'll create our own document pod for the delete request
+    let timestamp_pod = document
+        .metadata
+        .timestamp_pod
+        .get()
+        .map_err(|e| format!("Failed to get timestamp pod: {e}"))?;
+
+    log::info!("✓ Timestamp pod extracted from server");
+
+    // Verify the timestamp pod
+    timestamp_pod
+        .verify()
+        .map_err(|e| format!("Timestamp pod verification failed: {e}"))?;
+    log::info!("✓ Timestamp pod verification successful");
+
+    // Extract the original data from the publish MainPod to use in delete pod
+    let publish_main_pod = document
+        .metadata
+        .pod
+        .get()
+        .map_err(|e| format!("Failed to get publish MainPod: {e}"))?;
+
+    // The publish MainPod contains the verified data structure - we need to extract it
+    // The data is in the public statements of the MainPod
+    let publish_verified_statement = &publish_main_pod.public_statements[1]; // publish_verified statement
+    let original_data = match publish_verified_statement {
+        pod2::middleware::Statement::Custom(_, args) => &args[1], // Second argument is the data
+        _ => return Err("Invalid MainPod structure - expected publish_verified statement".into()),
+    };
+
+    log::info!("✓ Original document data extracted from publish MainPod");
+
+    // Create document pod for deletion request (signed by user) using the same data
+    let params = Params::default();
+    let mut delete_document_builder = SignedPodBuilder::new(&params);
+    delete_document_builder.insert("request_type", "delete");
+    delete_document_builder.insert("data", original_data.clone());
+    delete_document_builder.insert("timestamp_pod", timestamp_pod.id());
+
+    let delete_document_pod = delete_document_builder
+        .sign(&Signer(private_key))
+        .map_err(|e| format!("Failed to sign delete document pod: {e}"))?;
+
+    // Verify the delete document pod
+    delete_document_pod
+        .verify()
+        .map_err(|e| format!("Delete document pod verification failed: {e}"))?;
+    log::info!("✓ Delete document pod created and verified");
+
+    // Create main pod that proves both identity and document verification
+    let delete_params = podnet_models::mainpod::delete::DeleteProofParams {
+        identity_pod: &identity_pod,
+        document_pod: &delete_document_pod,
+        timestamp_pod,
+        use_mock_proofs: false, // Use real proofs for production
+    };
+    let main_pod = podnet_models::mainpod::delete::prove_delete(delete_params)
+        .map_err(|e| format!("Failed to generate delete verification MainPod: {e}"))?;
+
+    log::info!("✓ Main pod created and verified");
+
+    // Create the delete request
+    let delete_request = DeleteRequest {
+        document_id,
+        username: username.clone(),
+        main_pod,
+    };
+
+    log::info!("Sending delete request");
+    let response = client
+        .delete(format!("{server_url}/documents/{document_id}"))
+        .header("Content-Type", "application/json")
+        .json(&delete_request)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send delete request: {e}"))?;
+
+    if response.status().is_success() {
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse delete response: {e}"))?;
+
+        log::info!("✓ Successfully deleted document from server using main pod verification!");
+        log::info!(
+            "Server response: {}",
+            serde_json::to_string_pretty(&result).unwrap_or_default()
+        );
+
+        // Trigger state sync to update the UI
+        drop(app_state);
+        let mut app_state = state.lock().await;
+        if let Err(e) = app_state.trigger_state_sync().await {
+            log::warn!("Failed to trigger state sync after delete: {e}");
+        }
+
+        Ok(DeleteResult {
+            success: true,
+            document_id: Some(document_id),
+            error_message: None,
+        })
+    } else {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+
+        log::error!("Delete request failed with status {status}: {error_text}");
+
+        Ok(DeleteResult {
+            success: false,
+            document_id: Some(document_id),
+            error_message: Some(format!("Server error: {status} - {error_text}")),
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn get_current_username(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Option<String>, String> {
+    let app_state = state.lock().await;
+
+    let setup_state = pod2_db::store::get_app_setup_state(&app_state.db)
+        .await
+        .map_err(|e| format!("Failed to get app setup state: {e}"))?;
+
+    if !setup_state.setup_completed {
+        return Ok(None);
+    }
+
+    Ok(setup_state.username)
 }

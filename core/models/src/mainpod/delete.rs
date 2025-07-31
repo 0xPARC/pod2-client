@@ -1,33 +1,61 @@
-//! Publish verification MainPod operations
+//! Delete verification MainPod operations
+//!
+//! This module handles cryptographic verification of document deletion requests
+//! using MainPods that prove identity and ownership.
+//!
+//! The delete verification process ensures:
+//! 1. User identity is verified via signed identity pod
+//! 2. User has ownership/authority over the document being deleted
+//! 3. Document exists and is accessible for deletion
+//! 4. All cryptographic proofs are valid
 
 use pod_utils::prover_setup::PodNetProverSetup;
 use pod2::{
     frontend::{MainPod, MainPodBuilder, SignedPod},
     lang::parse,
-    middleware::{KEY_SIGNER, Params, Value, containers::Dictionary},
+    middleware::{KEY_SIGNER, KEY_TYPE, Params, PodType, Value},
 };
-// Import solver dependencies
 use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
 
 use super::{MainPodError, MainPodResult};
-use crate::get_publish_verification_predicate;
-// Import the main_pod macro
 
-/// Parameters for publish verification proof generation
-pub struct PublishProofParams<'a> {
+/// Datalog predicate for delete verification
+pub fn get_delete_verification_predicate() -> String {
+    format!(
+        r#"
+        identity_verified(username, private: identity_pod) = AND(
+            Equal(?identity_pod["{key_type}"], {signed_pod_type})
+            Equal(?identity_pod["username"], ?username)
+        )
+
+        document_verified(data, timestamp_pod, private: identity_pod, document_pod) = AND(
+            Equal(?document_pod["request_type"], "delete")
+            Equal(?document_pod["data"], ?data)
+            Equal(?document_pod["timestamp_pod"], ?timestamp_pod)
+            Equal(?document_pod["{key_signer}"], ?identity_pod["user_public_key"])
+        )
+
+        delete_verified(username, data, identity_server_pk, timestamp_pod, private: identity_pod, document_pod) = AND(
+            identity_verified(?username)
+            document_verified(?data, ?timestamp_pod)
+            Equal(?identity_pod["{key_signer}"], ?identity_server_pk)
+        )
+    "#,
+        key_type = KEY_TYPE,
+        key_signer = KEY_SIGNER,
+        signed_pod_type = PodType::Signed as usize,
+    )
+}
+
+/// Parameters for delete verification proof generation
+pub struct DeleteProofParams<'a> {
     pub identity_pod: &'a SignedPod,
     pub document_pod: &'a SignedPod,
+    pub timestamp_pod: &'a SignedPod,
     pub use_mock_proofs: bool,
 }
 
-/// Generate a publish verification MainPod using the pod2 solver
-///
-/// This creates a MainPod that cryptographically proves the same properties as
-/// prove_publish_verification but uses the automated solver approach instead
-/// of manual proof construction.
-pub fn prove_publish_verification_with_solver(
-    params: PublishProofParams,
-) -> MainPodResult<MainPod> {
+pub fn prove_delete(params: DeleteProofParams) -> MainPodResult<MainPod> {
     // Extract required values from pods
     let username = params
         .identity_pod
@@ -52,15 +80,16 @@ pub fn prove_publish_verification_with_solver(
             field: "data",
         })?
         .clone();
+    let timestamp_pod_id = Value::from(params.timestamp_pod.id());
 
     // Start with the existing predicate definitions and append REQUEST
-    let mut query = get_publish_verification_predicate();
+    let mut query = get_delete_verification_predicate();
 
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            publish_verified({username}, {data}, {identity_server_pk})
+            delete_verified({username}, {data}, {identity_server_pk}, {timestamp_pod_id})
         )
         "#
     ));
@@ -116,51 +145,78 @@ pub fn prove_publish_verification_with_solver(
         .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
+    println!("GOT MAINPOD: {main_pod}");
+    main_pod.pod.verify().map_err(|e| {
+        MainPodError::ProofGeneration(format!("MainPod verification failed: {e:?}"))
+    })?;
+
     Ok(main_pod)
 }
 
-pub fn verify_publish_verification_with_solver(
+/// Verify delete request MainPod using the solver
+pub fn verify_delete_verification_with_solver(
     main_pod: &MainPod,
     expected_username: &str,
-    expected_data: &Dictionary,
+    expected_data: &Value,
     expected_identity_server_pk: &Value,
+    expected_timestamp_pod: &SignedPod,
 ) -> MainPodResult<()> {
     // Start with the existing predicate definitions and append REQUEST
-    let mut query = get_publish_verification_predicate();
+    let mut query = get_delete_verification_predicate().to_string();
 
     let username_value = Value::from(expected_username);
-    let data_value = Value::from(expected_data.clone());
+    let timestamp_pod_id_value = Value::from(expected_timestamp_pod.id());
 
     query.push_str(&format!(
         r#"
 
         REQUEST(
-            publish_verified({username_value}, {data_value}, {expected_identity_server_pk})
+            delete_verified({username_value}, {expected_data}, {expected_identity_server_pk}, {timestamp_pod_id_value})
         )
         "#
     ));
-    println!("QUERY: {query}");
+    println!("DELETE QUERY: {query}");
 
     // Parse the complete query
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
+        .map_err(|e| MainPodError::Verification(format!("Parse error: {e:?}")))?
         .request;
 
-    // Provide all three pods as facts
+    // Provide the main pod as fact
     let pods = [IndexablePod::main_pod(main_pod)];
 
     // Let the solver find the proof
     let context = SolverContext::new(&pods, &[]);
     let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
-    println!("GOT PROOF: {proof}");
+        .map_err(|e| MainPodError::Verification(format!("Solver error: {e:?}")))?;
+    println!("GOT DELETE PROOF: {proof}");
 
+    log::info!("✓ Delete verification succeeded for user {expected_username}");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
 
-    // Add unit tests for publish verification functions
+    use super::*;
+
+    #[test]
+    fn test_delete_predicate_parsing() {
+        let params = PodNetProverSetup::get_params();
+        let predicate_input = get_delete_verification_predicate();
+        let result = pod2::lang::parse(&predicate_input, &params, &[]);
+
+        assert!(result.is_ok(), "Delete predicate should parse successfully");
+
+        let batch = result.unwrap().custom_batch;
+        assert!(
+            batch.predicate_ref_by_name("delete_verified").is_some(),
+            "delete_verified predicate should exist"
+        );
+        assert!(
+            batch.predicate_ref_by_name("identity_verified").is_some(),
+            "identity_verified predicate should exist"
+        );
+    }
 }

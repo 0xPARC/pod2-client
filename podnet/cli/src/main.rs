@@ -6,7 +6,7 @@ mod utils;
 
 use clap::{Arg, Command};
 use cli::*;
-use commands::{documents, identity, keygen, posts, publish, upvote};
+use commands::{delete, documents, identity, keygen, posts, publish, upvote};
 use hex::ToHex;
 use podnet_models::DocumentContent;
 use pulldown_cmark::{Event, Options, Parser, html};
@@ -381,6 +381,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     mock_arg(),
                 ]),
         )
+        .subcommand(
+            Command::new("delete")
+                .about("Delete a document with cryptographic verification using main pod")
+                .args([
+                    keypair_arg(),
+                    document_id_arg(),
+                    identity_pod_arg(),
+                    mock_arg(),
+                ]),
+        )
         .get_matches();
 
     match matches.subcommand() {
@@ -457,6 +467,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let identity_pod = sub_matches.get_one::<String>("identity_pod").unwrap();
             let use_mock = sub_matches.get_flag("mock");
             upvote::upvote_document(keypair_file, document_id, &server, identity_pod, use_mock)
+                .await?;
+        }
+        Some(("delete", sub_matches)) => {
+            let keypair_file = sub_matches.get_one::<String>("keypair").unwrap();
+            let server = config::CliConfig::load().server_url;
+            let document_id = sub_matches.get_one::<String>("document_id").unwrap();
+            let identity_pod = sub_matches.get_one::<String>("identity_pod").unwrap();
+            let use_mock = sub_matches.get_flag("mock");
+            delete::delete_document(keypair_file, document_id, &server, identity_pod, use_mock)
                 .await?;
         }
         _ => {

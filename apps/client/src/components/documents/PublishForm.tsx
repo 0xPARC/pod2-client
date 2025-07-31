@@ -39,7 +39,8 @@ export function PublishForm({
   replyTo,
   editingDraftId
 }: PublishFormProps) {
-  const { setCurrentView } = useAppStore();
+  const { setCurrentView, editDocumentData, setEditDocumentData } =
+    useAppStore();
   const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
     "message"
   );
@@ -134,13 +135,19 @@ export function PublishForm({
   };
 
   const getPublishData = () => {
+    console.log("getPublishData called, editDocumentData:", editDocumentData);
+
     const data: any = {
       title: title.trim(),
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
       replyTo,
-      draftId: currentDraftId || editingDraftId // Pass the draft ID for deletion after publish
+      draftId: currentDraftId || editingDraftId, // Pass the draft ID for deletion after publish
+      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
+
+    console.log("getPublishData result:", data);
+    console.log("editDocumentData?.postId:", editDocumentData?.postId);
 
     switch (activeTab) {
       case "message":
@@ -263,6 +270,53 @@ export function PublishForm({
 
     loadDraft();
   }, [editingDraftId]);
+
+  // Load document data if editing a document
+  useEffect(() => {
+    const loadEditDocument = async () => {
+      if (editDocumentData && !editingDraftId) {
+        // Only load if not editing a draft
+        try {
+          console.log("Loading edit document data:", editDocumentData);
+
+          setTitle(editDocumentData.title);
+          setTags(editDocumentData.tags);
+          setAuthors(editDocumentData.authors);
+
+          // Determine content type and set appropriate tab
+          if (editDocumentData.content.message) {
+            setActiveTab("message");
+            setMessage(editDocumentData.content.message);
+          } else if (editDocumentData.content.file) {
+            setActiveTab("file");
+            // Recreate File object from stored data
+            const uint8Array = new Uint8Array(
+              editDocumentData.content.file.content
+            );
+            const blob = new Blob([uint8Array], {
+              type: editDocumentData.content.file.mime_type
+            });
+            const file = new File([blob], editDocumentData.content.file.name, {
+              type: editDocumentData.content.file.mime_type
+            });
+            setFile(file);
+          } else if (editDocumentData.content.url) {
+            setActiveTab("url");
+            setUrl(editDocumentData.content.url);
+          }
+
+          setHasUnsavedChangesWithLogging(false); // Document is freshly loaded, no unsaved changes
+        } catch (error) {
+          console.error("Failed to load edit document data:", error);
+          toast.error("Failed to load document for editing");
+        }
+      }
+    };
+
+    loadEditDocument();
+  }, [editDocumentData, editingDraftId]); // React to changes in editDocumentData, but prevent running when editing drafts
+
+  // Note: editDocumentData cleanup is handled in the PublishButton onPublishSuccess callback
 
   // Use refs to capture current state values for cleanup
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
@@ -699,7 +753,16 @@ export function PublishForm({
             <PublishButton
               data={getPublishData()}
               disabled={!isValid()}
-              onPublishSuccess={onPublishSuccess}
+              onPublishSuccess={(documentId) => {
+                // Clear edit document data after successful publish
+                if (editDocumentData) {
+                  setEditDocumentData(null);
+                }
+                // Call the original success callback
+                if (onPublishSuccess) {
+                  onPublishSuccess(documentId);
+                }
+              }}
               onSubmitAttempt={handleSubmitAttempt}
             />
           </div>

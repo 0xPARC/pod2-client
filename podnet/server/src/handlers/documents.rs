@@ -10,8 +10,11 @@ use pod2::middleware::{
     containers::{Dictionary, Set},
 };
 use podnet_models::{
-    Document, DocumentMetadata, PublishRequest,
-    mainpod::publish::verify_publish_verification_with_solver,
+    DeleteRequest, Document, DocumentMetadata, PublishRequest,
+    mainpod::{
+        delete::verify_delete_verification_with_solver,
+        publish::verify_publish_verification_with_solver,
+    },
 };
 
 pub async fn get_documents(
@@ -360,4 +363,164 @@ pub async fn get_document_replies(
     }
 
     Ok(Json(replies))
+}
+
+pub async fn delete_document(
+    Path(id): Path<i64>,
+    State(state): State<Arc<crate::AppState>>,
+    Json(payload): Json<DeleteRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    log::info!("Starting document deletion with main pod verification for document {id}");
+
+    // Verify the document ID matches the request
+    if payload.document_id != id {
+        log::error!(
+            "Document ID mismatch: path {} vs payload {}",
+            id,
+            payload.document_id
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    println!("GOt mainpod: {}", payload.main_pod);
+    // Verify main pod proof
+    log::info!("Verifying main pod proof for deletion");
+    payload.main_pod.pod.verify().map_err(|e| {
+        log::error!("Failed to verify main pod: {e}");
+        StatusCode::UNAUTHORIZED
+    })?;
+    log::info!("✓ Main pod proof verified");
+
+    // Check if document exists and get uploader info
+    log::info!("Checking document exists and getting uploader info");
+    let document = state
+        .db
+        .get_document(id, &state.storage)
+        .map_err(|e| {
+            log::error!("Database error retrieving document {id}: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    log::info!(
+        "Document {} found, uploader: {}",
+        id,
+        document.metadata.uploader_id
+    );
+
+    // Verify username matches document uploader
+    if payload.username != document.metadata.uploader_id {
+        log::error!(
+            "Username mismatch: requester '{}' vs document uploader '{}'",
+            payload.username,
+            document.metadata.uploader_id
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+    log::info!("✓ Username verification passed");
+
+    // Get all registered identity servers for verification
+    log::info!("Getting all registered identity servers for verification");
+    let identity_servers = state.db.get_all_identity_servers().map_err(|e| {
+        log::error!("Database error retrieving identity servers: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if identity_servers.is_empty() {
+        log::error!("No identity servers registered");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // Try verification with each registered identity server until one succeeds
+    let mut verification_succeeded = false;
+
+    let timestamp_pod = document
+        .metadata
+        .timestamp_pod
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    log::info!("Got timestamp pod for document deletion verification: {timestamp_pod}");
+
+    // Extract the original data from the publish MainPod
+    let publish_main_pod = document.metadata.pod.get().map_err(|e| {
+        log::error!("Failed to get publish MainPod: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // The publish MainPod contains the verified data structure - extract it
+    let publish_verified_statement = &publish_main_pod.public_statements[1]; // publish_verified statement
+    let original_data = match publish_verified_statement {
+        pod2::middleware::Statement::Custom(_, args) => &args[1], // Second argument is the data
+        _ => {
+            log::error!("Invalid MainPod structure - expected publish_verified statement");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    log::info!("✓ Original document data extracted from publish MainPod");
+
+    for identity_server in &identity_servers {
+        // Parse the identity server public key from database
+        let server_pk: pod2::backends::plonky2::primitives::ec::curve::Point =
+            serde_json::from_str(&identity_server.public_key).map_err(|e| {
+                log::error!("Failed to parse identity server public key: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let server_pk_value = Value::from(server_pk);
+
+        // Try verification with this identity server
+        log::info!(
+            "Trying deletion verification with identity server: {}",
+            identity_server.server_id
+        );
+        match verify_delete_verification_with_solver(
+            &payload.main_pod,
+            &payload.username,
+            original_data,
+            &server_pk_value,
+            timestamp_pod,
+        ) {
+            Ok(_) => {
+                log::info!(
+                    "✓ Solver verification succeeded with identity server: {}",
+                    identity_server.server_id
+                );
+                verification_succeeded = true;
+                break;
+            }
+            Err(_) => {
+                log::debug!(
+                    "Verification failed with identity server: {}",
+                    identity_server.server_id
+                );
+                continue;
+            }
+        }
+    }
+
+    if !verification_succeeded {
+        log::error!("Solver-based verification failed with all registered identity servers");
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    log::info!(
+        "✓ Solver verification passed: username={}, document_id={}",
+        payload.username,
+        payload.document_id
+    );
+
+    // Delete the document
+    log::info!("Deleting document {id}");
+    let deleted_uploader = state.db.delete_document(id).map_err(|e| {
+        log::error!("Failed to delete document {id}: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    log::info!("Document deletion completed successfully for document {id}");
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "document_id": id,
+        "deleted_by": payload.username,
+        "original_uploader": deleted_uploader
+    })))
 }
