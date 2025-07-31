@@ -57,7 +57,15 @@ export function Frogedex() {
               {frogedex.map((entry) => (
                 <tr key={entry.frog_id}>
                   <td>{entry.frog_id}</td>
-                  <td className={entry.seen ? `${RARITY_BG_COLORS[entry.rarity]} text-white` : `${RARITY_TEXT_COLORS[entry.rarity]}`}>{RARITY_NAMES[entry.rarity]}</td>
+                  <td
+                    className={
+                      entry.seen
+                        ? `${RARITY_BG_COLORS[entry.rarity]} text-white`
+                        : `${RARITY_TEXT_COLORS[entry.rarity]}`
+                    }
+                  >
+                    {RARITY_NAMES[entry.rarity]}
+                  </td>
                   <td>{entry.name}</td>
                 </tr>
               ))}
@@ -74,7 +82,9 @@ export function Frogedex() {
                     className="w-48 h-48 object-cover mx-auto"
                   />
                 </div>
-                <div className={RARITY_TEXT_COLORS[entry.rarity]}>{entry.name}</div>
+                <div className={RARITY_TEXT_COLORS[entry.rarity]}>
+                  {entry.name}
+                </div>
               </div>
             ))}
           </div>
