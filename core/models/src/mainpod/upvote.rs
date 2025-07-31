@@ -173,7 +173,7 @@ pub fn prove_upvote_verification_with_solver(
     }
 
     let main_pod = builder
-        .prove(&*prover, &pod_params)
+        .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
@@ -324,7 +324,7 @@ pub fn prove_upvote_count_base_with_solver(
     }
 
     let main_pod = builder
-        .prove(&*prover, &pod_params)
+        .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
@@ -422,7 +422,7 @@ pub fn prove_upvote_count_inductive_with_solver(
     }
 
     let main_pod = builder
-        .prove(&*prover, &pod_params)
+        .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)

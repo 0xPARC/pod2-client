@@ -204,7 +204,7 @@ mod tests {
 
         builder.add_signed_pod(&alice_attestation);
 
-        let alice_bob_pod = builder.prove(&prover, &params).unwrap();
+        let alice_bob_pod = builder.prove(&prover).unwrap();
         let bindings = request.exact_match_pod(&*alice_bob_pod.pod).unwrap();
         assert_eq!(bindings.len(), 1);
         assert_eq!(bindings.get("Distance").unwrap(), &Value::from(1));
@@ -255,7 +255,7 @@ mod tests {
         builder.add_signed_pod(&bob_attestation);
         builder.add_recursive_pod(alice_bob_pod);
 
-        let bob_charlie_pod = builder.prove(&prover, &params).unwrap();
+        let bob_charlie_pod = builder.prove(&prover).unwrap();
         let bindings = request.exact_match_pod(&*bob_charlie_pod.pod).unwrap();
         assert_eq!(bindings.len(), 1);
         assert_eq!(bindings.get("Distance").unwrap(), &Value::from(2));
@@ -333,7 +333,7 @@ mod tests {
             }
         }
 
-        let kyc = builder.prove(&prover, &params).unwrap();
+        let kyc = builder.prove(&prover).unwrap();
 
         println!("{kyc}");
     }
@@ -418,7 +418,7 @@ REQUEST(
         }
 
         let prover = MockProver {};
-        let pod = builder.prove(&prover, &params).unwrap();
+        let pod = builder.prove(&prover).unwrap();
 
         assert_eq!(pod.public_statements.len(), 3); // Including the _type statement
         println!("{pod}");
