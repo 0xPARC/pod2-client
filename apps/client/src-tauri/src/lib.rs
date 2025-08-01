@@ -659,6 +659,11 @@ pub fn run() {
                     .trigger_state_sync()
                     .await
                     .expect("failed to initialize state");
+
+                if AppConfig::get().features.frogcrypto {
+                    frog::setup_background_thread(app.handle().clone());
+                }
+
                 app.manage(Mutex::new(app_state));
             });
             Ok(())
@@ -669,6 +674,9 @@ pub fn run() {
             // Debug commands
             reset_database,
             // Frog commands
+            frog::fix_frog_descriptions,
+            frog::get_frogedex,
+            frog::list_frogs,
             frog::request_frog,
             frog::request_score,
             frog::request_leaderboard,

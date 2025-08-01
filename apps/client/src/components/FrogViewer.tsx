@@ -3,15 +3,22 @@ import { useAppStore } from "../lib/store";
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { requestFrog, requestScore } from "@/lib/rpc";
+import {
+  requestFrog,
+  requestScore,
+  listFrogs,
+  FrogPod,
+  FrogData
+} from "@/lib/rpc";
 import { toast } from "sonner";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
-import type { SignedPod, Value } from "@pod2/pod2js";
-import type { PodInfo } from "@/lib/rpc";
+import { Switch } from "./ui/switch";
+import { listen, emit } from "@tauri-apps/api/event";
+import { RARITY_SHADOW_COLORS } from "./FrogCrypto";
 
 interface FrogViewerProps {
   setScore: (score: number) => void;
@@ -25,21 +32,30 @@ function waitText(timeRemaining: number) {
   return ` (wait ${minsText}${secsText})`;
 }
 
-const temperaments = new Map<string, string>([
-  ["1", "N/A"],
-  ["2", "ANGY"],
-  ["3", "BORD"],
-  ["4", "CALM"],
-  ["7", "DARK"],
-  ["10", "HNGY"],
-  ["16", "SADG"],
-  ["18", "SLPY"]
+const temperaments = new Map<number, string>([
+  [1, "N/A"],
+  [2, "ANGY"],
+  [3, "BORD"],
+  [4, "CALM"],
+  [7, "DARK"],
+  [10, "HNGY"],
+  [16, "SADG"],
+  [18, "SLPY"]
 ]);
 
 export function FrogViewer({ setScore }: FrogViewerProps) {
-  const { getPodsInFolder, setFrogTimeout, frogTimeout } = useAppStore();
+  const { setFrogTimeout, frogTimeout } = useAppStore();
 
   const [time, setTime] = useState(new Date().getTime());
+  const [frogs, setFrogs] = useState<FrogPod[]>([]);
+  const [hashesChecked, setHashesChecked] = useState("");
+
+  async function updateFrogs() {
+    try {
+      const frogList = await listFrogs();
+      setFrogs(frogList);
+    } catch (e) {}
+  }
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date().getTime()), 1000);
@@ -48,7 +64,9 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     };
   }, []);
 
-  const filteredPods = getPodsInFolder("frogs");
+  useEffect(() => {
+    updateFrogs();
+  }, []);
 
   const requestFrogAndUpdateTimeout = async () => {
     try {
@@ -73,6 +91,40 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     updateTimeout();
   }, []);
 
+  useEffect(() => {
+    const unlisten = listen("frog-alert", (event) => {
+      toast(event.payload as string);
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen("frog-background", (event) => {
+      setHashesChecked(`${event.payload}K hashes checked`);
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen("refresh-frogs", () => {
+      updateFrogs();
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  const toggleMining = async (b: boolean) => {
+    await emit("toggle-mining", b);
+  };
+
   const timeRemaining =
     frogTimeout === null || time >= frogTimeout
       ? 0
@@ -82,20 +134,26 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border flex flex-col">
         <Button
           variant="outline"
+          className="w-fit"
           onClick={() => requestFrogAndUpdateTimeout()}
           disabled={searchDisabled}
         >
           Search SWAMP {searchButtonWaitText}
         </Button>
+        <div className="py-4">
+          <label htmlFor="mining">Mining enabled</label>
+          <Switch id="mining" onCheckedChange={toggleMining} />
+          {hashesChecked}
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div>
-            {filteredPods.map((pod) => (
-              <FrogCard pod={pod} key={pod.id} />
+            {frogs.map((pod) => (
+              <FrogCard pod={pod} key={pod.pod_id} />
             ))}
           </div>
         </ScrollArea>
@@ -104,48 +162,34 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   );
 }
 
-function intEntry(value: Value): string {
-  const entry = (value as { Int: string })?.Int;
-  if (entry === undefined) {
-    return "";
+function vibeEntry(index: number | undefined): string {
+  if (index == null) {
+    return "???";
   } else {
-    return entry;
-  }
-}
-
-function vibeEntry(value: Value): string {
-  const entry = (value as { Int: string })?.Int as string;
-  if (entry === undefined) {
-    return "";
-  } else {
-    return temperaments.get(entry) || "";
+    return temperaments.get(index as number) ?? "???";
   }
 }
 
 interface FrogCardProps {
-  pod: PodInfo;
+  pod: FrogPod;
 }
 
 function FrogCard({ pod }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const entries = (pod.data.pod_data_payload as SignedPod).entries;
+  const haveDesc = pod.data != null;
 
   return (
-    <Card
-      key={pod.id}
-      className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm"
-    >
+    <Card className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm">
       <CardContent className="p-3 flex flex-col text-center justify-center items-center">
         <div className="space-y-2">
-          <img
-            src={
-              (pod.data.pod_data_payload as SignedPod).entries
-                .image_url as string
-            }
-            className="max-w-xs"
-          ></img>
-          <h2>{(entries.name as string).toUpperCase()}</h2>
+          {haveDesc && (
+            <img
+              src={(pod.data as FrogData).image_url}
+              className={`max-w-xs drop-shadow-xl ${RARITY_SHADOW_COLORS[(pod.data as FrogData).rarity]}`}
+            ></img>
+          )}
+          <h2>{(pod.data?.name ?? "???").toUpperCase()}</h2>
         </div>
         <div>
           <table className="[&_th]:px-4 text-center">
@@ -160,26 +204,25 @@ function FrogCard({ pod }: FrogCardProps) {
             </thead>
             <tbody>
               <tr>
-                <td>{intEntry(entries.jump)}</td>
-                <td>{vibeEntry(entries.temperament)}</td>
-                <td>{intEntry(entries.speed)}</td>
-                <td>{intEntry(entries.intelligence)}</td>
-                <td>{intEntry(entries.beauty)}</td>
+                <td>{pod.data?.jump ?? "???"}</td>
+                <td>{vibeEntry(pod.data?.temperament)}</td>
+                <td>{pod.data?.speed ?? "???"}</td>
+                <td>{pod.data?.intelligence ?? "???"}</td>
+                <td>{pod.data?.beauty ?? "???"}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <Collapsible open={expanded} onOpenChange={setExpanded}>
-          <CollapsibleTrigger asChild>
-            {expanded ? <span>Collapse</span> : <span>See more</span>}
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            {
-              (pod.data.pod_data_payload as SignedPod).entries
-                .description as string
-            }
-          </CollapsibleContent>
-        </Collapsible>
+        {haveDesc && (
+          <Collapsible open={expanded} onOpenChange={setExpanded}>
+            <CollapsibleTrigger asChild>
+              {expanded ? <span>Collapse</span> : <span>See more</span>}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {(pod.data as FrogData).description}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </CardContent>
     </Card>
   );
