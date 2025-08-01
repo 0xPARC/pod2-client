@@ -559,6 +559,7 @@ fn compute_frog_stats(frog_id: i64, id: Hash) -> FrogStats {
             temperament: 1,
         },
         _ => {
+            let bonus = if (61..=70).contains(&frog_id) { 8 } else { 0 };
             let (val, temperament_index) = val.div_rem_euclid(&7);
             let temperament = DEFAULT_TEMPERAMENTS[temperament_index as usize];
             let (val, beauty) = val.div_rem_euclid(&8);
@@ -566,10 +567,10 @@ fn compute_frog_stats(frog_id: i64, id: Hash) -> FrogStats {
             let (val, speed) = val.div_rem_euclid(&8);
             let jump = val.rem_euclid(8);
             FrogStats {
-                jump,
-                speed,
-                intelligence,
-                beauty,
+                jump: jump + bonus,
+                speed: speed + bonus,
+                intelligence: intelligence + bonus,
+                beauty: beauty + bonus,
                 temperament,
             }
         }
