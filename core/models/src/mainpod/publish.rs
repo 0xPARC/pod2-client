@@ -112,6 +112,13 @@ pub fn prove_publish_verification_with_solver(
         }
     }
 
+    log::debug!(
+        "Inputs: {}\n\n {}",
+        serde_json::to_string(&params.document_pod).unwrap(),
+        serde_json::to_string(&params.identity_pod).unwrap()
+    );
+    log::debug!("Builder: {builder:#?}");
+
     let main_pod = builder
         .prove(&*prover)
         .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
