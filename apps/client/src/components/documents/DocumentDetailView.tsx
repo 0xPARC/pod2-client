@@ -17,7 +17,9 @@ import {
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeMathjax from "rehype-mathjax";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { toast } from "sonner";
 import {
   Document,
@@ -35,6 +37,7 @@ import { useAppStore } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import rehypeDisplayMath from "./displayMath";
 
 // Interface for threaded reply structure
 interface ThreadedReply extends DocumentMetadata {
@@ -667,8 +670,38 @@ export function DocumentDetailView({
       return (
         <div className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none">
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
+            remarkPlugins={[
+              remarkGfm,
+              [remarkMath, { singleDollarTextMath: true }]
+            ]}
+            rehypePlugins={[
+              rehypeHighlight,
+              [
+                rehypeMathjax,
+                {
+                  // MathJax configuration
+                  tex: {
+                    inlineMath: [
+                      ["$", "$"],
+                      ["\\(", "\\)"]
+                    ],
+                    displayMath: [
+                      ["$$", "$$"],
+                      ["\\[", "\\]"]
+                    ],
+                    loader: { load: ["[tex]/textmacros", "[tex]/textcomp"] },
+                    tex: { packages: { "[+]": ["textmacros"] } },
+                    textmacros: { packages: { "[+]": ["textcomp"] } },
+                    processEscapes: true,
+                    macros: {
+                      "\\RR": "\\mathbb{R}",
+                      "\\NN": "\\mathbb{N}"
+                    }
+                  }
+                }
+              ],
+              rehypeDisplayMath
+            ]}
             components={{
               // Custom link component to handle external links safely
               a: ({ href, children, ...props }) => (

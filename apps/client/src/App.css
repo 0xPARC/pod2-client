@@ -6,8 +6,8 @@
 body {
   @apply m-0;
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+  "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* -webkit-user-select: none;
@@ -17,10 +17,14 @@ body {
   cursor: default;
 }
 
-code {
-  font-family:
-    source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+svg {
+  display: inline-block;
 }
+
+mjx-container[display="true"] {
+  display: block;
+}
+
 /* 
 @theme inline {
   --radius-sm:
