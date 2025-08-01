@@ -10,7 +10,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@daiji256/rehype-mathml": "^1.2.1",
     "@monaco-editor/react": "^4.7.0",
     "@pod2/pod2js": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -46,7 +45,6 @@
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^3.0.3",
     "rehype-highlight": "^7.0.2",
-    "rehype-katex": "^7.0.1",
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
