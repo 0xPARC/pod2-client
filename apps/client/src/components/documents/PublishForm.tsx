@@ -754,6 +754,8 @@ export function PublishForm({
               data={getPublishData()}
               disabled={!isValid()}
               onPublishSuccess={(documentId) => {
+                console.log("onPublishSuccess called");
+                hasUnsavedChangesRef.current = false;
                 // Clear edit document data after successful publish
                 if (editDocumentData) {
                   setEditDocumentData(null);
