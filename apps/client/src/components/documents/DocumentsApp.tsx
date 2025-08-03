@@ -19,7 +19,19 @@ const getRouteTitle = (route: any): string => {
     case "drafts":
       return "Drafts";
     case "publish":
-      return route.editingDraftId ? "Edit Draft" : "Publish Document";
+      if (route.editingDraftId) {
+        return "Edit Draft";
+      }
+      // Show content type in title
+      switch (route.contentType) {
+        case "link":
+          return "New Link";
+        case "file":
+          return "New File";
+        case "document":
+        default:
+          return "New Document";
+      }
     case "debug":
       return "Debug";
     default:
@@ -136,6 +148,7 @@ export function DocumentsApp() {
         return (
           <PublishPage
             editingDraftId={currentRoute.editingDraftId || null}
+            contentType={currentRoute.contentType || "document"}
             onPublishSuccess={() => {
               // Navigation is now handled by the top-level back/forward buttons
             }}

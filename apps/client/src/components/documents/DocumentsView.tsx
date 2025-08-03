@@ -2,8 +2,11 @@ import {
   AlertCircleIcon,
   ArrowUpDownIcon,
   ChevronDownIcon,
+  FileIcon,
   FileTextIcon,
   FilterIcon,
+  LinkIcon,
+  MessageSquareIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
@@ -155,8 +158,9 @@ export function DocumentsView() {
     navigateToDocument(documentId);
   };
 
-  const handleNewDocument = () => {
-    navigateToPublish();
+  const handleNewContent = (contentType: "document" | "link" | "file") => {
+    // For now, pass content type as a parameter - we'll extend this with routing later
+    navigateToPublish(undefined, contentType);
   };
 
   return (
@@ -170,13 +174,40 @@ export function DocumentsView() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              onClick={handleNewDocument}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Publish Document
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  New
+                  <ChevronDownIcon className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Create Content</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleNewContent("document")}>
+                  <MessageSquareIcon className="h-4 w-4 mr-2" />
+                  Document
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Markdown
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("link")}>
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  Link
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    URL
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("file")}>
+                  <FileIcon className="h-4 w-4 mr-2" />
+                  File
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Upload
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               onClick={loadDocuments}
               disabled={loading}

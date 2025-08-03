@@ -70,6 +70,7 @@ export interface DocumentRoute {
   type: "documents-list" | "document-detail" | "drafts" | "publish" | "debug";
   id?: number;
   editingDraftId?: string;
+  contentType?: "document" | "link" | "file";
 }
 
 export interface DocumentsState {
@@ -129,7 +130,10 @@ export interface PodCollectionActions {
 export interface DocumentsActions {
   navigateToDocument: (id: number) => void;
   navigateToDrafts: () => void;
-  navigateToPublish: (editingDraftId?: string) => void;
+  navigateToPublish: (
+    editingDraftId?: string,
+    contentType?: "document" | "link" | "file"
+  ) => void;
   navigateToDocumentsList: () => void;
   navigateToDebug: () => void;
   goBack: () => void;
@@ -399,9 +403,16 @@ export const useAppStore = create<AppStoreState>()(
         });
       },
 
-      navigateToPublish: (editingDraftId?: string) => {
+      navigateToPublish: (
+        editingDraftId?: string,
+        contentType?: "document" | "link" | "file"
+      ) => {
         set((state) => {
-          const newRoute: DocumentRoute = { type: "publish", editingDraftId };
+          const newRoute: DocumentRoute = {
+            type: "publish",
+            editingDraftId,
+            contentType: contentType || "document" // Default to document if not specified
+          };
           const history = state.documents.browsingHistory;
           // Trim forward history
           history.stack.splice(history.currentIndex + 1);

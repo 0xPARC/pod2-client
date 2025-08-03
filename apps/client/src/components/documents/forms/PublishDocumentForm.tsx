@@ -1,12 +1,10 @@
 import {
-  FileIcon,
-  LinkIcon,
-  MessageSquareIcon,
   PlusIcon,
   Trash2Icon,
-  XIcon
+  XIcon,
+  MessageSquareIcon
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   createDraft,
@@ -15,45 +13,39 @@ import {
   getDraft,
   updateDraft,
   type DocumentMetadata
-} from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Textarea } from "../ui/textarea";
-import { PublishButton } from "./PublishButton";
+} from "../../../lib/documentApi";
+import { useDocuments } from "../../../lib/store";
+import { Badge } from "../../ui/badge";
+import { Button } from "../../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
+import { Input } from "../../ui/input";
+import { Label } from "../../ui/label";
+import { PublishButton } from "../PublishButton";
+import { MarkdownEditor } from "../editors/MarkdownEditor";
 
-interface PublishFormProps {
+interface PublishDocumentFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
   replyTo?: string;
   editingDraftId?: string; // UUID
 }
 
-export function PublishForm({
+export function PublishDocumentForm({
   onPublishSuccess,
   onCancel,
   replyTo,
   editingDraftId
-}: PublishFormProps) {
+}: PublishDocumentFormProps) {
   const { editDocumentData, setEditDocumentData, navigateToDrafts } =
     useDocuments();
-  const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
-    "message"
-  );
+
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
   const [message, setMessage] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [url, setUrl] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [authors, setAuthors] = useState<string[]>([]);
   const [authorInput, setAuthorInput] = useState("");
-  const [isDragOver, setIsDragOver] = useState(false);
   const [replyToDocument, setReplyToDocument] =
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
@@ -104,41 +96,12 @@ export function PublishForm({
     }
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      setFile(files[0]);
-      setActiveTab("file");
-      setHasUnsavedChangesWithLogging(true);
-    }
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      setFile(files[0]);
-      setHasUnsavedChangesWithLogging(true);
-    }
-  };
-
   const getPublishData = () => {
     console.log("getPublishData called, editDocumentData:", editDocumentData);
 
     const data: any = {
       title: title.trim(),
+      message: message.trim(),
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
       replyTo,
@@ -149,24 +112,6 @@ export function PublishForm({
     console.log("getPublishData result:", data);
     console.log("editDocumentData?.postId:", editDocumentData?.postId);
 
-    switch (activeTab) {
-      case "message":
-        if (message.trim()) {
-          data.message = message.trim();
-        }
-        break;
-      case "file":
-        if (file) {
-          data.file = file;
-        }
-        break;
-      case "url":
-        if (url.trim()) {
-          data.url = url.trim();
-        }
-        break;
-    }
-
     return data;
   };
 
@@ -175,30 +120,8 @@ export function PublishForm({
   };
 
   const isValid = () => {
-    // Title is mandatory
-    if (title.trim().length === 0) {
-      return false;
-    }
-
-    // At least one content type must be provided
-    switch (activeTab) {
-      case "message":
-        return message.trim().length > 0;
-      case "file":
-        return file !== null;
-      case "url":
-        return url.trim().length > 0;
-      default:
-        return false;
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    // Title and message are mandatory for documents
+    return title.trim().length > 0 && message.trim().length > 0;
   };
 
   const deleteDraft = async () => {
@@ -241,24 +164,9 @@ export function PublishForm({
           const draft = await getDraft(editingDraftId);
           if (draft) {
             setTitle(draft.title);
-            setActiveTab(draft.content_type as "message" | "file" | "url");
             setMessage(draft.message || "");
-            setUrl(draft.url || "");
             setTags(draft.tags);
             setAuthors(draft.authors);
-
-            // Handle file content if present
-            if (draft.file_content && draft.file_name && draft.file_mime_type) {
-              const uint8Array = new Uint8Array(draft.file_content);
-              const blob = new Blob([uint8Array], {
-                type: draft.file_mime_type
-              });
-              const file = new File([blob], draft.file_name, {
-                type: draft.file_mime_type
-              });
-              setFile(file);
-            }
-
             setLastSavedAt(new Date(draft.updated_at));
             setHasUnsavedChangesWithLogging(false); // Draft is freshly loaded, no unsaved changes
           }
@@ -283,26 +191,9 @@ export function PublishForm({
           setTags(editDocumentData.tags);
           setAuthors(editDocumentData.authors);
 
-          // Determine content type and set appropriate tab
+          // Load message content
           if (editDocumentData.content.message) {
-            setActiveTab("message");
             setMessage(editDocumentData.content.message);
-          } else if (editDocumentData.content.file) {
-            setActiveTab("file");
-            // Recreate File object from stored data
-            const uint8Array = new Uint8Array(
-              editDocumentData.content.file.content
-            );
-            const blob = new Blob([uint8Array], {
-              type: editDocumentData.content.file.mime_type
-            });
-            const file = new File([blob], editDocumentData.content.file.name, {
-              type: editDocumentData.content.file.mime_type
-            });
-            setFile(file);
-          } else if (editDocumentData.content.url) {
-            setActiveTab("url");
-            setUrl(editDocumentData.content.url);
           }
 
           setHasUnsavedChangesWithLogging(false); // Document is freshly loaded, no unsaved changes
@@ -316,18 +207,13 @@ export function PublishForm({
     loadEditDocument();
   }, [editDocumentData, editingDraftId]); // React to changes in editDocumentData, but prevent running when editing drafts
 
-  // Note: editDocumentData cleanup is handled in the PublishButton onPublishSuccess callback
-
   // Use refs to capture current state values for cleanup
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
   const currentStateRef = useRef({
     title,
     message,
-    url,
-    file,
     tags,
     authors,
-    activeTab,
     currentDraftId,
     replyTo
   });
@@ -341,22 +227,16 @@ export function PublishForm({
     currentStateRef.current = {
       title,
       message,
-      url,
-      file,
       tags,
       authors,
-      activeTab,
       currentDraftId,
       replyTo
     };
   }, [
     title,
     message,
-    url,
-    file,
     tags,
     authors,
-    activeTab,
     currentDraftId,
     replyTo
   ]);
@@ -372,8 +252,6 @@ export function PublishForm({
       const hasCurrentContent = !!(
         currentState.title.trim() ||
         currentState.message.trim() ||
-        currentState.url.trim() ||
-        currentState.file ||
         currentState.tags.length > 0 ||
         currentState.authors.length > 0
       );
@@ -383,33 +261,14 @@ export function PublishForm({
         // Create the draft data directly here since we can't call functions in cleanup
         const saveDraftData = async () => {
           try {
-            let fileContent = null;
-            if (currentState.activeTab === "file" && currentState.file) {
-              fileContent = Array.from(
-                new Uint8Array(await currentState.file.arrayBuffer())
-              );
-            }
-
             const draftData = {
               title: currentState.title.trim(),
-              content_type: currentState.activeTab,
-              message:
-                currentState.activeTab === "message"
-                  ? currentState.message || null
-                  : null,
-              file_name:
-                currentState.activeTab === "file" && currentState.file
-                  ? currentState.file.name
-                  : null,
-              file_content: fileContent,
-              file_mime_type:
-                currentState.activeTab === "file" && currentState.file
-                  ? currentState.file.type
-                  : null,
-              url:
-                currentState.activeTab === "url"
-                  ? currentState.url || null
-                  : null,
+              content_type: 'message' as const,
+              message: currentState.message || null,
+              file_name: null,
+              file_content: null,
+              file_mime_type: null,
+              url: null,
               tags: currentState.tags,
               authors: currentState.authors,
               reply_to: currentState.replyTo || null
@@ -458,10 +317,10 @@ export function PublishForm({
             <div className="flex items-center gap-3">
               <CardTitle className="text-xl">
                 {editingDraftId || currentDraftId
-                  ? "Edit Draft"
+                  ? "Edit Document Draft"
                   : replyTo
                     ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
-                    : "Publish New Document"}
+                    : "New Document"}
               </CardTitle>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {lastSavedAt ? (
@@ -531,129 +390,19 @@ export function PublishForm({
           </p>
         </div>
 
-        {/* Content Input */}
+        {/* Markdown Editor */}
         <div>
-          <Label className="text-base font-medium">Content</Label>
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => {
-              setActiveTab(value as any);
-              setHasUnsavedChangesWithLogging(true);
-            }}
-            className="mt-2"
-          >
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="message" className="flex items-center gap-2">
-                <MessageSquareIcon className="h-4 w-4" />
-                Message
-              </TabsTrigger>
-              <TabsTrigger value="file" className="flex items-center gap-2">
-                <FileIcon className="h-4 w-4" />
-                File
-              </TabsTrigger>
-              <TabsTrigger value="url" className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4" />
-                URL
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="message" className="mt-4">
-              <Textarea
-                placeholder="Enter your message content (supports Markdown)..."
-                value={message}
-                onChange={(e) => {
-                  setMessage(e.target.value);
-                  setHasUnsavedChangesWithLogging(true);
-                }}
-                className="min-h-[200px] resize-none"
-              />
-              <p className="text-sm text-muted-foreground mt-2">
-                Supports Markdown formatting including **bold**, *italic*,
-                `code`, and more.
-              </p>
-            </TabsContent>
-
-            <TabsContent value="file" className="mt-4">
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  isDragOver
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25 hover:border-muted-foreground/50"
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                {file ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center gap-3">
-                      <FileIcon className="h-8 w-8 text-primary" />
-                      <div className="text-left">
-                        <p className="font-medium">{file.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} •{" "}
-                          {file.type || "Unknown type"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setFile(null);
-                          setHasUnsavedChangesWithLogging(true);
-                        }}
-                      >
-                        Remove File
-                      </Button>
-                      <label htmlFor="file-input">
-                        <Button variant="outline" size="sm" asChild>
-                          <span>Choose Different File</span>
-                        </Button>
-                      </label>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <FileIcon className="h-12 w-12 mx-auto text-muted-foreground" />
-                    <div>
-                      <p className="text-lg font-medium">Drop a file here</p>
-                      <p className="text-muted-foreground">
-                        or click to browse
-                      </p>
-                    </div>
-                    <label htmlFor="file-input">
-                      <Button variant="outline" asChild>
-                        <span>Choose File</span>
-                      </Button>
-                    </label>
-                  </div>
-                )}
-                <input
-                  id="file-input"
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="url" className="mt-4">
-              <Input
-                placeholder="https://example.com/document"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  setHasUnsavedChangesWithLogging(true);
-                }}
-                type="url"
-              />
-              <p className="text-sm text-muted-foreground mt-2">
-                Reference a URL that contains the document content.
-              </p>
-            </TabsContent>
-          </Tabs>
+          <Label className="text-base font-medium">Content *</Label>
+          <div className="mt-2">
+            <MarkdownEditor
+              value={message}
+              onChange={(value) => {
+                setMessage(value);
+                setHasUnsavedChangesWithLogging(true);
+              }}
+              placeholder="Enter your markdown content..."
+            />
+          </div>
         </div>
 
         {/* Tags */}
