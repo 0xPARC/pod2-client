@@ -16,7 +16,7 @@ import {
   updateDraft,
   type DocumentMetadata
 } from "../../lib/documentApi";
-import { useAppStore } from "../../lib/store";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -39,8 +39,8 @@ export function PublishForm({
   replyTo,
   editingDraftId
 }: PublishFormProps) {
-  const { setCurrentView, editDocumentData, setEditDocumentData } =
-    useAppStore();
+  const { editDocumentData, setEditDocumentData, navigateToDrafts } =
+    useDocuments();
   const [activeTab, setActiveTab] = useState<"message" | "file" | "url">(
     "message"
   );
@@ -223,7 +223,7 @@ export function PublishForm({
 
       // Navigate based on context
       if (editingDraftId) {
-        setCurrentView("drafts");
+        navigateToDrafts();
       } else if (onCancel) {
         onCancel();
       }

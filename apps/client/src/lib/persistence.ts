@@ -1,29 +1,34 @@
-import type { AppView } from "./store";
+import type { MiniApp } from "./store";
 
-const CURRENT_VIEW_KEY = "pod2-client-current-view";
+const ACTIVE_APP_KEY = "pod2-client-active-app";
 
 /**
- * Load the last selected view from localStorage
+ * Load the last selected mini-app from localStorage
  */
-export function loadCurrentView(): AppView {
+export function loadActiveApp(): MiniApp {
   try {
-    const stored = localStorage.getItem(CURRENT_VIEW_KEY);
-    if (stored && ["pods", "editor"].includes(stored)) {
-      return stored as AppView;
+    const stored = localStorage.getItem(ACTIVE_APP_KEY);
+    if (
+      stored &&
+      ["pod-collection", "documents", "pod-editor", "frogcrypto"].includes(
+        stored
+      )
+    ) {
+      return stored as MiniApp;
     }
   } catch (error) {
-    console.warn("Failed to load current view from localStorage:", error);
+    console.warn("Failed to load active app from localStorage:", error);
   }
-  return "pods"; // Default fallback
+  return "pod-collection"; // Default fallback
 }
 
 /**
- * Save the current view to localStorage
+ * Save the active mini-app to localStorage
  */
-export function saveCurrentView(view: AppView): void {
+export function saveActiveApp(app: MiniApp): void {
   try {
-    localStorage.setItem(CURRENT_VIEW_KEY, view);
+    localStorage.setItem(ACTIVE_APP_KEY, app);
   } catch (error) {
-    console.warn("Failed to save current view to localStorage:", error);
+    console.warn("Failed to save active app to localStorage:", error);
   }
 }

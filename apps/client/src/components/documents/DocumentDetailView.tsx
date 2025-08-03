@@ -4,7 +4,6 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import "highlight.js/styles/github-dark.css";
 import {
   AlertCircleIcon,
-  ArrowLeftIcon,
   CheckCircleIcon,
   DownloadIcon,
   EditIcon,
@@ -33,7 +32,7 @@ import {
   deleteDocument,
   getCurrentUsername
 } from "../../lib/documentApi";
-import { useAppStore } from "../../lib/store";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -47,7 +46,6 @@ interface ThreadedReply extends DocumentMetadata {
 
 interface DocumentDetailViewProps {
   documentId: number;
-  onBack: () => void;
   onNavigateToDocument?: (documentId: number) => void;
 }
 
@@ -123,11 +121,14 @@ const ensureFileExtension = (filename: string, mimeType: string): string => {
 
 export function DocumentDetailView({
   documentId,
-  onBack,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { setCurrentView, setReplyToDocumentId, setEditDocumentData } =
-    useAppStore();
+  const {
+    setReplyToDocumentId,
+    setEditDocumentData,
+    navigateToPublish,
+    navigateToDocumentsList
+  } = useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +270,7 @@ export function DocumentDetailView({
     console.log("Setting replyToDocumentId to:", replyToId);
     // Set the reply context and navigate to publish page
     setReplyToDocumentId(replyToId);
-    setCurrentView("publish");
+    navigateToPublish();
   };
 
   const handleUpvote = async () => {
@@ -359,7 +360,7 @@ export function DocumentDetailView({
       if (result.success) {
         toast.success("Document deleted successfully!");
         // Navigate back to documents list
-        onBack();
+        navigateToDocumentsList();
       } else {
         toast.error(result.error_message || "Failed to delete document");
       }
@@ -393,7 +394,7 @@ export function DocumentDetailView({
     });
 
     // Navigate to publish view in edit mode
-    setCurrentView("publish");
+    navigateToPublish();
   };
 
   useEffect(() => {
@@ -987,10 +988,6 @@ export function DocumentDetailView({
     return (
       <div className="p-6 min-h-screen w-full">
         <div className="w-full">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back to Documents
-          </Button>
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-center py-12">
@@ -1010,10 +1007,6 @@ export function DocumentDetailView({
     return (
       <div className="p-6 min-h-screen w-full">
         <div className="w-full">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back to Documents
-          </Button>
           <Card className="border-destructive">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
@@ -1030,11 +1023,6 @@ export function DocumentDetailView({
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeftIcon className="h-4 w-4 mr-2" />
-          Back to Documents
-        </Button>
-
         {/* Document Header - Reddit-style */}
         <div className="mb-6">
           <div className="flex items-start gap-4">

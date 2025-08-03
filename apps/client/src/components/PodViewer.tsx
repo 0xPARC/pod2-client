@@ -1,6 +1,6 @@
 import { FileCheck, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../lib/store";
+import { usePodCollection } from "../lib/store";
 import { DeletePodDialog } from "./DeletePodDialog";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
@@ -19,11 +19,8 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 
 export function PodViewer() {
-  const { getFilteredPods, getSelectedPod, setSelectedPodId, selectedPodId } =
-    useAppStore();
-
-  const filteredPods = getFilteredPods();
-  const selectedPod = getSelectedPod();
+  const { filteredPods, selectedPod, selectedPodId, selectPod } =
+    usePodCollection();
 
   // Delete dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -101,7 +98,7 @@ export function PodViewer() {
                           ? "bg-accent text-accent-foreground"
                           : ""
                       }`}
-                      onClick={() => setSelectedPodId(pod.id)}
+                      onClick={() => selectPod(pod.id)}
                     >
                       {pod.pod_type === "signed" ? (
                         <FilePen className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
