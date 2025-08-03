@@ -1,5 +1,7 @@
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
 import { useDocuments } from "../../lib/store";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "../../lib/keyboard/types";
 import { DebugView } from "../DebugView";
 import { Button } from "../ui/button";
 import { DocumentDetailView } from "./DocumentDetailView";
@@ -62,11 +64,55 @@ function DocumentsNavigationBar() {
 
 // Main Documents app component
 export function DocumentsApp() {
-  const { browsingHistory, navigateToDocument, navigateToPublish } =
-    useDocuments();
+  const {
+    browsingHistory,
+    navigateToDocument,
+    navigateToPublish,
+    goBack,
+    goForward
+  } = useDocuments();
   const currentRoute = browsingHistory.stack[browsingHistory.currentIndex] || {
     type: "documents-list"
   };
+
+  // Documents app keyboard shortcuts
+  const documentsShortcuts = [
+    // New document
+    createShortcut("n", () => navigateToPublish(), "New Document", {
+      cmd: true
+    }),
+    // Back navigation
+    createShortcut(
+      "[",
+      () => {
+        if (browsingHistory.currentIndex > 0) {
+          goBack();
+        }
+      },
+      "Go Back",
+      {
+        cmd: true
+      }
+    ),
+    // Forward navigation
+    createShortcut(
+      "]",
+      () => {
+        if (browsingHistory.currentIndex < browsingHistory.stack.length - 1) {
+          goForward();
+        }
+      },
+      "Go Forward",
+      {
+        cmd: true
+      }
+    )
+  ];
+
+  useKeyboardShortcuts(documentsShortcuts, {
+    enabled: true,
+    context: "documents"
+  });
 
   const renderRoute = () => {
     switch (currentRoute.type) {

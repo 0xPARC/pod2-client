@@ -9,6 +9,7 @@ import { SidebarProvider } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
 import { FeatureConfigProvider } from "./lib/features/config";
+import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { useAppStore } from "./lib/store";
 
 function App() {
@@ -67,27 +68,29 @@ function App() {
   return (
     <ThemeProvider>
       <FeatureConfigProvider>
-        <div className="h-screen overflow-hidden overscroll-none">
-          {/* TODO: Maybe make this MacOS-only? */}
-          <div
-            data-tauri-drag-region
-            className="fixed top-0 left-0 right-0 z-[100]! h-[20px]"
-            onDoubleClick={() => {
-              getCurrentWindow().maximize();
-            }}
-          ></div>
-          <SidebarProvider className="h-screen">
-            <AppSidebar />
-            <MainContent />
-          </SidebarProvider>
-          <Toaster />
+        <KeyboardProvider>
+          <div className="h-screen overflow-hidden overscroll-none">
+            {/* TODO: Maybe make this MacOS-only? */}
+            <div
+              data-tauri-drag-region
+              className="fixed top-0 left-0 right-0 z-[100]! h-[20px]"
+              onDoubleClick={() => {
+                getCurrentWindow().maximize();
+              }}
+            ></div>
+            <SidebarProvider className="h-screen">
+              <AppSidebar />
+              <MainContent />
+            </SidebarProvider>
+            <Toaster />
 
-          {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
-          <GitHubIdentitySetupModal
-            open={!isSetupCompleted}
-            onComplete={handleSetupComplete}
-          />
-        </div>
+            {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
+            <GitHubIdentitySetupModal
+              open={!isSetupCompleted}
+              onComplete={handleSetupComplete}
+            />
+          </div>
+        </KeyboardProvider>
       </FeatureConfigProvider>
     </ThemeProvider>
   );

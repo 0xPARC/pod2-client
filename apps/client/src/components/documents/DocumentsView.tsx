@@ -9,9 +9,11 @@ import {
   SearchIcon,
   XIcon
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "../../lib/keyboard/types";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -38,6 +40,26 @@ export function DocumentsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts for documents list
+  const shortcuts = [
+    createShortcut(
+      "/",
+      () => {
+        searchInputRef.current?.focus();
+      },
+      "Focus Search",
+      {
+        preventDefault: true
+      }
+    )
+  ];
+
+  useKeyboardShortcuts(shortcuts, {
+    enabled: true,
+    context: "documents-list"
+  });
 
   const loadDocuments = async () => {
     try {
@@ -173,6 +195,7 @@ export function DocumentsView() {
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search document titles..."
               value={searchQuery}
               onChange={(e) => updateSearch(e.target.value)}
