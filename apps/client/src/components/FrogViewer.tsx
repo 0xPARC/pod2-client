@@ -49,6 +49,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
   const [time, setTime] = useState(new Date().getTime());
   const [frogs, setFrogs] = useState<FrogPod[]>([]);
   const [hashesChecked, setHashesChecked] = useState("");
+  const [selection, setSelection] = useState("");
 
   async function updateFrogs() {
     try {

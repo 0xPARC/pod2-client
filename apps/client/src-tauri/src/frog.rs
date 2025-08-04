@@ -100,6 +100,7 @@ pub struct FrogedexEntry {
     name: String,
     image_url: String,
     seen: bool,
+    can_level_up: bool,
 }
 
 const FROG_RARITIES: [i64; 80] = [
@@ -169,11 +170,12 @@ pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod
     Ok(frogs)
 }
 
-fn frogedex_data_for(desc: &SignedPod) -> Option<(i64, String, String)> {
+fn frogedex_data_for(desc: &SignedPod) -> Option<(i64, String, String, bool)> {
     Some((
         desc.get("frog_id")?.as_int()?,
         desc.get("name")?.as_str()?.to_owned(),
         desc.get("image_url")?.as_str()?.to_owned(),
+        desc.get("can_level_up")?.as_int()? != 0,
     ))
 }
 
@@ -190,15 +192,17 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
             name: "???".to_string(),
             image_url: "https://frogcrypto.vercel.app/images/pixel_frog.png".to_string(),
             seen: false,
+            can_level_up: false,
         })
         .collect();
     for desc in frog_descs {
-        if let Some((frog_id, name, image_url)) = frogedex_data_for(&desc) {
+        if let Some((frog_id, name, image_url, can_level_up)) = frogedex_data_for(&desc) {
             if (1..=80).contains(&frog_id) {
                 let index = (frog_id - 1) as usize;
                 entries[index].name = name;
                 entries[index].image_url = image_url;
                 entries[index].seen = true;
+                entries[index].can_level_up = can_level_up;
             }
         }
     }
@@ -369,14 +373,14 @@ pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, Stri
 
 #[tauri::command]
 pub async fn fix_frog_descriptions(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    println!("trying to fix descriptions");
     let app_state = state.lock().await;
     let frog_pods = frog_pods(&app_state.db).await?;
     let frog_descs = description_pods(&app_state.db).await?;
     for pod in frog_pods {
         let desc = description_for(&pod, &frog_descs);
         if desc.is_none() {
-            //request_frog_description(pod, app_state.app_handle.clone()).await?;
+            // request the descriptions in another future so we don't
+            // hold the lock on `state` while waiting for them
             tauri::async_runtime::spawn(request_frog_description(
                 (pod.json)(),
                 app_state.app_handle.clone(),
