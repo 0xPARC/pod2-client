@@ -4,6 +4,9 @@ import {
   ResizablePanel,
   ResizablePanelGroup
 } from "../ui/resizable";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "../../lib/keyboard/types";
+import { usePodEditor } from "../../lib/store";
 
 import { EditorPane } from "./EditorPane";
 import { EditorControls } from "./EditorControls";
@@ -15,10 +18,44 @@ const MIN_EDITOR_SIZE = 30; // Minimum percentage for editor panel
 const MAX_RESULTS_SIZE = 70; // Maximum percentage for results panel
 
 export function EditorView() {
+  const { executeEditorCode } = usePodEditor();
+
   // Results panel state
   const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [resultsPanelSize, setResultsPanelSize] =
     useState(DEFAULT_RESULTS_SIZE);
+
+  // POD Editor keyboard shortcuts
+  const shortcuts = [
+    // Execute code
+    createShortcut(
+      "Enter",
+      () => {
+        executeEditorCode(false); // Execute with real proofs
+      },
+      "Execute Code",
+      {
+        cmd: true
+      }
+    ),
+    // Execute with mock proofs
+    createShortcut(
+      "Enter",
+      () => {
+        executeEditorCode(true); // Execute with mock proofs
+      },
+      "Execute Code (Mock)",
+      {
+        cmd: true,
+        shift: true
+      }
+    )
+  ];
+
+  useKeyboardShortcuts(shortcuts, {
+    enabled: true,
+    context: "pod-editor"
+  });
 
   // Handle results toggle
   const handleResultsToggle = () => {

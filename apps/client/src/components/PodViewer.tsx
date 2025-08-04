@@ -1,6 +1,8 @@
 import { FileCheck, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePodCollection } from "../lib/store";
+import { useKeyboardShortcuts } from "../lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "../lib/keyboard/types";
 import { DeletePodDialog } from "./DeletePodDialog";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
@@ -25,6 +27,73 @@ export function PodViewer() {
   // Delete dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [podToDelete, setPodToDelete] = useState<any>(null);
+
+  // Navigate through POD list with arrow keys
+  const navigatePods = useCallback(
+    (direction: "up" | "down") => {
+      if (filteredPods.length === 0) return;
+
+      const currentIndex = selectedPodId
+        ? filteredPods.findIndex((pod) => pod.id === selectedPodId)
+        : -1;
+
+      let nextIndex;
+      if (direction === "up") {
+        nextIndex =
+          currentIndex <= 0 ? filteredPods.length - 1 : currentIndex - 1;
+      } else {
+        nextIndex =
+          currentIndex >= filteredPods.length - 1 ? 0 : currentIndex + 1;
+      }
+
+      selectPod(filteredPods[nextIndex].id);
+    },
+    [filteredPods, selectedPodId, selectPod]
+  );
+
+  // POD Collection keyboard shortcuts
+  const shortcuts = [
+    // Delete selected POD
+    createShortcut(
+      "d",
+      () => {
+        if (selectedPod) {
+          setPodToDelete(selectedPod);
+          setIsDeleteDialogOpen(true);
+        }
+      },
+      "Delete Selected POD",
+      {
+        cmd: true
+      }
+    ),
+    // Navigate up
+    createShortcut("ArrowUp", () => navigatePods("up"), "Navigate Up", {
+      preventDefault: true
+    }),
+    // Navigate down
+    createShortcut("ArrowDown", () => navigatePods("down"), "Navigate Down", {
+      preventDefault: true
+    }),
+    // Select POD (if none selected, select first)
+    createShortcut(
+      "Enter",
+      () => {
+        if (!selectedPodId && filteredPods.length > 0) {
+          selectPod(filteredPods[0].id);
+        }
+      },
+      "Select First POD",
+      {
+        preventDefault: true
+      }
+    )
+  ];
+
+  useKeyboardShortcuts(shortcuts, {
+    enabled: true,
+    context: "pod-collection"
+  });
 
   const formatLabel = (pod: any) => {
     return pod.label || `${pod.pod_type} POD`;
