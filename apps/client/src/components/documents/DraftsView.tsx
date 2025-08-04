@@ -135,19 +135,6 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">My Drafts</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage your unpublished drafts
-            </p>
-          </div>
-          <Button onClick={handleNewDraft} className="flex items-center gap-2">
-            <PlusIcon className="h-4 w-4" />
-            New Draft
-          </Button>
-        </div>
-
         {drafts.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">

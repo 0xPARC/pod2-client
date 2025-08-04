@@ -13,7 +13,7 @@ import {
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
-import { useMarkdownRenderer, renderMarkdownToHtml } from "../markdownRenderer";
+import { renderMarkdownToHtml, useMarkdownRenderer } from "../markdownRenderer";
 
 interface MarkdownEditorProps {
   value: string;
@@ -165,7 +165,7 @@ export function MarkdownEditor({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder={placeholder || "Enter your markdown content..."}
-              className="flex-1 min-h-0 border-0 rounded-none resize-none focus-visible:ring-0 font-mono text-sm overflow-auto p-4"
+              className="flex-1 min-h-0 border-0 rounded-none resize-none focus-visible:ring-0 font-mono text-base md:text-base overflow-auto p-4"
             />
           </div>
         )}
@@ -176,7 +176,7 @@ export function MarkdownEditor({
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
             <div
-              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
+              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           </div>

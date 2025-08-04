@@ -14,9 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
-import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -167,12 +167,6 @@ export function DocumentsView() {
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Documents</h1>
-            <p className="text-muted-foreground">
-              Documents from the PodNet server with cryptographic verification.
-            </p>
-          </div>
           <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

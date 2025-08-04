@@ -149,6 +149,7 @@ export function DocumentsApp() {
           <PublishPage
             editingDraftId={currentRoute.editingDraftId || null}
             contentType={currentRoute.contentType || "document"}
+            replyTo={currentRoute.replyTo}
             onPublishSuccess={() => {
               // Navigation is now handled by the top-level back/forward buttons
             }}

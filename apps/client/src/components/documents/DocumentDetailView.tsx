@@ -118,12 +118,8 @@ export function DocumentDetailView({
   documentId,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const {
-    setReplyToDocumentId,
-    setEditDocumentData,
-    navigateToPublish,
-    navigateToDocumentsList
-  } = useDocuments();
+  const { setEditDocumentData, navigateToPublish, navigateToDocumentsList } =
+    useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -265,10 +261,9 @@ export function DocumentDetailView({
 
     // Format: "post_id:document_id"
     const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
-    console.log("Setting replyToDocumentId to:", replyToId);
-    // Set the reply context and navigate to publish page
-    setReplyToDocumentId(replyToId);
-    navigateToPublish();
+    console.log("Navigating to reply with replyTo:", replyToId);
+    // Navigate to publish page with reply context
+    navigateToPublish(undefined, "document", replyToId);
   };
 
   const handleUpvote = async () => {

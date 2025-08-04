@@ -71,6 +71,7 @@ export interface DocumentRoute {
   id?: number;
   editingDraftId?: string;
   contentType?: "document" | "link" | "file";
+  replyTo?: string;
 }
 
 export interface DocumentsState {
@@ -81,8 +82,7 @@ export interface DocumentsState {
   searchQuery: string;
   selectedTag: string | null;
   cachedDocuments: Record<number, any>;
-  // Core Documents app state
-  replyToDocumentId: string | null;
+  // Core Documents app state (TODO: consider if these should also be route-specific)
   currentDraftId: string | null;
   isDraftInitializing: boolean;
   editDocumentData: EditDocumentData | null;
@@ -132,7 +132,8 @@ export interface DocumentsActions {
   navigateToDrafts: () => void;
   navigateToPublish: (
     editingDraftId?: string,
-    contentType?: "document" | "link" | "file"
+    contentType?: "document" | "link" | "file",
+    replyTo?: string
   ) => void;
   navigateToDocumentsList: () => void;
   navigateToDebug: () => void;
@@ -141,8 +142,7 @@ export interface DocumentsActions {
   updateSearch: (query: string) => void;
   selectTag: (tag: string | null) => void;
   cacheDocument: (id: number, document: any) => void;
-  // Core Documents app actions
-  setReplyToDocumentId: (documentId: string | null) => void;
+  // Core Documents app actions (TODO: consider if these should also be route-specific)
   setCurrentDraftId: (draftId: string | null) => void;
   setIsDraftInitializing: (initializing: boolean) => void;
   setEditDocumentData: (data: EditDocumentData | null) => void;
@@ -255,8 +255,7 @@ export const useAppStore = create<AppStoreState>()(
       searchQuery: "",
       selectedTag: null,
       cachedDocuments: {},
-      // Legacy fields
-      replyToDocumentId: null,
+      // Legacy fields (TODO: consider if these should also be route-specific)
       currentDraftId: null,
       isDraftInitializing: false,
       editDocumentData: null
@@ -405,13 +404,15 @@ export const useAppStore = create<AppStoreState>()(
 
       navigateToPublish: (
         editingDraftId?: string,
-        contentType?: "document" | "link" | "file"
+        contentType?: "document" | "link" | "file",
+        replyTo?: string
       ) => {
         set((state) => {
           const newRoute: DocumentRoute = {
             type: "publish",
             editingDraftId,
-            contentType: contentType || "document" // Default to document if not specified
+            contentType: contentType || "document", // Default to document if not specified
+            replyTo
           };
           const history = state.documents.browsingHistory;
           // Trim forward history
@@ -485,13 +486,7 @@ export const useAppStore = create<AppStoreState>()(
         });
       },
 
-      // Core Documents app actions
-      setReplyToDocumentId: (documentId: string | null) => {
-        set((state) => {
-          state.documents.replyToDocumentId = documentId;
-        });
-      },
-
+      // Core Documents app actions (TODO: consider if these should also be route-specific)
       setCurrentDraftId: (draftId: string | null) => {
         set((state) => {
           state.documents.currentDraftId = draftId;
@@ -972,7 +967,6 @@ export const useDocuments = () => {
     searchQuery: documents.searchQuery,
     selectedTag: documents.selectedTag,
     cachedDocuments: documents.cachedDocuments,
-    replyToDocumentId: documents.replyToDocumentId,
     currentDraftId: documents.currentDraftId,
     isDraftInitializing: documents.isDraftInitializing,
     editDocumentData: documents.editDocumentData,
@@ -988,7 +982,6 @@ export const useDocuments = () => {
     updateSearch: documentsActions.updateSearch,
     selectTag: documentsActions.selectTag,
     cacheDocument: documentsActions.cacheDocument,
-    setReplyToDocumentId: documentsActions.setReplyToDocumentId,
     setCurrentDraftId: documentsActions.setCurrentDraftId,
     setIsDraftInitializing: documentsActions.setIsDraftInitializing,
     setEditDocumentData: documentsActions.setEditDocumentData

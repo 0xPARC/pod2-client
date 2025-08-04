@@ -1,4 +1,3 @@
-import { useDocuments } from "../../lib/store";
 import { PublishDocumentForm } from "./forms/PublishDocumentForm";
 import { PublishFileForm } from "./forms/PublishFileForm";
 import { PublishLinkForm } from "./forms/PublishLinkForm";
@@ -7,31 +6,23 @@ interface PublishPageProps {
   onPublishSuccess?: (documentId: number) => void;
   editingDraftId?: string | null; // UUID - only used for documents
   contentType?: "document" | "link" | "file";
+  replyTo?: string;
 }
 
 export function PublishPage({
   onPublishSuccess,
   editingDraftId,
-  contentType = "document"
+  contentType = "document",
+  replyTo
 }: PublishPageProps) {
-  const { replyToDocumentId, setReplyToDocumentId } = useDocuments();
-
   const handlePublishSuccess = (documentId: number) => {
     console.log("Content published successfully with ID:", documentId);
-    // Clear the reply context after successful publish (only relevant for documents)
-    if (contentType === "document") {
-      setReplyToDocumentId(null);
-    }
     if (onPublishSuccess) {
       onPublishSuccess(documentId);
     }
   };
 
   const handleCancel = () => {
-    // Clear the reply context when canceling (only relevant for documents)
-    if (contentType === "document") {
-      setReplyToDocumentId(null);
-    }
     // Navigation is now handled by the top-level back/forward buttons
   };
 
@@ -42,7 +33,7 @@ export function PublishPage({
           <PublishDocumentForm
             onPublishSuccess={handlePublishSuccess}
             onCancel={handleCancel}
-            replyTo={replyToDocumentId || undefined}
+            replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
           />
         );
@@ -65,7 +56,7 @@ export function PublishPage({
           <PublishDocumentForm
             onPublishSuccess={handlePublishSuccess}
             onCancel={handleCancel}
-            replyTo={replyToDocumentId || undefined}
+            replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
           />
         );
