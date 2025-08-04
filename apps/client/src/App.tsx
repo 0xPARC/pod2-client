@@ -5,12 +5,32 @@ import { AppSidebar } from "./components/AppSidebar";
 import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
 import { MainContent } from "./components/MainContent";
 import { ThemeProvider } from "./components/theme-provider";
-import { SidebarProvider } from "./components/ui/sidebar";
+import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
 import { FeatureConfigProvider } from "./lib/features/config";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
+import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "./lib/keyboard/types";
 import { useAppStore } from "./lib/store";
+
+// Component that handles global keyboard shortcuts within the sidebar context
+function GlobalKeyboardShortcuts() {
+  const { toggleSidebar } = useSidebar();
+
+  const globalShortcuts = [
+    createShortcut("b", () => toggleSidebar(), "Toggle Sidebar", {
+      cmd: true
+    })
+  ];
+
+  useKeyboardShortcuts(globalShortcuts, {
+    enabled: true,
+    context: "global"
+  });
+
+  return null;
+}
 
 function App() {
   const { initialize } = useAppStore((state) => state);
@@ -79,6 +99,7 @@ function App() {
               }}
             ></div>
             <SidebarProvider className="h-screen">
+              <GlobalKeyboardShortcuts />
               <AppSidebar />
               <MainContent />
             </SidebarProvider>

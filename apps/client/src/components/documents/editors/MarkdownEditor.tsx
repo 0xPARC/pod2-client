@@ -10,12 +10,10 @@ import {
   QuoteIcon,
   SplitIcon
 } from "lucide-react";
-import MarkdownIt from "markdown-it";
-import hljs from "markdown-it-highlightjs";
-import markdownItMathjax from "markdown-it-mathjax3";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
+import { useMarkdownRenderer, renderMarkdownToHtml } from "../markdownRenderer";
 
 interface MarkdownEditorProps {
   value: string;
@@ -35,70 +33,15 @@ export function MarkdownEditor({
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Memoize markdown-it instance - configured once with GitHub Flavored Markdown features
-  const md = useMemo(() => {
-    const mdInstance = new MarkdownIt({
-      html: false, // Disable raw HTML for security
-      xhtmlOut: false,
-      breaks: true, // Convert '\n' in paragraphs into <br>
-      langPrefix: "language-", // CSS language prefix for fenced blocks
-      linkify: true, // Autoconvert URL-like text to links
-      typographer: true // Enable smartquotes and other typographic replacements
-    })
-      .use(hljs) // Add syntax highlighting
-      .use(markdownItMathjax, {
-        // MathJax configuration
-        tex: {
-          inlineMath: [
-            ["$", "$"],
-            ["\\(", "\\)"]
-          ],
-          displayMath: [
-            ["$$", "$$"],
-            ["\\[", "\\]"]
-          ],
-          loader: { load: ["[tex]/textmacros", "[tex]/textcomp"] },
-          tex: { packages: { "[+]": ["textmacros"] } },
-          textmacros: { packages: { "[+]": ["textcomp"] } },
-          processEscapes: true,
-          macros: {
-            "\\RR": "\\mathbb{R}",
-            "\\NN": "\\mathbb{N}"
-          }
-        }
-      })
-      .enable([
-        "table", // GitHub tables
-        "strikethrough" // ~~text~~
-      ]);
-
-    // Custom renderer for links to open in new tab
-    mdInstance.renderer.rules.link_open = function (
-      tokens,
-      idx,
-      options,
-      _env,
-      renderer
-    ) {
-      const aIndex = tokens[idx].attrIndex("target");
-      if (aIndex < 0) {
-        tokens[idx].attrPush(["target", "_blank"]);
-        tokens[idx].attrPush(["rel", "noopener noreferrer"]);
-      } else {
-        tokens[idx].attrs![aIndex][1] = "_blank";
-      }
-      return renderer.renderToken(tokens, idx, options);
-    };
-
-    return mdInstance;
-  }, []);
+  // Use shared markdown renderer
+  const md = useMarkdownRenderer();
 
   // Memoize the rendered HTML - only re-render when content changes
   const renderedHtml = useMemo(() => {
     if (!value.trim()) {
       return "Nothing to preview yet. Start typing to see your markdown rendered here.";
     }
-    return md.render(value);
+    return renderMarkdownToHtml(md, value);
   }, [value, md]);
 
   // Insert markdown formatting at cursor position
@@ -233,7 +176,7 @@ export function MarkdownEditor({
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
             <div
-              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full"
+              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           </div>
