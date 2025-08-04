@@ -12,7 +12,7 @@ import {
   updateEditorMarkers
 } from "../../lib/features/authoring/monaco";
 import { createDebouncedValidator } from "../../lib/features/authoring/editor";
-import { useAppStore } from "../../lib/store";
+import { usePodEditor } from "../../lib/store";
 
 // Configure Monaco loader
 loader.config({ monaco });
@@ -27,10 +27,12 @@ export function EditorPane({ className }: EditorPaneProps) {
   const { theme } = useTheme();
 
   // Editor state from store
-  const editorContent = useAppStore((state) => state.editorContent);
-  const setEditorContent = useAppStore((state) => state.setEditorContent);
-  const editorDiagnostics = useAppStore((state) => state.editorDiagnostics);
-  const validateEditorCode = useAppStore((state) => state.validateEditorCode);
+  const {
+    editorContent,
+    setEditorContent,
+    editorDiagnostics,
+    validateEditorCode
+  } = usePodEditor();
 
   // Editor refs
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);

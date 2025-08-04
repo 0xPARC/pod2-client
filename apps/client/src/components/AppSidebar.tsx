@@ -47,7 +47,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { FeatureGate } from "../lib/features/config";
-import { useAppStore } from "../lib/store";
+import { useAppStore, usePodCollection, useDocuments } from "../lib/store";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { ImportPodDialog } from "./ImportPodDialog";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
@@ -66,16 +66,27 @@ import { ScrollArea } from "./ui/scroll-area";
 
 export function AppSidebar() {
   const {
+    activeApp,
     appState,
-    currentView,
-    selectedFolderFilter,
     folders,
     foldersLoading,
     privateKeyInfo,
     buildInfo,
-    setCurrentView,
-    setSelectedFolderFilter
+    setActiveApp
   } = useAppStore();
+
+  const { selectedFolderId, selectFolder } = usePodCollection();
+  const {
+    navigateToDocumentsList,
+    navigateToDrafts,
+    navigateToDebug,
+    browsingHistory
+  } = useDocuments();
+
+  // Get current route for active state
+  const currentRoute = browsingHistory.stack[browsingHistory.currentIndex] || {
+    type: "documents-list"
+  };
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [allFoldersExpanded, setAllFoldersExpanded] = useState(true);
@@ -127,11 +138,12 @@ export function AppSidebar() {
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       onClick={() => {
-                        setCurrentView("pods");
-                        setSelectedFolderFilter("all");
+                        setActiveApp("pod-collection");
+                        selectFolder("all");
                       }}
                       isActive={
-                        currentView === "pods" && selectedFolderFilter === "all"
+                        activeApp === "pod-collection" &&
+                        selectedFolderId === "all"
                       }
                     >
                       {allFoldersExpanded ? (
@@ -168,12 +180,12 @@ export function AppSidebar() {
                             <SidebarMenuSubItem key={folder.id}>
                               <SidebarMenuSubButton
                                 onClick={() => {
-                                  setCurrentView("pods");
-                                  setSelectedFolderFilter(folder.id);
+                                  setActiveApp("pod-collection");
+                                  selectFolder(folder.id);
                                 }}
                                 isActive={
-                                  currentView === "pods" &&
-                                  selectedFolderFilter === folder.id
+                                  activeApp === "pod-collection" &&
+                                  selectedFolderId === folder.id
                                 }
                               >
                                 <FolderIcon />
@@ -198,8 +210,14 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => setCurrentView("documents")}
-                  isActive={currentView === "documents"}
+                  onClick={() => {
+                    setActiveApp("documents");
+                    navigateToDocumentsList();
+                  }}
+                  isActive={
+                    activeApp === "documents" &&
+                    currentRoute.type === "documents-list"
+                  }
                 >
                   <FileTextIcon />
                   Documents
@@ -207,8 +225,13 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => setCurrentView("drafts")}
-                  isActive={currentView === "drafts"}
+                  onClick={() => {
+                    setActiveApp("documents");
+                    navigateToDrafts();
+                  }}
+                  isActive={
+                    activeApp === "documents" && currentRoute.type === "drafts"
+                  }
                 >
                   <PencilLineIcon />
                   Drafts
@@ -225,11 +248,13 @@ export function AppSidebar() {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => setCurrentView("editor")}
-                    isActive={currentView === "editor"}
+                    onClick={() => {
+                      setActiveApp("pod-editor");
+                    }}
+                    isActive={activeApp === "pod-editor"}
                   >
                     <EditIcon />
-                    POD Request
+                    POD Editor
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -264,7 +289,12 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton onClick={() => setCurrentView("frogs")}>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      setActiveApp("frogcrypto");
+                    }}
+                    isActive={activeApp === "frogcrypto"}
+                  >
                     FrogCrypto
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -323,7 +353,12 @@ export function AppSidebar() {
               Add ZuKYC PODs
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setCurrentView("debug")}>
+            <DropdownMenuItem
+              onClick={() => {
+                setActiveApp("documents");
+                navigateToDebug();
+              }}
+            >
               <SettingsIcon className="h-4 w-4 mr-2" />
               View Config
             </DropdownMenuItem>

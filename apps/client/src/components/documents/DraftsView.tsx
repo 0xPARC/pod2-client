@@ -12,7 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { deleteDraft, DraftInfo, listDrafts } from "../../lib/documentApi";
-import { useAppStore } from "../../lib/store";
+import { useDocuments } from "../../lib/store";
 import { formatTimeAgo } from "../../lib/timeUtils";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -27,7 +27,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const [publishingDrafts, setPublishingDrafts] = useState<Set<string>>(
     new Set()
   );
-  const { currentView, setCurrentView } = useAppStore();
+  const { navigateToPublish } = useDocuments();
 
   const loadDrafts = async () => {
     try {
@@ -46,12 +46,8 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     loadDrafts();
   }, []);
 
-  // Reload drafts when navigating back to the drafts view
-  useEffect(() => {
-    if (currentView === "drafts") {
-      loadDrafts();
-    }
-  }, [currentView]);
+  // Reload drafts when component mounts (handled by DocumentsApp routing)
+  // This component is now managed by DocumentsApp navigation
 
   const handleDeleteDraft = async (draftId: string) => {
     try {
@@ -107,7 +103,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   };
 
   const handleNewDraft = () => {
-    setCurrentView("publish");
+    navigateToPublish();
   };
 
   const getContentIcon = (contentType: string) => {

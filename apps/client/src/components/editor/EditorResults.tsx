@@ -5,7 +5,7 @@ import {
   ChevronUp
 } from "lucide-react";
 
-import { useAppStore } from "../../lib/store";
+import { usePodEditor } from "../../lib/store";
 import MainPodCard from "../MainPodCard";
 import { Button } from "../ui/button";
 
@@ -21,9 +21,7 @@ export function EditorResults({
   className
 }: EditorResultsProps) {
   // Results state from store
-  const executionResult = useAppStore((state) => state.executionResult);
-  const executionError = useAppStore((state) => state.executionError);
-  const isExecuting = useAppStore((state) => state.isExecuting);
+  const { executionResult, executionError, isExecuting } = usePodEditor();
 
   // Determine what to display
   let content;

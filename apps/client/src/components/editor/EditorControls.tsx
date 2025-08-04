@@ -10,7 +10,7 @@ import {
   saveLastMockSetting,
   loadLastMockSetting
 } from "../../lib/features/authoring/editor";
-import { useAppStore } from "../../lib/store";
+import { usePodEditor } from "../../lib/store";
 
 interface EditorControlsProps {
   className?: string;
@@ -18,10 +18,8 @@ interface EditorControlsProps {
 
 export function EditorControls({ className }: EditorControlsProps) {
   // Editor state from store
-  const editorDiagnostics = useAppStore((state) => state.editorDiagnostics);
-  const isExecuting = useAppStore((state) => state.isExecuting);
-  const isValidating = useAppStore((state) => state.isValidating);
-  const executeEditorCode = useAppStore((state) => state.executeEditorCode);
+  const { editorDiagnostics, isExecuting, isValidating, executeEditorCode } =
+    usePodEditor();
 
   // Local mock setting state
   const [mock, setMock] = useState(() => loadLastMockSetting());
