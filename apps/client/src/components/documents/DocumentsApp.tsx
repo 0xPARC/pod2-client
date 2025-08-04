@@ -163,16 +163,8 @@ export function DocumentsApp() {
 
   return (
     <div className="flex flex-col h-full w-full">
-      {currentRoute.type === "publish" &&
-      currentRoute.contentType === "document" ? (
-        // Document publishing gets full height without navigation bar
-        renderRoute()
-      ) : (
-        <>
-          <DocumentsNavigationBar />
-          <div className="flex-1 overflow-auto">{renderRoute()}</div>
-        </>
-      )}
+      <DocumentsNavigationBar />
+      <div className="flex-1 overflow-auto">{renderRoute()}</div>
     </div>
   );
 }

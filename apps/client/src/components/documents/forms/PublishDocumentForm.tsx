@@ -292,7 +292,7 @@ export function PublishDocumentForm({
   }, [replyTo]);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Top Bar */}
       <div className="flex items-center gap-6 px-6 py-4 border-b bg-background shrink-0">
         {/* Title - Direct Input */}
@@ -443,7 +443,7 @@ export function PublishDocumentForm({
       )}
 
       {/* Markdown Editor - Full Height */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden h-full">
         <MarkdownEditor
           value={message}
           onChange={(value) => {

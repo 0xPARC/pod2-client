@@ -73,7 +73,7 @@ export function PublishPage({
   };
 
   return (
-    <div className="w-full overflow-hidden">
+    <div className="w-full overflow-hidden h-full">
       {contentType === "document" ? (
         renderForm()
       ) : (
