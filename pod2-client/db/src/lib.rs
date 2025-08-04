@@ -57,6 +57,11 @@ impl Db {
             .map_err(|e| anyhow::anyhow!("InteractError during migration: {e}"))
             .context("Failed to run migrations")??;
 
+        let current_version = conn
+            .interact(|conn| migrations.current_version(conn))
+            .await
+            .unwrap();
+        info!("Current migration version: {}", current_version.unwrap());
         info!("Migrations applied successfully.");
 
         Ok(Self { pool })

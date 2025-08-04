@@ -182,7 +182,7 @@ export function PublishButton({
             : "Publishing..."
           : data.postId
             ? "Update Document"
-            : "Publish Document"}
+            : "Publish"}
       </span>
     </Button>
   );

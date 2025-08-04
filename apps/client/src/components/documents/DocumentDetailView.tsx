@@ -4,7 +4,6 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import "highlight.js/styles/github-dark.css";
 import {
   AlertCircleIcon,
-  ArrowLeftIcon,
   CheckCircleIcon,
   DownloadIcon,
   EditIcon,
@@ -14,12 +13,7 @@ import {
   ReplyIcon,
   TrashIcon
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
-import rehypeMathjax from "rehype-mathjax";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Document,
@@ -33,11 +27,11 @@ import {
   deleteDocument,
   getCurrentUsername
 } from "../../lib/documentApi";
-import { useAppStore } from "../../lib/store";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import rehypeDisplayMath from "./displayMath";
+import { useMarkdownRenderer, renderMarkdownToHtml } from "./markdownRenderer";
 
 // Interface for threaded reply structure
 interface ThreadedReply extends DocumentMetadata {
@@ -47,7 +41,6 @@ interface ThreadedReply extends DocumentMetadata {
 
 interface DocumentDetailViewProps {
   documentId: number;
-  onBack: () => void;
   onNavigateToDocument?: (documentId: number) => void;
 }
 
@@ -123,11 +116,10 @@ const ensureFileExtension = (filename: string, mimeType: string): string => {
 
 export function DocumentDetailView({
   documentId,
-  onBack,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { setCurrentView, setReplyToDocumentId, setEditDocumentData } =
-    useAppStore();
+  const { setEditDocumentData, navigateToPublish, navigateToDocumentsList } =
+    useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +139,9 @@ export function DocumentDetailView({
   const [repliesError, setRepliesError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Use shared markdown renderer
+  const md = useMarkdownRenderer();
 
   const loadDocument = async () => {
     try {
@@ -266,10 +261,9 @@ export function DocumentDetailView({
 
     // Format: "post_id:document_id"
     const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
-    console.log("Setting replyToDocumentId to:", replyToId);
-    // Set the reply context and navigate to publish page
-    setReplyToDocumentId(replyToId);
-    setCurrentView("publish");
+    console.log("Navigating to reply with replyTo:", replyToId);
+    // Navigate to publish page with reply context
+    navigateToPublish(undefined, "document", replyToId);
   };
 
   const handleUpvote = async () => {
@@ -359,7 +353,7 @@ export function DocumentDetailView({
       if (result.success) {
         toast.success("Document deleted successfully!");
         // Navigate back to documents list
-        onBack();
+        navigateToDocumentsList();
       } else {
         toast.error(result.error_message || "Failed to delete document");
       }
@@ -393,7 +387,7 @@ export function DocumentDetailView({
     });
 
     // Navigate to publish view in edit mode
-    setCurrentView("publish");
+    navigateToPublish();
   };
 
   useEffect(() => {
@@ -652,107 +646,38 @@ export function DocumentDetailView({
     );
   };
 
-  const renderContent = (content: Document["content"]) => {
-    if (!content.message) return null;
+  // Memoize rendered HTML for message content
+  const renderedMessageHtml = useMemo(() => {
+    if (!document?.content.message) return null;
 
     // Check if content looks like markdown
     const isMarkdown =
-      content.message.includes("#") ||
-      content.message.includes("**") ||
-      content.message.includes("*") ||
-      content.message.includes("```") ||
-      (content.message.includes("[") && content.message.includes("](")) ||
-      content.message.includes("- ") ||
-      content.message.includes("1. ");
-    console.log("is markdown?: ", isMarkdown);
+      document.content.message.includes("#") ||
+      document.content.message.includes("**") ||
+      document.content.message.includes("*") ||
+      document.content.message.includes("```") ||
+      (document.content.message.includes("[") &&
+        document.content.message.includes("](")) ||
+      document.content.message.includes("- ") ||
+      document.content.message.includes("1. ");
 
-    if (isMarkdown) {
+    return {
+      html: isMarkdown
+        ? renderMarkdownToHtml(md, document.content.message)
+        : null,
+      isMarkdown
+    };
+  }, [document?.content.message, md]);
+
+  const renderContent = (content: Document["content"]) => {
+    if (!content.message) return null;
+
+    if (renderedMessageHtml?.isMarkdown) {
       return (
-        <div className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none">
-          <ReactMarkdown
-            remarkPlugins={[
-              remarkGfm,
-              [remarkMath, { singleDollarTextMath: true }]
-            ]}
-            rehypePlugins={[
-              rehypeHighlight,
-              [
-                rehypeMathjax,
-                {
-                  // MathJax configuration
-                  tex: {
-                    inlineMath: [
-                      ["$", "$"],
-                      ["\\(", "\\)"]
-                    ],
-                    displayMath: [
-                      ["$$", "$$"],
-                      ["\\[", "\\]"]
-                    ],
-                    loader: { load: ["[tex]/textmacros", "[tex]/textcomp"] },
-                    tex: { packages: { "[+]": ["textmacros"] } },
-                    textmacros: { packages: { "[+]": ["textcomp"] } },
-                    processEscapes: true,
-                    macros: {
-                      "\\RR": "\\mathbb{R}",
-                      "\\NN": "\\mathbb{N}"
-                    }
-                  }
-                }
-              ],
-              rehypeDisplayMath
-            ]}
-            components={{
-              // Custom link component to handle external links safely
-              a: ({ href, children, ...props }) => (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 underline"
-                  {...props}
-                >
-                  {children}
-                </a>
-              ),
-              // Custom code block styling
-              pre: ({ children, ...props }) => (
-                <pre
-                  className="bg-muted border rounded-lg p-4 overflow-x-auto"
-                  {...props}
-                >
-                  {children}
-                </pre>
-              ),
-              // Custom table styling
-              table: ({ children, ...props }) => (
-                <div className="overflow-x-auto">
-                  <table
-                    className="min-w-full border-collapse border border-border"
-                    {...props}
-                  >
-                    {children}
-                  </table>
-                </div>
-              ),
-              th: ({ children, ...props }) => (
-                <th
-                  className="border border-border bg-muted px-4 py-2 text-left font-medium"
-                  {...props}
-                >
-                  {children}
-                </th>
-              ),
-              td: ({ children, ...props }) => (
-                <td className="border border-border px-4 py-2" {...props}>
-                  {children}
-                </td>
-              )
-            }}
-          >
-            {content.message}
-          </ReactMarkdown>
-        </div>
+        <div
+          className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
+          dangerouslySetInnerHTML={{ __html: renderedMessageHtml.html! }}
+        />
       );
     } else {
       return (
@@ -819,61 +744,12 @@ export function DocumentDetailView({
             </div>
           </div>
 
-          <div className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none border rounded-lg p-6 max-h-[70vh] overflow-y-auto">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={{
-                // Custom link component to handle external links safely
-                a: ({ href, children, ...props }) => (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline"
-                    {...props}
-                  >
-                    {children}
-                  </a>
-                ),
-                // Custom code block styling
-                pre: ({ children, ...props }) => (
-                  <pre
-                    className="bg-muted border rounded-lg p-4 overflow-x-auto"
-                    {...props}
-                  >
-                    {children}
-                  </pre>
-                ),
-                // Custom table styling
-                table: ({ children, ...props }) => (
-                  <div className="overflow-x-auto">
-                    <table
-                      className="min-w-full border-collapse border border-border"
-                      {...props}
-                    >
-                      {children}
-                    </table>
-                  </div>
-                ),
-                th: ({ children, ...props }) => (
-                  <th
-                    className="border border-border bg-muted px-4 py-2 text-left font-medium"
-                    {...props}
-                  >
-                    {children}
-                  </th>
-                ),
-                td: ({ children, ...props }) => (
-                  <td className="border border-border px-4 py-2" {...props}>
-                    {children}
-                  </td>
-                )
-              }}
-            >
-              {fileContent}
-            </ReactMarkdown>
-          </div>
+          <div
+            className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere border rounded-lg p-6 max-h-[70vh] overflow-y-auto"
+            dangerouslySetInnerHTML={{
+              __html: renderMarkdownToHtml(md, fileContent)
+            }}
+          />
         </div>
       );
     }
@@ -987,10 +863,6 @@ export function DocumentDetailView({
     return (
       <div className="p-6 min-h-screen w-full">
         <div className="w-full">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back to Documents
-          </Button>
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-center py-12">
@@ -1010,10 +882,6 @@ export function DocumentDetailView({
     return (
       <div className="p-6 min-h-screen w-full">
         <div className="w-full">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back to Documents
-          </Button>
           <Card className="border-destructive">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
@@ -1030,11 +898,6 @@ export function DocumentDetailView({
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeftIcon className="h-4 w-4 mr-2" />
-          Back to Documents
-        </Button>
-
         {/* Document Header - Reddit-style */}
         <div className="mb-6">
           <div className="flex items-start gap-4">

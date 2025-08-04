@@ -5,11 +5,32 @@ import { AppSidebar } from "./components/AppSidebar";
 import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
 import { MainContent } from "./components/MainContent";
 import { ThemeProvider } from "./components/theme-provider";
-import { SidebarProvider } from "./components/ui/sidebar";
+import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
 import { FeatureConfigProvider } from "./lib/features/config";
+import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
+import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
+import { createShortcut } from "./lib/keyboard/types";
 import { useAppStore } from "./lib/store";
+
+// Component that handles global keyboard shortcuts within the sidebar context
+function GlobalKeyboardShortcuts() {
+  const { toggleSidebar } = useSidebar();
+
+  const globalShortcuts = [
+    createShortcut("b", () => toggleSidebar(), "Toggle Sidebar", {
+      cmd: true
+    })
+  ];
+
+  useKeyboardShortcuts(globalShortcuts, {
+    enabled: true,
+    context: "global"
+  });
+
+  return null;
+}
 
 function App() {
   const { initialize } = useAppStore((state) => state);
@@ -67,27 +88,30 @@ function App() {
   return (
     <ThemeProvider>
       <FeatureConfigProvider>
-        <div className="h-screen overflow-hidden overscroll-none">
-          {/* TODO: Maybe make this MacOS-only? */}
-          <div
-            data-tauri-drag-region
-            className="fixed top-0 left-0 right-0 z-[100]! h-[20px]"
-            onDoubleClick={() => {
-              getCurrentWindow().maximize();
-            }}
-          ></div>
-          <SidebarProvider className="h-screen">
-            <AppSidebar />
-            <MainContent />
-          </SidebarProvider>
-          <Toaster />
+        <KeyboardProvider>
+          <div className="h-screen overflow-hidden overscroll-none">
+            {/* TODO: Maybe make this MacOS-only? */}
+            <div
+              data-tauri-drag-region
+              className="fixed top-0 left-0 right-0 z-[100]! h-[20px]"
+              onDoubleClick={() => {
+                getCurrentWindow().maximize();
+              }}
+            ></div>
+            <SidebarProvider className="h-screen">
+              <GlobalKeyboardShortcuts />
+              <AppSidebar />
+              <MainContent />
+            </SidebarProvider>
+            <Toaster />
 
-          {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
-          <GitHubIdentitySetupModal
-            open={!isSetupCompleted}
-            onComplete={handleSetupComplete}
-          />
-        </div>
+            {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
+            <GitHubIdentitySetupModal
+              open={!isSetupCompleted}
+              onComplete={handleSetupComplete}
+            />
+          </div>
+        </KeyboardProvider>
       </FeatureConfigProvider>
     </ThemeProvider>
   );

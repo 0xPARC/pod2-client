@@ -2,15 +2,21 @@ import {
   AlertCircleIcon,
   ArrowUpDownIcon,
   ChevronDownIcon,
+  FileIcon,
   FileTextIcon,
   FilterIcon,
+  LinkIcon,
+  MessageSquareIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
   XIcon
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
+import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -23,20 +29,40 @@ import {
   DropdownMenuTrigger
 } from "../ui/dropdown-menu";
 import { Input } from "../ui/input";
-import { DocumentDetailView } from "./DocumentDetailView";
-import { PublishPage } from "./PublishPage";
 
 export function DocumentsView() {
+  const {
+    searchQuery,
+    selectedTag,
+    navigateToDocument,
+    navigateToPublish,
+    updateSearch,
+    selectTag
+  } = useDocuments();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(
-    null
-  );
-  const [showPublishForm, setShowPublishForm] = useState(false);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts for documents list
+  const shortcuts = [
+    createShortcut(
+      "/",
+      () => {
+        searchInputRef.current?.focus();
+      },
+      "Focus Search",
+      {
+        preventDefault: true
+      }
+    )
+  ];
+
+  useKeyboardShortcuts(shortcuts, {
+    enabled: true,
+    context: "documents-list"
+  });
 
   const loadDocuments = async () => {
     try {
@@ -127,49 +153,55 @@ export function DocumentsView() {
     }
   };
 
-  // If publish form is shown, show the publish page
-  if (showPublishForm) {
-    return (
-      <PublishPage
-        onBack={() => setShowPublishForm(false)}
-        onPublishSuccess={(documentId) => {
-          console.log("Document published with ID:", documentId);
-          setShowPublishForm(false);
-          loadDocuments();
-        }}
-      />
-    );
-  }
+  // Helper functions for navigation
+  const handleDocumentClick = (documentId: number) => {
+    navigateToDocument(documentId);
+  };
 
-  // If a document is selected, show the detail view
-  if (selectedDocumentId !== null) {
-    return (
-      <DocumentDetailView
-        documentId={selectedDocumentId}
-        onBack={() => setSelectedDocumentId(null)}
-        onNavigateToDocument={(documentId) => setSelectedDocumentId(documentId)}
-      />
-    );
-  }
+  const handleNewContent = (contentType: "document" | "link" | "file") => {
+    // For now, pass content type as a parameter - we'll extend this with routing later
+    navigateToPublish(undefined, contentType);
+  };
 
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Documents</h1>
-            <p className="text-muted-foreground">
-              Documents from the PodNet server with cryptographic verification.
-            </p>
-          </div>
           <div className="flex gap-2">
-            <Button
-              onClick={() => setShowPublishForm(true)}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Publish Document
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  New
+                  <ChevronDownIcon className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Create Content</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleNewContent("document")}>
+                  <MessageSquareIcon className="h-4 w-4 mr-2" />
+                  Document
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Markdown
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("link")}>
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  Link
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    URL
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("file")}>
+                  <FileIcon className="h-4 w-4 mr-2" />
+                  File
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Upload
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               onClick={loadDocuments}
               disabled={loading}
@@ -188,16 +220,17 @@ export function DocumentsView() {
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search document titles..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => updateSearch(e.target.value)}
               className="pl-10"
             />
             {searchQuery && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSearchQuery("")}
+                onClick={() => updateSearch("")}
                 className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
               >
                 <XIcon className="h-4 w-4" />
@@ -249,7 +282,7 @@ export function DocumentsView() {
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuLabel>Filter by Tag</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSelectedTag(null)}>
+                  <DropdownMenuItem onClick={() => selectTag(null)}>
                     <span>Show All Documents</span>
                     {!selectedTag && (
                       <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
@@ -257,10 +290,7 @@ export function DocumentsView() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {availableTags.map((tag) => (
-                    <DropdownMenuItem
-                      key={tag}
-                      onClick={() => setSelectedTag(tag)}
-                    >
+                    <DropdownMenuItem key={tag} onClick={() => selectTag(tag)}>
                       <span>{tag}</span>
                       {selectedTag === tag && (
                         <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
@@ -273,7 +303,7 @@ export function DocumentsView() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSelectedTag(null)}
+                  onClick={() => selectTag(null)}
                   className="h-8 px-2"
                 >
                   <XIcon className="h-4 w-4" />
@@ -338,7 +368,7 @@ export function DocumentsView() {
               <div
                 key={doc.id}
                 className="flex items-start gap-2 p-2 hover:bg-muted/50 cursor-pointer border-b border-border/50"
-                onClick={() => setSelectedDocumentId(doc.id!)}
+                onClick={() => handleDocumentClick(doc.id!)}
               >
                 {/* Upvote section - Reddit-style */}
                 <div className="flex flex-col items-center min-w-[60px] pt-1">

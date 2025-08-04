@@ -1,57 +1,79 @@
-import { ArrowLeftIcon } from "lucide-react";
-import { useAppStore } from "../../lib/store";
-import { Button } from "../ui/button";
-import { PublishForm } from "./PublishForm";
+import { PublishDocumentForm } from "./forms/PublishDocumentForm";
+import { PublishFileForm } from "./forms/PublishFileForm";
+import { PublishLinkForm } from "./forms/PublishLinkForm";
 
 interface PublishPageProps {
-  onBack?: () => void;
   onPublishSuccess?: (documentId: number) => void;
-  editingDraftId?: string | null; // UUID
+  editingDraftId?: string | null; // UUID - only used for documents
+  contentType?: "document" | "link" | "file";
+  replyTo?: string;
 }
 
 export function PublishPage({
-  onBack,
   onPublishSuccess,
-  editingDraftId
+  editingDraftId,
+  contentType = "document",
+  replyTo
 }: PublishPageProps) {
-  const { replyToDocumentId, setReplyToDocumentId } = useAppStore();
-
   const handlePublishSuccess = (documentId: number) => {
-    console.log("Document published successfully with ID:", documentId);
-    // Clear the reply context after successful publish
-    setReplyToDocumentId(null);
+    console.log("Content published successfully with ID:", documentId);
     if (onPublishSuccess) {
       onPublishSuccess(documentId);
     }
   };
 
   const handleCancel = () => {
-    // Clear the reply context when canceling
-    setReplyToDocumentId(null);
-    if (onBack) {
-      onBack();
+    // Navigation is now handled by the top-level back/forward buttons
+  };
+
+  const renderForm = () => {
+    switch (contentType) {
+      case "document":
+        return (
+          <PublishDocumentForm
+            onPublishSuccess={handlePublishSuccess}
+            onCancel={handleCancel}
+            replyTo={replyTo}
+            editingDraftId={editingDraftId || undefined}
+          />
+        );
+      case "link":
+        return (
+          <PublishLinkForm
+            onPublishSuccess={handlePublishSuccess}
+            onCancel={handleCancel}
+          />
+        );
+      case "file":
+        return (
+          <PublishFileForm
+            onPublishSuccess={handlePublishSuccess}
+            onCancel={handleCancel}
+          />
+        );
+      default:
+        return (
+          <PublishDocumentForm
+            onPublishSuccess={handlePublishSuccess}
+            onCancel={handleCancel}
+            replyTo={replyTo}
+            editingDraftId={editingDraftId || undefined}
+          />
+        );
     }
   };
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
-      <div className="w-full max-w-4xl mx-auto">
-        {onBack && (
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        )}
-
-        <div className="space-y-6">
-          <PublishForm
-            onPublishSuccess={handlePublishSuccess}
-            onCancel={handleCancel}
-            replyTo={replyToDocumentId || undefined}
-            editingDraftId={editingDraftId || undefined}
-          />
+    <div className="w-full overflow-hidden h-full">
+      {contentType === "document" ? (
+        renderForm()
+      ) : (
+        <div className="p-6 min-h-screen w-full overflow-y-auto">
+          <div className="w-full max-w-4xl mx-auto">
+            <div className="space-y-6">{renderForm()}</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

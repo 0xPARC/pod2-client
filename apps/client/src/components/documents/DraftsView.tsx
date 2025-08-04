@@ -12,7 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { deleteDraft, DraftInfo, listDrafts } from "../../lib/documentApi";
-import { useAppStore } from "../../lib/store";
+import { useDocuments } from "../../lib/store";
 import { formatTimeAgo } from "../../lib/timeUtils";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -27,7 +27,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const [publishingDrafts, setPublishingDrafts] = useState<Set<string>>(
     new Set()
   );
-  const { currentView, setCurrentView } = useAppStore();
+  const { navigateToPublish } = useDocuments();
 
   const loadDrafts = async () => {
     try {
@@ -46,12 +46,8 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     loadDrafts();
   }, []);
 
-  // Reload drafts when navigating back to the drafts view
-  useEffect(() => {
-    if (currentView === "drafts") {
-      loadDrafts();
-    }
-  }, [currentView]);
+  // Reload drafts when component mounts (handled by DocumentsApp routing)
+  // This component is now managed by DocumentsApp navigation
 
   const handleDeleteDraft = async (draftId: string) => {
     try {
@@ -107,7 +103,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   };
 
   const handleNewDraft = () => {
-    setCurrentView("publish");
+    navigateToPublish();
   };
 
   const getContentIcon = (contentType: string) => {
@@ -139,19 +135,6 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">My Drafts</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage your unpublished drafts
-            </p>
-          </div>
-          <Button onClick={handleNewDraft} className="flex items-center gap-2">
-            <PlusIcon className="h-4 w-4" />
-            New Draft
-          </Button>
-        </div>
-
         {drafts.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">

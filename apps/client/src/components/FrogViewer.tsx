@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAppStore } from "../lib/store";
+import { useFrogCrypto } from "../lib/store";
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
@@ -44,7 +44,7 @@ const temperaments = new Map<number, string>([
 ]);
 
 export function FrogViewer({ setScore }: FrogViewerProps) {
-  const { setFrogTimeout, frogTimeout } = useAppStore();
+  const { frogTimeout, setFrogTimeout } = useFrogCrypto();
 
   const [time, setTime] = useState(new Date().getTime());
   const [frogs, setFrogs] = useState<FrogPod[]>([]);
