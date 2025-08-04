@@ -2,8 +2,11 @@ import {
   AlertCircleIcon,
   ArrowUpDownIcon,
   ChevronDownIcon,
+  FileIcon,
   FileTextIcon,
   FilterIcon,
+  LinkIcon,
+  MessageSquareIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
@@ -11,9 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
-import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -155,28 +158,50 @@ export function DocumentsView() {
     navigateToDocument(documentId);
   };
 
-  const handleNewDocument = () => {
-    navigateToPublish();
+  const handleNewContent = (contentType: "document" | "link" | "file") => {
+    // For now, pass content type as a parameter - we'll extend this with routing later
+    navigateToPublish(undefined, contentType);
   };
 
   return (
     <div className="p-6 min-h-screen w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Documents</h1>
-            <p className="text-muted-foreground">
-              Documents from the PodNet server with cryptographic verification.
-            </p>
-          </div>
           <div className="flex gap-2">
-            <Button
-              onClick={handleNewDocument}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Publish Document
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  New
+                  <ChevronDownIcon className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Create Content</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleNewContent("document")}>
+                  <MessageSquareIcon className="h-4 w-4 mr-2" />
+                  Document
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Markdown
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("link")}>
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  Link
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    URL
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewContent("file")}>
+                  <FileIcon className="h-4 w-4 mr-2" />
+                  File
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Upload
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               onClick={loadDocuments}
               disabled={loading}

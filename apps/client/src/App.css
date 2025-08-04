@@ -21,10 +21,6 @@ svg {
   display: inline-block;
 }
 
-mjx-container[display="true"] {
-  display: block;
-}
-
 /* 
 @theme inline {
   --radius-sm:
