@@ -10,15 +10,12 @@ import {
   QuoteIcon,
   SplitIcon
 } from "lucide-react";
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
-import rehypeMathjax from "rehype-mathjax";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import MarkdownIt from "markdown-it";
+import hljs from "markdown-it-highlightjs";
+import markdownItMathjax from "markdown-it-mathjax3";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
-import rehypeDisplayMath from "../displayMath";
 
 interface MarkdownEditorProps {
   value: string;
@@ -29,9 +26,6 @@ interface MarkdownEditorProps {
 
 type ViewMode = "edit" | "preview" | "split";
 
-// Memoized ReactMarkdown component
-const MemoizedReactMarkdown = React.memo(ReactMarkdown);
-
 export function MarkdownEditor({
   value,
   onChange,
@@ -41,87 +35,71 @@ export function MarkdownEditor({
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Memoize plugins configuration - these never change
-  const remarkPlugins = useMemo(
-    () => [remarkGfm, [remarkMath, { singleDollarTextMath: true }]] as any,
-    []
-  );
-
-  const rehypePlugins = useMemo(
-    () =>
-      [
-        rehypeHighlight,
-        [
-          rehypeMathjax,
-          {
-            // MathJax configuration
-            tex: {
-              inlineMath: [
-                ["$", "$"],
-                ["\\(", "\\)"]
-              ],
-              displayMath: [
-                ["$$", "$$"],
-                ["\\[", "\\]"]
-              ],
-              loader: {
-                load: ["[tex]/textmacros", "[tex]/textcomp", "[tex]/noerrors"]
-              },
-              tex: {
-                packages: { "[+]": ["textmacros", "noerrors"] }
-              },
-              textmacros: { packages: { "[+]": ["textcomp"] } },
-              processEscapes: true,
-              macros: {
-                "\\RR": "\\mathbb{R}",
-                "\\NN": "\\mathbb{N}"
-              }
-            }
+  // Memoize markdown-it instance - configured once with GitHub Flavored Markdown features
+  const md = useMemo(() => {
+    const mdInstance = new MarkdownIt({
+      html: false, // Disable raw HTML for security
+      xhtmlOut: false,
+      breaks: true, // Convert '\n' in paragraphs into <br>
+      langPrefix: "language-", // CSS language prefix for fenced blocks
+      linkify: true, // Autoconvert URL-like text to links
+      typographer: true // Enable smartquotes and other typographic replacements
+    })
+      .use(hljs) // Add syntax highlighting
+      .use(markdownItMathjax, {
+        // MathJax configuration
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"]
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"]
+          ],
+          loader: { load: ["[tex]/textmacros", "[tex]/textcomp"] },
+          tex: { packages: { "[+]": ["textmacros"] } },
+          textmacros: { packages: { "[+]": ["textcomp"] } },
+          processEscapes: true,
+          macros: {
+            "\\RR": "\\mathbb{R}",
+            "\\NN": "\\mathbb{N}"
           }
-        ],
-        rehypeDisplayMath
-      ] as any,
-    []
-  );
+        }
+      })
+      .enable([
+        "table", // GitHub tables
+        "strikethrough" // ~~text~~
+      ]);
 
-  // Memoize custom components - these never change
-  const components = useMemo(
-    () => ({
-      // Custom link component to handle external links safely
-      a: ({ href, children, ...props }: any) => (
-        <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-          {children}
-        </a>
-      ),
-      // Custom table components for better styling
-      table: ({ children, ...props }: any) => (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-border" {...props}>
-            {children}
-          </table>
-        </div>
-      ),
-      thead: ({ children, ...props }: any) => (
-        <thead className="bg-muted" {...props}>
-          {children}
-        </thead>
-      ),
-      th: ({ children, ...props }: any) => (
-        <th
-          className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
-          {...props}
-        >
-          {children}
-        </th>
-      ),
-      td: ({ children, ...props }: any) => (
-        <td className="px-4 py-3 whitespace-nowrap text-sm border-t" {...props}>
-          {children}
-        </td>
-      )
-    }),
-    []
-  );
+    // Custom renderer for links to open in new tab
+    mdInstance.renderer.rules.link_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      const aIndex = tokens[idx].attrIndex("target");
+      if (aIndex < 0) {
+        tokens[idx].attrPush(["target", "_blank"]);
+        tokens[idx].attrPush(["rel", "noopener noreferrer"]);
+      } else {
+        tokens[idx].attrs![aIndex][1] = "_blank";
+      }
+      return renderer.renderToken(tokens, idx, options);
+    };
+
+    return mdInstance;
+  }, []);
+
+  // Memoize the rendered HTML - only re-render when content changes
+  const renderedHtml = useMemo(() => {
+    if (!value.trim()) {
+      return "Nothing to preview yet. Start typing to see your markdown rendered here.";
+    }
+    return md.render(value);
+  }, [value, md]);
 
   // Insert markdown formatting at cursor position
   const insertFormatting = useCallback(
@@ -254,16 +232,10 @@ export function MarkdownEditor({
           <div
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
-            <div className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_.MathJax]:overflow-x-auto [&_.MathJax]:max-w-full [&_mjx-container]:overflow-x-auto [&_mjx-container]:max-w-full [&_svg]:max-w-full [&_svg]:overflow-visible [&_.MathJax_Error]:bg-destructive/10 [&_.MathJax_Error]:border [&_.MathJax_Error]:border-destructive/20 [&_.MathJax_Error]:rounded [&_.MathJax_Error]:p-2 [&_.MathJax_Error]:min-h-[2rem]">
-              <MemoizedReactMarkdown
-                remarkPlugins={remarkPlugins}
-                rehypePlugins={rehypePlugins}
-                components={components}
-              >
-                {value ||
-                  "Nothing to preview yet. Start typing to see your markdown rendered here."}
-              </MemoizedReactMarkdown>
-            </div>
+            <div
+              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full"
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            />
           </div>
         )}
       </div>
