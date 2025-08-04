@@ -1,9 +1,4 @@
-import {
-  PlusIcon,
-  Trash2Icon,
-  XIcon,
-  MessageSquareIcon
-} from "lucide-react";
+import { MessageSquareIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -15,11 +10,7 @@ import {
   type DocumentMetadata
 } from "../../../lib/documentApi";
 import { useDocuments } from "../../../lib/store";
-import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
-import { Input } from "../../ui/input";
-import { Label } from "../../ui/label";
 import { PublishButton } from "../PublishButton";
 import { MarkdownEditor } from "../editors/MarkdownEditor";
 
@@ -232,14 +223,7 @@ export function PublishDocumentForm({
       currentDraftId,
       replyTo
     };
-  }, [
-    title,
-    message,
-    tags,
-    authors,
-    currentDraftId,
-    replyTo
-  ]);
+  }, [title, message, tags, authors, currentDraftId, replyTo]);
 
   // Save draft only when component unmounts (not on every state change)
   useEffect(() => {
@@ -263,7 +247,7 @@ export function PublishDocumentForm({
           try {
             const draftData = {
               title: currentState.title.trim(),
-              content_type: 'message' as const,
+              content_type: "message" as const,
               message: currentState.message || null,
               file_name: null,
               file_content: null,
@@ -310,65 +294,14 @@ export function PublishDocumentForm({
   }, [replyTo]);
 
   return (
-    <Card className="w-full max-w-4xl">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-xl">
-                {editingDraftId || currentDraftId
-                  ? "Edit Document Draft"
-                  : replyTo
-                    ? `Reply to Document #${replyTo.split(":")[1]} (Post ${replyTo.split(":")[0]})`
-                    : "New Document"}
-              </CardTitle>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {lastSavedAt ? (
-                  <span>
-                    Last updated{" "}
-                    {lastSavedAt.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    })}
-                  </span>
-                ) : (
-                  <span>Draft</span>
-                )}
-              </div>
-            </div>
-            {replyTo && replyToDocument && (
-              <div className="mt-2 p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <MessageSquareIcon className="h-4 w-4" />
-                  <span>Replying to:</span>
-                </div>
-                <div className="font-medium text-foreground truncate">
-                  {replyToDocument.title}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  by u/{replyToDocument.uploader_id}
-                </div>
-              </div>
-            )}
-            {replyTo && replyToLoading && (
-              <div className="mt-2 p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b border-current"></div>
-                  <span>Loading document details...</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {/* Title Input */}
-        <div className="space-y-2">
-          <Label htmlFor="title">Title *</Label>
-          <Input
-            id="title"
-            placeholder="Enter a descriptive title for your document"
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Top Bar */}
+      <div className="flex items-center gap-6 px-6 py-4 border-b bg-background shrink-0">
+        {/* Title - Direct Input */}
+        <div className="flex-1 min-w-0">
+          <input
+            type="text"
+            placeholder="Untitled Document"
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -376,149 +309,163 @@ export function PublishDocumentForm({
             }}
             onBlur={() => setTitleTouched(true)}
             maxLength={200}
-            className={
+            className={`w-full bg-transparent border-none outline-none text-xl font-semibold placeholder:text-muted-foreground ${
               titleTouched && title.trim().length === 0
-                ? "border-destructive"
-                : ""
-            }
+                ? "text-destructive"
+                : "text-foreground"
+            }`}
           />
           {titleTouched && title.trim().length === 0 && (
-            <p className="text-sm text-destructive">Title is required</p>
+            <p className="text-sm text-destructive mt-1">Title is required</p>
           )}
-          <p className="text-sm text-muted-foreground">
-            {title.length}/200 characters
-          </p>
         </div>
 
-        {/* Markdown Editor */}
-        <div>
-          <Label className="text-base font-medium">Content *</Label>
-          <div className="mt-2">
-            <MarkdownEditor
-              value={message}
-              onChange={(value) => {
-                setMessage(value);
-                setHasUnsavedChangesWithLogging(true);
-              }}
-              placeholder="Enter your markdown content..."
-            />
-          </div>
-        </div>
-
-        {/* Tags */}
-        <div className="space-y-2">
-          <Label>Tags (optional)</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Add a tag..."
+        {/* Tags Section */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Tags:</span>
+          <div className="flex items-center gap-1">
+            {tags.map((tag) => (
+              <div
+                key={tag}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded-md text-sm"
+              >
+                <span>{tag}</span>
+                <button
+                  onClick={() => removeTag(tag)}
+                  className="hover:text-destructive"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <input
+              type="text"
+              placeholder={tags.length === 0 ? "Add tags..." : ""}
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyPress={(e) => handleKeyPress(e, addTag)}
-              className="flex-1"
+              className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-20 min-w-[5rem]"
             />
-            <Button type="button" variant="outline" size="sm" onClick={addTag}>
-              <PlusIcon className="h-4 w-4" />
+            <Button type="button" variant="ghost" size="sm" onClick={addTag}>
+              <PlusIcon className="h-3 w-3" />
             </Button>
           </div>
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {tags.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className="flex items-center gap-1"
-                >
-                  {tag}
-                  <button
-                    onClick={() => removeTag(tag)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <XIcon className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* Authors */}
-        <div className="space-y-2">
-          <Label>Authors (optional)</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Add an author..."
+        {/* Authors Section */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Authors:</span>
+          <div className="flex items-center gap-1">
+            {authors.map((author) => (
+              <div
+                key={author}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-muted/50 border rounded-md text-sm"
+              >
+                <span>{author}</span>
+                <button
+                  onClick={() => removeAuthor(author)}
+                  className="hover:text-destructive"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <input
+              type="text"
+              placeholder={authors.length === 0 ? "Add authors..." : ""}
               value={authorInput}
               onChange={(e) => setAuthorInput(e.target.value)}
               onKeyPress={(e) => handleKeyPress(e, addAuthor)}
               autoComplete="off"
-              className="flex-1"
+              className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-24 min-w-[6rem]"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addAuthor}
-            >
-              <PlusIcon className="h-4 w-4" />
+            <Button type="button" variant="ghost" size="sm" onClick={addAuthor}>
+              <PlusIcon className="h-3 w-3" />
             </Button>
           </div>
-          {authors.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {authors.map((author) => (
-                <Badge
-                  key={author}
-                  variant="outline"
-                  className="flex items-center gap-1"
-                >
-                  {author}
-                  <button
-                    onClick={() => removeAuthor(author)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <XIcon className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">
-            If no authors are specified, you will be listed as the default
-            author.
-          </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-between pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={deleteDraft}
-            className="flex items-center gap-2 text-destructive hover:text-destructive"
-          >
-            <Trash2Icon className="h-4 w-4" />
-            Discard Draft
-          </Button>
+        {/* Status */}
+        <div className="text-sm text-muted-foreground shrink-0">
+          {lastSavedAt ? (
+            <span>
+              Saved{" "}
+              {lastSavedAt.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+              })}
+            </span>
+          ) : (
+            <span>Draft</span>
+          )}
+        </div>
+      </div>
 
-          <div className="flex gap-3 ml-auto">
-            <PublishButton
-              data={getPublishData()}
-              disabled={!isValid()}
-              onPublishSuccess={(documentId) => {
-                console.log("onPublishSuccess called");
-                hasUnsavedChangesRef.current = false;
-                // Clear edit document data after successful publish
-                if (editDocumentData) {
-                  setEditDocumentData(null);
-                }
-                // Call the original success callback
-                if (onPublishSuccess) {
-                  onPublishSuccess(documentId);
-                }
-              }}
-              onSubmitAttempt={handleSubmitAttempt}
-            />
+      {/* Reply To Banner */}
+      {replyTo && replyToDocument && (
+        <div className="px-6 py-2 bg-muted/50 border-b shrink-0">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MessageSquareIcon className="h-4 w-4" />
+            <span>Replying to:</span>
+            <span className="font-medium text-foreground">
+              {replyToDocument.title}
+            </span>
+            <span className="text-xs">by u/{replyToDocument.uploader_id}</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {replyTo && replyToLoading && (
+        <div className="px-6 py-2 bg-muted/50 border-b shrink-0">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="animate-spin rounded-full h-4 w-4 border-b border-current"></div>
+            <span>Loading document details...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Markdown Editor - Full Height */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <MarkdownEditor
+          value={message}
+          onChange={(value) => {
+            setMessage(value);
+            setHasUnsavedChangesWithLogging(true);
+          }}
+          placeholder="Enter your markdown content..."
+          className="h-full"
+        />
+      </div>
+
+      {/* Bottom Action Bar */}
+      <div className="flex items-center justify-between px-6 py-4 border-t bg-background shrink-0">
+        <Button
+          variant="outline"
+          onClick={deleteDraft}
+          className="flex items-center gap-2 text-destructive hover:text-destructive"
+        >
+          <Trash2Icon className="h-4 w-4" />
+          Discard Draft
+        </Button>
+
+        <PublishButton
+          data={getPublishData()}
+          disabled={!isValid()}
+          onPublishSuccess={(documentId) => {
+            console.log("onPublishSuccess called");
+            hasUnsavedChangesRef.current = false;
+            // Clear edit document data after successful publish
+            if (editDocumentData) {
+              setEditDocumentData(null);
+            }
+            // Call the original success callback
+            if (onPublishSuccess) {
+              onPublishSuccess(documentId);
+            }
+          }}
+          onSubmitAttempt={handleSubmitAttempt}
+        />
+      </div>
+    </div>
   );
 }

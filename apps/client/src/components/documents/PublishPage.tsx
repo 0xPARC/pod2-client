@@ -73,10 +73,16 @@ export function PublishPage({
   };
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
-      <div className="w-full max-w-4xl mx-auto">
-        <div className="space-y-6">{renderForm()}</div>
-      </div>
+    <div className="w-full overflow-hidden">
+      {contentType === "document" ? (
+        renderForm()
+      ) : (
+        <div className="p-6 min-h-screen w-full overflow-y-auto">
+          <div className="w-full max-w-4xl mx-auto">
+            <div className="space-y-6">{renderForm()}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

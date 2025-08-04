@@ -84,9 +84,9 @@ export function MarkdownEditor({
   const handleCode = () => insertFormatting("`", "`", "code");
 
   return (
-    <div className={`${className}`}>
+    <div className={`flex flex-col ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 border-b bg-muted/30">
+      <div className="flex items-center justify-between p-2 border-b bg-muted">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -148,24 +148,28 @@ export function MarkdownEditor({
       </div>
 
       {/* Editor/Preview Content */}
-      <div className="flex h-96">
+      <div className="flex flex-1 min-h-0">
         {/* Editor pane */}
         {(viewMode === "edit" || viewMode === "split") && (
-          <div className={viewMode === "split" ? "w-1/2 border-r" : "w-full"}>
+          <div
+            className={`${viewMode === "split" ? "w-1/2" : "w-full"} flex flex-col min-h-0`}
+          >
             <Textarea
               ref={textareaRef}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder={placeholder || "Enter your markdown content..."}
-              className="h-full border-0 rounded-none resize-none focus-visible:ring-0 font-mono text-sm"
+              className="flex-1 min-h-0 border-0 rounded-none resize-none focus-visible:ring-0 font-mono text-sm overflow-auto p-4"
             />
           </div>
         )}
 
         {/* Preview pane */}
         {(viewMode === "preview" || viewMode === "split") && (
-          <div className={viewMode === "split" ? "w-1/2" : "w-full"}>
-            <div className="h-full p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none">
+          <div
+            className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
+          >
+            <div className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_.MathJax]:overflow-x-auto [&_.MathJax]:max-w-full [&_mjx-container]:overflow-x-auto [&_mjx-container]:max-w-full [&_svg]:max-w-full [&_svg]:overflow-visible [&_.MathJax_Error]:bg-destructive/10 [&_.MathJax_Error]:border [&_.MathJax_Error]:border-destructive/20 [&_.MathJax_Error]:rounded [&_.MathJax_Error]:p-2 [&_.MathJax_Error]:min-h-[2rem]">
               <ReactMarkdown
                 remarkPlugins={[
                   remarkGfm,
@@ -173,7 +177,38 @@ export function MarkdownEditor({
                 ]}
                 rehypePlugins={[
                   rehypeHighlight,
-                  rehypeMathjax,
+                  [
+                    rehypeMathjax,
+                    {
+                      // MathJax configuration
+                      tex: {
+                        inlineMath: [
+                          ["$", "$"],
+                          ["\\(", "\\)"]
+                        ],
+                        displayMath: [
+                          ["$$", "$$"],
+                          ["\\[", "\\]"]
+                        ],
+                        loader: {
+                          load: [
+                            "[tex]/textmacros",
+                            "[tex]/textcomp",
+                            "[tex]/noerrors"
+                          ]
+                        },
+                        tex: {
+                          packages: { "[+]": ["textmacros", "noerrors"] }
+                        },
+                        textmacros: { packages: { "[+]": ["textcomp"] } },
+                        processEscapes: true,
+                        macros: {
+                          "\\RR": "\\mathbb{R}",
+                          "\\NN": "\\mathbb{N}"
+                        }
+                      }
+                    }
+                  ],
                   rehypeDisplayMath
                 ]}
                 components={{
