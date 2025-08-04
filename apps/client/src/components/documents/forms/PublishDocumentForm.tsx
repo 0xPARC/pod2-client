@@ -34,15 +34,14 @@ export function PublishDocumentForm({
   const [titleTouched, setTitleTouched] = useState(false);
   const [message, setMessage] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [authors, setAuthors] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [authorInput, setAuthorInput] = useState("");
   const [replyToDocument, setReplyToDocument] =
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
   // Draft-related state
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [currentDraftId, setCurrentDraftId] = useState<string | undefined>(
     editingDraftId
   );
@@ -158,7 +157,6 @@ export function PublishDocumentForm({
             setMessage(draft.message || "");
             setTags(draft.tags);
             setAuthors(draft.authors);
-            setLastSavedAt(new Date(draft.updated_at));
             setHasUnsavedChangesWithLogging(false); // Draft is freshly loaded, no unsaved changes
           }
         } catch (error) {
@@ -390,19 +388,34 @@ export function PublishDocumentForm({
           </div>
         </div>
 
-        {/* Status */}
-        <div className="text-sm text-muted-foreground shrink-0">
-          {lastSavedAt ? (
-            <span>
-              Saved{" "}
-              {lastSavedAt.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-              })}
-            </span>
-          ) : (
-            <span>Draft</span>
-          )}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 shrink-0">
+          <Button
+            variant="outline"
+            onClick={deleteDraft}
+            className="flex items-center gap-2 text-destructive hover:text-destructive"
+          >
+            <Trash2Icon className="h-4 w-4" />
+            Discard
+          </Button>
+
+          <PublishButton
+            data={getPublishData()}
+            disabled={!isValid()}
+            onPublishSuccess={(documentId) => {
+              console.log("onPublishSuccess called");
+              hasUnsavedChangesRef.current = false;
+              // Clear edit document data after successful publish
+              if (editDocumentData) {
+                setEditDocumentData(null);
+              }
+              // Call the original success callback
+              if (onPublishSuccess) {
+                onPublishSuccess(documentId);
+              }
+            }}
+            onSubmitAttempt={handleSubmitAttempt}
+          />
         </div>
       </div>
 
@@ -439,36 +452,6 @@ export function PublishDocumentForm({
           }}
           placeholder="Enter your markdown content..."
           className="h-full"
-        />
-      </div>
-
-      {/* Bottom Action Bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-t bg-background shrink-0">
-        <Button
-          variant="outline"
-          onClick={deleteDraft}
-          className="flex items-center gap-2 text-destructive hover:text-destructive"
-        >
-          <Trash2Icon className="h-4 w-4" />
-          Discard Draft
-        </Button>
-
-        <PublishButton
-          data={getPublishData()}
-          disabled={!isValid()}
-          onPublishSuccess={(documentId) => {
-            console.log("onPublishSuccess called");
-            hasUnsavedChangesRef.current = false;
-            // Clear edit document data after successful publish
-            if (editDocumentData) {
-              setEditDocumentData(null);
-            }
-            // Call the original success callback
-            if (onPublishSuccess) {
-              onPublishSuccess(documentId);
-            }
-          }}
-          onSubmitAttempt={handleSubmitAttempt}
         />
       </div>
     </div>
