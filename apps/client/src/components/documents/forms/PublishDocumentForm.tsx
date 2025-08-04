@@ -308,6 +308,8 @@ export function PublishDocumentForm({
               setHasUnsavedChangesWithLogging(true);
             }}
             onBlur={() => setTitleTouched(true)}
+            autoComplete="off"
+            autoCorrect="off"
             maxLength={200}
             className={`w-full bg-transparent border-none outline-none text-xl font-semibold placeholder:text-muted-foreground ${
               titleTouched && title.trim().length === 0
@@ -344,6 +346,8 @@ export function PublishDocumentForm({
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyPress={(e) => handleKeyPress(e, addTag)}
+              autoComplete="off"
+              autoCorrect="off"
               className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-20 min-w-[5rem]"
             />
             <Button type="button" variant="ghost" size="sm" onClick={addTag}>
@@ -377,6 +381,7 @@ export function PublishDocumentForm({
               onChange={(e) => setAuthorInput(e.target.value)}
               onKeyPress={(e) => handleKeyPress(e, addAuthor)}
               autoComplete="off"
+              autoCorrect="off"
               className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-24 min-w-[6rem]"
             />
             <Button type="button" variant="ghost" size="sm" onClick={addAuthor}>
