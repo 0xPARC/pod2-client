@@ -212,6 +212,19 @@ impl Database {
         Ok(posts)
     }
 
+    pub fn get_most_recent_modification_time(&self) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row("SELECT MAX(last_edited_at) FROM posts", [], |row| {
+            row.get::<_, Option<String>>(0)
+        });
+
+        match result {
+            Ok(timestamp) => Ok(timestamp),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn update_post_last_edited(&self, post_id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(

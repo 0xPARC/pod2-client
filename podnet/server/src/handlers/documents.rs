@@ -2,8 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
-    response::Json,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::{IntoResponse, Json, Response},
 };
 use pod2::middleware::{
     Key, Value,
@@ -19,13 +19,77 @@ use podnet_models::{
 
 pub async fn get_documents(
     State(state): State<Arc<crate::AppState>>,
-) -> Result<Json<Vec<DocumentMetadata>>, StatusCode> {
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    // Extract conditional request header
+    let if_modified_since = headers.get(header::IF_MODIFIED_SINCE);
+
+    // Get the most recent modification time for cache validation
+    let last_modified = state
+        .db
+        .get_most_recent_modification_time()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut headers = HeaderMap::new();
+
+    if let Some(last_modified_str) = &last_modified {
+        // Convert SQLite timestamp to HTTP date format
+        if let Ok(last_modified_time) =
+            chrono::NaiveDateTime::parse_from_str(last_modified_str, "%Y-%m-%d %H:%M:%S")
+        {
+            let last_modified_utc: chrono::DateTime<chrono::Utc> =
+                chrono::DateTime::from_naive_utc_and_offset(last_modified_time, chrono::Utc);
+            let http_date = last_modified_utc.to_rfc2822();
+
+            // Set Last-Modified header in proper HTTP date format
+            if let Ok(header_value) = HeaderValue::from_str(&http_date) {
+                headers.insert("last-modified", header_value);
+            }
+        }
+
+        // Check If-Modified-Since header (time-based conditional request)
+        if let Some(if_modified_since_value) = if_modified_since
+            && let Ok(if_modified_since_str) = if_modified_since_value.to_str()
+        {
+            // Parse the last_modified timestamp from SQLite format
+            if let Ok(last_modified_time) =
+                chrono::NaiveDateTime::parse_from_str(last_modified_str, "%Y-%m-%d %H:%M:%S")
+            {
+                let last_modified_utc: chrono::DateTime<chrono::Utc> =
+                    chrono::DateTime::from_naive_utc_and_offset(last_modified_time, chrono::Utc);
+
+                // Parse the client's If-Modified-Since header
+                if let Ok(client_time) = chrono::DateTime::parse_from_rfc2822(if_modified_since_str)
+                {
+                    let client_time_utc = client_time.with_timezone(&chrono::Utc);
+
+                    // Compare timestamps - if content hasn't been modified since client's timestamp
+                    let is_modified = last_modified_utc > client_time_utc;
+
+                    if !is_modified {
+                        // Content not modified, return 304 Not Modified
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .body(axum::body::Body::empty())
+                            .unwrap());
+                    }
+                }
+            }
+        }
+    }
+
+    // Content has been modified or no conditional headers, return full response
     let documents_metadata = state
         .db
         .get_all_documents_metadata()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(documents_metadata))
+    // Set Cache-Control to allow caching but require validation
+    if let Ok(cache_control) = HeaderValue::from_str("public, max-age=0, must-revalidate") {
+        headers.insert("cache-control", cache_control);
+    }
+
+    Ok((headers, Json(documents_metadata)).into_response())
 }
 
 async fn get_document_from_db(
