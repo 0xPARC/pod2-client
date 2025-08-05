@@ -31,7 +31,7 @@ import {
 export type { AppStateData, PodLists, PodStats, PrivateKeyInfo, SpaceInfo };
 
 // Use the PodInfo from rpc.ts which matches the actual API
-  export type { PodInfo } from "./rpc";
+export type { PodInfo } from "./rpc";
 
 // Mini-app types
 export type MiniApp =
@@ -247,7 +247,7 @@ export const useAppStore = create<AppStoreState>()(
         currentIndex: 0
       },
       searchQuery: "",
-      selectedTag: null,
+      selectedTag: null
     },
 
     podEditor: {

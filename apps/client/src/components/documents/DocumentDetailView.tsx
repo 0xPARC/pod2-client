@@ -118,7 +118,11 @@ export function DocumentDetailView({
   documentId,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { navigateToPublish, navigateToDocumentsList, updateCurrentRouteTitle } = useDocuments();
+  const {
+    navigateToPublish,
+    navigateToDocumentsList,
+    updateCurrentRouteTitle
+  } = useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
