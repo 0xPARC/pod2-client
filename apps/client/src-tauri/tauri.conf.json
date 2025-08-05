@@ -50,6 +50,11 @@
           "multiple": true
         }
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["podnet"]
+      }
     }
   }
 }
