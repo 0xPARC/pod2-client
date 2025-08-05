@@ -13,6 +13,7 @@ import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "./lib/keyboard/types";
 import { useAppStore } from "./lib/store";
+import { useDeepLinkManager } from "./lib/deeplink";
 
 // Component that handles global keyboard shortcuts within the sidebar context
 function GlobalKeyboardShortcuts() {
@@ -41,6 +42,9 @@ function App() {
 
   // Initialize config store
   useConfigInitialization();
+
+  // Initialize deep-link manager
+  useDeepLinkManager();
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
