@@ -143,6 +143,12 @@ export function DocumentDetailView({
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const isVerified =
+    verificationResult &&
+    verificationResult.publish_verified &&
+    verificationResult.timestamp_verified &&
+    verificationResult.upvote_count_verified;
+
   // Use shared markdown renderer
   const md = useMarkdownRenderer();
 
@@ -1006,17 +1012,16 @@ export function DocumentDetailView({
                   variant="outline"
                   size="sm"
                 >
-                  {isVerifying ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircleIcon className="h-3 w-3 mr-1" />
-                      Verify POD
-                    </>
-                  )}
+                  <>
+                    <CheckCircleIcon
+                      className={`h-3 w-3 mr-1 ${isVerifying ? "animate-spin" : isVerified ? "text-green-600" : verificationResult ? "text-red-600" : ""}`}
+                    />
+                    {isVerified
+                      ? "Verified"
+                      : verificationResult
+                        ? "Verification Failed"
+                        : "Verify"}
+                  </>
                 </Button>
                 {/* Edit button - only show for document owner */}
                 {currentUsername &&
@@ -1055,16 +1060,6 @@ export function DocumentDetailView({
                     </Button>
                   )}
               </div>
-
-              {verificationResult &&
-                verificationResult.publish_verified &&
-                verificationResult.timestamp_verified &&
-                verificationResult.upvote_count_verified && (
-                  <div className="flex items-center gap-1 text-green-600 text-xs">
-                    <CheckCircleIcon className="h-4 w-4" />
-                    <span>Verified</span>
-                  </div>
-                )}
             </div>
           </div>
         </div>
