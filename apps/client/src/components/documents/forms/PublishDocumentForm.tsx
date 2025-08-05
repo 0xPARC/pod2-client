@@ -1,14 +1,7 @@
 import { MessageSquareIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import {
-  createDraft,
-  deleteDraft as deleteDraftApi,
-  fetchDocument,
-  getDraft,
-  updateDraft,
-  type DocumentMetadata
-} from "../../../lib/documentApi";
+import { useEffect, useState } from "react";
+import { fetchDocument, type DocumentMetadata } from "../../../lib/documentApi";
+import { useDraftAutoSave, type DraftContent } from "../../../lib/drafts";
 import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { PublishButton } from "../PublishButton";
@@ -32,39 +25,53 @@ export function PublishDocumentForm({
   // Get route-specific edit document data
   const editDocumentData = currentRoute?.editDocumentData;
 
-  const [title, setTitle] = useState("");
+  // Use the draft auto-save hook
+  const {
+    currentDraftId,
+    initialContent,
+    markContentChanged,
+    discardDraft,
+    markSaved,
+    registerContentGetter
+  } = useDraftAutoSave({ editingDraftId });
+
+  // Form state - initialize from loaded draft or defaults
+  const [title, setTitle] = useState(initialContent?.title ?? "");
   const [titleTouched, setTitleTouched] = useState(false);
-  const [message, setMessage] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [authors, setAuthors] = useState<string[]>([]);
+  const [message, setMessage] = useState(initialContent?.message ?? "");
+  const [tags, setTags] = useState<string[]>(initialContent?.tags ?? []);
+  const [authors, setAuthors] = useState<string[]>(
+    initialContent?.authors ?? []
+  );
   const [tagInput, setTagInput] = useState("");
   const [authorInput, setAuthorInput] = useState("");
   const [replyToDocument, setReplyToDocument] =
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
-  // Draft-related state
-  const [currentDraftId, setCurrentDraftId] = useState<string | undefined>(
-    editingDraftId
-  );
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Update form state when initial content loads
+  useEffect(() => {
+    if (initialContent) {
+      setTitle(initialContent.title);
+      setMessage(initialContent.message);
+      setTags(initialContent.tags);
+      setAuthors(initialContent.authors);
+    }
+  }, [initialContent]);
 
-  const setHasUnsavedChangesWithLogging = (value: boolean) => {
-    setHasUnsavedChanges(value);
-  };
-
+  // Helper functions that mark content as changed
   const addTag = () => {
     const trimmedTag = tagInput.trim();
     if (trimmedTag && !tags.includes(trimmedTag)) {
       setTags([...tags, trimmedTag]);
       setTagInput("");
-      setHasUnsavedChangesWithLogging(true);
+      markContentChanged();
     }
   };
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter((tag) => tag !== tagToRemove));
-    setHasUnsavedChangesWithLogging(true);
+    markContentChanged();
   };
 
   const addAuthor = () => {
@@ -72,13 +79,13 @@ export function PublishDocumentForm({
     if (trimmedAuthor && !authors.includes(trimmedAuthor)) {
       setAuthors([...authors, trimmedAuthor]);
       setAuthorInput("");
-      setHasUnsavedChangesWithLogging(true);
+      markContentChanged();
     }
   };
 
   const removeAuthor = (authorToRemove: string) => {
     setAuthors(authors.filter((author) => author !== authorToRemove));
-    setHasUnsavedChangesWithLogging(true);
+    markContentChanged();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent, action: () => void) => {
@@ -87,6 +94,15 @@ export function PublishDocumentForm({
       action();
     }
   };
+
+  // Get current form content as DraftContent
+  const getCurrentContent = (): DraftContent => ({
+    title,
+    message,
+    tags,
+    authors,
+    replyTo
+  });
 
   const getPublishData = () => {
     console.log("getPublishData called, editDocumentData:", editDocumentData);
@@ -116,59 +132,22 @@ export function PublishDocumentForm({
     return title.trim().length > 0 && message.trim().length > 0;
   };
 
-  const deleteDraft = async () => {
-    try {
-      const draftIdToDelete = currentDraftId || editingDraftId;
-
-      if (draftIdToDelete) {
-        const success = await deleteDraftApi(draftIdToDelete);
-
-        if (success) {
-          toast.success("Draft discarded");
-          setCurrentDraftId(undefined);
-          setHasUnsavedChangesWithLogging(false);
-        } else {
-          toast.error("Failed to discard draft");
-          return;
-        }
-      } else {
-        toast.success("Draft discarded");
-        setHasUnsavedChangesWithLogging(false);
-      }
-
+  const handleDiscardDraft = async () => {
+    const success = await discardDraft();
+    if (success) {
       // Navigate based on context
       if (editingDraftId) {
         navigateToDrafts();
       } else if (onCancel) {
         onCancel();
       }
-    } catch (error) {
-      console.error("Failed to delete draft:", error);
-      toast.error("Failed to discard draft");
     }
   };
 
-  // Load existing draft if editing
+  // Register content getter with the hook for save-on-unmount
   useEffect(() => {
-    const loadDraft = async () => {
-      if (editingDraftId) {
-        try {
-          const draft = await getDraft(editingDraftId);
-          if (draft) {
-            setTitle(draft.title);
-            setMessage(draft.message || "");
-            setTags(draft.tags);
-            setAuthors(draft.authors);
-            setHasUnsavedChangesWithLogging(false); // Draft is freshly loaded, no unsaved changes
-          }
-        } catch (error) {
-          console.error("Failed to load draft:", error);
-        }
-      }
-    };
-
-    loadDraft();
-  }, [editingDraftId]);
+    registerContentGetter(getCurrentContent);
+  }, [registerContentGetter, title, message, tags, authors, replyTo]); // Re-register when content changes
 
   // Load document data if editing a document
   useEffect(() => {
@@ -187,92 +166,15 @@ export function PublishDocumentForm({
             setMessage(editDocumentData.content.message);
           }
 
-          setHasUnsavedChangesWithLogging(false); // Document is freshly loaded, no unsaved changes
+          // Document is freshly loaded, no unsaved changes yet
         } catch (error) {
           console.error("Failed to load edit document data:", error);
-          toast.error("Failed to load document for editing");
         }
       }
     };
 
     loadEditDocument();
   }, [editDocumentData, editingDraftId]); // React to changes in editDocumentData, but prevent running when editing drafts
-
-  // Use refs to capture current state values for cleanup
-  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
-  const currentStateRef = useRef({
-    title,
-    message,
-    tags,
-    authors,
-    currentDraftId,
-    replyTo
-  });
-
-  // Update refs when state changes
-  useEffect(() => {
-    hasUnsavedChangesRef.current = hasUnsavedChanges;
-  }, [hasUnsavedChanges]);
-
-  useEffect(() => {
-    currentStateRef.current = {
-      title,
-      message,
-      tags,
-      authors,
-      currentDraftId,
-      replyTo
-    };
-  }, [title, message, tags, authors, currentDraftId, replyTo]);
-
-  // Save draft only when component unmounts (not on every state change)
-  useEffect(() => {
-    return () => {
-      // Use ref values to get current state, not stale closure values
-      const currentHasUnsavedChanges = hasUnsavedChangesRef.current;
-      const currentState = currentStateRef.current;
-
-      // Check if we have content using current state
-      const hasCurrentContent = !!(
-        currentState.title.trim() ||
-        currentState.message.trim() ||
-        currentState.tags.length > 0 ||
-        currentState.authors.length > 0
-      );
-
-      // Only save if we have unsaved changes and meaningful content
-      if (currentHasUnsavedChanges && hasCurrentContent) {
-        // Create the draft data directly here since we can't call functions in cleanup
-        const saveDraftData = async () => {
-          try {
-            const draftData = {
-              title: currentState.title.trim(),
-              content_type: "message" as const,
-              message: currentState.message || null,
-              file_name: null,
-              file_content: null,
-              file_mime_type: null,
-              url: null,
-              tags: currentState.tags,
-              authors: currentState.authors,
-              reply_to: currentState.replyTo || null
-            };
-
-            if (currentState.currentDraftId) {
-              await updateDraft(currentState.currentDraftId, draftData);
-            } else {
-              await createDraft(draftData);
-            }
-          } catch (error) {
-            console.error("Failed to save draft on unmount:", error);
-          }
-        };
-
-        // Fire and forget
-        saveDraftData();
-      }
-    };
-  }, []); // Empty deps - only runs on mount/unmount, safe from React Strict Mode
 
   // Fetch the document being replied to
   useEffect(() => {
@@ -305,7 +207,7 @@ export function PublishDocumentForm({
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
-              setHasUnsavedChangesWithLogging(true);
+              markContentChanged();
             }}
             onBlur={() => setTitleTouched(true)}
             autoComplete="off"
@@ -394,7 +296,7 @@ export function PublishDocumentForm({
         <div className="flex items-center gap-3 shrink-0">
           <Button
             variant="outline"
-            onClick={deleteDraft}
+            onClick={handleDiscardDraft}
             className="flex items-center gap-2 text-destructive hover:text-destructive"
           >
             <Trash2Icon className="h-4 w-4" />
@@ -406,8 +308,7 @@ export function PublishDocumentForm({
             disabled={!isValid()}
             onPublishSuccess={(documentId) => {
               console.log("onPublishSuccess called");
-              hasUnsavedChangesRef.current = false;
-              // Document editing is now route-specific, so no global state to clear
+              markSaved(); // Mark as saved using the hook
               // Call the original success callback
               if (onPublishSuccess) {
                 onPublishSuccess(documentId);
@@ -447,7 +348,7 @@ export function PublishDocumentForm({
           value={message}
           onChange={(value) => {
             setMessage(value);
-            setHasUnsavedChangesWithLogging(true);
+            markContentChanged();
           }}
           placeholder="Enter your markdown content..."
           className="h-full"
