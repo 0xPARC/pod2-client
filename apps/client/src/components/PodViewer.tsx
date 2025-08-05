@@ -1,11 +1,19 @@
-import { FileCheck, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  FileCheck,
+  FilePen,
+  FolderIcon,
+  FoldersIcon,
+  MoreHorizontal,
+  Trash2
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { usePodCollection } from "../lib/store";
-import { useKeyboardShortcuts } from "../lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../lib/keyboard/useKeyboardShortcuts";
+import { usePodCollection } from "../lib/store";
 import { DeletePodDialog } from "./DeletePodDialog";
 import MainPodCard from "./MainPodCard";
 import SignedPodCard from "./SignedPodCard";
+import { TopBarSlot } from "./TopBarContext";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -21,8 +29,13 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 
 export function PodViewer() {
-  const { filteredPods, selectedPod, selectedPodId, selectPod } =
-    usePodCollection();
+  const {
+    filteredPods,
+    selectedPod,
+    selectedPodId,
+    selectPod,
+    selectedFolder
+  } = usePodCollection();
 
   // Delete dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -147,11 +160,25 @@ export function PodViewer() {
         {/* Left panel - POD list */}
         <ResizablePanel defaultSize={35} minSize={25} maxSize={60}>
           <div className="h-full flex flex-col">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-semibold text-lg">
-                PODs ({filteredPods.length})
+            <TopBarSlot position="left">
+              {" "}
+              <h3 className="font-normal text-base flex items-center gap-2">
+                {selectedFolder === "all" ? (
+                  <div className="flex items-center gap-2 font-semibold">
+                    <FoldersIcon className="h-4 w-4" /> All PODs
+                  </div>
+                ) : selectedFolder ? (
+                  <div className="flex items-center gap-2 font-semibold">
+                    <FolderIcon className="h-4 w-4" /> {selectedFolder}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 font-semibold">
+                    <FolderIcon className="h-4 w-4" /> PODs
+                  </div>
+                )}{" "}
+                ({filteredPods.length})
               </h3>
-            </div>
+            </TopBarSlot>
             <ScrollArea className="flex-1 min-h-0">
               <div className="p-0">
                 {filteredPods.length === 0 ? (

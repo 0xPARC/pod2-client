@@ -208,6 +208,7 @@ interface AppStoreState {
   getFilteredPods: () => PodInfo[];
   getPodsInFolder: (folder: String) => PodInfo[];
   getSelectedPod: () => PodInfo | null;
+  getSelectedFolder: () => string | null;
 }
 
 export const useAppStore = create<AppStoreState>()(
@@ -925,6 +926,11 @@ export const useAppStore = create<AppStoreState>()(
       return (
         allPods.find((pod) => pod.id === podCollection.selectedPodId) || null
       );
+    },
+
+    getSelectedFolder: () => {
+      const { podCollection } = get();
+      return podCollection.selectedFolderId;
     }
   }))
 );
@@ -966,6 +972,7 @@ export const usePodCollection = () => {
   );
   const getFilteredPods = useAppStore((state) => state.getFilteredPods);
   const getSelectedPod = useAppStore((state) => state.getSelectedPod);
+  const getSelectedFolder = useAppStore((state) => state.getSelectedFolder);
 
   return {
     // State
@@ -979,7 +986,8 @@ export const usePodCollection = () => {
 
     // Computed
     filteredPods: getFilteredPods(),
-    selectedPod: getSelectedPod()
+    selectedPod: getSelectedPod(),
+    selectedFolder: getSelectedFolder()
   };
 };
 
