@@ -46,27 +46,12 @@ export {
 } from "./hooks";
 
 /**
- * Quick setup function for initializing deep-links in an app
- * This handles the most common setup scenario
+ * Test function for debugging deep-links
  */
-export async function initializeDeepLinks(): Promise<void> {
-  const { deepLinkManager, createNavigationHandler } = await import(
-    "./handler"
-  );
-
-  try {
-    // Start listening for deep-link events
-    await deepLinkManager.startListening();
-
-    // Add the default navigation handler
-    const navigationHandler = createNavigationHandler();
-    deepLinkManager.addHandler(navigationHandler);
-
-    console.log("Deep-link system initialized successfully");
-  } catch (error) {
-    console.error("Failed to initialize deep-link system:", error);
-    throw error;
-  }
+export function testDeepLink(url: string): void {
+  const { deepLinkManager } = require("./handler");
+  console.log(`[DeepLink] Testing: ${url}`);
+  deepLinkManager.handleDeepLinkUrl(url);
 }
 
 /**

@@ -2,9 +2,13 @@
  * React hooks for deep-link integration
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { DeepLinkHandler } from "./types";
-import { deepLinkManager, createNavigationHandler } from "./handler";
+import {
+  deepLinkManager,
+  createNavigationHandler,
+  type NavigationFunctions
+} from "./handler";
 
 /**
  * React hook for registering a deep-link handler
@@ -22,36 +26,69 @@ export function useDeepLinkHandler(handler: DeepLinkHandler): void {
 
 /**
  * React hook to initialize deep-link listening for the entire app
- * Should be called once in the main App component
+ * Should be called once in the main App component with navigation functions
  */
-export function useDeepLinkManager(): {
+export function useDeepLinkManager(navigation?: NavigationFunctions): {
   isActive: boolean;
   handlerCount: number;
   start: () => Promise<void>;
   stop: () => void;
 } {
+  const navigationHandlerRef = useRef<DeepLinkHandler | null>(null);
+  const isInitializedRef = useRef(false);
+
   useEffect(() => {
-    // Auto-start listening when the hook is first used
-    const startListening = async () => {
-      try {
-        await deepLinkManager.startListening();
+    // Initialize the manager only once
+    const initializeManager = async () => {
+      if (!isInitializedRef.current) {
+        try {
+          await deepLinkManager.startListening();
+          isInitializedRef.current = true;
+          console.log("[DeepLink] Manager initialized successfully");
+        } catch (error) {
+          console.error(
+            "[DeepLink] Failed to initialize deep-link manager:",
+            error
+          );
+          return;
+        }
+      }
 
-        // Register the default navigation handler
-        const navigationHandler = createNavigationHandler();
+      // Remove old navigation handler if it exists
+      if (navigationHandlerRef.current) {
+        deepLinkManager.removeHandler(navigationHandlerRef.current);
+        navigationHandlerRef.current = null;
+      }
+
+      // Register new navigation handler if navigation functions provided
+      if (navigation) {
+        console.log("[DeepLink] Registering navigation handler");
+        const navigationHandler = createNavigationHandler(navigation);
+        navigationHandlerRef.current = navigationHandler;
         deepLinkManager.addHandler(navigationHandler);
-
-        console.log("Deep-link manager initialized successfully");
-      } catch (error) {
-        console.error("Failed to initialize deep-link manager:", error);
+        console.log("[DeepLink] Navigation handler registered successfully");
+      } else {
+        console.warn("[DeepLink] No navigation functions provided");
       }
     };
 
-    startListening();
+    initializeManager();
 
-    // Cleanup on unmount
+    // Cleanup on unmount or navigation change
+    return () => {
+      if (navigationHandlerRef.current) {
+        deepLinkManager.removeHandler(navigationHandlerRef.current);
+        navigationHandlerRef.current = null;
+      }
+    };
+  }, [navigation]);
+
+  // Final cleanup on component unmount
+  useEffect(() => {
     return () => {
       deepLinkManager.stopListening();
       deepLinkManager.clearHandlers();
+      isInitializedRef.current = false;
     };
   }, []);
 

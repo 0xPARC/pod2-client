@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useState } from "react";
+import { getCurrent } from "@tauri-apps/plugin-deep-link";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { AppSidebar } from "./components/AppSidebar";
 import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
@@ -12,6 +13,7 @@ import { FeatureConfigProvider } from "./lib/features/config";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "./lib/keyboard/types";
+import { testDeepLink } from "./lib/deeplink";
 import { useAppStore } from "./lib/store";
 import { useDeepLinkManager } from "./lib/deeplink";
 
@@ -43,8 +45,44 @@ function App() {
   // Initialize config store
   useConfigInitialization();
 
-  // Initialize deep-link manager
-  useDeepLinkManager();
+  // Initialize deep-link manager with navigation functions
+  const setActiveApp = useAppStore((state) => state.setActiveApp);
+  const navigateToDocumentsList = useAppStore(
+    (state) => state.documentsActions.navigateToDocumentsList
+  );
+  const navigateToDocument = useAppStore(
+    (state) => state.documentsActions.navigateToDocument
+  );
+  const navigateToDrafts = useAppStore(
+    (state) => state.documentsActions.navigateToDrafts
+  );
+  const navigateToPublish = useAppStore(
+    (state) => state.documentsActions.navigateToPublish
+  );
+  const navigateToDebug = useAppStore(
+    (state) => state.documentsActions.navigateToDebug
+  );
+
+  const navigation = useMemo(
+    () => ({
+      setActiveApp,
+      navigateToDocumentsList,
+      navigateToDocument,
+      navigateToDrafts,
+      navigateToPublish,
+      navigateToDebug
+    }),
+    [
+      setActiveApp,
+      navigateToDocumentsList,
+      navigateToDocument,
+      navigateToDrafts,
+      navigateToPublish,
+      navigateToDebug
+    ]
+  );
+
+  useDeepLinkManager(navigation);
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
@@ -68,6 +106,24 @@ function App() {
   useEffect(() => {
     if (isSetupCompleted === true) {
       initialize();
+
+      // Check for deep-link URL that launched the app
+      const checkLaunchUrl = async () => {
+        try {
+          const launchUrls = await getCurrent();
+          if (launchUrls && launchUrls.length > 0) {
+            console.log("[App] App launched with deep-link URLs:", launchUrls);
+            launchUrls.forEach((url) => {
+              console.log("[App] Processing launch URL:", url);
+              testDeepLink(url);
+            });
+          }
+        } catch (error) {
+          console.log("[App] No launch URL or error getting current:", error);
+        }
+      };
+
+      checkLaunchUrl();
     }
   }, [isSetupCompleted, initialize]);
 

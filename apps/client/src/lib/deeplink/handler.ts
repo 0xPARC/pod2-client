@@ -23,13 +23,15 @@ export class DeepLinkManager {
    */
   async startListening(): Promise<void> {
     if (this.isListening) {
-      console.warn("Deep-link manager is already listening");
       return;
     }
 
     try {
       this.currentHandler = await onOpenUrl((urls) => {
-        console.log("Deep-link received:", urls);
+        console.log("[DeepLink] ⚡ RECEIVED URLs:", urls);
+        console.log(
+          `[DeepLink] Current handler count: ${this.handlers.length}`
+        );
 
         // Process each URL (usually there's only one)
         urls.forEach((url) => {
@@ -38,9 +40,8 @@ export class DeepLinkManager {
       });
 
       this.isListening = true;
-      console.log("Deep-link manager started listening");
     } catch (error) {
-      console.error("Failed to start deep-link listener:", error);
+      console.error("[DeepLink] Failed to start listener:", error);
       throw error;
     }
   }
@@ -56,7 +57,6 @@ export class DeepLinkManager {
     }
 
     this.isListening = false;
-    console.log("Deep-link manager stopped listening");
   }
 
   /**
@@ -87,19 +87,19 @@ export class DeepLinkManager {
    * Manually handle a deep-link URL (useful for testing)
    */
   handleDeepLinkUrl(url: string): void {
-    console.log(`Processing deep-link URL: ${url}`);
+    console.log(`[DeepLink] Processing: ${url}`);
 
     try {
       // Validate and sanitize the URL
       const validation = validateDeepLinkUrl(url);
 
-      // Log validation results
+      // Log validation issues
       if (validation.warnings.length > 0) {
-        console.warn("Deep-link validation warnings:", validation.warnings);
+        console.warn("[DeepLink] Warnings:", validation.warnings);
       }
 
       if (validation.errors.length > 0) {
-        console.error("Deep-link validation errors:", validation.errors);
+        console.error("[DeepLink] Errors:", validation.errors);
       }
 
       // Use the sanitized data even if there were warnings/errors
@@ -107,9 +107,7 @@ export class DeepLinkManager {
 
       // Additional safety check
       if (!isNavigableDeepLink(deepLinkData)) {
-        console.error(
-          "Deep-link data is not navigable, falling back to safe default"
-        );
+        console.error("[DeepLink] Not navigable, using fallback");
         const safeFallback = getSafeDeepLinkData(url);
         this.notifyHandlers(safeFallback);
         return;
@@ -118,7 +116,7 @@ export class DeepLinkManager {
       // Notify all handlers
       this.notifyHandlers(deepLinkData);
     } catch (error) {
-      console.error("Error processing deep-link URL:", error);
+      console.error("[DeepLink] Processing error:", error);
 
       // Create a safe fallback and notify handlers
       const fallbackData = getSafeDeepLinkData(url);
@@ -145,18 +143,15 @@ export class DeepLinkManager {
    */
   private notifyHandlers(data: DeepLinkData): void {
     if (this.handlers.length === 0) {
-      console.warn(
-        "No deep-link handlers registered, ignoring deep-link:",
-        data.originalUrl
-      );
+      console.warn("[DeepLink] No handlers registered, ignoring URL");
       return;
     }
 
-    this.handlers.forEach((handler) => {
+    this.handlers.forEach((handler, index) => {
       try {
         handler(data);
       } catch (error) {
-        console.error("Error in deep-link handler:", error);
+        console.error(`[DeepLink] Handler ${index + 1} error:`, error);
       }
     });
   }
@@ -168,90 +163,97 @@ export class DeepLinkManager {
 export const deepLinkManager = new DeepLinkManager();
 
 /**
- * Navigation handler that integrates with the app store
+ * Mini-app types for navigation
  */
-export function createNavigationHandler(): DeepLinkHandler {
+type MiniApp = "pod-collection" | "documents" | "pod-editor" | "frogcrypto";
+
+/**
+ * Navigation functions interface for dependency injection
+ */
+export interface NavigationFunctions {
+  setActiveApp: (app: MiniApp) => void;
+  navigateToDocumentsList: () => void;
+  navigateToDocument: (id: number) => void;
+  navigateToDrafts: () => void;
+  navigateToPublish: (
+    editingDraftId?: string,
+    contentType?: "document" | "link" | "file",
+    replyTo?: string
+  ) => void;
+  navigateToDebug: () => void;
+}
+
+/**
+ * Navigation handler that integrates with injected navigation functions
+ */
+export function createNavigationHandler(
+  navigation: NavigationFunctions
+): DeepLinkHandler {
   return (data: DeepLinkData) => {
-    console.log("Navigating to deep-link:", data);
+    console.log(`[DeepLink] Navigating to ${data.app}`);
 
-    // Import the store dynamically to avoid circular dependencies
-    import("../store")
-      .then(({ useAppStore }) => {
-        const store = useAppStore.getState();
+    try {
+      // Navigate to the target app - convert string to MiniApp type
+      const app = data.app as MiniApp;
+      navigation.setActiveApp(app);
 
-        try {
-          // Navigate to the target app
-          if (store.activeApp !== data.app) {
-            console.log(`Switching to app: ${data.app}`);
-            store.setActiveApp(data.app);
-          }
+      // Handle app-specific navigation
+      if (
+        data.app === "documents" &&
+        data.route &&
+        data.route.app === "documents"
+      ) {
+        handleDocumentsNavigation(data.route.route, navigation);
+      }
 
-          // Handle app-specific navigation
-          if (
-            data.app === "documents" &&
-            data.route &&
-            data.route.app === "documents"
-          ) {
-            handleDocumentsNavigation(data.route.route, store);
-          }
-
-          console.log("Deep-link navigation completed successfully");
-        } catch (error) {
-          console.error("Error during deep-link navigation:", error);
-        }
-      })
-      .catch((error) => {
-        console.error(
-          "Failed to import store for deep-link navigation:",
-          error
-        );
-      });
+      console.log("[DeepLink] Navigation completed");
+    } catch (error) {
+      console.error("[DeepLink] Navigation error:", error);
+    }
   };
 }
 
 /**
  * Handle navigation within the documents app
  */
-function handleDocumentsNavigation(route: any, store: any): void {
-  // Get the documents actions from the store
-  const actions = store.documentsActions;
-
-  if (!actions) {
-    console.error("Documents actions not available, cannot navigate");
-    return;
-  }
-
+function handleDocumentsNavigation(
+  route: any,
+  navigation: NavigationFunctions
+): void {
   switch (route.type) {
     case "documents-list":
-      actions.navigateToDocumentsList();
+      navigation.navigateToDocumentsList();
       break;
 
     case "document-detail":
       if (route.id) {
-        actions.navigateToDocument(route.id);
+        navigation.navigateToDocument(route.id);
+      } else {
+        console.warn(
+          `[DeepLink] document-detail missing id, using documents-list`
+        );
+        navigation.navigateToDocumentsList();
       }
       break;
 
     case "drafts":
-      actions.navigateToDrafts();
+      navigation.navigateToDrafts();
       break;
 
     case "publish":
-      actions.navigateToPublish(
+      navigation.navigateToPublish(
         route.editingDraftId,
-        route.contentType || "document",
+        (route.contentType as "document" | "link" | "file") || "document",
         route.replyTo
       );
       break;
 
     case "debug":
-      actions.navigateToDebug();
+      navigation.navigateToDebug();
       break;
 
     default:
-      console.warn(
-        `Unknown documents route type: ${route.type}, falling back to documents-list`
-      );
-      actions.navigateToDocumentsList();
+      console.warn(`[DeepLink] Unknown route type: ${route.type}`);
+      navigation.navigateToDocumentsList();
   }
 }
