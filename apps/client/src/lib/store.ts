@@ -31,7 +31,7 @@ import {
 export type { AppStateData, PodLists, PodStats, PrivateKeyInfo, SpaceInfo };
 
 // Use the PodInfo from rpc.ts which matches the actual API
-export type { PodInfo } from "./rpc";
+  export type { PodInfo } from "./rpc";
 
 // Mini-app types
 export type MiniApp =
@@ -69,6 +69,7 @@ export interface PodCollectionState {
 export interface DocumentRoute {
   type: "documents-list" | "document-detail" | "drafts" | "publish" | "debug";
   id?: number;
+  title?: string; // Optional document title for navigation display
   editingDraftId?: string;
   contentType?: "document" | "link" | "file";
   replyTo?: string;
@@ -82,7 +83,6 @@ export interface DocumentsState {
   };
   searchQuery: string;
   selectedTag: string | null;
-  cachedDocuments: Record<number, any>;
 }
 
 export interface EditorTab {
@@ -139,7 +139,7 @@ export interface DocumentsActions {
   goForward: () => void;
   updateSearch: (query: string) => void;
   selectTag: (tag: string | null) => void;
-  cacheDocument: (id: number, document: any) => void;
+  updateCurrentRouteTitle: (title: string) => void;
 }
 
 export interface PodEditorActions {
@@ -248,7 +248,6 @@ export const useAppStore = create<AppStoreState>()(
       },
       searchQuery: "",
       selectedTag: null,
-      cachedDocuments: {}
     },
 
     podEditor: {
@@ -469,12 +468,13 @@ export const useAppStore = create<AppStoreState>()(
         });
       },
 
-      cacheDocument: (id: number, document: any) => {
+      updateCurrentRouteTitle: (title: string) => {
         set((state) => {
-          state.documents.cachedDocuments[id] = {
-            document,
-            cachedAt: Date.now()
-          };
+          const history = state.documents.browsingHistory;
+          const currentRoute = history.stack[history.currentIndex];
+          if (currentRoute && currentRoute.type === "document-detail") {
+            currentRoute.title = title;
+          }
         });
       }
     },
@@ -944,7 +944,6 @@ export const useDocuments = () => {
     currentRoute, // Current route with route-specific data
     searchQuery: documents.searchQuery,
     selectedTag: documents.selectedTag,
-    cachedDocuments: documents.cachedDocuments,
 
     // Actions
     navigateToDocument: documentsActions.navigateToDocument,
@@ -956,7 +955,7 @@ export const useDocuments = () => {
     goForward: documentsActions.goForward,
     updateSearch: documentsActions.updateSearch,
     selectTag: documentsActions.selectTag,
-    cacheDocument: documentsActions.cacheDocument
+    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle
   };
 };
 

@@ -9,33 +9,39 @@ import { DocumentsView } from "./DocumentsView";
 import { DraftsView } from "./DraftsView";
 import { PublishPage } from "./PublishPage";
 
-// Helper function to get route title for breadcrumb
-const getRouteTitle = (route: any): string => {
+// Helper function to get route title data for breadcrumb
+const getRouteTitle = (
+  route: any
+): { text: string; hasPrefix?: boolean; prefix?: string } => {
   switch (route?.type) {
     case "documents-list":
-      return "Documents";
+      return { text: "Documents" };
     case "document-detail":
-      return `Document #${route.id}`;
+      // Use document title if available, fallback to document number
+      if (route.title) {
+        return { text: route.title, hasPrefix: true, prefix: "Document:" };
+      }
+      return { text: `Document #${route.id}` };
     case "drafts":
-      return "Drafts";
+      return { text: "Drafts" };
     case "publish":
       if (route.editingDraftId) {
-        return "Edit Draft";
+        return { text: "Edit Draft" };
       }
       // Show content type in title
       switch (route.contentType) {
         case "link":
-          return "New Link";
+          return { text: "New Link" };
         case "file":
-          return "New File";
+          return { text: "New File" };
         case "document":
         default:
-          return "New Document";
+          return { text: "New Document" };
       }
     case "debug":
-      return "Debug";
+      return { text: "Debug" };
     default:
-      return "Documents";
+      return { text: "Documents" };
   }
 };
 
@@ -46,6 +52,7 @@ function DocumentsNavigationBar() {
   const canGoForward =
     browsingHistory.currentIndex < browsingHistory.stack.length - 1;
   const currentRoute = browsingHistory.stack[browsingHistory.currentIndex];
+  const titleData = getRouteTitle(currentRoute);
 
   return (
     <div className="h-12 border-b border-border flex items-center px-4 bg-background">
@@ -69,7 +76,14 @@ function DocumentsNavigationBar() {
           <ArrowRightIcon className="w-4 h-4" />
         </Button>
       </div>
-      <h1 className="font-semibold">{getRouteTitle(currentRoute)}</h1>
+      <h1 className="font-semibold">
+        {titleData.hasPrefix && titleData.prefix && (
+          <span className="font-normal text-muted-foreground mr-1">
+            {titleData.prefix}
+          </span>
+        )}
+        {titleData.text}
+      </h1>
     </div>
   );
 }

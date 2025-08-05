@@ -13,9 +13,10 @@ import {
   ReplyIcon,
   TrashIcon
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  deleteDocument,
   Document,
   DocumentFile,
   DocumentMetadata,
@@ -23,15 +24,14 @@ import {
   fetchDocument,
   fetchDocumentReplies,
   fetchPostReplies,
-  verifyDocumentPod,
-  deleteDocument,
-  getCurrentUsername
+  getCurrentUsername,
+  verifyDocumentPod
 } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { useMarkdownRenderer, renderMarkdownToHtml } from "./markdownRenderer";
+import { renderMarkdownToHtml, useMarkdownRenderer } from "./markdownRenderer";
 
 // Interface for threaded reply structure
 interface ThreadedReply extends DocumentMetadata {
@@ -118,7 +118,7 @@ export function DocumentDetailView({
   documentId,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { navigateToPublish, navigateToDocumentsList } = useDocuments();
+  const { navigateToPublish, navigateToDocumentsList, updateCurrentRouteTitle } = useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +149,11 @@ export function DocumentDetailView({
       const doc = await fetchDocument(documentId);
       setDocument(doc);
       setUpvoteCount(doc.metadata.upvote_count);
+
+      // Update the route title with the document title
+      if (doc.metadata.title) {
+        updateCurrentRouteTitle(doc.metadata.title);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
