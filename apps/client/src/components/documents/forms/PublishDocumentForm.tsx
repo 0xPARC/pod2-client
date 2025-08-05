@@ -27,8 +27,10 @@ export function PublishDocumentForm({
   replyTo,
   editingDraftId
 }: PublishDocumentFormProps) {
-  const { editDocumentData, setEditDocumentData, navigateToDrafts } =
-    useDocuments();
+  const { currentRoute, navigateToDrafts } = useDocuments();
+
+  // Get route-specific edit document data
+  const editDocumentData = currentRoute?.editDocumentData;
 
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
@@ -405,10 +407,7 @@ export function PublishDocumentForm({
             onPublishSuccess={(documentId) => {
               console.log("onPublishSuccess called");
               hasUnsavedChangesRef.current = false;
-              // Clear edit document data after successful publish
-              if (editDocumentData) {
-                setEditDocumentData(null);
-              }
+              // Document editing is now route-specific, so no global state to clear
               // Call the original success callback
               if (onPublishSuccess) {
                 onPublishSuccess(documentId);

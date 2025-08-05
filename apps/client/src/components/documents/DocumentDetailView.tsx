@@ -118,8 +118,7 @@ export function DocumentDetailView({
   documentId,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { setEditDocumentData, navigateToPublish, navigateToDocumentsList } =
-    useDocuments();
+  const { navigateToPublish, navigateToDocumentsList } = useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -373,8 +372,8 @@ export function DocumentDetailView({
   const handleEditDocument = () => {
     if (!document) return;
 
-    // Set the document data for editing in the store
-    setEditDocumentData({
+    // Create the document data for editing
+    const editDocumentData = {
       documentId: document.metadata.id!,
       postId: document.metadata.post_id,
       title: document.metadata.title || "",
@@ -384,10 +383,10 @@ export function DocumentDetailView({
       replyTo: document.metadata.reply_to
         ? `${document.metadata.reply_to.post_id}:${document.metadata.reply_to.document_id}`
         : null
-    });
+    };
 
-    // Navigate to publish view in edit mode
-    navigateToPublish();
+    // Navigate to publish view in edit mode with route-specific data
+    navigateToPublish(undefined, "document", undefined, editDocumentData);
   };
 
   useEffect(() => {
