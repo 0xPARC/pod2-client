@@ -1,8 +1,9 @@
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
-import { useDocuments } from "../../lib/store";
-import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { useDocuments } from "../../lib/store";
 import { DebugView } from "../DebugView";
+import { TopBarSlot } from "../TopBarContext";
 import { Button } from "../ui/button";
 import { DocumentDetailView } from "./DocumentDetailView";
 import { DocumentsView } from "./DocumentsView";
@@ -45,49 +46,6 @@ const getRouteTitle = (
   }
 };
 
-// Top navigation bar for Documents app
-function DocumentsNavigationBar() {
-  const { browsingHistory, goBack, goForward } = useDocuments();
-  const canGoBack = browsingHistory.currentIndex > 0;
-  const canGoForward =
-    browsingHistory.currentIndex < browsingHistory.stack.length - 1;
-  const currentRoute = browsingHistory.stack[browsingHistory.currentIndex];
-  const titleData = getRouteTitle(currentRoute);
-
-  return (
-    <div className="h-12 border-b border-border flex items-center px-4 bg-background">
-      <div className="flex items-center gap-1 mr-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canGoBack}
-          onClick={goBack}
-          title="Go back"
-        >
-          <ArrowLeftIcon className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canGoForward}
-          onClick={goForward}
-          title="Go forward"
-        >
-          <ArrowRightIcon className="w-4 h-4" />
-        </Button>
-      </div>
-      <h1 className="font-semibold">
-        {titleData.hasPrefix && titleData.prefix && (
-          <span className="font-normal text-muted-foreground mr-1">
-            {titleData.prefix}
-          </span>
-        )}
-        {titleData.text}
-      </h1>
-    </div>
-  );
-}
-
 // Main Documents app component
 export function DocumentsApp() {
   const {
@@ -97,9 +55,15 @@ export function DocumentsApp() {
     goBack,
     goForward
   } = useDocuments();
+
   const currentRoute = browsingHistory.stack[browsingHistory.currentIndex] || {
     type: "documents-list"
   };
+
+  const canGoBack = browsingHistory.currentIndex > 0;
+  const canGoForward =
+    browsingHistory.currentIndex < browsingHistory.stack.length - 1;
+  const titleData = getRouteTitle(currentRoute);
 
   // Documents app keyboard shortcuts
   const documentsShortcuts = [
@@ -178,7 +142,38 @@ export function DocumentsApp() {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <DocumentsNavigationBar />
+      {/* TopBar Content */}
+      <TopBarSlot position="left">
+        <div className="flex items-center gap-1 mr-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canGoBack}
+            onClick={goBack}
+            title="Go back"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canGoForward}
+            onClick={goForward}
+            title="Go forward"
+          >
+            <ArrowRightIcon className="w-4 h-4" />
+          </Button>
+          <h1>
+            {titleData.hasPrefix && titleData.prefix && (
+              <span className="font-normal text-muted-foreground mr-1">
+                {titleData.prefix}
+              </span>
+            )}
+            {titleData.text}
+          </h1>
+        </div>
+      </TopBarSlot>
+
       <div className="flex-1 overflow-auto">{renderRoute()}</div>
     </div>
   );

@@ -1,15 +1,25 @@
-import { useState } from "react";
+import { AlertCircle, CheckCircle, Play, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  getFirstErrorMessage,
+  hasValidationErrors,
+  loadLastMockSetting,
+  saveLastMockSetting
+} from "../../lib/features/authoring/editor";
+import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { usePodEditor } from "../../lib/store";
+import { TopBarSlot } from "../TopBarContext";
+import { Button } from "../ui/button";
+import { Label } from "../ui/label";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup
 } from "../ui/resizable";
-import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
-import { createShortcut } from "../../lib/keyboard/types";
-import { usePodEditor } from "../../lib/store";
+import { Switch } from "../ui/switch";
 
 import { EditorPane } from "./EditorPane";
-import { EditorControls } from "./EditorControls";
 import { EditorResults } from "./EditorResults";
 
 const COLLAPSED_RESULTS_SIZE = 4; // Percentage when collapsed
@@ -18,12 +28,54 @@ const MIN_EDITOR_SIZE = 30; // Minimum percentage for editor panel
 const MAX_RESULTS_SIZE = 70; // Maximum percentage for results panel
 
 export function EditorView() {
-  const { executeEditorCode } = usePodEditor();
+  const { editorDiagnostics, isExecuting, isValidating, executeEditorCode } =
+    usePodEditor();
 
   // Results panel state
   const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [resultsPanelSize, setResultsPanelSize] =
     useState(DEFAULT_RESULTS_SIZE);
+
+  // Local mock setting state
+  const [mock, setMock] = useState(() => loadLastMockSetting());
+
+  // Validation state
+  const hasErrors = hasValidationErrors(editorDiagnostics);
+  const firstErrorMessage = getFirstErrorMessage(editorDiagnostics);
+
+  // Save mock setting when it changes
+  useEffect(() => {
+    saveLastMockSetting(mock);
+  }, [mock]);
+
+  // Handle execute button click
+  const handleExecute = () => {
+    if (hasErrors || isExecuting) return;
+    executeEditorCode(mock);
+  };
+
+  // Determine execute button state
+  const canExecute = !hasErrors && !isExecuting && !isValidating;
+  const executeButtonText = isExecuting ? "Executing..." : "Execute";
+
+  // Validation status display
+  let statusIcon;
+  let statusText;
+  let statusColor;
+
+  if (isValidating) {
+    statusIcon = <AlertCircle className="h-4 w-4 text-yellow-500" />;
+    statusText = "Validating...";
+    statusColor = "text-yellow-600 dark:text-yellow-400";
+  } else if (hasErrors) {
+    statusIcon = <XCircle className="h-4 w-4 text-red-500" />;
+    statusText = firstErrorMessage || "Code has errors";
+    statusColor = "text-red-600 dark:text-red-400";
+  } else {
+    statusIcon = <CheckCircle className="h-4 w-4 text-green-500" />;
+    statusText = "Code is valid";
+    statusColor = "text-green-600 dark:text-green-400";
+  }
 
   // POD Editor keyboard shortcuts
   const shortcuts = [
@@ -71,8 +123,49 @@ export function EditorView() {
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Editor Controls */}
-      <EditorControls />
+      {/* TopBar Content */}
+      <TopBarSlot position="left">
+        <div className="flex items-center space-x-4">
+          {/* Execute Button */}
+          <Button
+            onClick={handleExecute}
+            disabled={!canExecute}
+            size="sm"
+            className="flex items-center gap-2 h-7"
+          >
+            <Play className="h-3 w-3" />
+            {executeButtonText}
+          </Button>
+
+          {/* Mock Mode Switch */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="mock-mode"
+              checked={mock}
+              onCheckedChange={setMock}
+              disabled={isExecuting}
+            />
+            <Label
+              htmlFor="mock-mode"
+              className="text-sm font-medium cursor-pointer select-none"
+            >
+              Mock Mode
+            </Label>
+          </div>
+        </div>
+      </TopBarSlot>
+
+      <TopBarSlot position="right">
+        <div className="flex items-center gap-2">
+          {statusIcon}
+          <span
+            className={`text-sm ${statusColor} max-w-md truncate`}
+            title={statusText}
+          >
+            {statusText}
+          </span>
+        </div>
+      </TopBarSlot>
 
       {/* Main Editor Area with Resizable Panels */}
       <div className="flex-1 overflow-hidden">
