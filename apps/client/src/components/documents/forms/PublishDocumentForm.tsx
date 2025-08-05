@@ -1,9 +1,10 @@
-import { MessageSquareIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { MessageSquareIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchDocument, type DocumentMetadata } from "../../../lib/documentApi";
 import { useDraftAutoSave, type DraftContent } from "../../../lib/drafts";
 import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
+import { InlineChipInput } from "../../ui/inline-chip-input";
 import { PublishButton } from "../PublishButton";
 import { MarkdownEditor } from "../editors/MarkdownEditor";
 
@@ -43,8 +44,6 @@ export function PublishDocumentForm({
   const [authors, setAuthors] = useState<string[]>(
     initialContent?.authors ?? []
   );
-  const [tagInput, setTagInput] = useState("");
-  const [authorInput, setAuthorInput] = useState("");
   const [replyToDocument, setReplyToDocument] =
     useState<DocumentMetadata | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
@@ -60,39 +59,14 @@ export function PublishDocumentForm({
   }, [initialContent]);
 
   // Helper functions that mark content as changed
-  const addTag = () => {
-    const trimmedTag = tagInput.trim();
-    if (trimmedTag && !tags.includes(trimmedTag)) {
-      setTags([...tags, trimmedTag]);
-      setTagInput("");
-      markContentChanged();
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter((tag) => tag !== tagToRemove));
+  const handleTagsChange = (newTags: string[]) => {
+    setTags(newTags);
     markContentChanged();
   };
 
-  const addAuthor = () => {
-    const trimmedAuthor = authorInput.trim();
-    if (trimmedAuthor && !authors.includes(trimmedAuthor)) {
-      setAuthors([...authors, trimmedAuthor]);
-      setAuthorInput("");
-      markContentChanged();
-    }
-  };
-
-  const removeAuthor = (authorToRemove: string) => {
-    setAuthors(authors.filter((author) => author !== authorToRemove));
+  const handleAuthorsChange = (newAuthors: string[]) => {
+    setAuthors(newAuthors);
     markContentChanged();
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent, action: () => void) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      action();
-    }
   };
 
   // Get current form content as DraftContent
@@ -225,72 +199,20 @@ export function PublishDocumentForm({
         </div>
 
         {/* Tags Section */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Tags:</span>
-          <div className="flex items-center gap-1">
-            {tags.map((tag) => (
-              <div
-                key={tag}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded-md text-sm"
-              >
-                <span>{tag}</span>
-                <button
-                  onClick={() => removeTag(tag)}
-                  className="hover:text-destructive"
-                >
-                  <XIcon className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-            <input
-              type="text"
-              placeholder={tags.length === 0 ? "Add tags..." : ""}
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, addTag)}
-              autoComplete="off"
-              autoCorrect="off"
-              className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-20 min-w-[5rem]"
-            />
-            <Button type="button" variant="ghost" size="sm" onClick={addTag}>
-              <PlusIcon className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
+        <InlineChipInput
+          label="Tags"
+          placeholder="Add tags..."
+          values={tags}
+          onValuesChange={handleTagsChange}
+        />
 
         {/* Authors Section */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Authors:</span>
-          <div className="flex items-center gap-1">
-            {authors.map((author) => (
-              <div
-                key={author}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-muted/50 border rounded-md text-sm"
-              >
-                <span>{author}</span>
-                <button
-                  onClick={() => removeAuthor(author)}
-                  className="hover:text-destructive"
-                >
-                  <XIcon className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-            <input
-              type="text"
-              placeholder={authors.length === 0 ? "Add authors..." : ""}
-              value={authorInput}
-              onChange={(e) => setAuthorInput(e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, addAuthor)}
-              autoComplete="off"
-              autoCorrect="off"
-              className="bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground w-24 min-w-[6rem]"
-            />
-            <Button type="button" variant="ghost" size="sm" onClick={addAuthor}>
-              <PlusIcon className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
+        <InlineChipInput
+          label="Authors"
+          placeholder="Add authors..."
+          values={authors}
+          onValuesChange={handleAuthorsChange}
+        />
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3 shrink-0">
