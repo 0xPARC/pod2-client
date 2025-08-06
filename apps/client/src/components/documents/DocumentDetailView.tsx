@@ -13,9 +13,10 @@ import {
   ReplyIcon,
   TrashIcon
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  deleteDocument,
   Document,
   DocumentFile,
   DocumentMetadata,
@@ -23,15 +24,14 @@ import {
   fetchDocument,
   fetchDocumentReplies,
   fetchPostReplies,
-  verifyDocumentPod,
-  deleteDocument,
-  getCurrentUsername
+  getCurrentUsername,
+  verifyDocumentPod
 } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { useMarkdownRenderer, renderMarkdownToHtml } from "./markdownRenderer";
+import { renderMarkdownToHtml, useMarkdownRenderer } from "./markdownRenderer";
 
 // Interface for threaded reply structure
 interface ThreadedReply extends DocumentMetadata {
@@ -118,8 +118,11 @@ export function DocumentDetailView({
   documentId,
   onNavigateToDocument
 }: DocumentDetailViewProps) {
-  const { setEditDocumentData, navigateToPublish, navigateToDocumentsList } =
-    useDocuments();
+  const {
+    navigateToPublish,
+    navigateToDocumentsList,
+    updateCurrentRouteTitle
+  } = useDocuments();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +143,12 @@ export function DocumentDetailView({
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const isVerified =
+    verificationResult &&
+    verificationResult.publish_verified &&
+    verificationResult.timestamp_verified &&
+    verificationResult.upvote_count_verified;
+
   // Use shared markdown renderer
   const md = useMarkdownRenderer();
 
@@ -150,6 +159,11 @@ export function DocumentDetailView({
       const doc = await fetchDocument(documentId);
       setDocument(doc);
       setUpvoteCount(doc.metadata.upvote_count);
+
+      // Update the route title with the document title
+      if (doc.metadata.title) {
+        updateCurrentRouteTitle(doc.metadata.title);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {
@@ -373,8 +387,8 @@ export function DocumentDetailView({
   const handleEditDocument = () => {
     if (!document) return;
 
-    // Set the document data for editing in the store
-    setEditDocumentData({
+    // Create the document data for editing
+    const editDocumentData = {
       documentId: document.metadata.id!,
       postId: document.metadata.post_id,
       title: document.metadata.title || "",
@@ -384,10 +398,10 @@ export function DocumentDetailView({
       replyTo: document.metadata.reply_to
         ? `${document.metadata.reply_to.post_id}:${document.metadata.reply_to.document_id}`
         : null
-    });
+    };
 
-    // Navigate to publish view in edit mode
-    navigateToPublish();
+    // Navigate to publish view in edit mode with route-specific data
+    navigateToPublish(undefined, "document", undefined, editDocumentData);
   };
 
   useEffect(() => {
@@ -998,17 +1012,16 @@ export function DocumentDetailView({
                   variant="outline"
                   size="sm"
                 >
-                  {isVerifying ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircleIcon className="h-3 w-3 mr-1" />
-                      Verify POD
-                    </>
-                  )}
+                  <>
+                    <CheckCircleIcon
+                      className={`h-3 w-3 mr-1 ${isVerifying ? "animate-spin" : isVerified ? "text-green-600" : verificationResult ? "text-red-600" : ""}`}
+                    />
+                    {isVerified
+                      ? "Verified"
+                      : verificationResult
+                        ? "Verification Failed"
+                        : "Verify"}
+                  </>
                 </Button>
                 {/* Edit button - only show for document owner */}
                 {currentUsername &&
@@ -1047,16 +1060,6 @@ export function DocumentDetailView({
                     </Button>
                   )}
               </div>
-
-              {verificationResult &&
-                verificationResult.publish_verified &&
-                verificationResult.timestamp_verified &&
-                verificationResult.upvote_count_verified && (
-                  <div className="flex items-center gap-1 text-green-600 text-xs">
-                    <CheckCircleIcon className="h-4 w-4" />
-                    <span>Verified</span>
-                  </div>
-                )}
             </div>
           </div>
         </div>

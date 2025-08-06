@@ -6,14 +6,17 @@ import {
   CopyIcon,
   DatabaseIcon,
   HardDriveIcon,
+  LinkIcon,
   RefreshCwIcon,
   SettingsIcon,
   TrashIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { testDeepLink } from "../lib/deeplink";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Input } from "./ui/input";
 
 interface AppConfig {
   features: {
@@ -61,6 +64,7 @@ export function DebugView() {
   const [cacheClearLoading, setCacheClearLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheError, setCacheError] = useState<string | null>(null);
+  const [testUrl, setTestUrl] = useState("podnet://documents/");
 
   // Load configuration on component mount
   useEffect(() => {
@@ -130,6 +134,16 @@ export function DebugView() {
       toast.success("Copied to clipboard!");
     } catch (error) {
       toast.error("Failed to copy to clipboard");
+    }
+  };
+
+  const handleTestDeepLink = () => {
+    try {
+      testDeepLink(testUrl);
+      toast.success("Deep-link test initiated - check console for logs");
+    } catch (error) {
+      console.error("Failed to test deep-link:", error);
+      toast.error("Failed to test deep-link");
     }
   };
 
@@ -396,6 +410,75 @@ export function DebugView() {
                 data={extendedConfig.config.logging}
                 icon={<SettingsIcon className="h-5 w-5" />}
               />
+
+              {/* Deep-Link Testing Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LinkIcon className="h-5 w-5" />
+                    Deep-Link Testing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="podnet://documents/"
+                        value={testUrl}
+                        onChange={(e) => setTestUrl(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button onClick={handleTestDeepLink} size="sm">
+                        Test
+                      </Button>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p>Test URLs:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li
+                          className="cursor-pointer hover:text-foreground"
+                          onClick={() => setTestUrl("podnet://documents/")}
+                        >
+                          podnet://documents/
+                        </li>
+                        <li
+                          className="cursor-pointer hover:text-foreground"
+                          onClick={() =>
+                            setTestUrl("podnet://documents/document/123")
+                          }
+                        >
+                          podnet://documents/document/123
+                        </li>
+                        <li
+                          className="cursor-pointer hover:text-foreground"
+                          onClick={() =>
+                            setTestUrl("podnet://documents/drafts")
+                          }
+                        >
+                          podnet://documents/drafts
+                        </li>
+                        <li
+                          className="cursor-pointer hover:text-foreground"
+                          onClick={() =>
+                            setTestUrl("podnet://documents/publish")
+                          }
+                        >
+                          podnet://documents/publish
+                        </li>
+                        <li
+                          className="cursor-pointer hover:text-foreground"
+                          onClick={() => setTestUrl("podnet://documents/debug")}
+                        >
+                          podnet://documents/debug
+                        </li>
+                      </ul>
+                      <p className="mt-2">
+                        Check the browser console for detailed logs.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>

@@ -665,6 +665,17 @@ pub fn run() {
                 }
 
                 app.manage(Mutex::new(app_state));
+
+                // Register deep-link scheme for runtime handling
+                #[cfg(desktop)]
+                {
+                    use tauri_plugin_deep_link::DeepLinkExt;
+                    if let Err(e) = app.deep_link().register("podnet") {
+                        log::warn!("Failed to register deep-link scheme 'podnet': {e:?}");
+                    } else {
+                        log::info!("Successfully registered deep-link scheme 'podnet'");
+                    }
+                }
             });
             Ok(())
         })

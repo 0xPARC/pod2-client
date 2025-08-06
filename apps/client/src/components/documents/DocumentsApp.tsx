@@ -1,78 +1,50 @@
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
-import { useDocuments } from "../../lib/store";
-import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { useDocuments } from "../../lib/store";
 import { DebugView } from "../DebugView";
+import { TopBarSlot } from "../TopBarContext";
 import { Button } from "../ui/button";
 import { DocumentDetailView } from "./DocumentDetailView";
 import { DocumentsView } from "./DocumentsView";
 import { DraftsView } from "./DraftsView";
 import { PublishPage } from "./PublishPage";
 
-// Helper function to get route title for breadcrumb
-const getRouteTitle = (route: any): string => {
+// Helper function to get route title data for breadcrumb
+const getRouteTitle = (
+  route: any
+): { text: string; hasPrefix?: boolean; prefix?: string } => {
   switch (route?.type) {
     case "documents-list":
-      return "Documents";
+      return { text: "Documents" };
     case "document-detail":
-      return `Document #${route.id}`;
+      // Use document title if available, fallback to document number
+      if (route.title) {
+        return { text: route.title, hasPrefix: true, prefix: "Document:" };
+      }
+      return { text: `Document #${route.id}` };
     case "drafts":
-      return "Drafts";
+      return { text: "Drafts" };
     case "publish":
       if (route.editingDraftId) {
-        return "Edit Draft";
+        return { text: "Edit Draft" };
       }
       // Show content type in title
       switch (route.contentType) {
         case "link":
-          return "New Link";
+          return { text: "New Link" };
         case "file":
-          return "New File";
+          return { text: "New File" };
         case "document":
         default:
-          return "New Document";
+          return { text: "New Document" };
       }
     case "debug":
-      return "Debug";
+      return { text: "Debug" };
     default:
-      return "Documents";
+      return { text: "Documents" };
   }
 };
-
-// Top navigation bar for Documents app
-function DocumentsNavigationBar() {
-  const { browsingHistory, goBack, goForward } = useDocuments();
-  const canGoBack = browsingHistory.currentIndex > 0;
-  const canGoForward =
-    browsingHistory.currentIndex < browsingHistory.stack.length - 1;
-  const currentRoute = browsingHistory.stack[browsingHistory.currentIndex];
-
-  return (
-    <div className="h-12 border-b border-border flex items-center px-4 bg-background">
-      <div className="flex items-center gap-1 mr-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canGoBack}
-          onClick={goBack}
-          title="Go back"
-        >
-          <ArrowLeftIcon className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canGoForward}
-          onClick={goForward}
-          title="Go forward"
-        >
-          <ArrowRightIcon className="w-4 h-4" />
-        </Button>
-      </div>
-      <h1 className="font-semibold">{getRouteTitle(currentRoute)}</h1>
-    </div>
-  );
-}
 
 // Main Documents app component
 export function DocumentsApp() {
@@ -83,9 +55,15 @@ export function DocumentsApp() {
     goBack,
     goForward
   } = useDocuments();
+
   const currentRoute = browsingHistory.stack[browsingHistory.currentIndex] || {
     type: "documents-list"
   };
+
+  const canGoBack = browsingHistory.currentIndex > 0;
+  const canGoForward =
+    browsingHistory.currentIndex < browsingHistory.stack.length - 1;
+  const titleData = getRouteTitle(currentRoute);
 
   // Documents app keyboard shortcuts
   const documentsShortcuts = [
@@ -164,7 +142,38 @@ export function DocumentsApp() {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <DocumentsNavigationBar />
+      {/* TopBar Content */}
+      <TopBarSlot position="left">
+        <div className="flex items-center gap-1 mr-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canGoBack}
+            onClick={goBack}
+            title="Go back"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canGoForward}
+            onClick={goForward}
+            title="Go forward"
+          >
+            <ArrowRightIcon className="w-4 h-4" />
+          </Button>
+          <h1>
+            {titleData.hasPrefix && titleData.prefix && (
+              <span className="font-normal text-muted-foreground mr-1">
+                {titleData.prefix}
+              </span>
+            )}
+            {titleData.text}
+          </h1>
+        </div>
+      </TopBarSlot>
+
       <div className="flex-1 overflow-auto">{renderRoute()}</div>
     </div>
   );
