@@ -17,12 +17,8 @@ import {
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
 import { Switch } from "./ui/switch";
-import { listen, emit } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { RARITY_SHADOW_COLORS } from "./FrogCrypto";
-
-interface FrogViewerProps {
-  setScore: (score: number) => void;
-}
 
 function waitText(timeRemaining: number) {
   const mins = Math.floor(timeRemaining / 60);
@@ -43,13 +39,12 @@ const temperaments = new Map<number, string>([
   [18, "SLPY"]
 ]);
 
-export function FrogViewer({ setScore }: FrogViewerProps) {
-  const { frogTimeout, setFrogTimeout } = useFrogCrypto();
+export function FrogViewer() {
+  const { frogTimeout, setFrogTimeout, setScore, mining, setMining } = useFrogCrypto();
 
   const [time, setTime] = useState(new Date().getTime());
   const [frogs, setFrogs] = useState<FrogPod[]>([]);
   const [hashesChecked, setHashesChecked] = useState("");
-  const [selection, setSelection] = useState("");
 
   async function updateFrogs() {
     try {
@@ -122,10 +117,6 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
     };
   }, []);
 
-  const toggleMining = async (b: boolean) => {
-    await emit("toggle-mining", b);
-  };
-
   const timeRemaining =
     frogTimeout === null || time >= frogTimeout
       ? 0
@@ -146,7 +137,7 @@ export function FrogViewer({ setScore }: FrogViewerProps) {
         </Button>
         <div className="py-4">
           <label htmlFor="mining">Mining enabled</label>
-          <Switch id="mining" onCheckedChange={toggleMining} />
+          <Switch id="mining" checked={mining} onCheckedChange={setMining} />
           {hashesChecked}
         </div>
       </div>
@@ -179,6 +170,7 @@ function FrogCard({ pod }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const haveDesc = pod.data != null;
+  const { setLevelUpId } = useFrogCrypto();
 
   return (
     <Card className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm">
@@ -214,6 +206,11 @@ function FrogCard({ pod }: FrogCardProps) {
             </tbody>
           </table>
         </div>
+        {pod.offer_level_up &&
+          <Button onClick={() => setLevelUpId(pod.id)}>
+            Level up
+          </Button>
+        }
         {haveDesc && (
           <Collapsible open={expanded} onOpenChange={setExpanded}>
             <CollapsibleTrigger asChild>

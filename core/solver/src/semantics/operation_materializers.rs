@@ -960,8 +960,8 @@ fn explain_transitive_equal_from_statements(
                     if let Some(idx) = db.get_binary_statement_index(&NativePredicate::Equal) {
                         if idx.contains_key(&left_args) && idx.contains_key(&right_args) {
                             Ok(Operation::transitive_eq(
-                                &Statement::Equal(left_args[0].clone(), left_args[1].clone()),
-                                &Statement::Equal(right_args[0].clone(), right_args[1].clone()),
+                                Statement::Equal(left_args[0].clone(), left_args[1].clone()),
+                                Statement::Equal(right_args[0].clone(), right_args[1].clone()),
                             ))
                         } else {
                             Err(SolverError::Internal(

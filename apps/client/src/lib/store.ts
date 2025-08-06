@@ -26,6 +26,7 @@ import {
   type PrivateKeyInfo,
   type SpaceInfo
 } from "./rpc";
+import { emit } from "@tauri-apps/api/event";
 
 // Re-export types for convenience
 export type { AppStateData, PodLists, PodStats, PrivateKeyInfo, SpaceInfo };
@@ -115,9 +116,11 @@ export interface PodEditorState {
 }
 
 export interface FrogCryptoState {
-  currentScreen: "game" | "leaderboard" | "collection";
+  currentScreen: "game" | "leaderboard" | "frogedex";
   frogTimeout: number | null;
-  gameState: any;
+  score: number;
+  mining: boolean;
+  levelUpId: string | null;
 }
 
 // Action types for each mini-app
@@ -171,8 +174,11 @@ export interface PodEditorActions {
 }
 
 export interface FrogCryptoActions {
-  navigateToScreen: (screen: "game" | "leaderboard" | "collection") => void;
+  navigateToScreen: (screen: "game" | "leaderboard" | "frogedex") => void;
   setFrogTimeout: (timeout: number | null) => void;
+  setScore: (score: number) => void;
+  setMining: (mining: boolean) => void;
+  setLevelUpId: (levelUpId: string | null) => void;
 }
 
 interface AppStoreState {
@@ -282,7 +288,9 @@ export const useAppStore = create<AppStoreState>()(
     frogCrypto: {
       currentScreen: "game",
       frogTimeout: null,
-      gameState: null
+      score: 0,
+      mining: false,
+      levelUpId: null,
     },
 
     initialize: async () => {
@@ -902,7 +910,7 @@ export const useAppStore = create<AppStoreState>()(
     },
 
     frogCryptoActions: {
-      navigateToScreen: (screen: "game" | "leaderboard" | "collection") => {
+      navigateToScreen: (screen: "game" | "leaderboard" | "frogedex") => {
         set((state) => {
           state.frogCrypto.currentScreen = screen;
         });
@@ -912,7 +920,37 @@ export const useAppStore = create<AppStoreState>()(
         set((state) => {
           state.frogCrypto.frogTimeout = timeout;
         });
-      }
+      },
+
+      setScore: (score: number) => {
+        set((state) => {
+          state.frogCrypto.score = score;
+        });
+      },
+      
+      setMining: (mining: boolean) => {
+        set((state) => {
+          const changed = state.frogCrypto.mining != mining;
+          state.frogCrypto.mining = mining;
+          if (changed) {
+            emit("toggle-mining", mining).catch((e) => console.log(e));
+          }
+        });
+      },
+
+      setLevelUpId: (levelUpId: string | null) => {
+        set((state) => {
+          console.log(`entered ${levelUpId} ${state.frogCrypto.levelUpId}`);
+          const changed = state.frogCrypto.levelUpId != levelUpId;
+          state.frogCrypto.levelUpId = levelUpId;
+          if (changed) {
+            console.log("changed");
+            emit("set-level-up", levelUpId).catch((e) => console.log(e));
+          }
+        });
+      },
+      
+      
     },
 
     getPodsInFolder: (folder: String) => {
@@ -1020,11 +1058,16 @@ export const useFrogCrypto = () => {
     // State
     currentScreen: frogCrypto.currentScreen,
     frogTimeout: frogCrypto.frogTimeout,
-    gameState: frogCrypto.gameState,
+    score: frogCrypto.score,
+    mining: frogCrypto.mining,
+    levelUpId: frogCrypto.levelUpId,
 
     // Actions
     navigateToScreen: frogCryptoActions.navigateToScreen,
-    setFrogTimeout: frogCryptoActions.setFrogTimeout
+    setFrogTimeout: frogCryptoActions.setFrogTimeout,
+    setMining: frogCryptoActions.setMining,
+    setScore: frogCryptoActions.setScore,
+    setLevelUpId: frogCryptoActions.setLevelUpId,
   };
 };
 

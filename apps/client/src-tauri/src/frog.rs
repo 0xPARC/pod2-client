@@ -1,7 +1,6 @@
 mod level;
 mod mining;
 
-pub(crate) use mining::setup_background_thread;
 use num::traits::Euclid;
 use pod2::{
     backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
@@ -17,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
-use crate::{config::config, AppState};
+use crate::{config::config, frog::level::LEVEL_UP_2, AppState};
 
 fn server_url(path: &str) -> String {
     let domain = &config().network.frogcrypto_server;
@@ -38,6 +37,16 @@ struct Challenge {
 struct FrogResponse {
     pod: SignedPod,
     score: i64,
+}
+
+pub(crate) fn setup_background_threads(app_handle: &AppHandle) {
+    self::level::setup_background_thread(app_handle.clone());
+    self::mining::setup_background_thread(app_handle.clone());
+}
+
+async fn get_private_key(state: &State<'_, Mutex<AppState>>) -> Result<SecretKey, String> {
+    let app_state = state.lock().await;
+    crate::get_private_key(&app_state.db).await
 }
 
 async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedPod, String> {
@@ -77,6 +86,7 @@ pub struct FrogDesc {
     name: String,
     description: String,
     image_url: String,
+    can_level_up: bool,
 }
 
 #[derive(Serialize)]
@@ -89,8 +99,29 @@ pub struct FrogData {
 
 #[derive(Serialize)]
 pub struct FrogPod {
-    pod_id: PodId,
+    id: PodId,
     data: Option<FrogData>,
+    level: i64,
+    offer_level_up: bool,
+}
+
+impl FrogPod {
+    fn index(&self) -> Option<usize> {
+        let frog_id = self.data.as_ref()?.desc.frog_id;
+        if (1..=80).contains(&frog_id) {
+            Some((frog_id - 1) as usize)
+        } else {
+            None
+        }
+    }
+
+    fn can_level_up(&self) -> bool {
+        if let Some(data) = &self.data {
+            data.desc.can_level_up
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -112,6 +143,7 @@ const FROG_RARITIES: [i64; 80] = [
 trait AsTyped {
     fn as_str(&self) -> Option<&str>;
     fn as_int(&self) -> Option<i64>;
+    fn as_bool(&self) -> Option<bool>;
 }
 
 impl AsTyped for Value {
@@ -128,6 +160,13 @@ impl AsTyped for Value {
             _ => None,
         }
     }
+
+    fn as_bool(&self) -> Option<bool> {
+        match self.typed() {
+            TypedValue::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
 }
 
 fn frog_data_for(pod: &FrogPodInfo, desc: &SignedPod) -> Option<FrogData> {
@@ -140,12 +179,14 @@ fn frog_data_for(pod: &FrogPodInfo, desc: &SignedPod) -> Option<FrogData> {
     let name = desc.get("name")?.as_str()?.to_owned();
     let description = desc.get("description")?.as_str()?.to_owned();
     let image_url = desc.get("image_url")?.as_str()?.to_owned();
+    let can_level_up = desc.get("can_level_up")?.as_bool()?;
     let desc = FrogDesc {
         frog_id,
         name,
         description,
         image_url,
         rarity,
+        can_level_up,
     };
     let stats = compute_frog_stats(frog_id, pod.base_id);
     Some(FrogData { desc, stats })
@@ -155,18 +196,36 @@ fn frog_data_for(pod: &FrogPodInfo, desc: &SignedPod) -> Option<FrogData> {
 pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod>, String> {
     let app_state = state.lock().await;
     let frog_pods = frog_pods(&app_state.db).await?;
+    let mut max_levels = [0; 80];
     let frog_descs = description_pods(&app_state.db).await?;
-    let frogs = frog_pods
+    drop(app_state);
+    let mut frogs: Vec<_> = frog_pods
         .into_iter()
         .map(|pod| {
             let desc = description_for(&pod, &frog_descs);
             let data = desc.and_then(|d| frog_data_for(&pod, d));
-            FrogPod {
-                pod_id: PodId(Hash(pod.pod_id.0)),
+            let frog_pod = FrogPod {
+                id: PodId(Hash(pod.pod_id.0)),
                 data,
+                level: pod.level,
+                offer_level_up: false,
+            };
+            if let Some(idx) = frog_pod.index() {
+                if pod.level > max_levels[idx] {
+                    max_levels[idx] = pod.level;
+                }
             }
+
+            frog_pod
         })
         .collect();
+    for frog in frogs.iter_mut() {
+        if let Some(idx) = frog.index() {
+            if frog.can_level_up() && frog.level == max_levels[idx] && frog.level < LEVEL_UP_2 {
+                frog.offer_level_up = true;
+            }
+        }
+    }
     Ok(frogs)
 }
 
@@ -183,6 +242,7 @@ fn frogedex_data_for(desc: &SignedPod) -> Option<(i64, String, String, bool)> {
 pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogedexEntry>, String> {
     let app_state = state.lock().await;
     let frog_descs = description_pods(&app_state.db).await?;
+    drop(app_state);
     let mut entries: Vec<_> = FROG_RARITIES
         .iter()
         .enumerate()
@@ -209,7 +269,11 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
     Ok(entries)
 }
 
-async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> Result<(), String> {
+async fn register_pod(
+    app_state: &mut AppState,
+    pod: impl IntoFrogPod,
+    space: &str,
+) -> Result<(), String> {
     if !space_exists(&app_state.db, space)
         .await
         .map_err(|e| e.to_string())?
@@ -218,14 +282,9 @@ async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> 
             .await
             .map_err(|e| e.to_string())?;
     }
-    store::import_pod(
-        &app_state.db,
-        &PodData::Signed(Box::new(pod.into())),
-        None,
-        space,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    store::import_pod(&app_state.db, &pod.pod_data(), None, space)
+        .await
+        .map_err(|e| e.to_string())?;
     app_state.trigger_state_sync().await?;
     app_state
         .app_handle
@@ -254,56 +313,75 @@ fn description_for<'a>(frog: &'_ FrogPodInfo, descs: &'a [SignedPod]) -> Option<
     None
 }
 
+trait IntoFrogPod: Clone {
+    fn info(self) -> Option<FrogPodInfo>;
+    fn pod_data(self) -> PodData;
+}
+
 struct FrogPodInfo {
     pod_id: RawValue,
     base_id: RawValue,
     biome: i64,
     level: i64,
-    json: Box<dyn FnOnce() -> String + Send + Sync>,
+    json: Box<dyn FnOnce() -> serde_json::Value + Send + Sync>,
 }
 
-fn signed_pod_frog_info(pod: SignedPod) -> Option<FrogPodInfo> {
-    let biome: i64 = pod.get("biome")?.typed().try_into().ok()?;
-    let pod_id = RawValue::from(pod.id().0);
-    let json = Box::new(move || serde_json::to_string(&pod).unwrap());
-    Some(FrogPodInfo {
-        pod_id,
-        base_id: pod_id,
-        biome,
-        level: 0,
-        json,
-    })
+impl IntoFrogPod for SignedPod {
+    fn info(self) -> Option<FrogPodInfo> {
+        let biome: i64 = self.get("biome")?.typed().try_into().ok()?;
+        let pod_id = RawValue::from(self.id().0);
+        let json = Box::new(move || serde_json::to_value(&self).unwrap());
+        Some(FrogPodInfo {
+            pod_id,
+            base_id: pod_id,
+            biome,
+            level: 0,
+            json,
+        })
+    }
+    fn pod_data(self) -> PodData {
+        PodData::Signed(Box::new(self.into()))
+    }
+}
+
+impl IntoFrogPod for MainPod {
+    fn info(self) -> Option<FrogPodInfo> {
+        let statements = self.pod.pub_statements();
+        let (base_id, level) = statements
+            .into_iter()
+            .filter_map(|st| match st {
+                Statement::Custom(cpr, args) if cpr.index == 0 => {
+                    let base_id = args.first()?.raw();
+                    let level: i64 = args.get(1)?.typed().try_into().ok()?;
+                    Some((base_id, level))
+                }
+                _ => None,
+            })
+            .next()?;
+        let pod_id = RawValue::from(self.id().0);
+        let json = Box::new(move || serde_json::to_value(&self).unwrap());
+        Some(FrogPodInfo {
+            pod_id,
+            base_id,
+            biome: 1,
+            level,
+            json,
+        })
+    }
+    fn pod_data(self) -> PodData {
+        PodData::Main(Box::new(self.into()))
+    }
 }
 
 fn get_frog_pod_info(pod: PodInfo) -> Option<FrogPodInfo> {
     match pod.data {
         PodData::Signed(s) => {
             let inner = SignedPod::try_from(s.as_ref().clone()).ok()?;
-            signed_pod_frog_info(inner)
+            inner.info()
         }
         PodData::Main(s) => {
             let inner = MainPod::try_from(s.as_ref().clone()).ok()?;
-            let statements = inner.pod.pub_statements();
-            let (base_id, level) = statements
-                .into_iter()
-                .filter_map(|st| match st {
-                    Statement::Custom(cpr, args) if cpr.index == 0 => {
-                        let base_id = args.first()?.raw();
-                        let level: i64 = args.get(1)?.typed().try_into().ok()?;
-                        Some((base_id, level))
-                    }
-                    _ => None,
-                })
-                .next()?;
-            let pod_id = RawValue::from(inner.id().0);
-            let json = Box::new(move || serde_json::to_string(&inner).unwrap());
-            Some(FrogPodInfo {
-                pod_id,
-                base_id,
-                biome: 1,
-                level,
-                json,
-            })
+            inner.info()
         }
     }
 }
@@ -328,30 +406,49 @@ async fn description_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
         .map_err(|e| e.to_string())
 }
 
-async fn request_frog_description(pod: String, app_handle: AppHandle) -> Result<(), String> {
+async fn request_frog_description_and_log_err(pod: serde_json::Value, app_handle: AppHandle) {
+    if let Err(e) = request_frog_description(pod, app_handle).await {
+        log::error!("{e}");
+    }
+}
+
+async fn request_frog_description(
+    pod: serde_json::Value,
+    app_handle: AppHandle,
+) -> Result<(), String> {
     let client = Client::new();
     let url = server_url("desc");
     let desc: SignedPod = client
         .post(&url)
-        .body(pod)
+        .json(&pod)
         .send()
         .await
-        .map_err(connection_failed)?
+        .map_err(|e| e.to_string())?
         .json()
         .await
-        .map_err(connection_failed)?;
+        .map_err(|e| e.to_string())?;
     let state = app_handle.state::<Mutex<AppState>>();
     let mut app_state = state.lock().await;
     register_pod(&mut app_state, desc, "frog-descriptions").await
 }
 
-async fn register_frog(app_state: &mut AppState, pod: SignedPod) -> Result<(), String> {
+async fn register_frog(
+    state: &State<'_, Mutex<AppState>>,
+    pod: impl IntoFrogPod,
+) -> Result<(), String> {
+    let mut app_state = state.lock().await;
+    register_pod(&mut app_state, pod.clone(), "frogs").await?;
     let frog_descriptions = description_pods(&app_state.db).await?;
-    let info = signed_pod_frog_info(pod.clone()).unwrap();
+    let app_handle = app_state.app_handle.clone();
+    drop(app_state);
+    let info = pod
+        .clone()
+        .info()
+        .ok_or_else(|| "failed to parse pod".to_string())?;
     if description_for(&info, &frog_descriptions).is_none() {
-        tauri::async_runtime::spawn(request_frog_description(
+        tauri::async_runtime::spawn(request_frog_description_and_log_err(
             (info.json)(),
-            app_state.app_handle.clone(),
+            app_handle.clone(),
         ));
     }
     Ok(())
@@ -359,15 +456,14 @@ async fn register_frog(app_state: &mut AppState, pod: SignedPod) -> Result<(), S
 
 #[tauri::command]
 pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
+    let private_key = get_private_key(&state).await?;
     let client = Client::new();
-    let mut app_state = state.lock().await;
-    let private_key = crate::get_private_key(&app_state.db).await?;
     let frog_response: FrogResponse = download_frog(&client, private_key)
         .await?
         .json()
         .await
         .map_err(|e| e.to_string())?;
-    register_frog(&mut app_state, frog_response.pod).await?;
+    register_frog(&state, frog_response.pod).await?;
     Ok(frog_response.score)
 }
 
@@ -376,14 +472,14 @@ pub async fn fix_frog_descriptions(state: State<'_, Mutex<AppState>>) -> Result<
     let app_state = state.lock().await;
     let frog_pods = frog_pods(&app_state.db).await?;
     let frog_descs = description_pods(&app_state.db).await?;
+    let app_handle = app_state.app_handle.clone();
+    drop(app_state);
     for pod in frog_pods {
         let desc = description_for(&pod, &frog_descs);
         if desc.is_none() {
-            // request the descriptions in another future so we don't
-            // hold the lock on `state` while waiting for them
-            tauri::async_runtime::spawn(request_frog_description(
+            tauri::async_runtime::spawn(request_frog_description_and_log_err(
                 (pod.json)(),
-                app_state.app_handle.clone(),
+                app_handle.clone(),
             ));
         }
     }
@@ -393,8 +489,7 @@ pub async fn fix_frog_descriptions(state: State<'_, Mutex<AppState>>) -> Result<
 #[tauri::command]
 pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
     let client = Client::new();
-    let app_state = state.lock().await;
-    let private_key = crate::get_private_key(&app_state.db).await?;
+    let private_key = get_private_key(&state).await?;
     let pod = process_challenge(&client, private_key).await?;
     let score_url = server_url("score");
     client

@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
 import { Leaderboard } from "./Leaderboard";
 import { Button } from "./ui/button";
 import { requestScore, fixFrogDescriptions } from "@/lib/rpc";
 import { useEffect } from "react";
+import { useFrogCrypto } from "@/lib/store";
 
 // We need to write out all of the text, shadow, etc + color combinations, or tailwind won't generate the right css
 export const RARITY_TEXT_COLORS = [
@@ -29,18 +29,11 @@ export const RARITY_BG_COLORS = [
   "bg-black"
 ];
 
-enum View {
-  Frogs,
-  Frogedex,
-  Leaderboard
-}
-
 export function FrogCrypto() {
-  const [view, setView] = useState(View.Frogs);
-  const [score, setScore] = useState(0);
-  const frogView = view == View.Frogs;
-  const frogedexView = view == View.Frogedex;
-  const leaderboardView = view == View.Leaderboard;
+  const { currentScreen, navigateToScreen, score, setScore } = useFrogCrypto();
+  const frogView = currentScreen == "game";
+  const frogedexView = currentScreen == "frogedex";
+  const leaderboardView = currentScreen == "leaderboard";
   useEffect(() => {
     async function updateScore() {
       try {
@@ -58,21 +51,21 @@ export function FrogCrypto() {
         <Button
           className={`max-w-48 ${frogView ? "bg-accent" : ""}`}
           variant="outline"
-          onClick={() => setView(View.Frogs)}
+          onClick={() => navigateToScreen("game")}
         >
           get frogs
         </Button>
         <Button
           className={`max-w-48 ${frogedexView ? "bg-accent" : ""}`}
           variant="outline"
-          onClick={() => setView(View.Frogedex)}
+          onClick={() => navigateToScreen("frogedex")}
         >
           frogedex
         </Button>
         <Button
           className={`max-w-48 ${leaderboardView ? "bg-accent" : ""}`}
           variant="outline"
-          onClick={() => setView(View.Leaderboard)}
+          onClick={() => navigateToScreen("leaderboard")}
         >
           leaderboard
         </Button>
@@ -85,7 +78,7 @@ export function FrogCrypto() {
         reload frog descriptions
       </Button>
 
-      {frogView && <FrogViewer setScore={setScore} />}
+      {frogView && <FrogViewer />}
       {frogedexView && <Frogedex />}
       {leaderboardView && <Leaderboard />}
     </div>

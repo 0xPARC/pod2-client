@@ -136,8 +136,9 @@ export async function requestFrog(): RpcResult<number> {
 }
 
 export interface FrogPod {
-  pod_id: string;
-  data: FrogData | undefined;
+  id: string;
+  data: FrogData | null;
+  offer_level_up: boolean;
 }
 
 export interface FrogData {
