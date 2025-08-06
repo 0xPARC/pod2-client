@@ -43,6 +43,7 @@ export function TopBar() {
         <div className="flex items-center">{slots.left}</div>
         <div className="flex items-center">{slots.center}</div>
         <div className="flex items-center">{slots.right}</div>
+        {/* <div className="text-base rounded-full p-1 animate-spin border-border bg-gradient-to-r from-indigo-500 to-sky-500 flex items-center"><div className="text-white animate-pulse">pod</div></div> */}
       </div>
     </div>
   );

@@ -3,6 +3,17 @@ import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 import { useMemo } from "react";
 
+// Helper function to add line mapping attributes to tokens
+function addLineMapping(tokens: any[], idx: number) {
+  if (tokens[idx].map && tokens[idx].level === 0) {
+    const startline = tokens[idx].map[0] + 1;
+    const endline = tokens[idx].map[1];
+    tokens[idx].attrJoin("class", "part");
+    tokens[idx].attrJoin("data-startline", startline.toString());
+    tokens[idx].attrJoin("data-endline", endline.toString());
+  }
+}
+
 // Reusable markdown-it instance creator with consistent configuration
 export function useMarkdownRenderer() {
   return useMemo(() => {
@@ -40,6 +51,152 @@ export function useMarkdownRenderer() {
         "table", // GitHub tables
         "strikethrough" // ~~text~~
       ]);
+
+    // Override renderer rules to add line mapping for scroll sync
+    mdInstance.renderer.rules.paragraph_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.heading_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      tokens[idx].attrJoin("class", "raw");
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.blockquote_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      tokens[idx].attrJoin("class", "raw");
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.bullet_list_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.ordered_list_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.list_item_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      tokens[idx].attrJoin("class", "raw");
+      if (tokens[idx].map) {
+        const startline = tokens[idx].map[0] + 1;
+        const endline = tokens[idx].map[1];
+        tokens[idx].attrJoin("data-startline", startline.toString());
+        tokens[idx].attrJoin("data-endline", endline.toString());
+      }
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.table_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      addLineMapping(tokens, idx);
+      return self.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.fence = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      self
+    ) {
+      const token = tokens[idx];
+      const info = token.info
+        ? mdInstance.utils.unescapeAll(token.info).trim()
+        : "";
+      let langName = "";
+      let highlighted;
+
+      if (info) {
+        langName = info.split(/\s+/g)[0];
+        token.attrJoin(
+          "class",
+          options.langPrefix + langName.replace(/=$|=\d+$|=\+$|!$|=!/, "")
+        );
+        token.attrJoin("class", "hljs");
+        token.attrJoin("class", "raw");
+      }
+
+      if (options.highlight) {
+        highlighted =
+          options.highlight(token.content, langName, "") ||
+          mdInstance.utils.escapeHtml(token.content);
+      } else {
+        highlighted = mdInstance.utils.escapeHtml(token.content);
+      }
+
+      if (highlighted.indexOf("<pre") === 0) {
+        return `${highlighted}\n`;
+      }
+
+      if (tokens[idx].map && tokens[idx].level === 0) {
+        const startline = tokens[idx].map[0] + 1;
+        const endline = tokens[idx].map[1];
+        return `<pre class="part" data-startline="${startline}" data-endline="${endline}"><code${self.renderAttrs(token)}>${highlighted}</code></pre>\n`;
+      }
+
+      return `<pre><code${self.renderAttrs(token)}>${highlighted}</code></pre>\n`;
+    };
+
+    mdInstance.renderer.rules.code_block = function (
+      tokens,
+      idx,
+      _options,
+      _env,
+      _self
+    ) {
+      if (tokens[idx].map && tokens[idx].level === 0) {
+        const startline = tokens[idx].map[0] + 1;
+        const endline = tokens[idx].map[1];
+        return `<pre class="part" data-startline="${startline}" data-endline="${endline}"><code>${mdInstance.utils.escapeHtml(tokens[idx].content)}</code></pre>\n`;
+      }
+      return `<pre><code>${mdInstance.utils.escapeHtml(tokens[idx].content)}</code></pre>\n`;
+    };
 
     // Custom renderer for links to open in new tab
     mdInstance.renderer.rules.link_open = function (

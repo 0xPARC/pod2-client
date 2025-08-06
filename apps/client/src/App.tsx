@@ -35,6 +35,22 @@ function GlobalKeyboardShortcuts() {
   return null;
 }
 
+// Component that renders MainContent with proper sidebar-aware width
+function MainContentWithSidebarAware() {
+  const { open } = useSidebar();
+
+  return (
+    <main
+      className="mt-(--top-bar-height) h-full"
+      style={{
+        width: open ? "calc(100vw - var(--sidebar-width))" : "100vw"
+      }}
+    >
+      <MainContent />
+    </main>
+  );
+}
+
 function App() {
   const { initialize } = useAppStore((state) => state);
   const [isSetupCompleted, setIsSetupCompleted] = useState<boolean | null>(
@@ -164,9 +180,7 @@ function App() {
                 <GlobalKeyboardShortcuts />
                 <TopBar />
                 <AppSidebar />
-                <div className="mt-(--top-bar-height) w-full h-full">
-                  <MainContent />
-                </div>
+                <MainContentWithSidebarAware />
               </TopBarProvider>
             </SidebarProvider>
             <Toaster />

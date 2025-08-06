@@ -10,10 +10,11 @@ import {
   QuoteIcon,
   SplitIcon
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
-import { renderMarkdownToHtml, useMarkdownRenderer } from "../markdownRenderer";
+import { useChunkBasedScrollSync } from "../useChunkBasedScrollSync";
+import { useChunkedMarkdown } from "../useChunkedMarkdown";
 
 interface MarkdownEditorProps {
   value: string;
@@ -33,16 +34,20 @@ export function MarkdownEditor({
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Use shared markdown renderer
-  const md = useMarkdownRenderer();
+  // Use chunked markdown rendering
+  const { chunkElements: chunkedContent, chunks } = useChunkedMarkdown(
+    value,
+    textareaRef
+  );
 
-  // Memoize the rendered HTML - only re-render when content changes
-  const renderedHtml = useMemo(() => {
-    if (!value.trim()) {
-      return "Nothing to preview yet. Start typing to see your markdown rendered here.";
-    }
-    return renderMarkdownToHtml(md, value);
-  }, [value, md]);
+  // Use chunk-based scroll synchronization
+  const { editAreaRef, viewAreaRef } = useChunkBasedScrollSync(chunks);
+
+  // Combined ref callback to handle both textareaRef and editAreaRef
+  const setTextareaRef = useCallback((element: HTMLTextAreaElement | null) => {
+    textareaRef.current = element;
+    editAreaRef.current = element;
+  }, []);
 
   // Insert markdown formatting at cursor position
   const insertFormatting = useCallback(
@@ -154,14 +159,14 @@ export function MarkdownEditor({
       </div>
 
       {/* Editor/Preview Content */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden">
         {/* Editor pane */}
         {(viewMode === "edit" || viewMode === "split") && (
           <div
-            className={`${viewMode === "split" ? "w-1/2" : "w-full"} flex flex-col min-h-0`}
+            className={`${viewMode === "split" ? "w-1/2" : "w-full"} flex flex-col min-h-0 min-w-0`}
           >
             <Textarea
-              ref={textareaRef}
+              ref={setTextareaRef}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder={placeholder || "Enter your markdown content..."}
@@ -173,12 +178,15 @@ export function MarkdownEditor({
         {/* Preview pane */}
         {(viewMode === "preview" || viewMode === "split") && (
           <div
-            className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
+            className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 max-w-full bg-card overflow-hidden`}
           >
             <div
-              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
+              ref={viewAreaRef}
+              className="flex-1 min-h-0 min-w-0 max-w-full p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
+              style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
+            >
+              {chunkedContent}
+            </div>
           </div>
         )}
       </div>
