@@ -14,7 +14,11 @@ export function useMarkdownRenderer() {
       linkify: true, // Autoconvert URL-like text to links
       typographer: true // Enable smartquotes and other typographic replacements
     })
-      .use(hljs) // Add syntax highlighting
+      .use(hljs, {
+        // Configure highlight.js to handle language parsing properly
+        auto: false, // Disable auto-detection to avoid errors
+        code: true // Only highlight code blocks with explicit language
+      }) // Add syntax highlighting with error handling
       .use(markdownItMathjax, {
         // MathJax configuration
         tex: {

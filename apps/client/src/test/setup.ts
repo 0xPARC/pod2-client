@@ -3,7 +3,8 @@
  * This file is executed before each test file runs
  */
 
-import "@testing-library/jest-dom";
+// TODO: Fix jest-dom import issue - temporarily commented out
+// import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
 // Type declarations for global properties

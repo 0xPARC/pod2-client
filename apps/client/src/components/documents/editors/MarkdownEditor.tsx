@@ -1,4 +1,10 @@
 import "highlight.js/styles/github-dark.css";
+import Editor, {
+  type Monaco,
+  type OnChange,
+  loader
+} from "@monaco-editor/react";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import {
   BoldIcon,
   CodeIcon,
@@ -8,12 +14,17 @@ import {
   LinkIcon,
   ListIcon,
   QuoteIcon,
-  SplitIcon
+  SplitIcon,
+  Link2OffIcon
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../../ui/button";
-import { Textarea } from "../../ui/textarea";
-import { renderMarkdownToHtml, useMarkdownRenderer } from "../markdownRenderer";
+import { useMarkdownWorker } from "../useMarkdownWorker";
+import { useScrollSync } from "../useScrollSync";
+import { useTheme } from "../../theme-provider";
+
+// Configure Monaco loader
+loader.config({ monaco });
 
 interface MarkdownEditorProps {
   value: string;
@@ -27,58 +38,152 @@ type ViewMode = "edit" | "preview" | "split";
 export function MarkdownEditor({
   value,
   onChange,
-  placeholder,
+  placeholder: _placeholder,
   className
 }: MarkdownEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [scrollSyncEnabled, setScrollSyncEnabled] = useState(true);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const { theme } = useTheme();
 
-  // Use shared markdown renderer
-  const md = useMarkdownRenderer();
+  // Use worker-based markdown renderer
+  const {
+    renderMarkdown,
+    html: renderedHtml,
+    blockMappings,
+    isRendering,
+    error
+  } = useMarkdownWorker();
 
-  // Memoize the rendered HTML - only re-render when content changes
-  const renderedHtml = useMemo(() => {
-    if (!value.trim()) {
-      return "Nothing to preview yet. Start typing to see your markdown rendered here.";
+  // Use scroll synchronization with cooldown to prevent feedback loops
+  const { setEditorRef, setPreviewRef, updateBlockMappings, enableSync } =
+    useScrollSync({
+      cooldownMs: 150 // Brief cooldown to prevent feedback loops
+    });
+
+  // Handle preview container ref
+  const handlePreviewRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      previewContainerRef.current = element;
+      setPreviewRef(element);
+    },
+    [setPreviewRef]
+  );
+
+  // Trigger rendering when value changes
+  useEffect(() => {
+    if (value.trim()) {
+      renderMarkdown(value);
     }
-    return renderMarkdownToHtml(md, value);
-  }, [value, md]);
+  }, [value, renderMarkdown]);
 
-  // Insert markdown formatting at cursor position
+  // Update block mappings when they change
+  useEffect(() => {
+    if (blockMappings.length > 0) {
+      updateBlockMappings(blockMappings);
+    }
+  }, [blockMappings, updateBlockMappings]);
+
+  // Update scroll sync enabled state
+  useEffect(() => {
+    enableSync(scrollSyncEnabled);
+  }, [scrollSyncEnabled, enableSync]);
+
+  // Display content based on state
+  const displayHtml = error
+    ? `<div style="color: red; padding: 16px;">Error rendering markdown: ${error}</div>`
+    : value.trim()
+      ? renderedHtml ||
+        (isRendering
+          ? '<div style="padding: 16px; opacity: 0.5;">Rendering...</div>'
+          : "")
+      : "Nothing to preview yet. Start typing to see your markdown rendered here.";
+
+  // Handle Monaco editor content changes
+  const handleEditorChange: OnChange = useCallback(
+    (value) => {
+      const newContent = value || "";
+      onChange(newContent);
+    },
+    [onChange]
+  );
+
+  // Handle Monaco editor mount
+  const handleEditorDidMount = useCallback(
+    (
+      mountedEditor: monaco.editor.IStandaloneCodeEditor,
+      mountedMonaco: Monaco
+    ) => {
+      editorRef.current = mountedEditor;
+      monacoRef.current = mountedMonaco;
+
+      // Set theme
+      const currentTheme = theme === "dark" ? "vs-dark" : "vs-light";
+      mountedMonaco.editor.setTheme(currentTheme);
+
+      // Set editor ref for scroll sync
+      setEditorRef(mountedEditor);
+    },
+    [theme, setEditorRef]
+  );
+
+  // Update theme when it changes
+  React.useEffect(() => {
+    if (monacoRef.current) {
+      const currentTheme = theme === "dark" ? "vs-dark" : "vs-light";
+      monacoRef.current.editor.setTheme(currentTheme);
+    }
+  }, [theme]);
+
+  // Insert markdown formatting at cursor position using Monaco API
   const insertFormatting = useCallback(
     (prefix: string, suffix: string = "", placeholder: string = "") => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+      const editor = editorRef.current;
+      if (!editor) return;
 
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selectedText = value.substring(start, end);
+      const selection = editor.getSelection();
+      if (!selection) return;
 
+      const model = editor.getModel();
+      if (!model) return;
+
+      const selectedText = model.getValueInRange(selection);
       const replacement = selectedText
         ? `${prefix}${selectedText}${suffix}`
         : `${prefix}${placeholder}${suffix}`;
 
-      const newValue =
-        value.substring(0, start) + replacement + value.substring(end);
-      onChange(newValue);
-
-      // Set cursor position after the inserted text
-      setTimeout(() => {
-        if (selectedText) {
-          textarea.setSelectionRange(
-            start + prefix.length,
-            start + prefix.length + selectedText.length
-          );
-        } else {
-          textarea.setSelectionRange(
-            start + prefix.length,
-            start + prefix.length + placeholder.length
-          );
+      // Execute edit operation
+      editor.executeEdits("markdown-formatting", [
+        {
+          range: selection,
+          text: replacement
         }
-        textarea.focus();
-      }, 0);
+      ]);
+
+      // Set selection after the inserted text
+      if (selectedText) {
+        // Select the replaced text
+        editor.setSelection({
+          startLineNumber: selection.startLineNumber,
+          startColumn: selection.startColumn + prefix.length,
+          endLineNumber: selection.endLineNumber,
+          endColumn: selection.startColumn + prefix.length + selectedText.length
+        });
+      } else {
+        // Select the placeholder text
+        editor.setSelection({
+          startLineNumber: selection.startLineNumber,
+          startColumn: selection.startColumn + prefix.length,
+          endLineNumber: selection.startLineNumber,
+          endColumn: selection.startColumn + prefix.length + placeholder.length
+        });
+      }
+
+      editor.focus();
     },
-    [value, onChange]
+    []
   );
 
   // Toolbar actions
@@ -122,6 +227,21 @@ export function MarkdownEditor({
           <Button variant="ghost" size="sm" onClick={handleCode} title="Code">
             <CodeIcon className="w-4 h-4" />
           </Button>
+          <div className="h-4 w-px bg-border mx-1" /> {/* Divider */}
+          <Button
+            variant={scrollSyncEnabled ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setScrollSyncEnabled(!scrollSyncEnabled)}
+            title={
+              scrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"
+            }
+          >
+            {scrollSyncEnabled ? (
+              <LinkIcon className="w-4 h-4" />
+            ) : (
+              <Link2OffIcon className="w-4 h-4" />
+            )}
+          </Button>
         </div>
 
         {/* View mode toggle */}
@@ -160,13 +280,86 @@ export function MarkdownEditor({
           <div
             className={`${viewMode === "split" ? "w-1/2" : "w-full"} flex flex-col min-h-0`}
           >
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={placeholder || "Enter your markdown content..."}
-              className="flex-1 min-h-0 border-0 rounded-none resize-none focus-visible:ring-0 font-mono text-base md:text-base overflow-auto p-4"
-            />
+            <div className="flex-1 min-h-0">
+              <Editor
+                height="100%"
+                width="100%"
+                language="markdown"
+                theme={theme === "dark" ? "vs-dark" : "vs-light"}
+                value={value}
+                onChange={handleEditorChange}
+                onMount={handleEditorDidMount}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  wordWrap: "on",
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  lineNumbers: "on",
+                  renderLineHighlight: "line",
+                  selectionHighlight: false,
+                  smoothScrolling: true,
+                  cursorBlinking: "smooth",
+                  folding: true,
+                  foldingHighlight: true,
+                  // Disable IntelliSense/autocomplete features inappropriate for markdown
+                  quickSuggestions: false,
+                  suggestOnTriggerCharacters: false,
+                  acceptSuggestionOnEnter: "off",
+                  tabCompletion: "off",
+                  wordBasedSuggestions: "off",
+                  // Disable parameter hints and signature help
+                  parameterHints: { enabled: false },
+                  // Disable code lens and other code-oriented features
+                  codeLens: false,
+                  // Disable hover information
+                  hover: { enabled: false },
+                  // Keep basic bracket features but disable advanced code features
+                  bracketPairColorization: {
+                    enabled: false // Disable for markdown
+                  },
+                  guides: {
+                    bracketPairs: false, // Not useful for markdown
+                    indentation: false // Markdown doesn't need indentation guides
+                  },
+                  // Disable suggestions entirely
+                  suggest: {
+                    showKeywords: false,
+                    showSnippets: false,
+                    showFunctions: false,
+                    showConstructors: false,
+                    showFields: false,
+                    showVariables: false,
+                    showClasses: false,
+                    showStructs: false,
+                    showInterfaces: false,
+                    showModules: false,
+                    showProperties: false,
+                    showEvents: false,
+                    showOperators: false,
+                    showUnits: false,
+                    showValues: false,
+                    showConstants: false,
+                    showEnums: false,
+                    showEnumMembers: false,
+                    showColors: false,
+                    showFiles: false,
+                    showReferences: false,
+                    showFolders: false,
+                    showTypeParameters: false,
+                    showIssues: false,
+                    showUsers: false,
+                    showWords: false
+                  },
+                  padding: {
+                    top: 16,
+                    bottom: 16
+                  },
+                  tabSize: 2,
+                  insertSpaces: true
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -176,8 +369,9 @@ export function MarkdownEditor({
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
             <div
+              ref={handlePreviewRef}
               className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
           </div>
         )}
