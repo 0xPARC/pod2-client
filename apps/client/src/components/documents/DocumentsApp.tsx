@@ -1,10 +1,22 @@
-import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
+import { generateDocumentsUrl } from "@/lib/deeplink/generator";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  LinkIcon,
+  ShareIcon
+} from "lucide-react";
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { useDocuments } from "../../lib/store";
 import { DebugView } from "../DebugView";
 import { TopBarSlot } from "../TopBarContext";
 import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "../ui/dropdown-menu";
 import { DocumentDetailView } from "./DocumentDetailView";
 import { DocumentsView } from "./DocumentsView";
 import { DraftsView } from "./DraftsView";
@@ -163,6 +175,28 @@ export function DocumentsApp() {
           >
             <ArrowRightIcon className="w-4 h-4" />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" onClick={() => {}}>
+                <ShareIcon className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    generateDocumentsUrl({
+                      type: currentRoute.type,
+                      id: currentRoute.id
+                    })
+                  );
+                }}
+              >
+                <LinkIcon className="w-4 h-4" />
+                Copy link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <h1>
             {titleData.hasPrefix && titleData.prefix && (
               <span className="font-normal text-muted-foreground mr-1">
