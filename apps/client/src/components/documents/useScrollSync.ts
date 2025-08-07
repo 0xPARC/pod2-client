@@ -34,6 +34,13 @@ interface UseScrollSyncResult {
   // Update block mappings when they change
   updateBlockMappings: (mappings: BlockMapping[]) => void;
 
+  // Manual sync triggers for view mode transitions
+  syncEditorToPreview: () => void;
+  syncPreviewToEditor: () => void;
+
+  // Layout change control
+  setLayoutChanging: (changing: boolean) => void;
+
   // Current block geometries (for debugging)
   blockGeometries: BlockGeometry[];
 }
@@ -58,6 +65,7 @@ export function useScrollSync(
 
   // Sync timing control
   const syncCooldownTimer = useRef<NodeJS.Timeout | undefined>(undefined);
+  const isLayoutChanging = useRef(false);
 
   // Update block geometry calculations
   const updateBlockGeometries = useCallback(
@@ -307,6 +315,11 @@ export function useScrollSync(
 
   // Direct scroll handlers without debouncing
   const handleEditorScroll = useCallback(() => {
+    // Skip if layout is changing (geometry is stale)
+    if (isLayoutChanging.current) {
+      return;
+    }
+
     // Skip if we recently synced from preview to editor
     const timeSinceLastSync = Date.now() - lastSyncTime.current;
     if (
@@ -326,6 +339,12 @@ export function useScrollSync(
   }, [syncEditorToPreview, cooldownMs]);
 
   const handlePreviewScroll = useCallback(() => {
+    // Skip if layout is changing (geometry is stale)
+    if (isLayoutChanging.current) {
+      console.log("🛑 Blocked preview scroll sync - layout changing");
+      return;
+    }
+
     // Skip if we recently synced from editor to preview
     const timeSinceLastSync = Date.now() - lastSyncTime.current;
     if (
@@ -340,6 +359,7 @@ export function useScrollSync(
       return;
     }
 
+    console.log("🔄 Running preview scroll sync");
     // Sync immediately without debouncing
     syncPreviewToEditor();
   }, [syncPreviewToEditor, cooldownMs]);
@@ -358,6 +378,28 @@ export function useScrollSync(
 
     // Listen to preview scroll events
     preview.addEventListener("scroll", handlePreviewScroll, { passive: true });
+
+    // Set up ResizeObserver to detect preview container size changes (view mode transitions, window resizes)
+    const handlePreviewResize = () => {
+      // Mark that layout is changing to prevent scroll sync with stale geometry
+      console.log("📏 ResizeObserver fired - blocking scroll sync");
+      isLayoutChanging.current = true;
+
+      // Delay geometry refresh to ensure layout has settled after resize
+      setTimeout(() => {
+        console.log("📏 Updating block geometries after resize");
+        updateBlockGeometries(blockGeometries.map((geom) => geom.mapping));
+
+        // Re-enable scroll sync after geometry is updated
+        setTimeout(() => {
+          console.log("✅ Re-enabling scroll sync after layout");
+          isLayoutChanging.current = false;
+        }, 50);
+      }, 100);
+    };
+
+    const resizeObserver = new ResizeObserver(handlePreviewResize);
+    resizeObserver.observe(preview);
 
     // To ensure geometry is updated after MathJax renders, we use multiple strategies:
     // 1. Listen for specific MathJax events for immediate feedback.
@@ -427,6 +469,9 @@ export function useScrollSync(
       editorScrollDisposable.dispose();
       preview.removeEventListener("scroll", handlePreviewScroll);
 
+      // Disconnect ResizeObserver
+      resizeObserver.disconnect();
+
       // Remove all MathJax event listeners
       mathJaxEvents.forEach((eventName) => {
         preview.removeEventListener(eventName, handleMathJaxRendered);
@@ -467,10 +512,22 @@ export function useScrollSync(
     [updateBlockGeometries]
   );
 
+  const setLayoutChanging = useCallback((changing: boolean) => {
+    isLayoutChanging.current = changing;
+    if (changing) {
+      console.log("🛑 Layout changing - blocking scroll sync");
+    } else {
+      console.log("✅ Layout settled - enabling scroll sync");
+    }
+  }, []);
+
   return {
     setEditorRef,
     setPreviewRef,
     updateBlockMappings,
+    syncEditorToPreview,
+    syncPreviewToEditor,
+    setLayoutChanging,
     blockGeometries
   };
 }

@@ -61,6 +61,7 @@ export function MarkdownEditor({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousViewModeRef = useRef<ViewMode>("split");
   const { theme } = useTheme();
 
   // Use worker-based markdown renderer with optimized updates
@@ -105,6 +106,74 @@ export function MarkdownEditor({
       updateBlockMappings(blockMappings);
     }
   }, [blockMappings, updateBlockMappings]);
+
+  // Track view mode changes and fix scroll jumps after they happen
+  useEffect(() => {
+    const previousMode = previousViewModeRef.current;
+    const currentMode = viewMode;
+
+    if (previousMode !== currentMode && previewContainerRef.current) {
+      const preview = previewContainerRef.current;
+
+      // Check if this transition affects preview layout (split ↔ preview)
+      const affectsPreviewLayout =
+        (previousMode === "split" && currentMode === "preview") ||
+        (previousMode === "preview" && currentMode === "split") ||
+        (previousMode === "edit" &&
+          (currentMode === "preview" || currentMode === "split")) ||
+        ((previousMode === "preview" || previousMode === "split") &&
+          currentMode === "edit");
+
+      if (affectsPreviewLayout) {
+        // Capture scroll position before transition
+        const originalScrollTop = preview.scrollTop;
+        const scrollHeight = preview.scrollHeight;
+        const clientHeight = preview.clientHeight;
+        const scrollPercentage =
+          scrollHeight > clientHeight
+            ? (originalScrollTop / (scrollHeight - clientHeight)) * 100
+            : 0;
+
+        console.log(`View mode: ${previousMode} → ${currentMode}`);
+        console.log(
+          `Before transition - scrollTop: ${originalScrollTop}, scrollHeight: ${scrollHeight}, percentage: ${scrollPercentage.toFixed(1)}%`
+        );
+
+        // Check what happened after layout settles and fix it
+        setTimeout(() => {
+          const newScrollTop = preview.scrollTop;
+          const newScrollHeight = preview.scrollHeight;
+          const newClientHeight = preview.clientHeight;
+          const newScrollPercentage =
+            newScrollHeight > newClientHeight
+              ? (newScrollTop / (newScrollHeight - newClientHeight)) * 100
+              : 0;
+
+          console.log(
+            `After transition - scrollTop: ${newScrollTop}, scrollHeight: ${newScrollHeight}, percentage: ${newScrollPercentage.toFixed(1)}%`
+          );
+          console.log(
+            `Scroll change: ${originalScrollTop} → ${newScrollTop} (${(newScrollTop - originalScrollTop).toFixed(0)}px)`
+          );
+
+          // Always restore the original scroll position
+          if (newScrollTop !== originalScrollTop) {
+            console.log(
+              `🔧 Restoring scroll position: ${newScrollTop}px → ${originalScrollTop}px`
+            );
+            preview.scrollTo({
+              top: originalScrollTop,
+              behavior: "instant"
+            });
+          }
+
+          console.log("---");
+        }, 200);
+      }
+    }
+
+    previousViewModeRef.current = viewMode;
+  }, [viewMode]);
 
   // Display content based on state
   const displayHtml = error
@@ -307,108 +376,116 @@ export function MarkdownEditor({
 
       {/* Editor/Preview Content */}
       <div className="flex flex-1 min-h-0">
-        {/* Editor pane */}
-        {(viewMode === "edit" || viewMode === "split") && (
-          <div
-            className={`${viewMode === "split" ? "w-1/2" : "w-full"} flex flex-col min-h-0`}
-          >
-            <div className="flex-1 min-h-0">
-              <Editor
-                height="100%"
-                width="100%"
-                language="markdown"
-                theme={theme === "dark" ? "vs-dark" : "vs-light"}
-                value={value}
-                onChange={handleEditorChange}
-                onMount={handleEditorDidMount}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  wordWrap: "on",
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  lineNumbers: "on",
-                  renderLineHighlight: "line",
-                  selectionHighlight: false,
-                  smoothScrolling: true,
-                  cursorBlinking: "smooth",
-                  folding: true,
-                  foldingHighlight: true,
-                  // Disable IntelliSense/autocomplete features inappropriate for markdown
-                  quickSuggestions: false,
-                  suggestOnTriggerCharacters: false,
-                  acceptSuggestionOnEnter: "off",
-                  tabCompletion: "off",
-                  wordBasedSuggestions: "off",
-                  // Disable parameter hints and signature help
-                  parameterHints: { enabled: false },
-                  // Disable code lens and other code-oriented features
-                  codeLens: false,
-                  // Disable hover information
-                  hover: { enabled: false },
-                  // Keep basic bracket features but disable advanced code features
-                  bracketPairColorization: {
-                    enabled: false // Disable for markdown
-                  },
-                  guides: {
-                    bracketPairs: false, // Not useful for markdown
-                    indentation: false // Markdown doesn't need indentation guides
-                  },
-                  // Disable suggestions entirely
-                  suggest: {
-                    showKeywords: false,
-                    showSnippets: false,
-                    showFunctions: false,
-                    showConstructors: false,
-                    showFields: false,
-                    showVariables: false,
-                    showClasses: false,
-                    showStructs: false,
-                    showInterfaces: false,
-                    showModules: false,
-                    showProperties: false,
-                    showEvents: false,
-                    showOperators: false,
-                    showUnits: false,
-                    showValues: false,
-                    showConstants: false,
-                    showEnums: false,
-                    showEnumMembers: false,
-                    showColors: false,
-                    showFiles: false,
-                    showReferences: false,
-                    showFolders: false,
-                    showTypeParameters: false,
-                    showIssues: false,
-                    showUsers: false,
-                    showWords: false
-                  },
-                  padding: {
-                    top: 16,
-                    bottom: 16
-                  },
-                  tabSize: 2,
-                  insertSpaces: true
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Preview pane */}
-        {(viewMode === "preview" || viewMode === "split") && (
-          <div
-            className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
-          >
-            <MarkdownPreview
-              ref={handlePreviewRef}
-              html={displayHtml}
-              affectedRegions={affectedRegions}
-              blockMappings={blockMappings}
-              className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
+        {/* Editor pane - always rendered but hidden in preview-only mode to maintain scroll sync */}
+        <div
+          className={`${
+            viewMode === "preview"
+              ? "hidden"
+              : viewMode === "split"
+                ? "w-1/2"
+                : "w-full"
+          } flex flex-col min-h-0`}
+        >
+          <div className="flex-1 min-h-0">
+            <Editor
+              height="100%"
+              width="100%"
+              language="markdown"
+              theme={theme === "dark" ? "vs-dark" : "vs-light"}
+              value={value}
+              onChange={handleEditorChange}
+              onMount={handleEditorDidMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                wordWrap: "on",
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                lineNumbers: "on",
+                renderLineHighlight: "line",
+                selectionHighlight: false,
+                smoothScrolling: true,
+                cursorBlinking: "smooth",
+                folding: true,
+                foldingHighlight: true,
+                // Disable IntelliSense/autocomplete features inappropriate for markdown
+                quickSuggestions: false,
+                suggestOnTriggerCharacters: false,
+                acceptSuggestionOnEnter: "off",
+                tabCompletion: "off",
+                wordBasedSuggestions: "off",
+                // Disable parameter hints and signature help
+                parameterHints: { enabled: false },
+                // Disable code lens and other code-oriented features
+                codeLens: false,
+                // Disable hover information
+                hover: { enabled: false },
+                // Keep basic bracket features but disable advanced code features
+                bracketPairColorization: {
+                  enabled: false // Disable for markdown
+                },
+                guides: {
+                  bracketPairs: false, // Not useful for markdown
+                  indentation: false // Markdown doesn't need indentation guides
+                },
+                // Disable suggestions entirely
+                suggest: {
+                  showKeywords: false,
+                  showSnippets: false,
+                  showFunctions: false,
+                  showConstructors: false,
+                  showFields: false,
+                  showVariables: false,
+                  showClasses: false,
+                  showStructs: false,
+                  showInterfaces: false,
+                  showModules: false,
+                  showProperties: false,
+                  showEvents: false,
+                  showOperators: false,
+                  showUnits: false,
+                  showValues: false,
+                  showConstants: false,
+                  showEnums: false,
+                  showEnumMembers: false,
+                  showColors: false,
+                  showFiles: false,
+                  showReferences: false,
+                  showFolders: false,
+                  showTypeParameters: false,
+                  showIssues: false,
+                  showUsers: false,
+                  showWords: false
+                },
+                padding: {
+                  top: 16,
+                  bottom: 16
+                },
+                tabSize: 2,
+                insertSpaces: true
+              }}
             />
           </div>
-        )}
+        </div>
+
+        {/* Preview pane - always rendered but hidden in edit-only mode to maintain scroll sync */}
+        <div
+          className={`${
+            viewMode === "edit"
+              ? "hidden"
+              : viewMode === "split"
+                ? "w-1/2 border-l"
+                : "w-full"
+          } flex flex-col min-h-0 min-w-0 bg-card`}
+        >
+          <MarkdownPreview
+            ref={handlePreviewRef}
+            html={displayHtml}
+            affectedRegions={affectedRegions}
+            blockMappings={blockMappings}
+            className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
+          />
+        </div>
       </div>
     </div>
   );
