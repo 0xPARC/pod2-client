@@ -2,6 +2,9 @@
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Default scroll sync cooldown to prevent editor/preview feedback loops
+const DEFAULT_SCROLL_SYNC_COOLDOWN_MS = 100;
+
 export interface BlockMapping {
   startLine: number;
   endLine: number;
@@ -41,7 +44,7 @@ interface UseScrollSyncResult {
 export function useScrollSync(
   options: UseScrollSyncOptions = {}
 ): UseScrollSyncResult {
-  const { cooldownMs = 100 } = options;
+  const { cooldownMs = DEFAULT_SCROLL_SYNC_COOLDOWN_MS } = options;
 
   // Refs for editor and preview
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);

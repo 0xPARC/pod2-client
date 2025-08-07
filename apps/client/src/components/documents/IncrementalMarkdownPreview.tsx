@@ -1,5 +1,5 @@
 // Component for incremental markdown preview updates with surgical DOM operations
-import { useEffect, useRef, forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import type {
   AffectedRegion,
   BlockMapping
@@ -19,6 +19,9 @@ function parseHTMLToDOM(htmlString: string): DocumentFragment {
   template.innerHTML = htmlString.trim();
   return template.content;
 }
+
+// Cache for DOM elements by element index to avoid repeated querySelector calls
+const elementCache = new Map<number, Element>();
 
 // Helper function to find elements that correspond to affected regions
 function findAffectedElements(
@@ -45,10 +48,22 @@ function findAffectedElements(
     for (let line = region.startLine; line <= region.endLine; line++) {
       const mapping = lineToMapping.get(line);
       if (mapping) {
-        // Find the DOM element with the corresponding element index
-        const element = container.querySelector(
-          `[data-md-element-index="${mapping.elementIndex}"]`
-        );
+        // Try to get element from cache first
+        let element = elementCache.get(mapping.elementIndex);
+
+        if (!element || !document.contains(element)) {
+          // Cache miss or stale element - query DOM and update cache
+          const foundElement = container.querySelector(
+            `[data-md-element-index="${mapping.elementIndex}"]`
+          );
+          if (foundElement) {
+            element = foundElement;
+            elementCache.set(mapping.elementIndex, foundElement);
+          } else {
+            element = undefined;
+          }
+        }
+
         if (element) {
           results.push({ element, region, mapping });
           break; // Don't duplicate the same element
@@ -58,6 +73,11 @@ function findAffectedElements(
   });
 
   return results;
+}
+
+// Helper function to clear element cache when HTML changes significantly
+function clearElementCache() {
+  elementCache.clear();
 }
 
 export const IncrementalMarkdownPreview = forwardRef<
@@ -139,6 +159,7 @@ export const IncrementalMarkdownPreview = forwardRef<
           } else {
             // Fallback to full update if we couldn't find specific elements
             container.innerHTML = html;
+            clearElementCache(); // Clear cache after full DOM replacement
             container.scrollTop = scrollTop;
             container.scrollLeft = scrollLeft;
           }
@@ -148,6 +169,7 @@ export const IncrementalMarkdownPreview = forwardRef<
           const scrollLeft = container.scrollLeft;
 
           container.innerHTML = html;
+          clearElementCache(); // Clear cache after full DOM replacement
 
           container.scrollTop = scrollTop;
           container.scrollLeft = scrollLeft;
@@ -155,6 +177,7 @@ export const IncrementalMarkdownPreview = forwardRef<
       } else {
         // Full update (first render or no incremental data)
         container.innerHTML = html;
+        clearElementCache(); // Clear cache after full DOM replacement
       }
 
       lastHtmlRef.current = html;

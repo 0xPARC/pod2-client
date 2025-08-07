@@ -1,32 +1,32 @@
-import "highlight.js/styles/github-dark.css";
 import Editor, {
   type Monaco,
   type OnChange,
   loader
 } from "@monaco-editor/react";
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import "highlight.js/styles/github-dark.css";
 import {
   BoldIcon,
   CodeIcon,
   EditIcon,
   EyeIcon,
   ItalicIcon,
+  Link2OffIcon,
   LinkIcon,
   ListIcon,
   QuoteIcon,
-  SplitIcon,
-  Link2OffIcon
+  SplitIcon
 } from "lucide-react";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "../../ui/button";
-import { useMarkdownWorker } from "../useMarkdownWorker";
-import { useScrollSync } from "../useScrollSync";
-import { useTheme } from "../../theme-provider";
 import {
   initializeMonacoWorkers,
   isWorkerSupported
 } from "../../../lib/monacoWorkers";
+import { useTheme } from "../../theme-provider";
+import { Button } from "../../ui/button";
 import { IncrementalMarkdownPreview } from "../IncrementalMarkdownPreview";
+import { useMarkdownWorker } from "../useMarkdownWorker";
+import { useScrollSync } from "../useScrollSync";
 
 // Configure Monaco loader and workers
 loader.config({ monaco });
@@ -35,6 +35,15 @@ loader.config({ monaco });
 if (isWorkerSupported()) {
   initializeMonacoWorkers();
 }
+
+// WeakMap to track disposables for editor cleanup without monkey-patching
+const editorDisposables = new WeakMap<
+  monaco.editor.IStandaloneCodeEditor,
+  monaco.IDisposable
+>();
+
+// Constants for scroll sync configuration
+const SCROLL_SYNC_COOLDOWN_MS = 150; // Prevents feedback loops between editor/preview scrolling
 
 interface MarkdownEditorProps {
   value: string;
@@ -75,7 +84,7 @@ export function MarkdownEditor({
   // Use scroll synchronization with cooldown to prevent feedback loops
   const { setEditorRef, setPreviewRef, updateBlockMappings, enableSync } =
     useScrollSync({
-      cooldownMs: 150 // Brief cooldown to prevent feedback loops
+      cooldownMs: SCROLL_SYNC_COOLDOWN_MS
     });
 
   // Handle preview container ref
@@ -160,8 +169,8 @@ export function MarkdownEditor({
             }
           });
 
-          // Store disposable for cleanup
-          (mountedEditor as any)._incrementalDisposable = disposable;
+          // Store disposable for cleanup using WeakMap
+          editorDisposables.set(mountedEditor, disposable);
         }
       }
     },
@@ -180,9 +189,12 @@ export function MarkdownEditor({
   React.useEffect(() => {
     return () => {
       const editor = editorRef.current;
-      if (editor && (editor as any)._incrementalDisposable) {
-        (editor as any)._incrementalDisposable.dispose();
-        delete (editor as any)._incrementalDisposable;
+      if (editor) {
+        const disposable = editorDisposables.get(editor);
+        if (disposable) {
+          disposable.dispose();
+          editorDisposables.delete(editor);
+        }
       }
     };
   }, []);
