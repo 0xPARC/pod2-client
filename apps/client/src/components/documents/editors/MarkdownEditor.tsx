@@ -23,7 +23,7 @@ import {
 } from "../../../lib/monacoWorkers";
 import { useTheme } from "../../theme-provider";
 import { Button } from "../../ui/button";
-import { IncrementalMarkdownPreview } from "../IncrementalMarkdownPreview";
+import { MarkdownPreview } from "../IncrementalMarkdownPreview";
 import { useMarkdownWorker } from "../useMarkdownWorker";
 import { useScrollSync } from "../useScrollSync";
 
@@ -63,18 +63,15 @@ export function MarkdownEditor({
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const { theme } = useTheme();
 
-  // Use worker-based markdown renderer with incremental updates
+  // Use worker-based markdown renderer with optimized updates
   const {
     renderMarkdown,
     sendChangeEvent,
     html: renderedHtml,
     blockMappings,
     affectedRegions,
-    error,
-    isIncrementalMode
-  } = useMarkdownWorker({
-    enableIncremental: true // Re-enable incremental rendering with debugging
-  });
+    error
+  } = useMarkdownWorker();
 
   // Use scroll synchronization with cooldown to prevent feedback loops
   const { setEditorRef, setPreviewRef, updateBlockMappings } = useScrollSync({
@@ -118,13 +115,9 @@ export function MarkdownEditor({
       const newContent = value || "";
       onChange(newContent);
 
-      // In incremental mode, changes are handled by onDidChangeContent
-      // In legacy mode, trigger full rendering
-      if (!isIncrementalMode) {
-        renderMarkdown(newContent);
-      }
+      // Changes are handled by onDidChangeContent event listener
     },
-    [onChange, isIncrementalMode, renderMarkdown]
+    [onChange]
   );
 
   // Handle Monaco editor mount
@@ -143,25 +136,23 @@ export function MarkdownEditor({
       // Set editor ref for scroll sync
       setEditorRef(mountedEditor);
 
-      // Set up incremental change handling
-      if (isIncrementalMode) {
-        const model = mountedEditor.getModel();
-        if (model) {
-          const disposable = model.onDidChangeContent((event) => {
-            const changes = event.changes;
-            if (changes.length > 0) {
-              const change = changes[0];
-              const fullText = model.getValue();
-              sendChangeEvent(change, fullText);
-            }
-          });
+      // Set up change event handling
+      const model = mountedEditor.getModel();
+      if (model) {
+        const disposable = model.onDidChangeContent((event) => {
+          const changes = event.changes;
+          if (changes.length > 0) {
+            const change = changes[0];
+            const fullText = model.getValue();
+            sendChangeEvent(change, fullText);
+          }
+        });
 
-          // Store disposable for cleanup using WeakMap
-          editorDisposables.set(mountedEditor, disposable);
-        }
+        // Store disposable for cleanup using WeakMap
+        editorDisposables.set(mountedEditor, disposable);
       }
     },
-    [theme, setEditorRef, isIncrementalMode, sendChangeEvent]
+    [theme, setEditorRef, sendChangeEvent]
   );
 
   // Update theme when it changes
@@ -172,7 +163,7 @@ export function MarkdownEditor({
     }
   }, [theme]);
 
-  // Cleanup incremental event listeners on unmount
+  // Cleanup change event listeners on unmount
   React.useEffect(() => {
     return () => {
       const editor = editorRef.current;
@@ -402,12 +393,11 @@ export function MarkdownEditor({
           <div
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
-            <IncrementalMarkdownPreview
+            <MarkdownPreview
               ref={handlePreviewRef}
               html={displayHtml}
               affectedRegions={affectedRegions}
               blockMappings={blockMappings}
-              isIncrementalMode={isIncrementalMode}
               className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
             />
           </div>

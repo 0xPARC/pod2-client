@@ -36,19 +36,13 @@ export interface MonacoChange {
 }
 
 // Message types for worker communication
-export interface MarkdownRenderRequest {
-  type: "render";
-  markdown: string;
-  sequenceId: number;
-  sharedBuffer?: SharedArrayBuffer;
-}
 
 export interface MarkdownChangeEvent {
   type: "change-event";
   change: MonacoChange;
   fullText: string;
   sequenceId: number;
-  latestSequenceId: number;
+  sharedBuffer?: SharedArrayBuffer;
 }
 
 export interface BlockMapping {
@@ -62,13 +56,6 @@ export interface AffectedRegion {
   startLine: number;
   endLine: number;
   changeType: "insert" | "delete" | "modify";
-}
-
-export interface MarkdownRenderResponse {
-  type: "render-complete";
-  html: string;
-  blockMappings: BlockMapping[];
-  sequenceId: number;
 }
 
 export interface MarkdownIncrementalResponse {
@@ -85,9 +72,8 @@ export interface MarkdownErrorResponse {
   sequenceId: number;
 }
 
-export type MarkdownWorkerMessage = MarkdownRenderRequest | MarkdownChangeEvent;
+export type MarkdownWorkerMessage = MarkdownChangeEvent;
 export type MarkdownWorkerResponse =
-  | MarkdownRenderResponse
   | MarkdownIncrementalResponse
   | MarkdownErrorResponse;
 
@@ -157,6 +143,19 @@ function mergeChanges(changes: MarkdownChangeEvent[]): AffectedRegion[] {
 function processAccumulatedChanges() {
   if (pendingChanges.length === 0) return;
 
+  // Check if any changes are still valid before processing
+  const latestChange = pendingChanges[pendingChanges.length - 1];
+  if (latestChange.sharedBuffer) {
+    const sharedArray = new Int32Array(latestChange.sharedBuffer);
+    const latestSequenceId = Atomics.load(sharedArray, 0);
+
+    // If a newer request has been sent, discard all pending changes
+    if (latestChange.sequenceId < latestSequenceId) {
+      pendingChanges = [];
+      return;
+    }
+  }
+
   isProcessing = true;
 
   try {
@@ -202,10 +201,14 @@ function processAccumulatedChanges() {
 
     // If more changes arrived while processing, handle them
     if (pendingChanges.length > 0) {
-      // Check if the latest change is complete (no more pending)
+      // Check if the latest change is complete using shared buffer
       const latestChange = pendingChanges[pendingChanges.length - 1];
-      const isLatest =
-        latestChange.sequenceId === latestChange.latestSequenceId;
+      let isLatest = true;
+      if (latestChange.sharedBuffer) {
+        const sharedArray = new Int32Array(latestChange.sharedBuffer);
+        const latestSequenceId = Atomics.load(sharedArray, 0);
+        isLatest = latestChange.sequenceId === latestSequenceId;
+      }
 
       if (isLatest) {
         processAccumulatedChanges();
@@ -439,10 +442,14 @@ function createMarkdownRenderer(): MarkdownIt {
     // Get the token with line mapping attributes
     const token = tokens[idx];
 
-    // Render math using the original mathjax3 renderer (if available) or fallback
-    const mathHtml = originalRules.math_block
-      ? originalRules.math_block(tokens, idx, options, env, renderer)
-      : renderer.renderToken(tokens, idx, options);
+    // Render math using the MathJax3 renderer
+    const mathHtml = originalRules.math_block!(
+      tokens,
+      idx,
+      options,
+      env,
+      renderer
+    );
 
     // Extract attributes from the token and apply them to a wrapper div
     const attrs = token.attrs || [];
@@ -493,69 +500,24 @@ self.addEventListener(
       // Always add to batch
       pendingChanges.push(changeEvent);
 
-      // Check if this is the latest message in the sequence
-      const isLatest = changeEvent.sequenceId === changeEvent.latestSequenceId;
+      // Check if this is the latest message in the sequence using shared buffer
+      let isLatest = true;
+      if (changeEvent.sharedBuffer) {
+        const sharedArray = new Int32Array(changeEvent.sharedBuffer);
+        const latestSequenceId = Atomics.load(sharedArray, 0);
+        isLatest = changeEvent.sequenceId === latestSequenceId;
+      }
 
       if (isLatest && !isProcessing) {
         // This is the last message, and we're free to process
         processAccumulatedChanges();
+      } else {
+        console.log(
+          "Deferred change event, current sequenceId:",
+          changeEvent.sequenceId
+        );
       }
       // Otherwise, we wait for the next event handler to fire
-    } else if (messageData.type === "render") {
-      // Handle legacy render requests (for backward compatibility)
-      const { markdown, sequenceId, sharedBuffer } = messageData;
-
-      try {
-        // Check if this request is still the latest (if SharedArrayBuffer is available)
-        if (sharedBuffer) {
-          const sharedArray = new Int32Array(sharedBuffer);
-          const latestSequenceId = Atomics.load(sharedArray, 0);
-
-          // If a newer request has been sent, discard this one
-          if (sequenceId < latestSequenceId) {
-            return; // Silently discard stale request
-          }
-        }
-
-        // Reset mapping data for this render
-        blockMappings = [];
-        elementCounter = 0;
-
-        // Render markdown to HTML
-        const html = markdown.trim() ? md.render(markdown) : "";
-
-        // Check again if this request is still valid
-        if (sharedBuffer) {
-          const sharedArray = new Int32Array(sharedBuffer);
-          const latestSequenceId = Atomics.load(sharedArray, 0);
-
-          if (sequenceId < latestSequenceId) {
-            return; // Silently discard stale result
-          }
-
-          // Update completed sequence ID
-          Atomics.store(sharedArray, 1, sequenceId);
-        }
-
-        // Send result back to main thread
-        const response: MarkdownRenderResponse = {
-          type: "render-complete",
-          html,
-          blockMappings: [...blockMappings], // Copy the array
-          sequenceId
-        };
-
-        self.postMessage(response);
-      } catch (error) {
-        // Send error back to main thread
-        const errorResponse: MarkdownErrorResponse = {
-          type: "error",
-          error: error instanceof Error ? error.message : String(error),
-          sequenceId
-        };
-
-        self.postMessage(errorResponse);
-      }
     }
   }
 );

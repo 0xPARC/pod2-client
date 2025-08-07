@@ -8,18 +8,11 @@ import type {
   MarkdownChangeEvent,
   MarkdownErrorResponse,
   MarkdownIncrementalResponse,
-  MarkdownRenderRequest,
-  MarkdownRenderResponse,
   MarkdownWorkerResponse,
   MonacoChange
 } from "../../workers/markdown.worker";
 
-interface UseMarkdownWorkerOptions {
-  // Enable SharedArrayBuffer coordination (set to false to disable for compatibility)
-  useSharedBuffer?: boolean;
-  // Enable incremental rendering with change events
-  enableIncremental?: boolean;
-}
+// No options needed - always use optimized rendering
 
 interface UseMarkdownWorkerResult {
   renderMarkdown: (markdown: string) => void;
@@ -29,13 +22,11 @@ interface UseMarkdownWorkerResult {
   affectedRegions: AffectedRegion[];
   isRendering: boolean;
   error: string | null;
-  isIncrementalMode: boolean;
+  // Optimized rendering with change tracking
 }
 
-export function useMarkdownWorker(
-  options: UseMarkdownWorkerOptions = {}
-): UseMarkdownWorkerResult {
-  const { useSharedBuffer = true, enableIncremental = true } = options;
+export function useMarkdownWorker(): UseMarkdownWorkerResult {
+  // Uses optimized rendering with SharedArrayBuffer coordination
 
   // State
   const [html, setHtml] = useState<string>("");
@@ -46,10 +37,8 @@ export function useMarkdownWorker(
 
   // Refs for worker management
   const workerRef = useRef<Worker | null>(null);
-  const sequenceIdRef = useRef(0);
   const changeSequenceIdRef = useRef(0);
   const sharedBufferRef = useRef<SharedArrayBuffer | null>(null);
-  const pendingRenderRef = useRef<string | null>(null);
 
   // Initialize worker and shared buffer
   useEffect(() => {
@@ -61,8 +50,8 @@ export function useMarkdownWorker(
 
     workerRef.current = worker;
 
-    // Create SharedArrayBuffer for coordination (if supported and enabled)
-    if (useSharedBuffer && typeof SharedArrayBuffer !== "undefined") {
+    // Create SharedArrayBuffer for coordination (if supported)
+    if (typeof SharedArrayBuffer !== "undefined") {
       try {
         // Create buffer with 3 Int32 slots: [latestSequenceId, completedSequenceId, lastRenderedSequenceId]
         const buffer = new SharedArrayBuffer(3 * 4); // 3 * 4 bytes
@@ -89,37 +78,7 @@ export function useMarkdownWorker(
       (event: MessageEvent<MarkdownWorkerResponse>) => {
         const { type, sequenceId } = event.data;
 
-        if (type === "render-complete") {
-          const { html: renderedHtml, blockMappings: renderedBlockMappings } =
-            event.data as MarkdownRenderResponse;
-
-          // Only update if this is still the latest completed render
-          if (sharedBufferRef.current) {
-            const sharedArray = new Int32Array(sharedBufferRef.current);
-            const completedSequenceId = Atomics.load(sharedArray, 1);
-
-            if (sequenceId === completedSequenceId) {
-              setHtml(renderedHtml);
-              setBlockMappings(renderedBlockMappings);
-              setAffectedRegions([]); // Legacy mode has no affected regions
-              setError(null);
-              setIsRendering(false);
-
-              // Update diagnostics
-              Atomics.store(sharedArray, 2, sequenceId);
-            }
-          } else {
-            // Without SharedArrayBuffer, just check sequence ID
-            if (sequenceId >= sequenceIdRef.current - 1) {
-              // Allow last or current
-              setHtml(renderedHtml);
-              setBlockMappings(renderedBlockMappings);
-              setAffectedRegions([]);
-              setError(null);
-              setIsRendering(false);
-            }
-          }
-        } else if (type === "incremental-complete") {
+        if (type === "incremental-complete") {
           const {
             html: renderedHtml,
             blockMappings: renderedBlockMappings,
@@ -154,50 +113,22 @@ export function useMarkdownWorker(
       worker.terminate();
       workerRef.current = null;
     };
-  }, [useSharedBuffer]);
-
-  // Legacy render function (for backward compatibility)
-  const renderMarkdown = useCallback((markdown: string) => {
-    const worker = workerRef.current;
-    if (!worker) return;
-
-    // Increment sequence ID
-    const sequenceId = ++sequenceIdRef.current;
-
-    // Update shared buffer with latest sequence ID
-    if (sharedBufferRef.current) {
-      const sharedArray = new Int32Array(sharedBufferRef.current);
-      Atomics.store(sharedArray, 0, sequenceId);
-    }
-
-    // Set rendering state
-    setIsRendering(true);
-    setError(null);
-    pendingRenderRef.current = markdown;
-
-    // Send message to worker
-    const message: MarkdownRenderRequest = {
-      type: "render",
-      markdown,
-      sequenceId,
-      sharedBuffer: sharedBufferRef.current || undefined
-    };
-
-    worker.postMessage(message);
   }, []);
 
-  // New change event function for incremental rendering
+  // Change event function for optimized rendering
   const sendChangeEvent = useCallback(
     (change: MonacoChange, fullText: string) => {
       const worker = workerRef.current;
-      if (!worker || !enableIncremental) {
-        // Fallback to legacy rendering
-        renderMarkdown(fullText);
-        return;
-      }
+      if (!worker) return;
 
       // Increment change sequence ID
       const sequenceId = ++changeSequenceIdRef.current;
+
+      // Update shared buffer with latest sequence ID
+      if (sharedBufferRef.current) {
+        const sharedArray = new Int32Array(sharedBufferRef.current);
+        Atomics.store(sharedArray, 0, sequenceId);
+      }
 
       // Set rendering state
       setIsRendering(true);
@@ -209,12 +140,32 @@ export function useMarkdownWorker(
         change,
         fullText,
         sequenceId,
-        latestSequenceId: sequenceId // This will be updated if more changes are pending
+        sharedBuffer: sharedBufferRef.current || undefined
       };
 
       worker.postMessage(message);
     },
-    [enableIncremental, renderMarkdown]
+    []
+  );
+
+  // Render function using change event simulation
+  const renderMarkdown = useCallback(
+    (markdown: string) => {
+      // For full rendering, simulate a change event covering the entire document
+      const fakeChange: MonacoChange = {
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: Number.MAX_SAFE_INTEGER,
+          endColumn: Number.MAX_SAFE_INTEGER
+        },
+        rangeLength: 0,
+        text: markdown
+      };
+
+      sendChangeEvent(fakeChange, markdown);
+    },
+    [sendChangeEvent]
   );
 
   return {
@@ -224,8 +175,7 @@ export function useMarkdownWorker(
     blockMappings,
     affectedRegions,
     isRendering,
-    error,
-    isIncrementalMode: enableIncremental
+    error
   };
 }
 

@@ -1,15 +1,14 @@
-// Component for incremental markdown preview updates with surgical DOM operations
+// Component for markdown preview with optimized DOM updates
 import { forwardRef, useEffect, useRef } from "react";
 import type {
   AffectedRegion,
   BlockMapping
 } from "../../workers/markdown.worker";
 
-interface IncrementalMarkdownPreviewProps {
+interface MarkdownPreviewProps {
   html: string;
   affectedRegions: AffectedRegion[];
   blockMappings: BlockMapping[];
-  isIncrementalMode: boolean;
   className?: string;
 }
 
@@ -80,14 +79,8 @@ function clearElementCache() {
   elementCache.clear();
 }
 
-export const IncrementalMarkdownPreview = forwardRef<
-  HTMLDivElement,
-  IncrementalMarkdownPreviewProps
->(
-  (
-    { html, affectedRegions, blockMappings, isIncrementalMode, className },
-    ref
-  ) => {
+export const MarkdownPreview = forwardRef<HTMLDivElement, MarkdownPreviewProps>(
+  ({ html, affectedRegions, blockMappings, className }, ref) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const lastHtmlRef = useRef<string>("");
 
@@ -105,15 +98,14 @@ export const IncrementalMarkdownPreview = forwardRef<
       const container = containerRef.current;
       if (!container) return;
 
-      // Check if we should use incremental updates
-      const shouldUseIncremental =
-        isIncrementalMode &&
+      // Check if we should use optimized updates
+      const shouldUseOptimized =
         affectedRegions.length > 0 &&
         blockMappings.length > 0 &&
         lastHtmlRef.current &&
         lastHtmlRef.current !== html;
 
-      if (shouldUseIncremental) {
+      if (shouldUseOptimized) {
         try {
           // Preserve scroll position only (no selection manipulation to avoid Monaco conflicts)
           const scrollTop = container.scrollTop;
@@ -187,16 +179,16 @@ export const IncrementalMarkdownPreview = forwardRef<
           container.scrollLeft = scrollLeft;
         }
       } else {
-        // Full update (first render or no incremental data)
+        // Full update (first render or no optimization data)
         container.innerHTML = html;
         clearElementCache(); // Clear cache after full DOM replacement
       }
 
       lastHtmlRef.current = html;
-    }, [html, affectedRegions, blockMappings, isIncrementalMode]);
+    }, [html, affectedRegions, blockMappings]);
 
     return <div ref={setRef} className={className} />;
   }
 );
 
-IncrementalMarkdownPreview.displayName = "IncrementalMarkdownPreview";
+MarkdownPreview.displayName = "MarkdownPreview";
