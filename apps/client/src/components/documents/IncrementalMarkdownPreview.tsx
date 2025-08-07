@@ -134,7 +134,8 @@ export const IncrementalMarkdownPreview = forwardRef<
             const tempContainer = document.createElement("div");
             tempContainer.appendChild(newContent.cloneNode(true));
 
-            // Replace each affected element using DOM-safe in-place updates
+            // Replace each affected element using DOM-safe updates
+            let hasTagMismatch = false;
             affectedElements.forEach(({ element, mapping }) => {
               // Find the corresponding new element
               const newElement = tempContainer.querySelector(
@@ -142,8 +143,13 @@ export const IncrementalMarkdownPreview = forwardRef<
               );
 
               if (newElement && element.parentNode) {
-                // Instead of replaceChild (which Monaco might reference),
-                // update the element in-place
+                // Check if tag names match - if not, we need full replacement
+                if (element.tagName !== newElement.tagName) {
+                  hasTagMismatch = true;
+                  return; // Skip this element, will do full replacement
+                }
+
+                // Safe to update in-place since tag names match
                 element.innerHTML = newElement.innerHTML;
 
                 // Copy attributes
@@ -152,6 +158,12 @@ export const IncrementalMarkdownPreview = forwardRef<
                 });
               }
             });
+
+            // If any elements had tag mismatches, fall back to full replacement
+            if (hasTagMismatch) {
+              container.innerHTML = html;
+              clearElementCache(); // Clear cache after full DOM replacement
+            }
 
             // Restore scroll position
             container.scrollTop = scrollTop;

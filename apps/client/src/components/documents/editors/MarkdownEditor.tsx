@@ -10,7 +10,6 @@ import {
   EditIcon,
   EyeIcon,
   ItalicIcon,
-  Link2OffIcon,
   LinkIcon,
   ListIcon,
   QuoteIcon,
@@ -36,7 +35,7 @@ if (isWorkerSupported()) {
   initializeMonacoWorkers();
 }
 
-// WeakMap to track disposables for editor cleanup without monkey-patching
+// WeakMap to track disposables for editor cleanup
 const editorDisposables = new WeakMap<
   monaco.editor.IStandaloneCodeEditor,
   monaco.IDisposable
@@ -48,7 +47,6 @@ const SCROLL_SYNC_COOLDOWN_MS = 150; // Prevents feedback loops between editor/p
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
   className?: string;
 }
 
@@ -57,11 +55,9 @@ type ViewMode = "edit" | "preview" | "split";
 export function MarkdownEditor({
   value,
   onChange,
-  placeholder: _placeholder,
   className
 }: MarkdownEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const [scrollSyncEnabled, setScrollSyncEnabled] = useState(true);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
@@ -74,7 +70,6 @@ export function MarkdownEditor({
     html: renderedHtml,
     blockMappings,
     affectedRegions,
-    isRendering,
     error,
     isIncrementalMode
   } = useMarkdownWorker({
@@ -82,10 +77,9 @@ export function MarkdownEditor({
   });
 
   // Use scroll synchronization with cooldown to prevent feedback loops
-  const { setEditorRef, setPreviewRef, updateBlockMappings, enableSync } =
-    useScrollSync({
-      cooldownMs: SCROLL_SYNC_COOLDOWN_MS
-    });
+  const { setEditorRef, setPreviewRef, updateBlockMappings } = useScrollSync({
+    cooldownMs: SCROLL_SYNC_COOLDOWN_MS
+  });
 
   // Handle preview container ref
   const handlePreviewRef = useCallback(
@@ -110,19 +104,12 @@ export function MarkdownEditor({
     }
   }, [blockMappings, updateBlockMappings]);
 
-  // Update scroll sync enabled state
-  useEffect(() => {
-    enableSync(scrollSyncEnabled);
-  }, [scrollSyncEnabled, enableSync]);
-
   // Display content based on state
   const displayHtml = error
     ? `<div style="color: red; padding: 16px;">Error rendering markdown: ${error}</div>`
     : value.trim()
       ? renderedHtml ||
-        (isRendering
-          ? '<div style="padding: 16px; opacity: 0.5;">Rendering...</div>'
-          : "")
+        '<div style="padding: 16px; opacity: 0.5;">Rendering...</div>'
       : "Nothing to preview yet. Start typing to see your markdown rendered here.";
 
   // Handle Monaco editor content changes
@@ -288,21 +275,6 @@ export function MarkdownEditor({
           </Button>
           <Button variant="ghost" size="sm" onClick={handleCode} title="Code">
             <CodeIcon className="w-4 h-4" />
-          </Button>
-          <div className="h-4 w-px bg-border mx-1" /> {/* Divider */}
-          <Button
-            variant={scrollSyncEnabled ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setScrollSyncEnabled(!scrollSyncEnabled)}
-            title={
-              scrollSyncEnabled ? "Disable Scroll Sync" : "Enable Scroll Sync"
-            }
-          >
-            {scrollSyncEnabled ? (
-              <LinkIcon className="w-4 h-4" />
-            ) : (
-              <Link2OffIcon className="w-4 h-4" />
-            )}
           </Button>
         </div>
 

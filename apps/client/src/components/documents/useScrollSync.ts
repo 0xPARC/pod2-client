@@ -34,9 +34,6 @@ interface UseScrollSyncResult {
   // Update block mappings when they change
   updateBlockMappings: (mappings: BlockMapping[]) => void;
 
-  // Enable/disable sync in specific directions
-  enableSync: (enabled: boolean) => void;
-
   // Current block geometries (for debugging)
   blockGeometries: BlockGeometry[];
 }
@@ -53,8 +50,7 @@ export function useScrollSync(
   // State for block geometries
   const [blockGeometries, setBlockGeometries] = useState<BlockGeometry[]>([]);
 
-  // Sync control
-  const [syncEnabled, setSyncEnabled] = useState(true);
+  // Scroll sync is always enabled
   const syncingFromEditor = useRef(false);
   const syncingFromPreview = useRef(false);
   const lastSyncTime = useRef(0);
@@ -69,7 +65,7 @@ export function useScrollSync(
       const editor = editorRef.current;
       const preview = previewRef.current;
 
-      if (!editor || !preview || !syncEnabled) {
+      if (!editor || !preview) {
         setBlockGeometries([]);
         return;
       }
@@ -132,7 +128,7 @@ export function useScrollSync(
 
       setBlockGeometries(newGeometries);
     },
-    [syncEnabled, cooldownMs]
+    [cooldownMs]
   );
 
   // Note: findBlockForLine removed - we now use direct scroll position matching
@@ -144,7 +140,7 @@ export function useScrollSync(
     const editor = editorRef.current;
     const preview = previewRef.current;
 
-    if (!editor || !preview || !syncEnabled || syncingFromPreview.current) {
+    if (!editor || !preview || syncingFromPreview.current) {
       return;
     }
 
@@ -216,14 +212,14 @@ export function useScrollSync(
         syncingFromEditor.current = false;
       }, cooldownMs);
     }
-  }, [syncEnabled, cooldownMs, blockGeometries]);
+  }, [cooldownMs, blockGeometries]);
 
   // Sync preview scroll to editor
   const syncPreviewToEditor = useCallback(() => {
     const editor = editorRef.current;
     const preview = previewRef.current;
 
-    if (!editor || !preview || !syncEnabled || syncingFromEditor.current) {
+    if (!editor || !preview || syncingFromEditor.current) {
       return;
     }
 
@@ -307,7 +303,7 @@ export function useScrollSync(
         syncingFromPreview.current = false;
       }, cooldownMs);
     }
-  }, [syncEnabled, cooldownMs, blockGeometries]);
+  }, [cooldownMs, blockGeometries]);
 
   // Direct scroll handlers without debouncing
   const handleEditorScroll = useCallback(() => {
@@ -353,7 +349,7 @@ export function useScrollSync(
     const editor = editorRef.current;
     const preview = previewRef.current;
 
-    if (!editor || !preview || !syncEnabled) {
+    if (!editor || !preview) {
       return;
     }
 
@@ -446,7 +442,6 @@ export function useScrollSync(
       }
     };
   }, [
-    syncEnabled,
     handleEditorScroll,
     handlePreviewScroll,
     updateBlockGeometries,
@@ -472,15 +467,10 @@ export function useScrollSync(
     [updateBlockGeometries]
   );
 
-  const enableSync = useCallback((enabled: boolean) => {
-    setSyncEnabled(enabled);
-  }, []);
-
   return {
     setEditorRef,
     setPreviewRef,
     updateBlockMappings,
-    enableSync,
     blockGeometries
   };
 }

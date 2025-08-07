@@ -267,7 +267,6 @@ export function PublishDocumentForm({
             setMessage(value);
             markContentChanged();
           }}
-          placeholder="Enter your markdown content..."
           className="h-full"
         />
       </div>
