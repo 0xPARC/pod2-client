@@ -4,6 +4,12 @@ import { SidebarIcon } from "lucide-react";
 import { useTopBar } from "./TopBarContext";
 import { Button } from "./ui/button";
 import { useSidebar } from "./ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "./ui/tooltip";
 
 export function TopBar() {
   const { toggleSidebar, state } = useSidebar();
@@ -34,9 +40,18 @@ export function TopBar() {
         )}
       >
         <div className="flex flex-col items-end w-full">
-          <Button variant="ghost" size="icon" onClick={toggleSidebar}>
-            <SidebarIcon />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+                  <SidebarIcon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="font-medium" sideOffset={-3}>
+                Toggle Sidebar <kbd>⌘B</kbd>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       <div className="flex flex-1 pl-2 pr-4 items-center justify-between">

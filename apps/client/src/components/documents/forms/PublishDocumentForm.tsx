@@ -260,7 +260,7 @@ export function PublishDocumentForm({
       )}
 
       {/* Markdown Editor - Full Height */}
-      <div className="flex-1 min-h-0 overflow-hidden h-full">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <MarkdownEditor
           value={message}
           onChange={(value) => {
