@@ -23,12 +23,32 @@ import MarkdownIt from "markdown-it";
 import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 
+// Monaco Editor change information
+export interface MonacoChange {
+  range: {
+    startLineNumber: number;
+    startColumn: number;
+    endLineNumber: number;
+    endColumn: number;
+  };
+  rangeLength: number;
+  text: string;
+}
+
 // Message types for worker communication
 export interface MarkdownRenderRequest {
   type: "render";
   markdown: string;
   sequenceId: number;
   sharedBuffer?: SharedArrayBuffer;
+}
+
+export interface MarkdownChangeEvent {
+  type: "change-event";
+  change: MonacoChange;
+  fullText: string;
+  sequenceId: number;
+  latestSequenceId: number;
 }
 
 export interface BlockMapping {
@@ -38,10 +58,24 @@ export interface BlockMapping {
   elementIndex: number;
 }
 
+export interface AffectedRegion {
+  startLine: number;
+  endLine: number;
+  changeType: "insert" | "delete" | "modify";
+}
+
 export interface MarkdownRenderResponse {
   type: "render-complete";
   html: string;
   blockMappings: BlockMapping[];
+  sequenceId: number;
+}
+
+export interface MarkdownIncrementalResponse {
+  type: "incremental-complete";
+  html: string;
+  blockMappings: BlockMapping[];
+  affectedRegions: AffectedRegion[];
   sequenceId: number;
 }
 
@@ -51,14 +85,134 @@ export interface MarkdownErrorResponse {
   sequenceId: number;
 }
 
-export type MarkdownWorkerMessage = MarkdownRenderRequest;
+export type MarkdownWorkerMessage = MarkdownRenderRequest | MarkdownChangeEvent;
 export type MarkdownWorkerResponse =
   | MarkdownRenderResponse
+  | MarkdownIncrementalResponse
   | MarkdownErrorResponse;
 
 // Global variable to collect block mappings during rendering
 let blockMappings: BlockMapping[] = [];
 let elementCounter = 0;
+
+// Change batching state
+let pendingChanges: MarkdownChangeEvent[] = [];
+let isProcessing = false;
+
+// Helper function to merge overlapping changes into affected regions
+function mergeChanges(changes: MarkdownChangeEvent[]): AffectedRegion[] {
+  if (changes.length === 0) return [];
+
+  // Collect all affected lines
+  const affectedLines = new Set<number>();
+
+  for (const changeEvent of changes) {
+    const change = changeEvent.change;
+    const startLine = change.range.startLineNumber - 1; // Convert to 0-indexed
+    const endLine = change.range.endLineNumber - 1;
+
+    for (let line = startLine; line <= endLine; line++) {
+      affectedLines.add(line);
+    }
+  }
+
+  // Convert to sorted array and consolidate into contiguous regions
+  const sortedLines = Array.from(affectedLines).sort((a, b) => a - b);
+  const regions: AffectedRegion[] = [];
+
+  if (sortedLines.length === 0) return regions;
+
+  let regionStart = sortedLines[0];
+  let regionEnd = sortedLines[0];
+
+  for (let i = 1; i < sortedLines.length; i++) {
+    const line = sortedLines[i];
+
+    if (line === regionEnd + 1) {
+      // Extend current region
+      regionEnd = line;
+    } else {
+      // Start new region
+      regions.push({
+        startLine: regionStart,
+        endLine: regionEnd,
+        changeType: "modify" // Simplified - could be more sophisticated
+      });
+      regionStart = line;
+      regionEnd = line;
+    }
+  }
+
+  // Add final region
+  regions.push({
+    startLine: regionStart,
+    endLine: regionEnd,
+    changeType: "modify"
+  });
+
+  return regions;
+}
+
+// Process accumulated changes
+function processAccumulatedChanges() {
+  if (pendingChanges.length === 0) return;
+
+  isProcessing = true;
+
+  try {
+    const changesToProcess = pendingChanges;
+    pendingChanges = []; // Clear queue
+
+    // Get the final text from the last change
+    const finalText = changesToProcess[changesToProcess.length - 1].fullText;
+    const finalSequenceId =
+      changesToProcess[changesToProcess.length - 1].sequenceId;
+
+    // Merge changes into affected regions
+    const affectedRegions = mergeChanges(changesToProcess);
+
+    // Reset mapping data for this render
+    blockMappings = [];
+    elementCounter = 0;
+
+    // Render markdown to HTML
+    const html = finalText.trim() ? md.render(finalText) : "";
+
+    // Send incremental response
+    const response: MarkdownIncrementalResponse = {
+      type: "incremental-complete",
+      html,
+      blockMappings: [...blockMappings], // Copy the array
+      affectedRegions,
+      sequenceId: finalSequenceId
+    };
+
+    self.postMessage(response);
+  } catch (error) {
+    // Send error response
+    const errorResponse: MarkdownErrorResponse = {
+      type: "error",
+      error: error instanceof Error ? error.message : String(error),
+      sequenceId: pendingChanges.length > 0 ? pendingChanges[0].sequenceId : 0
+    };
+
+    self.postMessage(errorResponse);
+  } finally {
+    isProcessing = false;
+
+    // If more changes arrived while processing, handle them
+    if (pendingChanges.length > 0) {
+      // Check if the latest change is complete (no more pending)
+      const latestChange = pendingChanges[pendingChanges.length - 1];
+      const isLatest =
+        latestChange.sequenceId === latestChange.latestSequenceId;
+
+      if (isLatest) {
+        processAccumulatedChanges();
+      }
+    }
+  }
+}
 
 // Create markdown-it instance with same configuration as main thread plus line mapping
 function createMarkdownRenderer(): MarkdownIt {
@@ -330,63 +484,78 @@ const md = createMarkdownRenderer();
 self.addEventListener(
   "message",
   (event: MessageEvent<MarkdownWorkerMessage>) => {
-    const { type, markdown, sequenceId, sharedBuffer } = event.data;
+    const messageData = event.data;
 
-    if (type !== "render") {
-      return;
-    }
+    if (messageData.type === "change-event") {
+      // Handle change events with batching
+      const changeEvent = messageData as MarkdownChangeEvent;
 
-    try {
-      // Check if this request is still the latest (if SharedArrayBuffer is available)
-      if (sharedBuffer) {
-        const sharedArray = new Int32Array(sharedBuffer);
-        const latestSequenceId = Atomics.load(sharedArray, 0);
+      // Always add to batch
+      pendingChanges.push(changeEvent);
 
-        // If a newer request has been sent, discard this one
-        if (sequenceId < latestSequenceId) {
-          return; // Silently discard stale request
-        }
+      // Check if this is the latest message in the sequence
+      const isLatest = changeEvent.sequenceId === changeEvent.latestSequenceId;
+
+      if (isLatest && !isProcessing) {
+        // This is the last message, and we're free to process
+        processAccumulatedChanges();
       }
+      // Otherwise, we wait for the next event handler to fire
+    } else if (messageData.type === "render") {
+      // Handle legacy render requests (for backward compatibility)
+      const { markdown, sequenceId, sharedBuffer } = messageData;
 
-      // Reset mapping data for this render
-      blockMappings = [];
-      elementCounter = 0;
+      try {
+        // Check if this request is still the latest (if SharedArrayBuffer is available)
+        if (sharedBuffer) {
+          const sharedArray = new Int32Array(sharedBuffer);
+          const latestSequenceId = Atomics.load(sharedArray, 0);
 
-      // Render markdown to HTML
-      const html = markdown.trim() ? md.render(markdown) : "";
-
-      // Check again if this request is still valid (in case a newer one arrived during rendering)
-      if (sharedBuffer) {
-        const sharedArray = new Int32Array(sharedBuffer);
-        const latestSequenceId = Atomics.load(sharedArray, 0);
-
-        // If a newer request has been sent while we were rendering, discard this result
-        if (sequenceId < latestSequenceId) {
-          return; // Silently discard stale result
+          // If a newer request has been sent, discard this one
+          if (sequenceId < latestSequenceId) {
+            return; // Silently discard stale request
+          }
         }
 
-        // Update completed sequence ID
-        Atomics.store(sharedArray, 1, sequenceId);
+        // Reset mapping data for this render
+        blockMappings = [];
+        elementCounter = 0;
+
+        // Render markdown to HTML
+        const html = markdown.trim() ? md.render(markdown) : "";
+
+        // Check again if this request is still valid
+        if (sharedBuffer) {
+          const sharedArray = new Int32Array(sharedBuffer);
+          const latestSequenceId = Atomics.load(sharedArray, 0);
+
+          if (sequenceId < latestSequenceId) {
+            return; // Silently discard stale result
+          }
+
+          // Update completed sequence ID
+          Atomics.store(sharedArray, 1, sequenceId);
+        }
+
+        // Send result back to main thread
+        const response: MarkdownRenderResponse = {
+          type: "render-complete",
+          html,
+          blockMappings: [...blockMappings], // Copy the array
+          sequenceId
+        };
+
+        self.postMessage(response);
+      } catch (error) {
+        // Send error back to main thread
+        const errorResponse: MarkdownErrorResponse = {
+          type: "error",
+          error: error instanceof Error ? error.message : String(error),
+          sequenceId
+        };
+
+        self.postMessage(errorResponse);
       }
-
-      // Send result back to main thread
-      const response: MarkdownRenderResponse = {
-        type: "render-complete",
-        html,
-        blockMappings: [...blockMappings], // Copy the array
-        sequenceId
-      };
-
-      self.postMessage(response);
-    } catch (error) {
-      // Send error back to main thread
-      const errorResponse: MarkdownErrorResponse = {
-        type: "error",
-        error: error instanceof Error ? error.message : String(error),
-        sequenceId
-      };
-
-      self.postMessage(errorResponse);
     }
   }
 );

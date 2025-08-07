@@ -22,9 +22,19 @@ import { Button } from "../../ui/button";
 import { useMarkdownWorker } from "../useMarkdownWorker";
 import { useScrollSync } from "../useScrollSync";
 import { useTheme } from "../../theme-provider";
+import {
+  initializeMonacoWorkers,
+  isWorkerSupported
+} from "../../../lib/monacoWorkers";
+import { IncrementalMarkdownPreview } from "../IncrementalMarkdownPreview";
 
-// Configure Monaco loader
+// Configure Monaco loader and workers
 loader.config({ monaco });
+
+// Initialize Monaco workers if supported
+if (isWorkerSupported()) {
+  initializeMonacoWorkers();
+}
 
 interface MarkdownEditorProps {
   value: string;
@@ -48,14 +58,19 @@ export function MarkdownEditor({
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const { theme } = useTheme();
 
-  // Use worker-based markdown renderer
+  // Use worker-based markdown renderer with incremental updates
   const {
     renderMarkdown,
+    sendChangeEvent,
     html: renderedHtml,
     blockMappings,
+    affectedRegions,
     isRendering,
-    error
-  } = useMarkdownWorker();
+    error,
+    isIncrementalMode
+  } = useMarkdownWorker({
+    enableIncremental: true // Enable incremental rendering
+  });
 
   // Use scroll synchronization with cooldown to prevent feedback loops
   const { setEditorRef, setPreviewRef, updateBlockMappings, enableSync } =
@@ -125,8 +140,26 @@ export function MarkdownEditor({
 
       // Set editor ref for scroll sync
       setEditorRef(mountedEditor);
+
+      // Set up incremental change handling if enabled
+      if (isIncrementalMode) {
+        const model = mountedEditor.getModel();
+        if (model) {
+          // Listen to content changes for incremental updates
+          model.onDidChangeContent((event) => {
+            const changes = event.changes;
+            if (changes.length > 0) {
+              // Convert Monaco change to our format and send to worker
+              const change = changes[0]; // Take first change (could enhance to handle multiple)
+              const fullText = model.getValue();
+
+              sendChangeEvent(change, fullText);
+            }
+          });
+        }
+      }
     },
-    [theme, setEditorRef]
+    [theme, setEditorRef, isIncrementalMode, sendChangeEvent]
   );
 
   // Update theme when it changes
@@ -368,10 +401,12 @@ export function MarkdownEditor({
           <div
             className={`${viewMode === "split" ? "w-1/2 border-l" : "w-full"} flex flex-col min-h-0 min-w-0 bg-card`}
           >
-            <div
+            <IncrementalMarkdownPreview
               ref={handlePreviewRef}
+              html={displayHtml}
+              affectedRegions={affectedRegions}
+              isIncrementalMode={isIncrementalMode}
               className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
-              dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
           </div>
         )}

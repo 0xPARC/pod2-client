@@ -1,64 +1,53 @@
 // Hook for managing markdown worker and async rendering
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Message types for worker communication
-interface MarkdownRenderRequest {
-  type: "render";
-  markdown: string;
-  sequenceId: number;
-  sharedBuffer?: SharedArrayBuffer;
-}
-
-interface BlockMapping {
-  startLine: number;
-  endLine: number;
-  elementType: string;
-  elementIndex: number;
-}
-
-interface MarkdownRenderResponse {
-  type: "render-complete";
-  html: string;
-  blockMappings: BlockMapping[];
-  sequenceId: number;
-}
-
-interface MarkdownErrorResponse {
-  type: "error";
-  error: string;
-  sequenceId: number;
-}
-
-type MarkdownWorkerMessage = MarkdownRenderRequest;
-type MarkdownWorkerResponse = MarkdownRenderResponse | MarkdownErrorResponse;
+// Import types from worker
+import type {
+  MarkdownWorkerResponse,
+  MarkdownRenderRequest,
+  MarkdownChangeEvent,
+  MarkdownRenderResponse,
+  MarkdownIncrementalResponse,
+  MarkdownErrorResponse,
+  BlockMapping,
+  AffectedRegion,
+  MonacoChange
+} from "../../workers/markdown.worker";
 
 interface UseMarkdownWorkerOptions {
   // Enable SharedArrayBuffer coordination (set to false to disable for compatibility)
   useSharedBuffer?: boolean;
+  // Enable incremental rendering with change events
+  enableIncremental?: boolean;
 }
 
 interface UseMarkdownWorkerResult {
   renderMarkdown: (markdown: string) => void;
+  sendChangeEvent: (change: MonacoChange, fullText: string) => void;
   html: string;
   blockMappings: BlockMapping[];
+  affectedRegions: AffectedRegion[];
   isRendering: boolean;
   error: string | null;
+  isIncrementalMode: boolean;
 }
 
 export function useMarkdownWorker(
   options: UseMarkdownWorkerOptions = {}
 ): UseMarkdownWorkerResult {
-  const { useSharedBuffer = true } = options;
+  const { useSharedBuffer = true, enableIncremental = true } = options;
 
   // State
   const [html, setHtml] = useState<string>("");
   const [blockMappings, setBlockMappings] = useState<BlockMapping[]>([]);
+  const [affectedRegions, setAffectedRegions] = useState<AffectedRegion[]>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Refs for worker management
   const workerRef = useRef<Worker | null>(null);
   const sequenceIdRef = useRef(0);
+  const changeSequenceIdRef = useRef(0);
   const sharedBufferRef = useRef<SharedArrayBuffer | null>(null);
   const pendingRenderRef = useRef<string | null>(null);
 
@@ -102,7 +91,7 @@ export function useMarkdownWorker(
 
         if (type === "render-complete") {
           const { html: renderedHtml, blockMappings: renderedBlockMappings } =
-            event.data;
+            event.data as MarkdownRenderResponse;
 
           // Only update if this is still the latest completed render
           if (sharedBufferRef.current) {
@@ -112,6 +101,7 @@ export function useMarkdownWorker(
             if (sequenceId === completedSequenceId) {
               setHtml(renderedHtml);
               setBlockMappings(renderedBlockMappings);
+              setAffectedRegions([]); // Legacy mode has no affected regions
               setError(null);
               setIsRendering(false);
 
@@ -124,12 +114,29 @@ export function useMarkdownWorker(
               // Allow last or current
               setHtml(renderedHtml);
               setBlockMappings(renderedBlockMappings);
+              setAffectedRegions([]);
               setError(null);
               setIsRendering(false);
             }
           }
+        } else if (type === "incremental-complete") {
+          const {
+            html: renderedHtml,
+            blockMappings: renderedBlockMappings,
+            affectedRegions: renderedAffectedRegions
+          } = event.data as MarkdownIncrementalResponse;
+
+          // For incremental mode, always accept the latest sequence
+          if (sequenceId >= changeSequenceIdRef.current - 5) {
+            // Allow some flexibility
+            setHtml(renderedHtml);
+            setBlockMappings(renderedBlockMappings);
+            setAffectedRegions(renderedAffectedRegions);
+            setError(null);
+            setIsRendering(false);
+          }
         } else if (type === "error") {
-          const { error: errorMessage } = event.data;
+          const { error: errorMessage } = event.data as MarkdownErrorResponse;
           setError(errorMessage);
           setIsRendering(false);
         }
@@ -150,7 +157,7 @@ export function useMarkdownWorker(
     };
   }, [useSharedBuffer]);
 
-  // Render function
+  // Legacy render function (for backward compatibility)
   const renderMarkdown = useCallback((markdown: string) => {
     const worker = workerRef.current;
     if (!worker) return;
@@ -170,7 +177,7 @@ export function useMarkdownWorker(
     pendingRenderRef.current = markdown;
 
     // Send message to worker
-    const message: MarkdownWorkerMessage = {
+    const message: MarkdownRenderRequest = {
       type: "render",
       markdown,
       sequenceId,
@@ -180,12 +187,46 @@ export function useMarkdownWorker(
     worker.postMessage(message);
   }, []);
 
+  // New change event function for incremental rendering
+  const sendChangeEvent = useCallback(
+    (change: MonacoChange, fullText: string) => {
+      const worker = workerRef.current;
+      if (!worker || !enableIncremental) {
+        // Fallback to legacy rendering
+        renderMarkdown(fullText);
+        return;
+      }
+
+      // Increment change sequence ID
+      const sequenceId = ++changeSequenceIdRef.current;
+
+      // Set rendering state
+      setIsRendering(true);
+      setError(null);
+
+      // Send change event to worker
+      const message: MarkdownChangeEvent = {
+        type: "change-event",
+        change,
+        fullText,
+        sequenceId,
+        latestSequenceId: sequenceId // This will be updated if more changes are pending
+      };
+
+      worker.postMessage(message);
+    },
+    [enableIncremental, renderMarkdown]
+  );
+
   return {
     renderMarkdown,
+    sendChangeEvent,
     html,
     blockMappings,
+    affectedRegions,
     isRendering,
-    error
+    error,
+    isIncrementalMode: enableIncremental
   };
 }
 
