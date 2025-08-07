@@ -142,10 +142,10 @@ pub struct DocumentMetadata {
     pub post_id: i64,
     pub revision: i64,
     pub created_at: Option<String>,
-    pub uploader_id: String, // Username of the uploader
-    pub upvote_count: i64,   // Number of upvotes for this document
-    pub tags: HashSet<String>, // Set of tags for document organization and discovery
-    pub authors: HashSet<String>, // Set of authors for document attribution
+    pub uploader_id: String,              // Username of the uploader
+    pub upvote_count: i64,                // Number of upvotes for this document
+    pub tags: HashSet<String>,            // Set of tags for document organization and discovery
+    pub authors: HashSet<String>,         // Set of authors for document attribution
     pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     /// Original post_id value from the publish request used in the MainPod proof
     /// This may be -1 for new documents, while post_id is the actual assigned ID

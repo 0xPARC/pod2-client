@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentMetadata, DocumentPods, IdentityServer, Post, RawDocument, ReplyReference, Upvote,
-    lazy_pod::LazyDeser,
+    Document, DocumentMetadata, DocumentPods, IdentityServer, Post, RawDocument, ReplyReference,
+    Upvote, lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
 
@@ -387,7 +387,11 @@ impl Database {
             })?, // Will be set by background task
         };
 
-        Ok(Document { metadata, pods, content })
+        Ok(Document {
+            metadata,
+            pods,
+            content,
+        })
     }
 
     pub fn get_raw_document(&self, id: i64) -> Result<Option<RawDocument>> {
@@ -791,7 +795,11 @@ impl Database {
                         )
                     })?;
 
-                Ok(Some(Document { metadata, pods, content }))
+                Ok(Some(Document {
+                    metadata,
+                    pods,
+                    content,
+                }))
             }
             None => Ok(None),
         }
