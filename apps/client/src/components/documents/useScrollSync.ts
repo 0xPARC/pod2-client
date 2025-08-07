@@ -79,12 +79,27 @@ export function useScrollSync(
       const newGeometries: BlockGeometry[] = [];
 
       for (const mapping of mappings) {
-        // Find the corresponding HTML element
-        const element = preview.querySelector(
+        // Find the corresponding HTML element using element index
+        let element = preview.querySelector(
           `[data-md-element-index="${mapping.elementIndex}"]`
         ) as HTMLElement;
 
+        // If no direct element found, look for element by line start (fallback)
+        if (!element) {
+          element = preview.querySelector(
+            `[data-md-line-start="${mapping.startLine}"]`
+          ) as HTMLElement;
+        }
+
         if (element) {
+          // For MathJax containers, use the first mjx-container for more accurate dimensions
+          const mathContainer = element.querySelector(
+            "mjx-container"
+          ) as HTMLElement;
+          if (mathContainer) {
+            element = mathContainer;
+          }
+
           // Get HTML element geometry
           const rect = element.getBoundingClientRect();
           const previewRect = preview.getBoundingClientRect();
@@ -110,38 +125,16 @@ export function useScrollSync(
         }
       }
 
+      // Note: MathJax containers are now properly wrapped with line mapping attributes
+
       setBlockGeometries(newGeometries);
     },
-    [syncEnabled]
+    [syncEnabled, cooldownMs]
   );
 
-  // Find block containing a specific line
-  const findBlockForLine = useCallback(
-    (lineNumber: number): BlockGeometry | null => {
-      return (
-        blockGeometries.find(
-          (geom) =>
-            lineNumber >= geom.mapping.startLine &&
-            lineNumber <= geom.mapping.endLine
-        ) || null
-      );
-    },
-    [blockGeometries]
-  );
+  // Note: findBlockForLine removed - we now use direct scroll position matching
 
-  // Find block containing a specific scroll position
-  const findBlockForScrollTop = useCallback(
-    (scrollTop: number): BlockGeometry | null => {
-      return (
-        blockGeometries.find(
-          (geom) =>
-            scrollTop >= geom.offsetTop &&
-            scrollTop < geom.offsetTop + geom.offsetHeight
-        ) || null
-      );
-    },
-    [blockGeometries]
-  );
+  // Note: findBlockForScrollTop removed - we now use viewport-center-based matching
 
   // Sync editor scroll to preview
   const syncEditorToPreview = useCallback(() => {
@@ -155,36 +148,57 @@ export function useScrollSync(
     syncingFromEditor.current = true;
 
     try {
-      // Get top visible line in editor
-      const visibleRanges = editor.getVisibleRanges();
-      if (visibleRanges.length === 0) return;
+      // Get current editor scroll position
+      const editorScrollTop = editor.getScrollTop();
 
-      const topVisibleLine = visibleRanges[0].startLineNumber - 1; // Convert to 0-indexed
-      // Get editor scroll position for diagnostics
-      // const editorScrollTop = editor.getScrollTop();
+      // Find which block contains this scroll position
+      let targetBlock: BlockGeometry | null = null;
+      let scrollWithinBlock = 0;
 
-      // Find the block containing this line
-      const block = findBlockForLine(topVisibleLine);
-      if (!block) return;
+      for (const block of blockGeometries) {
+        if (
+          editorScrollTop >= block.editorStartPixel &&
+          editorScrollTop <= block.editorEndPixel
+        ) {
+          targetBlock = block;
+          scrollWithinBlock = editorScrollTop - block.editorStartPixel;
+          break;
+        }
+        // Check if scroll position is between blocks (use the next block)
+        if (editorScrollTop < block.editorStartPixel) {
+          targetBlock = block;
+          scrollWithinBlock = 0; // At the start of this block
+          break;
+        }
+      }
 
-      // Calculate proportional position within the block
-      const linePixelTop = editor.getTopForLineNumber(topVisibleLine + 1);
-      const blockStartPixel = block.editorStartPixel;
-      const blockEndPixel = block.editorEndPixel;
+      // If no block found, use the last block
+      if (!targetBlock && blockGeometries.length > 0) {
+        targetBlock = blockGeometries[blockGeometries.length - 1];
+        const lastBlockRange =
+          targetBlock.editorEndPixel - targetBlock.editorStartPixel;
+        scrollWithinBlock = Math.max(
+          0,
+          editorScrollTop - targetBlock.editorStartPixel
+        );
+        scrollWithinBlock = Math.min(scrollWithinBlock, lastBlockRange);
+      }
 
-      const blockPixelRange = blockEndPixel - blockStartPixel;
+      if (!targetBlock) return;
+
+      // Calculate proportional position within the editor block
+      const blockPixelRange =
+        targetBlock.editorEndPixel - targetBlock.editorStartPixel;
       const proportion =
         blockPixelRange > 0
-          ? Math.max(
-              0,
-              Math.min(1, (linePixelTop - blockStartPixel) / blockPixelRange)
-            )
+          ? Math.max(0, Math.min(1, scrollWithinBlock / blockPixelRange))
           : 0;
 
       // Apply same proportion to HTML element
-      const targetScrollTop = block.offsetTop + proportion * block.offsetHeight;
+      const targetScrollTop =
+        targetBlock.offsetTop + proportion * targetBlock.offsetHeight;
 
-      // Scroll preview
+      // Scroll preview to maintain the same proportional position
       preview.scrollTo({
         top: targetScrollTop,
         behavior: "instant" // Use instant to avoid interfering with sync
@@ -199,7 +213,7 @@ export function useScrollSync(
         syncingFromEditor.current = false;
       }, cooldownMs);
     }
-  }, [syncEnabled, cooldownMs, findBlockForLine]);
+  }, [syncEnabled, cooldownMs, blockGeometries]);
 
   // Sync preview scroll to editor
   const syncPreviewToEditor = useCallback(() => {
@@ -213,36 +227,73 @@ export function useScrollSync(
     syncingFromPreview.current = true;
 
     try {
+      // Get preview viewport info
       const previewScrollTop = preview.scrollTop;
+      const previewViewportHeight = preview.clientHeight;
 
-      // Find the block containing this scroll position
-      const block = findBlockForScrollTop(previewScrollTop);
-      if (!block) return;
+      // Calculate preview viewport center for more stable syncing
+      const previewViewportCenter =
+        previewScrollTop + previewViewportHeight / 2;
 
-      // Calculate proportional position within the HTML element
-      const elementScrollOffset = previewScrollTop - block.offsetTop;
-      const proportion =
-        block.offsetHeight > 0
-          ? Math.max(0, Math.min(1, elementScrollOffset / block.offsetHeight))
-          : 0;
+      // Find the block containing the preview viewport center
+      let targetBlock: BlockGeometry | null = null;
+      let proportionWithinBlock = 0;
 
-      // Apply same proportion to editor block
-      // const blockPixelRange = block.editorEndPixel - block.editorStartPixel;
-      // Calculate target pixel position for diagnostics
-      // const targetPixelTop = block.editorStartPixel + (proportion * blockPixelRange);
+      for (const block of blockGeometries) {
+        if (
+          previewViewportCenter >= block.offsetTop &&
+          previewViewportCenter <= block.offsetTop + block.offsetHeight
+        ) {
+          targetBlock = block;
+          const elementScrollOffset = previewViewportCenter - block.offsetTop;
+          proportionWithinBlock =
+            block.offsetHeight > 0
+              ? Math.max(
+                  0,
+                  Math.min(1, elementScrollOffset / block.offsetHeight)
+                )
+              : 0;
+          break;
+        }
+        // Check if viewport center is between blocks (use the next block)
+        if (previewViewportCenter < block.offsetTop) {
+          targetBlock = block;
+          proportionWithinBlock = 0; // At the start of this block
+          break;
+        }
+      }
 
-      // Convert pixel position back to line number (approximately)
-      const targetLineNumber = Math.max(
-        1,
-        Math.round(
-          block.mapping.startLine +
-            1 +
-            proportion * (block.mapping.endLine - block.mapping.startLine)
-        )
-      );
+      // If no block found, use the last block
+      if (!targetBlock && blockGeometries.length > 0) {
+        targetBlock = blockGeometries[blockGeometries.length - 1];
+        const elementScrollOffset = Math.max(
+          0,
+          previewViewportCenter - targetBlock.offsetTop
+        );
+        proportionWithinBlock =
+          targetBlock.offsetHeight > 0
+            ? Math.max(
+                0,
+                Math.min(1, elementScrollOffset / targetBlock.offsetHeight)
+              )
+            : 0;
+      }
 
-      // Reveal the line in editor
-      editor.revealLineNearTop(targetLineNumber);
+      if (!targetBlock) return;
+
+      // Calculate corresponding position in editor and center it in editor viewport
+      const blockPixelRange =
+        targetBlock.editorEndPixel - targetBlock.editorStartPixel;
+      const targetElementPosition =
+        targetBlock.editorStartPixel + proportionWithinBlock * blockPixelRange;
+
+      // Center this position in the editor viewport
+      const editorViewportHeight = editor.getLayoutInfo().height;
+      const targetEditorScrollTop =
+        targetElementPosition - editorViewportHeight / 2;
+
+      // Scroll editor to center the corresponding portion
+      editor.setScrollTop(Math.max(0, targetEditorScrollTop)); // Don't scroll above content
     } finally {
       // Record sync time and direction
       lastSyncTime.current = Date.now();
@@ -253,7 +304,7 @@ export function useScrollSync(
         syncingFromPreview.current = false;
       }, cooldownMs);
     }
-  }, [syncEnabled, cooldownMs, findBlockForScrollTop]);
+  }, [syncEnabled, cooldownMs, blockGeometries]);
 
   // Direct scroll handlers without debouncing
   const handleEditorScroll = useCallback(() => {
@@ -294,7 +345,7 @@ export function useScrollSync(
     syncPreviewToEditor();
   }, [syncPreviewToEditor, cooldownMs]);
 
-  // Set up scroll event listeners
+  // Set up scroll event listeners and MathJax handling
   useEffect(() => {
     const editor = editorRef.current;
     const preview = previewRef.current;
@@ -309,16 +360,88 @@ export function useScrollSync(
     // Listen to preview scroll events
     preview.addEventListener("scroll", handlePreviewScroll, { passive: true });
 
+    // Listen for MathJax rendering completion to refresh geometry
+    const handleMathJaxRendered = () => {
+      // Delay geometry refresh to ensure MathJax is fully rendered
+      setTimeout(() => {
+        updateBlockGeometries(blockGeometries.map((geom) => geom.mapping));
+      }, 150);
+    };
+
+    // Multiple event listeners for different MathJax events
+    const mathJaxEvents = [
+      "mjx-math-rendered", // MathJax v3 math rendered
+      "mjx-startup-ready", // MathJax startup complete
+      "mjx-typeset-complete", // Typesetting complete
+      "DOMContentLoaded" // Fallback for initial render
+    ];
+
+    mathJaxEvents.forEach((eventName) => {
+      preview.addEventListener(eventName, handleMathJaxRendered);
+      document.addEventListener(eventName, handleMathJaxRendered);
+    });
+
+    // Listen for MutationObserver changes to detect MathJax rendering completion
+    const mathJaxObserver = new MutationObserver((mutations) => {
+      let hasMathJaxChanges = false;
+
+      mutations.forEach((mutation) => {
+        if (mutation.type === "childList") {
+          const addedNodes = Array.from(mutation.addedNodes);
+
+          addedNodes.forEach((node) => {
+            if (node instanceof Element) {
+              // Check if this is a MathJax container or contains one
+              const mathContainers =
+                node.tagName === "MJX-CONTAINER"
+                  ? [node as HTMLElement]
+                  : (Array.from(
+                      node.querySelectorAll("mjx-container")
+                    ) as HTMLElement[]);
+
+              if (mathContainers.length > 0) {
+                hasMathJaxChanges = true;
+              }
+            }
+          });
+        }
+      });
+
+      if (hasMathJaxChanges) {
+        handleMathJaxRendered();
+      }
+    });
+
+    mathJaxObserver.observe(preview, {
+      childList: true,
+      subtree: true
+    });
+
     return () => {
       editorScrollDisposable.dispose();
       preview.removeEventListener("scroll", handlePreviewScroll);
+
+      // Remove all MathJax event listeners
+      mathJaxEvents.forEach((eventName) => {
+        preview.removeEventListener(eventName, handleMathJaxRendered);
+        document.removeEventListener(eventName, handleMathJaxRendered);
+      });
+
+      // Disconnect MutationObserver
+      mathJaxObserver.disconnect();
 
       // Clear any pending cooldown timer
       if (syncCooldownTimer.current) {
         clearTimeout(syncCooldownTimer.current);
       }
     };
-  }, [syncEnabled, handleEditorScroll, handlePreviewScroll]);
+  }, [
+    syncEnabled,
+    handleEditorScroll,
+    handlePreviewScroll,
+    updateBlockGeometries,
+    blockGeometries
+  ]);
 
   // Public API
   const setEditorRef = useCallback(

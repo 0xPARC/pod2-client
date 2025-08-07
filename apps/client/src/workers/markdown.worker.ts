@@ -110,7 +110,8 @@ function createMarkdownRenderer(): MarkdownIt {
     fence: mdInstance.renderer.rules.fence,
     hr: mdInstance.renderer.rules.hr,
     list_item_open: mdInstance.renderer.rules.list_item_open,
-    table_open: mdInstance.renderer.rules.table_open
+    table_open: mdInstance.renderer.rules.table_open,
+    math_block: mdInstance.renderer.rules.math_block
   };
 
   // Helper function to add line mapping attributes
@@ -201,6 +202,33 @@ function createMarkdownRenderer(): MarkdownIt {
     renderer
   ) {
     addLineMappingAttributes(tokens, idx, "fence");
+
+    // Clean up language identifier to avoid highlightjs errors
+    const token = tokens[idx];
+    if (token.info) {
+      // Extract just the language name, ignoring attributes
+      let lang = token.info.trim();
+
+      // Handle pandoc-style attributes like `python {.numberLines frame="single"}`
+      const spaceIndex = lang.indexOf(" ");
+      if (spaceIndex > 0) {
+        lang = lang.substring(0, spaceIndex);
+      }
+
+      // Handle attribute-only cases like `{frame="single"}` or `{.numberLines`
+      if (lang.startsWith("{") || lang.includes("=") || lang.includes('"')) {
+        lang = ""; // Clear invalid language
+      }
+
+      // Clean up dotted class names like `.python` -> `python`
+      if (lang.startsWith(".")) {
+        lang = lang.substring(1);
+      }
+
+      // Update the token with cleaned language
+      token.info = lang;
+    }
+
     return originalRules.fence
       ? originalRules.fence(tokens, idx, options, env, renderer)
       : renderer.renderToken(tokens, idx, options);
@@ -243,6 +271,35 @@ function createMarkdownRenderer(): MarkdownIt {
     return originalRules.table_open
       ? originalRules.table_open(tokens, idx, options, env, renderer)
       : renderer.renderToken(tokens, idx, options);
+  };
+
+  mdInstance.renderer.rules.math_block = function (
+    tokens,
+    idx,
+    options,
+    env,
+    renderer
+  ) {
+    addLineMappingAttributes(tokens, idx, "math_block");
+
+    // Get the token with line mapping attributes
+    const token = tokens[idx];
+
+    // Render math using the original mathjax3 renderer (if available) or fallback
+    const mathHtml = originalRules.math_block
+      ? originalRules.math_block(tokens, idx, options, env, renderer)
+      : renderer.renderToken(tokens, idx, options);
+
+    // Extract attributes from the token and apply them to a wrapper div
+    const attrs = token.attrs || [];
+    if (attrs.length > 0) {
+      const attrString = attrs
+        .map(([name, value]) => `${name}="${value}"`)
+        .join(" ");
+      return `<div ${attrString}>${mathHtml}</div>`;
+    }
+
+    return mathHtml;
   };
 
   // Custom renderer for links to open in new tab
