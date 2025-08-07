@@ -8,6 +8,7 @@ import type {
   MarkdownChangeEvent,
   MarkdownErrorResponse,
   MarkdownIncrementalResponse,
+  MarkdownInitEvent,
   MarkdownWorkerResponse,
   MonacoChange
 } from "../../workers/markdown.worker";
@@ -36,10 +37,8 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
 
   // Refs for worker management
   const workerRef = useRef<Worker | null>(null);
-  const changeSequenceIdRef = useRef(0);
-  const sharedBufferRef = useRef<SharedArrayBuffer | null>(null);
 
-  // Initialize worker and shared buffer
+  // Initialize worker
   useEffect(() => {
     // Create worker
     const worker = new Worker(
@@ -49,31 +48,11 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
 
     workerRef.current = worker;
 
-    // Create SharedArrayBuffer for coordination (if supported)
-    if (typeof SharedArrayBuffer !== "undefined") {
-      try {
-        // Create buffer with 1 Int32 slot for sequence coordination
-        const buffer = new SharedArrayBuffer(4); // 1 * 4 bytes
-        const sharedArray = new Int32Array(buffer);
-
-        // Initialize to 0
-        Atomics.store(sharedArray, 0, 0); // latestSequenceId
-
-        sharedBufferRef.current = buffer;
-      } catch (e) {
-        console.warn(
-          "SharedArrayBuffer not supported, falling back to basic mode:",
-          e
-        );
-        sharedBufferRef.current = null;
-      }
-    }
-
     // Handle messages from worker
     worker.addEventListener(
       "message",
       (event: MessageEvent<MarkdownWorkerResponse>) => {
-        const { type, sequenceId } = event.data;
+        const { type } = event.data;
 
         // Mark worker as ready when we receive any message
         if (!isWorkerReady) {
@@ -87,14 +66,11 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
             affectedRegions: renderedAffectedRegions
           } = event.data as MarkdownIncrementalResponse;
 
-          // Always accept the latest sequence
-          if (sequenceId === changeSequenceIdRef.current) {
-            setHtml(renderedHtml);
-            setBlockMappings(renderedBlockMappings);
-            setAffectedRegions(renderedAffectedRegions);
-            setError(null);
-            setIsRendering(false);
-          }
+          setHtml(renderedHtml);
+          setBlockMappings(renderedBlockMappings);
+          setAffectedRegions(renderedAffectedRegions);
+          setError(null);
+          setIsRendering(false);
         } else if (type === "error") {
           const { error: errorMessage } = event.data as MarkdownErrorResponse;
           setError(errorMessage);
@@ -111,29 +87,12 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
       setIsWorkerReady(false); // Mark worker as not ready on error
     });
 
-    // Test worker readiness by sending a ping
-    // We'll send an empty change to trigger worker initialization
-    const testChange: MonacoChange = {
-      range: {
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: 1,
-        endColumn: 1
-      },
-      rangeLength: 0,
-      text: ""
+    // Send an init message to test worker readiness
+    const initMessage: MarkdownInitEvent = {
+      type: "init-message"
     };
 
-    // Send a test message to initialize the worker
-    const testMessage = {
-      type: "change-event" as const,
-      change: testChange,
-      fullText: "",
-      sequenceId: 0,
-      sharedBuffer: sharedBufferRef.current || undefined
-    };
-
-    worker.postMessage(testMessage);
+    worker.postMessage(initMessage);
 
     // Cleanup
     return () => {
@@ -152,15 +111,6 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
         return;
       }
 
-      // Increment change sequence ID
-      const sequenceId = ++changeSequenceIdRef.current;
-
-      // Update shared buffer with latest sequence ID
-      if (sharedBufferRef.current) {
-        const sharedArray = new Int32Array(sharedBufferRef.current);
-        Atomics.store(sharedArray, 0, sequenceId);
-      }
-
       // Set rendering state
       setIsRendering(true);
       setError(null);
@@ -169,9 +119,7 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
       const message: MarkdownChangeEvent = {
         type: "change-event",
         change,
-        fullText,
-        sequenceId,
-        sharedBuffer: sharedBufferRef.current || undefined
+        fullText
       };
 
       worker.postMessage(message);
