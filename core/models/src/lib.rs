@@ -103,13 +103,10 @@ pub struct PostWithDocuments {
     pub documents: Vec<DocumentMetadata>,
 }
 
+/// Cryptographic POD proofs associated with a document
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DocumentMetadata {
-    pub id: Option<i64>,
-    pub content_id: Hash,
-    pub post_id: i64,
-    pub revision: i64,
-    pub created_at: Option<String>,
+pub struct DocumentPods {
+    pub document_id: i64,
     /// MainPod that proves:
     /// - Identity verification: identity pod was signed by registered identity server
     /// - Document verification: document pod was signed by user from identity pod
@@ -131,14 +128,24 @@ pub struct DocumentMetadata {
     /// This pod proves the document was timestamped by the server and establishes
     /// the canonical ordering of document creation.
     pub timestamp_pod: LazyDeser<SignedPod>,
-    pub uploader_id: String, // Username of the uploader
-    pub upvote_count: i64,   // Number of upvotes for this document
     /// MainPod that cryptographically proves the upvote count is correct
     /// Proves: upvote_count(N, content_hash, post_id) where N is the actual count
     /// Uses recursive proofs starting from base case (count=0) and building up
     pub upvote_count_pod: LazyDeser<Option<MainPod>>,
-    pub tags: HashSet<String>, // Set of tags for document organization and discovery
-    pub authors: HashSet<String>, // Set of authors for document attribution
+}
+
+/// Lightweight document metadata without cryptographic proofs (for listing)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocumentMetadata {
+    pub id: Option<i64>,
+    pub content_id: Hash,
+    pub post_id: i64,
+    pub revision: i64,
+    pub created_at: Option<String>,
+    pub uploader_id: String,              // Username of the uploader
+    pub upvote_count: i64,                // Number of upvotes for this document
+    pub tags: HashSet<String>,            // Set of tags for document organization and discovery
+    pub authors: HashSet<String>,         // Set of authors for document attribution
     pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     /// Original post_id value from the publish request used in the MainPod proof
     /// This may be -1 for new documents, while post_id is the actual assigned ID
@@ -149,6 +156,7 @@ pub struct DocumentMetadata {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Document {
     pub metadata: DocumentMetadata,
+    pub pods: DocumentPods,
     pub content: DocumentContent, // Retrieved from storage
 }
 
@@ -179,7 +187,7 @@ impl Document {
 
         println!("Verifying publish verification MainPod...");
 
-        let main_pod = self.metadata.pod.get()?;
+        let main_pod = self.pods.pod.get()?;
 
         // Extract identity server public key from MainPod
         let publish_verified_statement = &main_pod.public_statements[1];
@@ -262,7 +270,7 @@ impl Document {
     ) -> Result<(), Box<dyn std::error::Error>> {
         println!("Verifying timestamp pod signature...");
 
-        let timestamp_pod = self.metadata.timestamp_pod.get()?;
+        let timestamp_pod = self.pods.timestamp_pod.get()?;
 
         // Verify signature
         timestamp_pod.verify()?;
@@ -287,7 +295,7 @@ impl Document {
 
     /// Verify the upvote count pod if present
     pub fn verify_upvote_count_pod(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(upvote_count_pod) = self.metadata.upvote_count_pod.get()? {
+        if let Some(upvote_count_pod) = self.pods.upvote_count_pod.get()? {
             println!("Verifying upvote count pod...");
 
             mainpod::upvote::verify_upvote_count_with_solver(

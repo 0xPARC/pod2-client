@@ -935,7 +935,7 @@ pub async fn delete_document(
     // Extract only the timestamp pod from the server response
     // We'll create our own document pod for the delete request
     let timestamp_pod = document
-        .metadata
+        .pods
         .timestamp_pod
         .get()
         .map_err(|e| format!("Failed to get timestamp pod: {e}"))?;
@@ -950,7 +950,7 @@ pub async fn delete_document(
 
     // Extract the original data from the publish MainPod to use in delete pod
     let publish_main_pod = document
-        .metadata
+        .pods
         .pod
         .get()
         .map_err(|e| format!("Failed to get publish MainPod: {e}"))?;

@@ -32,7 +32,17 @@ export interface ReplyReference {
 }
 
 /**
- * Document metadata from the PodNet server
+ * Cryptographic POD proofs associated with a document
+ */
+export interface DocumentPods {
+  document_id: number;
+  pod: MainPod; // MainPod proving document authenticity
+  timestamp_pod: SignedPod; // Server timestamp pod
+  upvote_count_pod?: MainPod; // MainPod proving upvote count
+}
+
+/**
+ * Lightweight document metadata (without PODs - for listing)
  */
 export interface DocumentMetadata {
   id?: number;
@@ -40,11 +50,8 @@ export interface DocumentMetadata {
   post_id: number;
   revision: number;
   created_at?: string;
-  pod: MainPod; // MainPod proving document authenticity
-  timestamp_pod: SignedPod; // Server timestamp pod
   uploader_id: string; // Username of uploader
   upvote_count: number; // Number of upvotes
-  upvote_count_pod?: MainPod; // MainPod proving upvote count
   tags: string[]; // Tags for organization
   authors: string[]; // Authors for attribution
   reply_to?: ReplyReference; // Post and document IDs this replies to
@@ -53,10 +60,11 @@ export interface DocumentMetadata {
 }
 
 /**
- * Complete document with metadata and content
+ * Complete document with metadata, PODs, and content
  */
 export interface Document {
   metadata: DocumentMetadata;
+  pods: DocumentPods;
   content: DocumentContent;
 }
 
