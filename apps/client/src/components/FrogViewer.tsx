@@ -145,7 +145,7 @@ export function FrogViewer() {
         <ScrollArea className="h-full">
           <div>
             {frogs.map((pod) => (
-              <FrogCard pod={pod} key={pod.pod_id} />
+              <FrogCard pod={pod} key={pod.id} />
             ))}
           </div>
         </ScrollArea>
@@ -170,7 +170,19 @@ function FrogCard({ pod }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const haveDesc = pod.data != null;
-  const { setLevelUpId } = useFrogCrypto();
+  const { levelUpId, setLevelUpId } = useFrogCrypto();
+  const [levelProgress, setLevelProgress] = useState("");
+
+  useEffect(() => {
+      const unlisten = listen("level-up-status", (event) => {
+        setLevelProgress(event.payload);
+      });
+
+      return () => {
+        unlisten.then((f) => f());
+      };
+    }, []);
+
 
   return (
     <Card className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm">
@@ -207,9 +219,16 @@ function FrogCard({ pod }: FrogCardProps) {
           </table>
         </div>
         {pod.offer_level_up &&
-          <Button onClick={() => setLevelUpId(pod.id)}>
+          <div>
+          <Button
+            disabled={levelUpId !== null}
+            onClick={() => setLevelUpId(pod.id)}>
             Level up
           </Button>
+          <span>
+            {levelProgress}
+          </span>
+          </div>
         }
         {haveDesc && (
           <Collapsible open={expanded} onOpenChange={setExpanded}>

@@ -1,23 +1,26 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
-    Arc, LazyLock,
+    atomic::{AtomicU32, Ordering},
+    Arc,
 };
 
 use pod2::{
     backends::plonky2::mainpod::Prover,
     frontend::{Error, MainPod, MainPodBuilder, Operation, SignedPod},
     middleware::{
-        CustomPredicateBatch, CustomPredicateRef, Params, RawValue, Statement, DEFAULT_VD_SET,
+        CustomPredicateBatch, CustomPredicateRef, Params, Statement, DEFAULT_VD_SET,
         SELF_ID_HASH,
     },
 };
 use pod2_db::store::{get_pod, PodData, PodInfo};
 use tauri::{AppHandle, Emitter, Event, Listener, Manager};
 
-use crate::{frog::register_frog, AppState};
+use crate::{
+    frog::{log_err, register_frog},
+    AppState,
+};
 
-pub(super) const LEVEL_UP_1: i64 = 3;
-pub(super) const LEVEL_UP_2: i64 = 4;
+pub(super) const LEVEL_UP_1: i64 = 4;
+pub(super) const LEVEL_UP_2: i64 = 5;
 
 pub(crate) fn setup_background_thread(app_handle: AppHandle) {
     let generation = Arc::new(AtomicU32::new(0));
@@ -63,7 +66,6 @@ async fn spawn_level_thread(
     if let Ok(Some(pod)) = get_pod(&app_state.db, "frogs", &pod_id).await {
         drop(app_state);
         log::info!("ready to spawn thread");
-        /*
         std::thread::spawn(move || {
             level_up(
                 app_handle,
@@ -73,7 +75,6 @@ async fn spawn_level_thread(
                 pod,
             );
         });
-        */
     }
 }
 
@@ -88,7 +89,11 @@ struct LevelData {
 impl LevelData {
     fn try_new(pod: PodInfo, level_up_pred: Arc<CustomPredicateBatch>) -> Option<Self> {
         match pod.data {
-            PodData::Signed(s) => Self::new_from_signed(&(*s).try_into().ok()?, level_up_pred).ok(),
+            PodData::Signed(s) => {
+                Self::new_from_signed(&(*s).try_into().inspect_err(log_err).ok()?, level_up_pred)
+                    .inspect_err(log_err)
+                    .ok()
+            }
             _ => todo!(),
         }
     }
@@ -141,18 +146,14 @@ impl LevelData {
             .get_statement("biome")
             .ok_or_else(|| anyhow::anyhow!("missing biome"))?;
         builder.pub_op(Operation::copy(biome_st.clone()))?;
-        let level_up_base_st = builder
-            .priv_op(Operation::custom(
-                level_up_base_ref,
-                vec![lev_const_st.into(), biome_st.into()],
-            ))
-            .unwrap();
-        let level_one_st = builder
-            .priv_op(Operation::custom(
-                level_up_ref.clone(),
-                [level_up_base_st, Statement::None],
-            ))
-            .unwrap();
+        let level_up_base_st = builder.priv_op(Operation::custom(
+            level_up_base_ref,
+            vec![lev_const_st.into(), biome_st.into()],
+        ))?;
+        let level_one_st = builder.priv_op(Operation::custom(
+            level_up_ref.clone(),
+            [level_up_base_st, Statement::None],
+        ))?;
         let level_two_st = Self::level_up_helper(&mut builder, &level_up_pred, 1, level_one_st)?;
         let pod = builder.prove(&Prover {})?;
         Ok(Self {
@@ -218,7 +219,7 @@ fn level_up(
             if let Err(e) =
                 app_handle.emit("level-up-status", format!("{}/{}", data.level, data.goal))
             {
-                log::error!("{e}");
+                log_err(&e);
             }
         }
     }

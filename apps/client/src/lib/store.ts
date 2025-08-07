@@ -316,6 +316,15 @@ export const useAppStore = create<AppStoreState>()(
           });
           console.log("state-changed", event.payload);
         });
+        await listen<string>("level-up-finish", (event) => {
+          set((state) => {
+            console.log(event.payload);
+            console.log(state.frogCrypto.levelUpId);
+            if (state.frogCrypto.levelUpId == event.payload) {
+              state.frogCrypto.levelUpId = null;
+            }
+          });
+        });
       } catch (error) {
         set((state) => {
           state.error = `Failed to initialize state: ${error}`;
@@ -914,12 +923,10 @@ export const useAppStore = create<AppStoreState>()(
 
       setLevelUpId: (levelUpId: string | null) => {
         set((state) => {
-          console.log(`entered ${levelUpId} ${state.frogCrypto.levelUpId}`);
           const changed = state.frogCrypto.levelUpId != levelUpId;
           state.frogCrypto.levelUpId = levelUpId;
           if (changed) {
-            console.log("changed");
-            emit("set-level-up", levelUpId).catch((e) => console.log(e));
+            emit("set-level-up", levelUpId ?? "").catch((e) => console.log(e));
           }
         });
       },
