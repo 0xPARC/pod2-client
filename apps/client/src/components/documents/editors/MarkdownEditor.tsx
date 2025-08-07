@@ -70,7 +70,8 @@ export function MarkdownEditor({
     html: renderedHtml,
     blockMappings,
     affectedRegions,
-    error
+    error,
+    isWorkerReady
   } = useMarkdownWorker();
 
   // Use scroll synchronization with cooldown to prevent feedback loops
@@ -87,12 +88,16 @@ export function MarkdownEditor({
     [setPreviewRef]
   );
 
-  // Initial rendering when component mounts
+  // Track if we've rendered the initial content
+  const hasRenderedInitialRef = useRef(false);
+
+  // Initial rendering when component mounts and worker is ready
   useEffect(() => {
-    if (value.trim()) {
+    if (isWorkerReady && !hasRenderedInitialRef.current && value.trim()) {
       renderMarkdown(value);
+      hasRenderedInitialRef.current = true;
     }
-  }, [renderMarkdown]); // Only run on mount, not on value changes
+  }, [isWorkerReady, value, renderMarkdown]); // Depend on value to catch when content loads
 
   // Update block mappings when they change
   useEffect(() => {
@@ -106,7 +111,9 @@ export function MarkdownEditor({
     ? `<div style="color: red; padding: 16px;">Error rendering markdown: ${error}</div>`
     : value.trim()
       ? renderedHtml ||
-        '<div style="padding: 16px; opacity: 0.5;">Rendering...</div>'
+        (isWorkerReady
+          ? '<div style="padding: 16px; opacity: 0.5;">Rendering...</div>'
+          : '<div style="padding: 16px; opacity: 0.5;">Loading renderer...</div>')
       : "Nothing to preview yet. Start typing to see your markdown rendered here.";
 
   // Handle Monaco editor content changes

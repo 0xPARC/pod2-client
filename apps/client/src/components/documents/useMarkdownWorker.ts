@@ -22,7 +22,7 @@ interface UseMarkdownWorkerResult {
   affectedRegions: AffectedRegion[];
   isRendering: boolean;
   error: string | null;
-  // Optimized rendering with change tracking
+  isWorkerReady: boolean;
 }
 
 export function useMarkdownWorker(): UseMarkdownWorkerResult {
@@ -34,6 +34,7 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
   const [affectedRegions, setAffectedRegions] = useState<AffectedRegion[]>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isWorkerReady, setIsWorkerReady] = useState(false);
 
   // Refs for worker management
   const workerRef = useRef<Worker | null>(null);
@@ -78,6 +79,11 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
       (event: MessageEvent<MarkdownWorkerResponse>) => {
         const { type, sequenceId } = event.data;
 
+        // Mark worker as ready when we receive any message
+        if (!isWorkerReady) {
+          setIsWorkerReady(true);
+        }
+
         if (type === "incremental-complete") {
           const {
             html: renderedHtml,
@@ -106,12 +112,38 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
       console.error("Markdown worker error:", event);
       setError("Worker error occurred");
       setIsRendering(false);
+      setIsWorkerReady(false); // Mark worker as not ready on error
     });
+
+    // Test worker readiness by sending a ping
+    // We'll send an empty change to trigger worker initialization
+    const testChange: MonacoChange = {
+      range: {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 1
+      },
+      rangeLength: 0,
+      text: ""
+    };
+
+    // Send a test message to initialize the worker
+    const testMessage = {
+      type: "change-event" as const,
+      change: testChange,
+      fullText: "",
+      sequenceId: 0,
+      sharedBuffer: sharedBufferRef.current || undefined
+    };
+
+    worker.postMessage(testMessage);
 
     // Cleanup
     return () => {
       worker.terminate();
       workerRef.current = null;
+      setIsWorkerReady(false);
     };
   }, []);
 
@@ -119,7 +151,10 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
   const sendChangeEvent = useCallback(
     (change: MonacoChange, fullText: string) => {
       const worker = workerRef.current;
-      if (!worker) return;
+      if (!worker) {
+        console.log("⚠️ sendChangeEvent called but worker not ready");
+        return;
+      }
 
       // Increment change sequence ID
       const sequenceId = ++changeSequenceIdRef.current;
@@ -151,13 +186,14 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
   // Render function using change event simulation
   const renderMarkdown = useCallback(
     (markdown: string) => {
-      // For full rendering, simulate a change event covering the entire document
+      // For full rendering, simulate a change event covering the actual document
+      const lineCount = markdown.split("\n").length;
       const fakeChange: MonacoChange = {
         range: {
           startLineNumber: 1,
           startColumn: 1,
-          endLineNumber: Number.MAX_SAFE_INTEGER,
-          endColumn: Number.MAX_SAFE_INTEGER
+          endLineNumber: lineCount,
+          endColumn: 1
         },
         rangeLength: 0,
         text: markdown
@@ -175,7 +211,8 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
     blockMappings,
     affectedRegions,
     isRendering,
-    error
+    error,
+    isWorkerReady
   };
 }
 
