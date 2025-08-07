@@ -3,14 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // Import types from worker
 import type {
-  MarkdownWorkerResponse,
-  MarkdownRenderRequest,
-  MarkdownChangeEvent,
-  MarkdownRenderResponse,
-  MarkdownIncrementalResponse,
-  MarkdownErrorResponse,
-  BlockMapping,
   AffectedRegion,
+  BlockMapping,
+  MarkdownChangeEvent,
+  MarkdownErrorResponse,
+  MarkdownIncrementalResponse,
+  MarkdownRenderRequest,
+  MarkdownRenderResponse,
+  MarkdownWorkerResponse,
   MonacoChange
 } from "../../workers/markdown.worker";
 
@@ -127,8 +127,7 @@ export function useMarkdownWorker(
           } = event.data as MarkdownIncrementalResponse;
 
           // For incremental mode, always accept the latest sequence
-          if (sequenceId >= changeSequenceIdRef.current - 5) {
-            // Allow some flexibility
+          if (sequenceId === changeSequenceIdRef.current) {
             setHtml(renderedHtml);
             setBlockMappings(renderedBlockMappings);
             setAffectedRegions(renderedAffectedRegions);

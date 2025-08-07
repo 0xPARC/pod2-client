@@ -69,7 +69,7 @@ export function MarkdownEditor({
     error,
     isIncrementalMode
   } = useMarkdownWorker({
-    enableIncremental: true // Enable incremental rendering
+    enableIncremental: true // Re-enable incremental rendering with debugging
   });
 
   // Use scroll synchronization with cooldown to prevent feedback loops
@@ -87,12 +87,12 @@ export function MarkdownEditor({
     [setPreviewRef]
   );
 
-  // Trigger rendering when value changes
+  // Initial rendering when component mounts
   useEffect(() => {
     if (value.trim()) {
       renderMarkdown(value);
     }
-  }, [value, renderMarkdown]);
+  }, [renderMarkdown]); // Only run on mount, not on value changes
 
   // Update block mappings when they change
   useEffect(() => {
@@ -121,8 +121,14 @@ export function MarkdownEditor({
     (value) => {
       const newContent = value || "";
       onChange(newContent);
+
+      // In incremental mode, changes are handled by onDidChangeContent
+      // In legacy mode, trigger full rendering
+      if (!isIncrementalMode) {
+        renderMarkdown(newContent);
+      }
     },
-    [onChange]
+    [onChange, isIncrementalMode, renderMarkdown]
   );
 
   // Handle Monaco editor mount
@@ -141,21 +147,21 @@ export function MarkdownEditor({
       // Set editor ref for scroll sync
       setEditorRef(mountedEditor);
 
-      // Set up incremental change handling if enabled
+      // Set up incremental change handling
       if (isIncrementalMode) {
         const model = mountedEditor.getModel();
         if (model) {
-          // Listen to content changes for incremental updates
-          model.onDidChangeContent((event) => {
+          const disposable = model.onDidChangeContent((event) => {
             const changes = event.changes;
             if (changes.length > 0) {
-              // Convert Monaco change to our format and send to worker
-              const change = changes[0]; // Take first change (could enhance to handle multiple)
+              const change = changes[0];
               const fullText = model.getValue();
-
               sendChangeEvent(change, fullText);
             }
           });
+
+          // Store disposable for cleanup
+          (mountedEditor as any)._incrementalDisposable = disposable;
         }
       }
     },
@@ -169,6 +175,17 @@ export function MarkdownEditor({
       monacoRef.current.editor.setTheme(currentTheme);
     }
   }, [theme]);
+
+  // Cleanup incremental event listeners on unmount
+  React.useEffect(() => {
+    return () => {
+      const editor = editorRef.current;
+      if (editor && (editor as any)._incrementalDisposable) {
+        (editor as any)._incrementalDisposable.dispose();
+        delete (editor as any)._incrementalDisposable;
+      }
+    };
+  }, []);
 
   // Insert markdown formatting at cursor position using Monaco API
   const insertFormatting = useCallback(
@@ -405,6 +422,7 @@ export function MarkdownEditor({
               ref={handlePreviewRef}
               html={displayHtml}
               affectedRegions={affectedRegions}
+              blockMappings={blockMappings}
               isIncrementalMode={isIncrementalMode}
               className="flex-1 min-h-0 min-w-0 p-4 overflow-auto prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
             />

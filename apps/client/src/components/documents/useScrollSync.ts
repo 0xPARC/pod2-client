@@ -1,6 +1,6 @@
 // Hook for managing scroll synchronization between Monaco editor and markdown preview
-import { useCallback, useEffect, useRef, useState } from "react";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface BlockMapping {
   startLine: number;
@@ -359,6 +359,13 @@ export function useScrollSync(
 
     // Listen to preview scroll events
     preview.addEventListener("scroll", handlePreviewScroll, { passive: true });
+
+    // To ensure geometry is updated after MathJax renders, we use multiple strategies:
+    // 1. Listen for specific MathJax events for immediate feedback.
+    // 2. Listen to DOMContentLoaded as a fallback for the initial page load.
+    // 3. Use a MutationObserver to catch cases where MathJax modifies the DOM
+    //    without firing a specific, catchable event. This is the most reliable
+    //    fallback.
 
     // Listen for MathJax rendering completion to refresh geometry
     const handleMathJaxRendered = () => {
