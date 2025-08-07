@@ -64,6 +64,11 @@ export function MarkdownEditor({
   const previousViewModeRef = useRef<ViewMode>("split");
   const { theme } = useTheme();
 
+  // Status bar state
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
+  const [totalLines, setTotalLines] = useState(1);
+  const [characterCount, setCharacterCount] = useState(0);
+
   // Use worker-based markdown renderer with optimized updates
   const {
     renderMarkdown,
@@ -100,12 +105,46 @@ export function MarkdownEditor({
     }
   }, [isWorkerReady, value, renderMarkdown]); // Depend on value to catch when content loads
 
+  // Update status bar when content or cursor changes
+  const updateStatusBar = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Update cursor position
+    const position = editor.getPosition();
+    if (position) {
+      setCursorPosition({ line: position.lineNumber, column: position.column });
+    }
+
+    // Update total lines and character count
+    const lineCount = model.getLineCount();
+    const content = model.getValue();
+
+    setTotalLines(lineCount);
+    setCharacterCount(content.length);
+  }, []);
+
   // Update block mappings when they change
   useEffect(() => {
     if (blockMappings.length > 0) {
       updateBlockMappings(blockMappings);
     }
   }, [blockMappings, updateBlockMappings]);
+
+  // Update status bar when value changes externally
+  useEffect(() => {
+    if (editorRef.current) {
+      updateStatusBar();
+    } else {
+      // Update character count even when editor is not mounted
+      const lines = value.split("\n");
+      setTotalLines(lines.length);
+      setCharacterCount(value.length);
+    }
+  }, [value, updateStatusBar]);
 
   // Track view mode changes and fix scroll jumps after they happen
   useEffect(() => {
@@ -215,20 +254,36 @@ export function MarkdownEditor({
       // Set up change event handling
       const model = mountedEditor.getModel();
       if (model) {
-        const disposable = model.onDidChangeContent((event) => {
+        const changeDisposable = model.onDidChangeContent((event) => {
           const changes = event.changes;
           if (changes.length > 0) {
             const change = changes[0];
             const fullText = model.getValue();
             sendChangeEvent(change, fullText);
           }
+          // Update status bar when content changes
+          updateStatusBar();
         });
 
-        // Store disposable for cleanup using WeakMap
-        editorDisposables.set(mountedEditor, disposable);
+        // Set up cursor position change handling
+        const cursorDisposable = mountedEditor.onDidChangeCursorPosition(() => {
+          updateStatusBar();
+        });
+
+        // Store disposables for cleanup using WeakMap
+        const compositeDisposable = {
+          dispose: () => {
+            changeDisposable.dispose();
+            cursorDisposable.dispose();
+          }
+        };
+        editorDisposables.set(mountedEditor, compositeDisposable);
+
+        // Initial status bar update
+        updateStatusBar();
       }
     },
-    [theme, setEditorRef, sendChangeEvent]
+    [theme, setEditorRef, sendChangeEvent, updateStatusBar]
   );
 
   // Update theme when it changes
@@ -313,7 +368,7 @@ export function MarkdownEditor({
   return (
     <div className={`flex flex-col ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 border-b bg-muted">
+      <div className="flex items-center justify-between p-2 py-1 border-b bg-muted">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -375,7 +430,7 @@ export function MarkdownEditor({
       </div>
 
       {/* Editor/Preview Content */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Editor pane - always rendered but hidden in preview-only mode to maintain scroll sync */}
         <div
           className={`${
@@ -466,6 +521,18 @@ export function MarkdownEditor({
               }}
             />
           </div>
+          {/* Status Bar - only show when editor is visible */}
+          {viewMode !== "preview" && (
+            <div className="flex items-center justify-between px-4 py-1 text-xs border-t bg-muted text-muted-foreground">
+              <div className="flex items-center gap-4">
+                <span>
+                  Line {cursorPosition.line} Column {cursorPosition.column}
+                </span>
+                <span>Lines {totalLines.toLocaleString()}</span>
+                <span>Length {characterCount.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Preview pane - always rendered but hidden in edit-only mode to maintain scroll sync */}
