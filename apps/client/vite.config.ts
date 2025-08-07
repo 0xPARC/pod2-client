@@ -13,6 +13,14 @@ export default defineConfig(async () => ({
     sourcemap: !!process.env.TAURI_ENV_DEBUG
   },
 
+  worker: {
+    format: "es" as const,
+    plugins: () => [
+      // Exclude React plugin from workers to prevent HMR issues
+      tailwindcss()
+    ]
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent vite from obscuring rust errors
@@ -22,6 +30,10 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp"
+    },
     hmr: host
       ? {
           protocol: "ws",
