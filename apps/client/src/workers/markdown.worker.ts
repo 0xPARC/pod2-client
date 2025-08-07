@@ -41,8 +41,10 @@ export interface MarkdownChangeEvent {
   type: "change-event";
   change: MonacoChange;
   fullText: string;
-  sequenceId: number;
-  sharedBuffer?: SharedArrayBuffer;
+}
+
+export interface MarkdownInitEvent {
+  type: "init-message";
 }
 
 export interface BlockMapping {
@@ -63,16 +65,14 @@ export interface MarkdownIncrementalResponse {
   html: string;
   blockMappings: BlockMapping[];
   affectedRegions: AffectedRegion[];
-  sequenceId: number;
 }
 
 export interface MarkdownErrorResponse {
   type: "error";
   error: string;
-  sequenceId: number;
 }
 
-export type MarkdownWorkerMessage = MarkdownChangeEvent;
+export type MarkdownWorkerMessage = MarkdownChangeEvent | MarkdownInitEvent;
 export type MarkdownWorkerResponse =
   | MarkdownIncrementalResponse
   | MarkdownErrorResponse;
@@ -81,9 +81,10 @@ export type MarkdownWorkerResponse =
 let blockMappings: BlockMapping[] = [];
 let elementCounter = 0;
 
-// Change batching state
-let pendingChanges: MarkdownChangeEvent[] = [];
-let isProcessing = false;
+// Worker state machine
+type WorkerState = "idle" | "busy" | "collecting";
+let workerState: WorkerState = "idle";
+let messageQueue: MarkdownChangeEvent[] = [];
 
 // Helper function to merge overlapping changes into affected regions
 function mergeChanges(changes: MarkdownChangeEvent[]): AffectedRegion[] {
@@ -139,36 +140,14 @@ function mergeChanges(changes: MarkdownChangeEvent[]): AffectedRegion[] {
   return regions;
 }
 
-// Process accumulated changes
-function processAccumulatedChanges() {
-  if (pendingChanges.length === 0) return;
-
-  // Check if any changes are still valid before processing
-  const latestChange = pendingChanges[pendingChanges.length - 1];
-  if (latestChange.sharedBuffer) {
-    const sharedArray = new Int32Array(latestChange.sharedBuffer);
-    const latestSequenceId = Atomics.load(sharedArray, 0);
-
-    // If a newer request has been sent, discard all pending changes
-    if (latestChange.sequenceId < latestSequenceId) {
-      pendingChanges = [];
-      return;
-    }
-  }
-
-  isProcessing = true;
-
+// Process change events (can be single change or multiple merged changes)
+function processChangeEvents(changeEvents: MarkdownChangeEvent[]) {
   try {
-    const changesToProcess = pendingChanges;
-    pendingChanges = []; // Clear queue
+    // Get the text from the last change (most up-to-date content)
+    const finalText = changeEvents[changeEvents.length - 1].fullText;
 
-    // Get the final text from the last change
-    const finalText = changesToProcess[changesToProcess.length - 1].fullText;
-    const finalSequenceId =
-      changesToProcess[changesToProcess.length - 1].sequenceId;
-
-    // Merge changes into affected regions
-    const affectedRegions = mergeChanges(changesToProcess);
+    // Merge all changes into affected regions for optimal DOM updates
+    const affectedRegions = mergeChanges(changeEvents);
 
     // Reset mapping data for this render
     blockMappings = [];
@@ -182,8 +161,7 @@ function processAccumulatedChanges() {
       type: "incremental-complete",
       html,
       blockMappings: [...blockMappings], // Copy the array
-      affectedRegions,
-      sequenceId: finalSequenceId
+      affectedRegions
     };
 
     self.postMessage(response);
@@ -191,29 +169,36 @@ function processAccumulatedChanges() {
     // Send error response
     const errorResponse: MarkdownErrorResponse = {
       type: "error",
-      error: error instanceof Error ? error.message : String(error),
-      sequenceId: pendingChanges.length > 0 ? pendingChanges[0].sequenceId : 0
+      error: error instanceof Error ? error.message : String(error)
     };
 
     self.postMessage(errorResponse);
-  } finally {
-    isProcessing = false;
+  }
+}
 
-    // If more changes arrived while processing, handle them
-    if (pendingChanges.length > 0) {
-      // Check if the latest change is complete using shared buffer
-      const latestChange = pendingChanges[pendingChanges.length - 1];
-      let isLatest = true;
-      if (latestChange.sharedBuffer) {
-        const sharedArray = new Int32Array(latestChange.sharedBuffer);
-        const latestSequenceId = Atomics.load(sharedArray, 0);
-        isLatest = latestChange.sequenceId === latestSequenceId;
-      }
+// Handle work completion and state transitions
+function handleWorkComplete() {
+  if (workerState !== "collecting") {
+    // Shouldn't happen, but handle gracefully
+    workerState = "idle";
+    return;
+  }
 
-      if (isLatest) {
-        processAccumulatedChanges();
-      }
-    }
+  if (messageQueue.length === 0) {
+    // No queued messages, return to idle
+    workerState = "idle";
+  } else {
+    // Process all queued messages together for better affected regions
+    const queuedMessages = [...messageQueue]; // Copy the queue
+    messageQueue = []; // Clear the queue
+
+    // Transition to busy and process all messages
+    workerState = "busy";
+    processChangeEvents(queuedMessages);
+
+    // Transition to collecting and schedule work complete handler
+    workerState = "collecting";
+    setTimeout(handleWorkComplete, 0);
   }
 }
 
@@ -493,26 +478,38 @@ self.addEventListener(
   (event: MessageEvent<MarkdownWorkerMessage>) => {
     const messageData = event.data;
 
-    if (messageData.type === "change-event") {
-      // Handle change events with batching
+    if (messageData.type === "init-message") {
+      // Worker initialization - just send back a simple response to mark as ready
+      const response: MarkdownIncrementalResponse = {
+        type: "incremental-complete",
+        html: "",
+        blockMappings: [],
+        affectedRegions: []
+      };
+      self.postMessage(response);
+    } else if (messageData.type === "change-event") {
       const changeEvent = messageData as MarkdownChangeEvent;
 
-      // Always add to batch
-      pendingChanges.push(changeEvent);
+      switch (workerState) {
+        case "idle":
+          // Process immediately and transition to busy
+          workerState = "busy";
+          processChangeEvents([changeEvent]);
 
-      // Check if this is the latest message in the sequence using shared buffer
-      let isLatest = true;
-      if (changeEvent.sharedBuffer) {
-        const sharedArray = new Int32Array(changeEvent.sharedBuffer);
-        const latestSequenceId = Atomics.load(sharedArray, 0);
-        isLatest = changeEvent.sequenceId === latestSequenceId;
-      }
+          // Transition to collecting and schedule work complete handler
+          workerState = "collecting";
+          setTimeout(handleWorkComplete, 0);
+          break;
 
-      if (isLatest && !isProcessing) {
-        // This is the last message, and we're free to process
-        processAccumulatedChanges();
+        case "busy":
+          // Currently processing, this message will be handled in collecting phase
+          break;
+
+        case "collecting":
+          // Queue the message for later processing
+          messageQueue.push(changeEvent);
+          break;
       }
-      // Otherwise, we wait for the next event handler to fire
     }
   }
 );
