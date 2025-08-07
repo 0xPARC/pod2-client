@@ -12,7 +12,7 @@ import type {
   MonacoChange
 } from "../../workers/markdown.worker";
 
-// No options needed - always use optimized rendering
+// Markdown worker hook for async rendering
 
 interface UseMarkdownWorkerResult {
   renderMarkdown: (markdown: string) => void;
@@ -26,8 +26,6 @@ interface UseMarkdownWorkerResult {
 }
 
 export function useMarkdownWorker(): UseMarkdownWorkerResult {
-  // Uses optimized rendering with SharedArrayBuffer coordination
-
   // State
   const [html, setHtml] = useState<string>("");
   const [blockMappings, setBlockMappings] = useState<BlockMapping[]>([]);
@@ -54,14 +52,12 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
     // Create SharedArrayBuffer for coordination (if supported)
     if (typeof SharedArrayBuffer !== "undefined") {
       try {
-        // Create buffer with 3 Int32 slots: [latestSequenceId, completedSequenceId, lastRenderedSequenceId]
-        const buffer = new SharedArrayBuffer(3 * 4); // 3 * 4 bytes
+        // Create buffer with 1 Int32 slot for sequence coordination
+        const buffer = new SharedArrayBuffer(4); // 1 * 4 bytes
         const sharedArray = new Int32Array(buffer);
 
-        // Initialize all values to 0
+        // Initialize to 0
         Atomics.store(sharedArray, 0, 0); // latestSequenceId
-        Atomics.store(sharedArray, 1, 0); // completedSequenceId
-        Atomics.store(sharedArray, 2, 0); // lastRenderedSequenceId (for diagnostics)
 
         sharedBufferRef.current = buffer;
       } catch (e) {
@@ -91,7 +87,7 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
             affectedRegions: renderedAffectedRegions
           } = event.data as MarkdownIncrementalResponse;
 
-          // For incremental mode, always accept the latest sequence
+          // Always accept the latest sequence
           if (sequenceId === changeSequenceIdRef.current) {
             setHtml(renderedHtml);
             setBlockMappings(renderedBlockMappings);
@@ -214,21 +210,4 @@ export function useMarkdownWorker(): UseMarkdownWorkerResult {
     error,
     isWorkerReady
   };
-}
-
-// Hook for diagnostic information (optional)
-export function useMarkdownWorkerDiagnostics(
-  _workerResult: UseMarkdownWorkerResult
-) {
-  const [diagnostics] = useState({
-    droppedRenders: 0,
-    latestSequenceId: 0,
-    completedSequenceId: 0,
-    lastRenderedSequenceId: 0
-  });
-
-  // This would be updated by the worker hook if diagnostics are enabled
-  // For now, this is a placeholder for future diagnostic features
-
-  return diagnostics;
 }

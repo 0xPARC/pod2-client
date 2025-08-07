@@ -122,7 +122,7 @@ function mergeChanges(changes: MarkdownChangeEvent[]): AffectedRegion[] {
       regions.push({
         startLine: regionStart,
         endLine: regionEnd,
-        changeType: "modify" // Simplified - could be more sophisticated
+        changeType: "modify"
       });
       regionStart = line;
       regionEnd = line;
@@ -511,11 +511,6 @@ self.addEventListener(
       if (isLatest && !isProcessing) {
         // This is the last message, and we're free to process
         processAccumulatedChanges();
-      } else {
-        console.log(
-          "Deferred change event, current sequenceId:",
-          changeEvent.sequenceId
-        );
       }
       // Otherwise, we wait for the next event handler to fire
     }

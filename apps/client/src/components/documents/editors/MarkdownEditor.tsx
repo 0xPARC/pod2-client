@@ -23,7 +23,7 @@ import {
 } from "../../../lib/monacoWorkers";
 import { useTheme } from "../../theme-provider";
 import { Button } from "../../ui/button";
-import { MarkdownPreview } from "../IncrementalMarkdownPreview";
+import { MarkdownPreview } from "../MarkdownPreview";
 import { useMarkdownWorker } from "../useMarkdownWorker";
 import { useScrollSync } from "../useScrollSync";
 
