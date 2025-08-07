@@ -79,8 +79,6 @@ export function PublishDocumentForm({
   });
 
   const getPublishData = () => {
-    console.log("getPublishData called, editDocumentData:", editDocumentData);
-
     const data: any = {
       title: title.trim(),
       message: message.trim(),
@@ -90,9 +88,6 @@ export function PublishDocumentForm({
       draftId: currentDraftId || editingDraftId, // Pass the draft ID for deletion after publish
       postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
-
-    console.log("getPublishData result:", data);
-    console.log("editDocumentData?.postId:", editDocumentData?.postId);
 
     return data;
   };
@@ -272,7 +267,6 @@ export function PublishDocumentForm({
             setMessage(value);
             markContentChanged();
           }}
-          placeholder="Enter your markdown content..."
           className="h-full"
         />
       </div>
