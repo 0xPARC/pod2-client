@@ -3,7 +3,7 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentMetadata, IdentityServer, Post, RawDocument, ReplyReference, Upvote,
+    Document, DocumentMetadata, DocumentPods, IdentityServer, Post, RawDocument, ReplyReference, Upvote,
     lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
@@ -345,13 +345,25 @@ impl Database {
         // Get upvote count (will be 0 for new document)
         let upvote_count = 0;
 
-        // Create the metadata with properly typed pods
+        // Create the metadata (without PODs)
         let metadata = DocumentMetadata {
             id: Some(document_id),
             content_id: *content_id,
             post_id,
             revision: next_revision,
             created_at: None, // Will be filled by database
+            uploader_id: uploader_id.to_string(),
+            upvote_count,
+            tags: tags.clone(),
+            authors: authors.clone(),
+            reply_to,
+            requested_post_id,
+            title: title.to_string(),
+        };
+
+        // Create the pods
+        let pods = DocumentPods {
+            document_id,
             pod: LazyDeser::from_value(pod.clone()).map_err(|_| {
                 rusqlite::Error::InvalidColumnType(
                     0,
@@ -366,8 +378,6 @@ impl Database {
                     rusqlite::types::Type::Text,
                 )
             })?,
-            uploader_id: uploader_id.to_string(),
-            upvote_count,
             upvote_count_pod: LazyDeser::from_value(None::<MainPod>).map_err(|_| {
                 rusqlite::Error::InvalidColumnType(
                     0,
@@ -375,14 +385,9 @@ impl Database {
                     rusqlite::types::Type::Text,
                 )
             })?, // Will be set by background task
-            tags: tags.clone(),
-            authors: authors.clone(),
-            reply_to,
-            requested_post_id,
-            title: title.to_string(),
         };
 
-        Ok(Document { metadata, content })
+        Ok(Document { metadata, pods, content })
     }
 
     pub fn get_raw_document(&self, id: i64) -> Result<Option<RawDocument>> {
@@ -666,8 +671,44 @@ impl Database {
         Ok(upvotes)
     }
 
-    // Helper method to convert RawDocument to DocumentMetadata
+    // Helper method to convert RawDocument to DocumentMetadata (without PODs)
     pub fn raw_document_to_metadata(&self, raw_doc: RawDocument) -> Result<DocumentMetadata> {
+        // Get upvote count
+        let upvote_count = raw_doc
+            .id
+            .map(|id| self.get_upvote_count(id).unwrap_or(0))
+            .unwrap_or(0);
+
+        let content_id = Hash::from_hex(raw_doc.content_id).map_err(|_| {
+            rusqlite::Error::InvalidColumnType(
+                0,
+                "content".to_string(),
+                rusqlite::types::Type::Text,
+            )
+        })?;
+
+        Ok(DocumentMetadata {
+            id: raw_doc.id,
+            content_id,
+            post_id: raw_doc.post_id,
+            revision: raw_doc.revision,
+            created_at: raw_doc.created_at,
+            uploader_id: raw_doc.uploader_id,
+            upvote_count,
+            tags: raw_doc.tags,
+            authors: raw_doc.authors,
+            reply_to: raw_doc.reply_to,
+            requested_post_id: raw_doc.requested_post_id,
+            title: raw_doc.title,
+        })
+    }
+
+    // Helper method to convert RawDocument to DocumentPods
+    pub fn raw_document_to_pods(&self, raw_doc: RawDocument) -> Result<DocumentPods> {
+        let document_id = raw_doc.id.ok_or_else(|| {
+            rusqlite::Error::InvalidColumnType(0, "id".to_string(), rusqlite::types::Type::Integer)
+        })?;
+
         // Create lazy pod wrappers instead of deserializing immediately
         let pod = LazyDeser::from_json_string(raw_doc.pod).map_err(|_| {
             rusqlite::Error::InvalidColumnType(0, "pod".to_string(), rusqlite::types::Type::Text)
@@ -698,36 +739,11 @@ impl Database {
                 )
             })?;
 
-        // Get upvote count
-        let upvote_count = raw_doc
-            .id
-            .map(|id| self.get_upvote_count(id).unwrap_or(0))
-            .unwrap_or(0);
-
-        let content_id = Hash::from_hex(raw_doc.content_id).map_err(|_| {
-            rusqlite::Error::InvalidColumnType(
-                0,
-                "content".to_string(),
-                rusqlite::types::Type::Text,
-            )
-        })?;
-
-        Ok(DocumentMetadata {
-            id: raw_doc.id,
-            content_id,
-            post_id: raw_doc.post_id,
-            revision: raw_doc.revision,
-            created_at: raw_doc.created_at,
+        Ok(DocumentPods {
+            document_id,
             pod,
             timestamp_pod,
-            uploader_id: raw_doc.uploader_id,
-            upvote_count,
             upvote_count_pod,
-            tags: raw_doc.tags,
-            authors: raw_doc.authors,
-            reply_to: raw_doc.reply_to,
-            requested_post_id: raw_doc.requested_post_id,
-            title: raw_doc.title,
         })
     }
 
@@ -748,6 +764,7 @@ impl Database {
         match self.get_raw_document(id)? {
             Some(raw_doc) => {
                 let metadata = self.raw_document_to_metadata(raw_doc.clone())?;
+                let pods = self.raw_document_to_pods(raw_doc.clone())?;
                 let content_hash = Hash::from_hex(raw_doc.content_id).map_err(|_| {
                     rusqlite::Error::InvalidColumnType(
                         0,
@@ -774,7 +791,7 @@ impl Database {
                         )
                     })?;
 
-                Ok(Some(Document { metadata, content }))
+                Ok(Some(Document { metadata, pods, content }))
             }
             None => Ok(None),
         }

@@ -498,14 +498,14 @@ pub async fn delete_document(
     let mut verification_succeeded = false;
 
     let timestamp_pod = document
-        .metadata
+        .pods
         .timestamp_pod
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     log::info!("Got timestamp pod for document deletion verification: {timestamp_pod}");
 
     // Extract the original data from the publish MainPod
-    let publish_main_pod = document.metadata.pod.get().map_err(|e| {
+    let publish_main_pod = document.pods.pod.get().map_err(|e| {
         log::error!("Failed to get publish MainPod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;

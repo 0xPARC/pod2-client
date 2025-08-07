@@ -570,8 +570,8 @@ async fn view_post_in_browser(
         // Verify all cryptographic proofs using the new Document.verify() method
         println!("Verifying signatures for revision {revision}...");
         document.verify(&server_public_key)?;
-        println!("Main pod: {}", document.metadata.pod.json());
-        println!("Timestamp pod: {}", document.metadata.timestamp_pod.json());
+        println!("Main pod: {}", document.pods.pod.json());
+        println!("Timestamp pod: {}", document.pods.timestamp_pod.json());
 
         // Fetch replies for this document
         println!("Fetching replies for document {doc_id}...");
