@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import anchor from "markdown-it-anchor";
 import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 import { useMemo } from "react";
@@ -14,6 +15,20 @@ export function useMarkdownRenderer() {
       linkify: true, // Autoconvert URL-like text to links
       typographer: true // Enable smartquotes and other typographic replacements
     })
+      .use(anchor, {
+        // Generate heading anchors automatically
+        permalink: false, // Just generate IDs, no permalink symbols
+        level: [1, 2, 3, 4, 5, 6], // Generate anchors for all heading levels
+        slugify: function (s: string) {
+          // Create URL-friendly slugs from heading text
+          const slug = s
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "");
+          return slug;
+        }
+      })
       .use(hljs, {
         // Configure highlight.js to handle language parsing properly
         auto: false, // Disable auto-detection to avoid errors
