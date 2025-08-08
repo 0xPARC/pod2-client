@@ -80,7 +80,7 @@ pub async fn delete_document(
 
     // Extract only the timestamp pod from the server response
     // We'll create our own document pod for the delete request
-    let timestamp_pod = document.metadata.timestamp_pod.get()?;
+    let timestamp_pod = document.pods.timestamp_pod.get()?;
 
     println!("✓ Timestamp pod extracted from server");
 
@@ -89,7 +89,7 @@ pub async fn delete_document(
     println!("✓ Timestamp pod verification successful");
 
     // Extract the original data from the publish MainPod to use in delete pod
-    let publish_main_pod = document.metadata.pod.get()?;
+    let publish_main_pod = document.pods.pod.get()?;
 
     // The publish MainPod contains the verified data structure - we need to extract it
     // The data is in the public statements of the MainPod

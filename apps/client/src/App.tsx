@@ -164,7 +164,7 @@ function App() {
                 <GlobalKeyboardShortcuts />
                 <TopBar />
                 <AppSidebar />
-                <div className="mt-(--top-bar-height) w-full h-full">
+                <div className="pt-(--top-bar-height) w-full h-full">
                   <MainContent />
                 </div>
               </TopBarProvider>
