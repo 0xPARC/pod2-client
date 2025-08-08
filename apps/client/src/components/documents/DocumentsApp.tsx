@@ -152,8 +152,17 @@ export function DocumentsApp() {
             editingDraftId={currentRoute.editingDraftId || null}
             contentType={currentRoute.contentType || "document"}
             replyTo={currentRoute.replyTo}
-            onPublishSuccess={() => {
-              // Navigation is now handled by the top-level back/forward buttons
+            onPublishSuccess={(documentId) => {
+              const currentRoute =
+                browsingHistory.stack[browsingHistory.currentIndex];
+
+              if (currentRoute?.editingDraftId) {
+                // Editing draft - keep existing behavior (stay in form for continued editing)
+                return;
+              }
+
+              // For both new documents and document edits, navigate to view the document
+              navigateToDocument(documentId);
             }}
           />
         );
