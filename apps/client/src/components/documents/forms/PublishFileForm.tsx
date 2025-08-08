@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { ChipInput } from "../../ui/chip-input";
@@ -16,18 +17,25 @@ export function PublishFileForm({
   onPublishSuccess,
   onCancel
 }: PublishFileFormProps) {
+  const { currentRoute } = useDocuments();
+
+  // Get route-specific edit document data
+  const editDocumentData = currentRoute?.editDocumentData;
+
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [authors, setAuthors] = useState<string[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const getPublishData = () => {
     return {
       title: title.trim(),
       file: file || undefined,
       tags: tags.length > 0 ? tags : undefined,
-      authors: authors.length > 0 ? authors : undefined
+      authors: authors.length > 0 ? authors : undefined,
+      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
   };
 
@@ -36,8 +44,9 @@ export function PublishFileForm({
   };
 
   const isValid = () => {
-    // Title and file are mandatory for file uploads
-    return title.trim().length > 0 && file !== null;
+    // Title is always required
+    // File is required for new documents, but optional when editing (keep existing file)
+    return title.trim().length > 0 && (file !== null || isEditMode);
   };
 
   const handleCancel = () => {
@@ -46,12 +55,42 @@ export function PublishFileForm({
     }
   };
 
+  // Load existing document data for editing
+  useEffect(() => {
+    if (editDocumentData) {
+      console.log("Loading file edit document data:", editDocumentData);
+      setIsEditMode(true);
+
+      setTitle(editDocumentData.title);
+      setTags(editDocumentData.tags);
+      setAuthors(editDocumentData.authors);
+
+      // For file editing, we don't pre-populate the file since it requires
+      // the user to select a new file or keep the existing one
+      // The existing file information is available in editDocumentData.content.file
+    }
+  }, [editDocumentData]);
+
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">Upload File</CardTitle>
+          <CardTitle className="text-xl">
+            {isEditMode ? "Edit File Document" : "Upload File"}
+          </CardTitle>
         </div>
+        {isEditMode && editDocumentData?.content.file && (
+          <div className="text-sm text-muted-foreground">
+            Currently editing:{" "}
+            <span className="font-medium">
+              {editDocumentData.content.file.name}
+            </span>{" "}
+            ({editDocumentData.content.file.mime_type})
+            <br />
+            Upload a new file to replace it, or leave empty to keep the existing
+            file.
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -81,7 +120,9 @@ export function PublishFileForm({
 
         {/* File Editor */}
         <div>
-          <Label className="text-base font-medium">File *</Label>
+          <Label className="text-base font-medium">
+            File {isEditMode ? "(optional - upload new file to replace)" : "*"}
+          </Label>
           <div className="mt-2">
             <FileEditor file={file} onFileChange={setFile} />
           </div>

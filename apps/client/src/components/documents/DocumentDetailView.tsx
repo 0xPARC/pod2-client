@@ -387,6 +387,24 @@ export function DocumentDetailView({
   const handleEditDocument = () => {
     if (!document) return;
 
+    // Detect the correct content type based on document content
+    let contentType: "document" | "link" | "file" = "document";
+
+    if (document.content.file && !document.content.message) {
+      // Pure file document (file only, no message)
+      contentType = "file";
+    } else if (
+      document.content.url &&
+      !document.content.message &&
+      !document.content.file
+    ) {
+      // Pure URL document (URL only, no message or file)
+      contentType = "link";
+    } else {
+      // Message document (with or without file/URL attachments)
+      contentType = "document";
+    }
+
     // Create the document data for editing
     const editDocumentData = {
       documentId: document.metadata.id!,
@@ -401,7 +419,7 @@ export function DocumentDetailView({
     };
 
     // Navigate to publish view in edit mode with route-specific data
-    navigateToPublish(undefined, "document", undefined, editDocumentData);
+    navigateToPublish(undefined, contentType, undefined, editDocumentData);
   };
 
   useEffect(() => {

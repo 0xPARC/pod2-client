@@ -41,7 +41,19 @@ const getRouteTitle = (
       if (route.editingDraftId) {
         return { text: "Edit Draft" };
       }
-      // Show content type in title
+      if (route.editDocumentData) {
+        // Editing existing document - show edit title based on content type
+        switch (route.contentType) {
+          case "link":
+            return { text: "Edit Link" };
+          case "file":
+            return { text: "Edit File" };
+          case "document":
+          default:
+            return { text: "Edit Document" };
+        }
+      }
+      // Creating new document - show new title based on content type
       switch (route.contentType) {
         case "link":
           return { text: "New Link" };
