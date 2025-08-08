@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { ChipInput } from "../../ui/chip-input";
@@ -16,18 +17,25 @@ export function PublishLinkForm({
   onPublishSuccess,
   onCancel
 }: PublishLinkFormProps) {
+  const { currentRoute } = useDocuments();
+
+  // Get route-specific edit document data
+  const editDocumentData = currentRoute?.editDocumentData;
+
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
   const [url, setUrl] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [authors, setAuthors] = useState<string[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const getPublishData = () => {
     return {
       title: title.trim(),
       url: url.trim(),
       tags: tags.length > 0 ? tags : undefined,
-      authors: authors.length > 0 ? authors : undefined
+      authors: authors.length > 0 ? authors : undefined,
+      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
   };
 
@@ -46,12 +54,37 @@ export function PublishLinkForm({
     }
   };
 
+  // Load existing document data for editing
+  useEffect(() => {
+    if (editDocumentData) {
+      console.log("Loading link edit document data:", editDocumentData);
+      setIsEditMode(true);
+
+      setTitle(editDocumentData.title);
+      setTags(editDocumentData.tags);
+      setAuthors(editDocumentData.authors);
+
+      // Pre-populate the URL from existing document
+      if (editDocumentData.content.url) {
+        setUrl(editDocumentData.content.url);
+      }
+    }
+  }, [editDocumentData]);
+
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">Share Link</CardTitle>
+          <CardTitle className="text-xl">
+            {isEditMode ? "Edit Link" : "Share Link"}
+          </CardTitle>
         </div>
+        {isEditMode && editDocumentData?.content.url && (
+          <div className="text-sm text-muted-foreground">
+            Currently editing link:{" "}
+            <span className="font-medium">{editDocumentData.content.url}</span>
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-6">

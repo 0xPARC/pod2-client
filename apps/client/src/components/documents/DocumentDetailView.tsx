@@ -10,10 +10,12 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   MessageSquareIcon,
+  PanelLeftIcon,
+  PanelRightIcon,
   ReplyIcon,
   TrashIcon
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   deleteDocument,
@@ -31,7 +33,9 @@ import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { useSidebar } from "../ui/sidebar";
 import { renderMarkdownToHtml, useMarkdownRenderer } from "./markdownRenderer";
+import { TableOfContents } from "./TableOfContents";
 
 // Interface for threaded reply structure
 interface ThreadedReply extends DocumentMetadata {
@@ -142,6 +146,11 @@ export function DocumentDetailView({
   const [repliesError, setRepliesError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(true);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { state: appSidebarState } = useSidebar();
 
   const isVerified =
     verificationResult &&
@@ -387,6 +396,24 @@ export function DocumentDetailView({
   const handleEditDocument = () => {
     if (!document) return;
 
+    // Detect the correct content type based on document content
+    let contentType: "document" | "link" | "file" = "document";
+
+    if (document.content.file && !document.content.message) {
+      // Pure file document (file only, no message)
+      contentType = "file";
+    } else if (
+      document.content.url &&
+      !document.content.message &&
+      !document.content.file
+    ) {
+      // Pure URL document (URL only, no message or file)
+      contentType = "link";
+    } else {
+      // Message document (with or without file/URL attachments)
+      contentType = "document";
+    }
+
     // Create the document data for editing
     const editDocumentData = {
       documentId: document.metadata.id!,
@@ -401,7 +428,7 @@ export function DocumentDetailView({
     };
 
     // Navigate to publish view in edit mode with route-specific data
-    navigateToPublish(undefined, "document", undefined, editDocumentData);
+    navigateToPublish(undefined, contentType, undefined, editDocumentData);
   };
 
   useEffect(() => {
@@ -910,306 +937,385 @@ export function DocumentDetailView({
   }
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
-      <div className="w-full">
-        {/* Document Header - Reddit-style */}
-        <div className="mb-6">
-          <div className="flex items-start gap-4">
-            {/* Upvote section */}
-            <div className="flex flex-col items-center min-w-[80px] pt-2">
-              <button
-                onClick={handleUpvote}
-                disabled={isUpvoting}
-                className={`text-3xl mb-2 transition-colors ${
-                  isUpvoting
-                    ? "text-muted-foreground cursor-not-allowed"
-                    : "text-muted-foreground hover:text-orange-500 cursor-pointer"
-                }`}
-                title="Upvote this document"
-              >
-                ▲
-              </button>
-              <div className="text-2xl font-bold text-orange-500 mb-1">
-                {upvoteCount}
+    <div className="flex min-h-screen w-full">
+      {/* Left Sidebar - Table of Contents (Fixed) - Only show for message documents */}
+      {document.content.message && (
+        <div
+          className={`hidden lg:flex flex-col border-r bg-background fixed h-[calc(100vh-var(--top-bar-height))] z-10 ${
+            leftSidebarCollapsed ? "w-0 overflow-hidden" : "w-64"
+          }`}
+          style={{
+            top: "var(--top-bar-height)",
+            left:
+              appSidebarState === "expanded"
+                ? "var(--sidebar-width)"
+                : "var(--sidebar-width-icon)"
+          }}
+        >
+          {!leftSidebarCollapsed && (
+            <TableOfContents
+              containerRef={contentRef}
+              scrollContainerRef={scrollContainerRef}
+              className="flex-1 overflow-y-auto"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div
+        ref={scrollContainerRef}
+        className={`flex-1 min-w-0 p-6 ${
+          leftSidebarCollapsed || !document.content.message
+            ? "lg:ml-0"
+            : "lg:ml-64"
+        } ${rightSidebarCollapsed ? "lg:mr-0" : "lg:mr-64"}`}
+      >
+        <div className="w-full max-w-4xl mx-auto">
+          {/* Document Header - Reddit-style */}
+          <div className="mb-6">
+            <div className="flex items-start gap-4">
+              {/* Upvote section */}
+              <div className="flex flex-col items-center min-w-[80px] pt-2">
+                <button
+                  onClick={handleUpvote}
+                  disabled={isUpvoting}
+                  className={`text-3xl mb-2 transition-colors ${
+                    isUpvoting
+                      ? "text-muted-foreground cursor-not-allowed"
+                      : "text-muted-foreground hover:text-orange-500 cursor-pointer"
+                  }`}
+                  title="Upvote this document"
+                >
+                  ▲
+                </button>
+                <div className="text-2xl font-bold text-orange-500 mb-1">
+                  {upvoteCount}
+                </div>
+                <div className="text-xs text-muted-foreground">upvotes</div>
               </div>
-              <div className="text-xs text-muted-foreground">upvotes</div>
-            </div>
 
-            {/* Main content header */}
-            <div className="flex-1 min-w-0">
-              {/* Title */}
-              <h1 className="text-3xl font-bold text-foreground mb-4 line-clamp-3">
-                {document.metadata.title}
-              </h1>
+              {/* Main content header */}
+              <div className="flex-1 min-w-0">
+                {/* Title */}
+                <h1 className="text-3xl font-bold text-foreground mb-4 line-clamp-3">
+                  {document.metadata.title}
+                </h1>
 
-              {/* Author/Uploader info */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                <span>Posted by</span>
-                <span className="font-medium text-blue-600">
-                  u/{document.metadata.uploader_id}
-                </span>
-                <span>•</span>
-                <span>{formatDate(document.metadata.created_at)}</span>
-                {document.metadata.reply_to && (
-                  <>
-                    <span>•</span>
-                    <span className="text-orange-600">
-                      Reply to #{document.metadata.reply_to.document_id} (Post{" "}
-                      {document.metadata.reply_to.post_id})
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {/* Authors (if different from uploader) */}
-              {document.metadata.authors.length > 0 && (
+                {/* Author/Uploader info */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <span>Authors:</span>
-                  <div className="flex gap-2">
-                    {document.metadata.authors.map((author, index) => (
+                  <span>Posted by</span>
+                  <span className="font-medium text-blue-600">
+                    u/{document.metadata.uploader_id}
+                  </span>
+                  <span>•</span>
+                  <span>{formatDate(document.metadata.created_at)}</span>
+                  {document.metadata.reply_to && (
+                    <>
+                      <span>•</span>
+                      <span className="text-orange-600">
+                        Reply to #{document.metadata.reply_to.document_id} (Post{" "}
+                        {document.metadata.reply_to.post_id})
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* Authors (if different from uploader) */}
+                {document.metadata.authors.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                    <span>Authors:</span>
+                    <div className="flex gap-2">
+                      {document.metadata.authors.map((author, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="text-xs bg-blue-100 text-blue-800"
+                        >
+                          {author}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {document.metadata.tags.length > 0 && (
+                  <div className="flex items-center gap-2 mb-6">
+                    {document.metadata.tags.map((tag, index) => (
                       <Badge
                         key={index}
-                        variant="secondary"
-                        className="text-xs bg-blue-100 text-blue-800"
+                        variant="outline"
+                        className="text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
                       >
-                        {author}
+                        {tag}
                       </Badge>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Tags */}
-              {document.metadata.tags.length > 0 && (
-                <div className="flex items-center gap-2 mb-6">
-                  {document.metadata.tags.map((tag, index) => (
-                    <Badge
-                      key={index}
-                      variant="outline"
-                      className="text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Right side - Action buttons */}
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleReplyToDocument}
-                  variant="outline"
-                  size="sm"
-                >
-                  <ReplyIcon className="h-3 w-3 mr-1" />
-                  Reply
-                </Button>
-                <Button
-                  onClick={handleVerifyDocument}
-                  disabled={isVerifying}
-                  variant="outline"
-                  size="sm"
-                >
-                  <>
-                    <CheckCircleIcon
-                      className={`h-3 w-3 mr-1 ${isVerifying ? "animate-spin" : isVerified ? "text-green-600" : verificationResult ? "text-red-600" : ""}`}
-                    />
-                    {isVerified
-                      ? "Verified"
-                      : verificationResult
-                        ? "Verification Failed"
-                        : "Verify"}
-                  </>
-                </Button>
-                {/* Edit button - only show for document owner */}
-                {currentUsername &&
-                  document.metadata.uploader_id === currentUsername && (
+              {/* Right side - Action buttons */}
+              <div className="flex flex-col items-end gap-2">
+                {/* Sidebar Toggle Buttons */}
+                <div className="hidden lg:flex items-center gap-1">
+                  {/* Only show TOC toggle for message documents */}
+                  {document.content.message && (
                     <Button
-                      onClick={handleEditDocument}
-                      variant="outline"
+                      onClick={() =>
+                        setLeftSidebarCollapsed(!leftSidebarCollapsed)
+                      }
+                      variant="ghost"
                       size="sm"
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                      title="Toggle Table of Contents"
                     >
-                      <EditIcon className="h-3 w-3 mr-1" />
-                      Edit
+                      <PanelLeftIcon className="h-3 w-3" />
                     </Button>
                   )}
-                {/* Delete button - only show for document owner */}
-                {currentUsername &&
-                  document.metadata.uploader_id === currentUsername && (
-                    <Button
-                      onClick={handleDeleteDocument}
-                      disabled={isDeleting}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                    >
-                      {isDeleting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <TrashIcon className="h-3 w-3 mr-1" />
-                          Delete
-                        </>
-                      )}
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() =>
+                      setRightSidebarCollapsed(!rightSidebarCollapsed)
+                    }
+                    variant="ghost"
+                    size="sm"
+                    title="Toggle Right Panel"
+                  >
+                    <PanelRightIcon className="h-3 w-3" />
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleReplyToDocument}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <ReplyIcon className="h-3 w-3 mr-1" />
+                    Reply
+                  </Button>
+                  <Button
+                    onClick={handleVerifyDocument}
+                    disabled={isVerifying}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <>
+                      <CheckCircleIcon
+                        className={`h-3 w-3 mr-1 ${isVerifying ? "animate-spin" : isVerified ? "text-green-600" : verificationResult ? "text-red-600" : ""}`}
+                      />
+                      {isVerified
+                        ? "Verified"
+                        : verificationResult
+                          ? "Verification Failed"
+                          : "Verify"}
+                    </>
+                  </Button>
+                  {/* Edit button - only show for document owner */}
+                  {currentUsername &&
+                    document.metadata.uploader_id === currentUsername && (
+                      <Button
+                        onClick={handleEditDocument}
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                      >
+                        <EditIcon className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  {/* Delete button - only show for document owner */}
+                  {currentUsername &&
+                    document.metadata.uploader_id === currentUsername && (
+                      <Button
+                        onClick={handleDeleteDocument}
+                        disabled={isDeleting}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      >
+                        {isDeleting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <TrashIcon className="h-3 w-3 mr-1" />
+                            Delete
+                          </>
+                        )}
+                      </Button>
+                    )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Show verification error if it exists */}
-        {verificationError && (
-          <Card className="mb-6 border-destructive">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertCircleIcon className="h-4 w-4" />
-                <span className="font-medium">
-                  Verification failed: {verificationError}
-                </span>
+          {/* Show verification error if it exists */}
+          {verificationError && (
+            <Card className="mb-6 border-destructive">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertCircleIcon className="h-4 w-4" />
+                  <span className="font-medium">
+                    Verification failed: {verificationError}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Document Content - Main Focus */}
+          <div ref={contentRef} className="mb-8">
+            {/* Render message content if it exists */}
+            {document.content.message && (
+              <div className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6">
+                {renderContent(document.content)}
+              </div>
+            )}
+
+            {/* If no message content but there's a file, render the file content */}
+            {!document.content.message &&
+              document.content.file &&
+              renderFileAttachment(document.content.file)}
+
+            {/* If there's both message and file, render file as attachment */}
+            {document.content.message &&
+              document.content.file &&
+              renderFileAttachment(document.content.file)}
+
+            {/* Render URL if it exists */}
+            {document.content.url && renderUrl(document.content.url)}
+
+            {/* Show empty state only if no content at all */}
+            {!document.content.message &&
+              !document.content.file &&
+              !document.content.url && (
+                <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                  <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
+                  <p>Content not available or unsupported format</p>
+                </div>
+              )}
+          </div>
+
+          {/* Replies Section */}
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MessageSquareIcon className="h-5 w-5" />
+                Replies to Post #{document.metadata.post_id} ({replies.length})
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Showing replies to all versions of this post
+              </p>
+            </CardHeader>
+            <CardContent>
+              {repliesLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
+                  Loading replies...
+                </div>
+              )}
+
+              {repliesError && (
+                <div className="flex items-center gap-2 text-destructive py-4">
+                  <AlertCircleIcon className="h-4 w-4" />
+                  <span>Failed to load replies: {repliesError}</span>
+                </div>
+              )}
+
+              {!repliesLoading && !repliesError && replies.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No replies yet</p>
+                </div>
+              )}
+
+              {!repliesLoading && !repliesError && replies.length > 0 && (
+                <div className="space-y-4">
+                  {buildReplyTree(replies).map((reply) =>
+                    renderThreadedReply(reply)
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Technical Details - Moved to Bottom */}
+          <Card className="bg-muted/30">
+            <CardHeader>
+              <CardTitle className="text-lg text-muted-foreground">
+                Document Metadata
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-muted-foreground">
+                    Document ID:
+                  </span>
+                  <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                    #{document.metadata.id}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="font-medium text-muted-foreground">
+                    Post ID:
+                  </span>
+                  <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                    #{document.metadata.post_id}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="font-medium text-muted-foreground">
+                    Revision:
+                  </span>
+                  <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                    r{document.metadata.revision}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-2">
+                  <span className="font-medium text-muted-foreground">
+                    Content ID:
+                  </span>
+                  <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1 break-all">
+                    {document.metadata.content_id}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="font-medium text-muted-foreground">
+                    Verified Upvotes:
+                  </span>
+                  <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
+                    {document.metadata.upvote_count}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* Document Content - Main Focus */}
-        <div className="mb-8">
-          {/* Render message content if it exists */}
-          {document.content.message && (
-            <div className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6">
-              {renderContent(document.content)}
-            </div>
-          )}
-
-          {/* If no message content but there's a file, render the file content */}
-          {!document.content.message &&
-            document.content.file &&
-            renderFileAttachment(document.content.file)}
-
-          {/* If there's both message and file, render file as attachment */}
-          {document.content.message &&
-            document.content.file &&
-            renderFileAttachment(document.content.file)}
-
-          {/* Render URL if it exists */}
-          {document.content.url && renderUrl(document.content.url)}
-
-          {/* Show empty state only if no content at all */}
-          {!document.content.message &&
-            !document.content.file &&
-            !document.content.url && (
-              <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
-                <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
-                <p>Content not available or unsupported format</p>
-              </div>
-            )}
         </div>
+      </div>
 
-        {/* Replies Section */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <MessageSquareIcon className="h-5 w-5" />
-              Replies to Post #{document.metadata.post_id} ({replies.length})
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Showing replies to all versions of this post
+      {/* Right Sidebar - Future Features (Fixed) */}
+      <div
+        className={`hidden lg:flex flex-col border-l bg-muted/30 fixed right-0 h-[calc(100vh-var(--top-bar-height))] z-10 ${
+          rightSidebarCollapsed ? "w-0 overflow-hidden" : "w-64"
+        }`}
+        style={{
+          top: "var(--top-bar-height)"
+        }}
+      >
+        {!rightSidebarCollapsed && (
+          <div className="p-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Reserved for future features
             </p>
-          </CardHeader>
-          <CardContent>
-            {repliesLoading && (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
-                Loading replies...
-              </div>
-            )}
-
-            {repliesError && (
-              <div className="flex items-center gap-2 text-destructive py-4">
-                <AlertCircleIcon className="h-4 w-4" />
-                <span>Failed to load replies: {repliesError}</span>
-              </div>
-            )}
-
-            {!repliesLoading && !repliesError && replies.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No replies yet</p>
-              </div>
-            )}
-
-            {!repliesLoading && !repliesError && replies.length > 0 && (
-              <div className="space-y-4">
-                {buildReplyTree(replies).map((reply) =>
-                  renderThreadedReply(reply)
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Technical Details - Moved to Bottom */}
-        <Card className="bg-muted/30">
-          <CardHeader>
-            <CardTitle className="text-lg text-muted-foreground">
-              Document Metadata
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-muted-foreground">
-                  Document ID:
-                </span>
-                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                  #{document.metadata.id}
-                </div>
-              </div>
-
-              <div>
-                <span className="font-medium text-muted-foreground">
-                  Post ID:
-                </span>
-                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                  #{document.metadata.post_id}
-                </div>
-              </div>
-
-              <div>
-                <span className="font-medium text-muted-foreground">
-                  Revision:
-                </span>
-                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                  r{document.metadata.revision}
-                </div>
-              </div>
-
-              <div className="lg:col-span-2">
-                <span className="font-medium text-muted-foreground">
-                  Content ID:
-                </span>
-                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1 break-all">
-                  {document.metadata.content_id}
-                </div>
-              </div>
-
-              <div>
-                <span className="font-medium text-muted-foreground">
-                  Verified Upvotes:
-                </span>
-                <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                  {document.metadata.upvote_count}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </div>
     </div>
   );
