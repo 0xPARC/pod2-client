@@ -225,6 +225,12 @@ function FrogCard({ pod }: FrogCardProps) {
             onClick={() => setLevelUpId(pod.id)}>
             Level up
           </Button>
+          {levelUpId == pod.id &&
+            <Button
+              onClick={() => setLevelUpId(null)}>
+              Cancel
+            </Button>
+          }
           <span>
             {levelProgress}
           </span>

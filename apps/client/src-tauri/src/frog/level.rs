@@ -7,7 +7,7 @@ use pod2::{
     backends::plonky2::mainpod::Prover,
     frontend::{Error, MainPod, MainPodBuilder, Operation, SignedPod},
     middleware::{
-        CustomPredicateBatch, CustomPredicateRef, Params, Statement, DEFAULT_VD_SET,
+        CustomPredicateBatch, CustomPredicateRef, Params, Predicate, Statement, DEFAULT_VD_SET,
         SELF_ID_HASH,
     },
 };
@@ -94,7 +94,11 @@ impl LevelData {
                     .inspect_err(log_err)
                     .ok()
             }
-            _ => todo!(),
+            PodData::Main(m) => {
+                Self::new_from_main((*m).try_into().inspect_err(log_err).ok()?, level_up_pred)
+                    .inspect_err(log_err)
+                    .ok()
+            }
         }
     }
 
@@ -163,6 +167,27 @@ impl LevelData {
             level_statement: level_two_st,
             level_up_pred,
         })
+    }
+
+    fn new_from_main(
+        main_pod: MainPod,
+        level_up_pred: Arc<CustomPredicateBatch>,
+    ) -> Result<Self, anyhow::Error> {
+        let params = Default::default();
+        let level_up_ref = CustomPredicateRef {
+            batch: level_up_pred.clone(),
+            index: 0,
+        };
+        let level_up_st = main_pod
+            .public_statements
+            .iter()
+            .filter(|st| st.predicate() == Predicate::Custom(level_up_ref.clone()))
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("failed to find level up statement"))?
+            .clone();
+        let mut builder = MainPodBuilder::new(&params, &DEFAULT_VD_SET);
+        builder.add_recursive_pod(main_pod);
+        todo!()
     }
 
     pub fn level_up(&mut self) -> Result<(), Error> {

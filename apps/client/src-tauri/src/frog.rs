@@ -337,25 +337,31 @@ trait IntoFrogPod: Clone {
     fn pod_data(self) -> PodData;
 }
 
+#[derive(Serialize)]
+#[serde(untagged)]
+enum SerializablePod {
+    Signed(SignedPod),
+    Main(MainPod),
+}
+
 struct FrogPodInfo {
     pod_id: RawValue,
     base_id: RawValue,
     biome: i64,
     level: i64,
-    json: Box<dyn FnOnce() -> serde_json::Value + Send + Sync>,
+    pod: SerializablePod,
 }
 
 impl IntoFrogPod for SignedPod {
     fn info(self) -> Option<FrogPodInfo> {
         let biome: i64 = self.get("biome")?.typed().try_into().ok()?;
         let pod_id = RawValue::from(self.id().0);
-        let json = Box::new(move || serde_json::to_value(&self).unwrap());
         Some(FrogPodInfo {
             pod_id,
             base_id: pod_id,
             biome,
             level: 0,
-            json,
+            pod: SerializablePod::Signed(self),
         })
     }
     fn pod_data(self) -> PodData {
@@ -378,13 +384,12 @@ impl IntoFrogPod for MainPod {
             })
             .next()?;
         let pod_id = RawValue::from(self.id().0);
-        let json = Box::new(move || serde_json::to_value(&self).unwrap());
         Some(FrogPodInfo {
             pod_id,
             base_id,
             biome: 1,
             level,
-            json,
+            pod: SerializablePod::Main(self),
         })
     }
     fn pod_data(self) -> PodData {
@@ -427,18 +432,22 @@ async fn description_pods(db: &Db) -> Result<Vec<FrogedexData>, String> {
         .map_err(|e| e.to_string())
 }
 
-async fn request_frog_description_and_log_err(pod: serde_json::Value, app_handle: AppHandle) {
+async fn request_frog_description_and_log_err(pod: SerializablePod, app_handle: AppHandle) {
     if let Err(e) = request_frog_description(pod, app_handle).await {
         log::error!("{e}");
     }
 }
 
 async fn request_frog_description(
-    pod: serde_json::Value,
+    pod: SerializablePod,
     app_handle: AppHandle,
 ) -> Result<(), String> {
     let client = Client::new();
-    let url = server_url("desc");
+    let route = match &pod {
+        SerializablePod::Signed(_) => "desc",
+        SerializablePod::Main(_) => "desc2",
+    };
+    let url = server_url(route);
     let desc: SignedPod = client
         .post(&url)
         .json(&pod)
@@ -468,7 +477,7 @@ async fn register_frog(
         .ok_or_else(|| "failed to parse pod".to_string())?;
     if description_for(&info, &frog_descriptions).is_none() {
         tauri::async_runtime::spawn(request_frog_description_and_log_err(
-            (info.json)(),
+            info.pod,
             app_handle.clone(),
         ));
     }
@@ -499,7 +508,7 @@ pub async fn fix_frog_descriptions(state: State<'_, Mutex<AppState>>) -> Result<
         let desc = description_for(&pod, &frog_descs);
         if desc.is_none() {
             tauri::async_runtime::spawn(request_frog_description_and_log_err(
-                (pod.json)(),
+                pod.pod,
                 app_handle.clone(),
             ));
         }
