@@ -208,7 +208,9 @@ export function DocumentsApp() {
         </div>
       </TopBarSlot>
 
-      <div className="flex-1 overflow-auto">{renderRoute()}</div>
+      <div className="flex-1 overflow-auto" id="documents-app-content">
+        {renderRoute()}
+      </div>
     </div>
   );
 }
