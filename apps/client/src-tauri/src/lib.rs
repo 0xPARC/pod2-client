@@ -691,6 +691,7 @@ pub fn run() {
             frog::request_frog,
             frog::request_score,
             frog::request_leaderboard,
+            frog::reregister_all_frogs,
             // Configuration commands
             get_feature_config_command,
             get_app_config,

@@ -2,7 +2,7 @@ import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
 import { Leaderboard } from "./Leaderboard";
 import { Button } from "./ui/button";
-import { requestScore, fixFrogDescriptions } from "@/lib/rpc";
+import { requestScore, fixFrogDescriptions, reregisterFrogs } from "@/lib/rpc";
 import { useEffect } from "react";
 import { useFrogCrypto } from "@/lib/store";
 
@@ -77,6 +77,14 @@ export function FrogCrypto() {
       >
         reload frog descriptions
       </Button>
+      <Button
+        className="max-w-48"
+        variant="outline"
+        onClick={() => reregisterFrogs()}
+      >
+        reupload mined frogs
+      </Button>
+
 
       {frogView && <FrogViewer />}
       {frogedexView && <Frogedex />}

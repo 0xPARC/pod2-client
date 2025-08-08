@@ -15,7 +15,10 @@ use pod2_db::store::get_default_private_key;
 use rand::{rngs::OsRng, Rng};
 use tauri::{AppHandle, Emitter, Event, Listener, Manager};
 
-use crate::{frog::register_frog, AppState};
+use crate::{
+    frog::{register_frog, upload_frogs, FrogRegistry, TaggedPod},
+    AppState,
+};
 
 const MAX_TRIES_BEFORE_POLLING: u64 = 50000;
 
@@ -102,13 +105,21 @@ impl MiningWorker {
             match self.search.generate_pod(self.private_key.clone()) {
                 Ok(pod) => {
                     let app_handle_clone = app_handle.clone();
+                    let public_key = self.private_key.public_key();
                     tauri::async_runtime::spawn(async move {
                         let state = app_handle_clone.state::<tokio::sync::Mutex<AppState>>();
-                        register_frog(&state, pod)
+                        register_frog(&state, pod.clone())
                             .await
                             .map_err(|e| e.to_string())?;
                         app_handle_clone
                             .emit("frog-alert", "Found something in the mines!".to_string())
+                            .map_err(|e| e.to_string())?;
+                        let registry = FrogRegistry {
+                            public_key,
+                            frogs: vec![TaggedPod::Signed(pod)],
+                        };
+                        upload_frogs(app_handle_clone, registry)
+                            .await
                             .map_err(|e| e.to_string())
                     });
                 }

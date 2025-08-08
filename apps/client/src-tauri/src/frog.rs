@@ -5,7 +5,10 @@ use std::fmt::Display;
 
 use num::traits::Euclid;
 use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
+    backends::plonky2::{
+        primitives::ec::{curve::Point, schnorr::SecretKey},
+        signedpod::Signer,
+    },
     frontend::{MainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
     middleware::{Hash, PodId, RawValue, Statement, TypedValue, Value},
 };
@@ -48,11 +51,6 @@ struct FrogResponse {
 pub(crate) fn setup_background_threads(app_handle: &AppHandle) {
     self::level::setup_background_thread(app_handle.clone());
     self::mining::setup_background_thread(app_handle.clone());
-}
-
-async fn get_private_key(state: &State<'_, Mutex<AppState>>) -> Result<SecretKey, String> {
-    let app_state = state.lock().await;
-    crate::get_private_key(&app_state.db).await
 }
 
 async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedPod, String> {
@@ -344,6 +342,18 @@ enum SerializablePod {
     Main(MainPod),
 }
 
+#[derive(Serialize)]
+enum TaggedPod {
+    Signed(SignedPod),
+    Main(MainPod),
+}
+
+#[derive(Serialize)]
+struct FrogRegistry {
+    public_key: Point,
+    frogs: Vec<TaggedPod>,
+}
+
 struct FrogPodInfo {
     pod_id: RawValue,
     base_id: RawValue,
@@ -486,7 +496,9 @@ async fn register_frog(
 
 #[tauri::command]
 pub async fn request_frog(state: State<'_, Mutex<AppState>>) -> Result<i64, String> {
-    let private_key = get_private_key(&state).await?;
+    let app_state = state.lock().await;
+    let private_key = crate::get_private_key(&app_state.db).await?;
+    drop(app_state);
     let client = Client::new();
     let frog_response: FrogResponse = download_frog(&client, private_key)
         .await?
@@ -519,7 +531,9 @@ pub async fn fix_frog_descriptions(state: State<'_, Mutex<AppState>>) -> Result<
 #[tauri::command]
 pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_json::Value, String> {
     let client = Client::new();
-    let private_key = get_private_key(&state).await?;
+    let app_state = state.lock().await;
+    let private_key = crate::get_private_key(&app_state.db).await?;
+    drop(app_state);
     let pod = process_challenge(&client, private_key).await?;
     let score_url = server_url("score");
     client
@@ -530,6 +544,58 @@ pub async fn request_score(state: State<'_, Mutex<AppState>>) -> Result<serde_js
         .map_err(|e| e.to_string())?
         .json()
         .await
+        .map_err(|e| e.to_string())
+}
+
+fn filter_proof_of_work(pod: FrogPodInfo) -> Option<TaggedPod> {
+    match pod.pod {
+        SerializablePod::Signed(p) => {
+            if p.get("biome").map(|v| v.typed()) == Some(&TypedValue::Int(1)) {
+                Some(TaggedPod::Signed(p))
+            } else {
+                None
+            }
+        }
+        // TODO
+        SerializablePod::Main(_) => None,
+    }
+}
+
+#[tauri::command]
+pub async fn reregister_all_frogs(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let app_state = state.lock().await;
+    let private_key = crate::get_private_key(&app_state.db).await?;
+    let frog_pods = frog_pods(&app_state.db).await?;
+    let app_handle = app_state.app_handle.clone();
+    drop(app_state);
+    let frogs_to_register = frog_pods
+        .into_iter()
+        .filter_map(filter_proof_of_work)
+        .collect();
+    upload_frogs(
+        app_handle,
+        FrogRegistry {
+            public_key: private_key.public_key(),
+            frogs: frogs_to_register,
+        },
+    )
+    .await
+}
+
+async fn upload_frogs(app_handle: AppHandle, frogs: FrogRegistry) -> Result<(), String> {
+    let client = Client::new();
+    let url = server_url("register");
+    let score: i64 = client
+        .post(&url)
+        .json(&frogs)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    app_handle
+        .emit("update-score", score)
         .map_err(|e| e.to_string())
 }
 

@@ -316,10 +316,11 @@ export const useAppStore = create<AppStoreState>()(
           });
           console.log("state-changed", event.payload);
         });
+        await listen<number>("update-score", (event) => {
+          get().frogCryptoActions.setScore(event.payload);
+        });
         await listen<string>("level-up-finish", (event) => {
           set((state) => {
-            console.log(event.payload);
-            console.log(state.frogCrypto.levelUpId);
             if (state.frogCrypto.levelUpId == event.payload) {
               state.frogCrypto.levelUpId = null;
             }
