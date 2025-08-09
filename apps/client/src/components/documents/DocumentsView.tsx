@@ -376,7 +376,6 @@ export function DocumentsView() {
                   <div className="text-sm font-bold text-orange-600">
                     {doc.upvote_count}
                   </div>
-                  <div className="text-xs text-muted-foreground">▼</div>
                 </div>
 
                 {/* Content section */}
