@@ -57,6 +57,9 @@ export function useScrollSync(
   // State for block geometries
   const [blockGeometries, setBlockGeometries] = useState<BlockGeometry[]>([]);
 
+  // Store current mappings in a ref to avoid recreating arrays
+  const currentMappings = useRef<BlockMapping[]>([]);
+
   // Scroll sync is always enabled
   const syncingFromEditor = useRef(false);
   const syncingFromPreview = useRef(false);
@@ -82,6 +85,9 @@ export function useScrollSync(
       if (Date.now() - lastSyncTime.current < cooldownMs) {
         return;
       }
+
+      // Store current mappings for use in resize handler
+      currentMappings.current = mappings;
 
       const newGeometries: BlockGeometry[] = [];
 
@@ -388,7 +394,8 @@ export function useScrollSync(
       // Delay geometry refresh to ensure layout has settled after resize
       setTimeout(() => {
         console.log("📏 Updating block geometries after resize");
-        updateBlockGeometries(blockGeometries.map((geom) => geom.mapping));
+        // Use stored current mappings instead of extracting from stale blockGeometries
+        updateBlockGeometries(currentMappings.current);
 
         // Re-enable scroll sync after geometry is updated
         setTimeout(() => {
@@ -412,7 +419,8 @@ export function useScrollSync(
     const handleMathJaxRendered = () => {
       // Delay geometry refresh to ensure MathJax is fully rendered
       setTimeout(() => {
-        updateBlockGeometries(blockGeometries.map((geom) => geom.mapping));
+        // Use stored current mappings instead of extracting from stale blockGeometries
+        updateBlockGeometries(currentMappings.current);
       }, 150);
     };
 
@@ -486,12 +494,7 @@ export function useScrollSync(
         clearTimeout(syncCooldownTimer.current);
       }
     };
-  }, [
-    handleEditorScroll,
-    handlePreviewScroll,
-    updateBlockGeometries,
-    blockGeometries
-  ]);
+  }, [handleEditorScroll, handlePreviewScroll, updateBlockGeometries]);
 
   // Public API
   const setEditorRef = useCallback(
