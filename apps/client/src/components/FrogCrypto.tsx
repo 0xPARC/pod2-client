@@ -15,11 +15,11 @@ export const RARITY_TEXT_COLORS = [
   "text-black"
 ];
 export const RARITY_SHADOW_COLORS = [
-  "drop-shadow-green-500",
-  "drop-shadow-sky-500",
-  "drop-shadow-purple-500",
-  "drop-shadow-orange-500",
-  "drop-shadow-black"
+  "shadow-[0_0_25px_theme(colors.green.500)]",
+  "shadow-[0_0_25px_theme(colors.sky.500)]",
+  "shadow-[0_0_25px_theme(colors.purple.500)]",
+  "shadow-[0_0_25px_theme(colors.orange.500)]",
+  "shadow-[0_0_25px_theme(colors.black.500)]"
 ];
 export const RARITY_BG_COLORS = [
   "bg-green-500",

@@ -191,7 +191,7 @@ function FrogCard({ pod }: FrogCardProps) {
           {haveDesc && (
             <img
               src={(pod.data as FrogData).image_url}
-              className={`max-w-xs drop-shadow-xl ${RARITY_SHADOW_COLORS[(pod.data as FrogData).rarity]}`}
+              className={`mx-auto max-w-xs ${RARITY_SHADOW_COLORS[(pod.data as FrogData).rarity]}`}
             ></img>
           )}
           <h2>{(pod.data?.name ?? "???").toUpperCase()}</h2>
