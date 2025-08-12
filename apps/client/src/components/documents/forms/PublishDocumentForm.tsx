@@ -245,7 +245,7 @@ export function PublishDocumentForm({
             <span className="font-medium text-foreground">
               {replyToDocument.title}
             </span>
-            <span className="text-xs">by u/{replyToDocument.uploader_id}</span>
+            <span className="text-xs">by {replyToDocument.uploader_id}</span>
           </div>
         </div>
       )}

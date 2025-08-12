@@ -570,7 +570,7 @@ export function DocumentDetailView({
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="font-medium text-blue-600">
-                u/{reply.uploader_id}
+                {reply.uploader_id}
               </span>
               <span>•</span>
               <span>{formatDate(reply.created_at)}</span>
@@ -1006,7 +1006,7 @@ export function DocumentDetailView({
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                   <span>Posted by</span>
                   <span className="font-medium text-blue-600">
-                    u/{document.metadata.uploader_id}
+                    {document.metadata.uploader_id}
                   </span>
                   <span>•</span>
                   <span>{formatDate(document.metadata.created_at)}</span>
