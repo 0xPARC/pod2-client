@@ -2,6 +2,7 @@ import {
   AlertCircleIcon,
   ArrowUpDownIcon,
   ChevronDownIcon,
+  DownloadIcon,
   FileIcon,
   FileTextIcon,
   FilterIcon,
@@ -26,9 +27,13 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from "../ui/dropdown-menu";
 import { Input } from "../ui/input";
+import { HackMDImportDialog } from "./import/HackMDImportDialog";
 
 export function DocumentsView() {
   const {
@@ -43,6 +48,7 @@ export function DocumentsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
+  const [showHackMDImport, setShowHackMDImport] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcuts for documents list
@@ -200,6 +206,23 @@ export function DocumentsView() {
                     Upload
                   </span>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <DownloadIcon className="h-4 w-4 mr-2" />
+                    Import
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuLabel>Import from</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowHackMDImport(true)}>
+                      HackMD
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        .md URL
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
@@ -456,6 +479,15 @@ export function DocumentsView() {
           </div>
         )}
       </div>
+
+      <HackMDImportDialog
+        open={showHackMDImport}
+        onOpenChange={setShowHackMDImport}
+        onImportSuccess={(draftId) => {
+          setShowHackMDImport(false);
+          navigateToPublish(draftId);
+        }}
+      />
     </div>
   );
 }

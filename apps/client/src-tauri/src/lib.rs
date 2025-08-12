@@ -99,6 +99,37 @@ async fn get_app_config() -> Result<AppConfig, String> {
     Ok(config::config().clone())
 }
 
+/// Tauri command to fetch text content from a URL (for HackMD import)
+#[tauri::command]
+async fn fetch_url_text(url: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "HTTP {} {}",
+            response.status().as_u16(),
+            response.status().canonical_reason().unwrap_or("Unknown")
+        ));
+    }
+
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response text: {e}"))?;
+
+    if text.trim().is_empty() {
+        return Err("Document appears to be empty".to_string());
+    }
+
+    Ok(text)
+}
+
 /// Extended config info with full paths for debugging
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtendedAppConfig {
@@ -695,6 +726,8 @@ pub fn run() {
             get_feature_config_command,
             get_app_config,
             get_extended_app_config,
+            // HTTP utilities
+            fetch_url_text,
             get_config_section,
             reload_config,
             get_cache_stats,

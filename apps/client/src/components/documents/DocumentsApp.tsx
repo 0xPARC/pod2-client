@@ -153,15 +153,12 @@ export function DocumentsApp() {
             contentType={currentRoute.contentType || "document"}
             replyTo={currentRoute.replyTo}
             onPublishSuccess={(documentId) => {
-              const currentRoute =
-                browsingHistory.stack[browsingHistory.currentIndex];
-
-              if (currentRoute?.editingDraftId) {
-                // Editing draft - keep existing behavior (stay in form for continued editing)
-                return;
-              }
-
-              // For both new documents and document edits, navigate to view the document
+              console.log(
+                "onPublishSuccess called with documentId:",
+                documentId
+              );
+              // Always navigate to the published document after successful publication
+              console.log("Navigating to document:", documentId);
               navigateToDocument(documentId);
             }}
           />
