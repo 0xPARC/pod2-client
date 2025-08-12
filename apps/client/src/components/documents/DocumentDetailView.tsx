@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+  createDraft,
   deleteDocument,
   Document,
   DocumentFile,
@@ -27,7 +28,8 @@ import {
   fetchDocumentReplies,
   fetchPostReplies,
   getCurrentUsername,
-  verifyDocumentPod
+  verifyDocumentPod,
+  type DraftRequest
 } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
@@ -127,7 +129,7 @@ export function DocumentDetailView({
     navigateToDocumentsList,
     updateCurrentRouteTitle
   } = useDocuments();
-  const [document, setDocument] = useState<Document | null>(null);
+  const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] =
@@ -166,7 +168,7 @@ export function DocumentDetailView({
       setLoading(true);
       setError(null);
       const doc = await fetchDocument(documentId);
-      setDocument(doc);
+      setCurrentDocument(doc);
       setUpvoteCount(doc.metadata.upvote_count);
 
       // Update the route title with the document title
@@ -226,7 +228,7 @@ export function DocumentDetailView({
   };
 
   const loadReplies = async () => {
-    if (!documentId || !document) return;
+    if (!documentId || !currentDocument) return;
 
     try {
       setRepliesLoading(true);
@@ -234,7 +236,7 @@ export function DocumentDetailView({
 
       // Use recursive fetching to get complete conversation tree
       const allRepliesData = await fetchAllRepliesRecursively(
-        document.metadata.post_id
+        currentDocument.metadata.post_id
       );
       setReplies(allRepliesData);
     } catch (err) {
@@ -245,7 +247,7 @@ export function DocumentDetailView({
           err
         );
         const postRepliesData = await fetchPostReplies(
-          document.metadata.post_id
+          currentDocument.metadata.post_id
         );
         setReplies(postRepliesData);
       } catch (fallbackErr) {
@@ -262,12 +264,12 @@ export function DocumentDetailView({
   };
 
   const handleVerifyDocument = async () => {
-    if (!document) return;
+    if (!currentDocument) return;
 
     try {
       setIsVerifying(true);
       setVerificationError(null);
-      const result = await verifyDocumentPod(document);
+      const result = await verifyDocumentPod(currentDocument);
       console.log("Verification result:", result);
       setVerificationResult(result);
     } catch (err) {
@@ -280,17 +282,17 @@ export function DocumentDetailView({
   };
 
   const handleReplyToDocument = () => {
-    if (!document) return;
+    if (!currentDocument) return;
 
     // Format: "post_id:document_id"
-    const replyToId = `${document.metadata.post_id}:${document.metadata.id}`;
+    const replyToId = `${currentDocument.metadata.post_id}:${currentDocument.metadata.id}`;
     console.log("Navigating to reply with replyTo:", replyToId);
     // Navigate to publish page with reply context
     navigateToPublish(undefined, "document", replyToId);
   };
 
   const handleUpvote = async () => {
-    if (isUpvoting || !document) return;
+    if (isUpvoting || !currentDocument) return;
 
     setIsUpvoting(true);
 
@@ -312,7 +314,7 @@ export function DocumentDetailView({
         error_message: string | null;
         already_upvoted: boolean;
       }>("upvote_document", {
-        documentId: document.metadata.id,
+        documentId: currentDocument.metadata.id,
         serverUrl: serverUrl
       });
 
@@ -343,7 +345,7 @@ export function DocumentDetailView({
   };
 
   const handleDeleteDocument = async () => {
-    if (!document || isDeleting) return;
+    if (!currentDocument || isDeleting) return;
 
     // Confirm deletion
     if (
@@ -368,7 +370,10 @@ export function DocumentDetailView({
       const serverUrl = networkConfig.document_server;
 
       // Call the Tauri delete command
-      const result = await deleteDocument(document.metadata.id!, serverUrl);
+      const result = await deleteDocument(
+        currentDocument.metadata.id!,
+        serverUrl
+      );
 
       // Dismiss loading toast
       toast.dismiss(loadingToast);
@@ -394,18 +399,18 @@ export function DocumentDetailView({
   };
 
   const handleEditDocument = () => {
-    if (!document) return;
+    if (!currentDocument) return;
 
     // Detect the correct content type based on document content
     let contentType: "document" | "link" | "file" = "document";
 
-    if (document.content.file && !document.content.message) {
+    if (currentDocument.content.file && !currentDocument.content.message) {
       // Pure file document (file only, no message)
       contentType = "file";
     } else if (
-      document.content.url &&
-      !document.content.message &&
-      !document.content.file
+      currentDocument.content.url &&
+      !currentDocument.content.message &&
+      !currentDocument.content.file
     ) {
       // Pure URL document (URL only, no message or file)
       contentType = "link";
@@ -416,14 +421,14 @@ export function DocumentDetailView({
 
     // Create the document data for editing
     const editDocumentData = {
-      documentId: document.metadata.id!,
-      postId: document.metadata.post_id,
-      title: document.metadata.title || "",
-      content: document.content,
-      tags: document.metadata.tags,
-      authors: document.metadata.authors,
-      replyTo: document.metadata.reply_to
-        ? `${document.metadata.reply_to.post_id}:${document.metadata.reply_to.document_id}`
+      documentId: currentDocument.metadata.id!,
+      postId: currentDocument.metadata.post_id,
+      title: currentDocument.metadata.title || "",
+      content: currentDocument.content,
+      tags: currentDocument.metadata.tags,
+      authors: currentDocument.metadata.authors,
+      replyTo: currentDocument.metadata.reply_to
+        ? `${currentDocument.metadata.reply_to.post_id}:${currentDocument.metadata.reply_to.document_id}`
         : null
     };
 
@@ -448,10 +453,162 @@ export function DocumentDetailView({
   }, []);
 
   useEffect(() => {
-    if (document) {
+    if (currentDocument) {
       loadReplies();
     }
-  }, [document]);
+  }, [currentDocument]);
+
+  // Simple selection handling - no React state updates that could interfere
+  useEffect(() => {
+    let quoteButtonElement: HTMLElement | null = null;
+
+    const showQuoteButton = (selection: Selection, range: Range) => {
+      // Remove any existing button
+      if (quoteButtonElement) {
+        quoteButtonElement.remove();
+        quoteButtonElement = null;
+      }
+
+      const text = range.toString().trim();
+      if (text.length < 3) return; // Minimum length
+
+      // Check if selection is within our content area
+      if (
+        !contentRef.current ||
+        !contentRef.current.contains(range.commonAncestorContainer)
+      ) {
+        return;
+      }
+
+      // Create button element directly in DOM (no React state)
+      const rect = range.getBoundingClientRect();
+      const button = document.createElement("button");
+      button.innerHTML = `
+        <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        Quote & Reply
+      `;
+
+      button.className =
+        "fixed z-50 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white shadow-lg border border-blue-500 rounded select-none";
+      button.style.left = `${rect.left + rect.width / 2 - 50}px`; // Center horizontally on selection
+      button.style.top = `${rect.top - 35}px`; // Position above selection
+      button.style.pointerEvents = "auto";
+
+      button.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Store the selected text
+        const selectedText = text;
+
+        // Remove button
+        button.remove();
+        quoteButtonElement = null;
+
+        // Clear selection to avoid further interference
+        selection.removeAllRanges();
+
+        // Handle quote selection with the stored text
+        if (!currentDocument) return;
+
+        // Format the selected text as a markdown blockquote
+        const quotedText = selectedText
+          .split("\n")
+          .map((line) => `> ${line}`)
+          .join("\n");
+
+        // Add attribution
+        const attribution = `\n\n*— From "${currentDocument.metadata.title}" by ${currentDocument.metadata.uploader_id}*\n\n`;
+        const fullQuote = quotedText + attribution;
+
+        // Format: "post_id:document_id"
+        const replyToId = `${currentDocument.metadata.post_id}:${currentDocument.metadata.id}`;
+
+        try {
+          // Create a draft with the quoted content
+          const draftRequest: DraftRequest = {
+            title: `Re: ${currentDocument.metadata.title}`,
+            content_type: "message" as const,
+            message: fullQuote,
+            file_name: null,
+            file_content: null,
+            file_mime_type: null,
+            url: null,
+            tags: [],
+            authors: [],
+            reply_to: replyToId
+          };
+
+          console.log("Creating draft with quote:", fullQuote);
+          const draftId = await createDraft(draftRequest);
+
+          // Navigate to publish page with the draft ID
+          navigateToPublish(draftId, "document", replyToId);
+        } catch (error) {
+          console.error("Failed to create draft with quote:", error);
+          toast.error("Failed to create quote draft");
+
+          // Fallback to regular reply
+          navigateToPublish(undefined, "document", replyToId);
+        }
+      };
+
+      document.body.appendChild(button);
+      quoteButtonElement = button;
+    };
+
+    const hideQuoteButton = () => {
+      if (quoteButtonElement) {
+        quoteButtonElement.remove();
+        quoteButtonElement = null;
+      }
+    };
+
+    const handleMouseUp = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (
+          selection &&
+          selection.rangeCount > 0 &&
+          selection.toString().trim().length >= 3
+        ) {
+          const range = selection.getRangeAt(0);
+          showQuoteButton(selection, range);
+        } else {
+          hideQuoteButton();
+        }
+      }, 100);
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      // Don't hide if clicking on our button
+      if (
+        (e.target as Element)
+          ?.closest("button")
+          ?.innerHTML?.includes("Quote & Reply")
+      ) {
+        return;
+      }
+
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length === 0) {
+          hideQuoteButton();
+        }
+      }, 50);
+    };
+
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("click", handleClick);
+
+    return () => {
+      hideQuoteButton();
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("click", handleClick);
+    };
+  }, [currentDocument, navigateToPublish]);
 
   const handleDownloadFile = async (file: DocumentFile) => {
     const fileKey = `${file.name}_${file.mime_type}`;
@@ -553,7 +710,7 @@ export function DocumentDetailView({
   const renderThreadedReply = (reply: ThreadedReply): React.JSX.Element => {
     const isReplyToCurrentDoc = reply.reply_to?.document_id === documentId;
     const isReplyToCurrentPost =
-      reply.reply_to?.post_id === document?.metadata.post_id;
+      reply.reply_to?.post_id === currentDocument?.metadata.post_id;
     const maxDepth = 5; // Limit nesting depth for readability
     const displayDepth = Math.min(reply.depth, maxDepth);
 
@@ -689,26 +846,26 @@ export function DocumentDetailView({
 
   // Memoize rendered HTML for message content
   const renderedMessageHtml = useMemo(() => {
-    if (!document?.content.message) return null;
+    if (!currentDocument?.content.message) return null;
 
     // Check if content looks like markdown
     const isMarkdown =
-      document.content.message.includes("#") ||
-      document.content.message.includes("**") ||
-      document.content.message.includes("*") ||
-      document.content.message.includes("```") ||
-      (document.content.message.includes("[") &&
-        document.content.message.includes("](")) ||
-      document.content.message.includes("- ") ||
-      document.content.message.includes("1. ");
+      currentDocument.content.message.includes("#") ||
+      currentDocument.content.message.includes("**") ||
+      currentDocument.content.message.includes("*") ||
+      currentDocument.content.message.includes("```") ||
+      (currentDocument.content.message.includes("[") &&
+        currentDocument.content.message.includes("](")) ||
+      currentDocument.content.message.includes("- ") ||
+      currentDocument.content.message.includes("1. ");
 
     return {
       html: isMarkdown
-        ? renderMarkdownToHtml(md, document.content.message)
+        ? renderMarkdownToHtml(md, currentDocument.content.message)
         : null,
       isMarkdown
     };
-  }, [document?.content.message, md]);
+  }, [currentDocument?.content.message, md]);
 
   const renderContent = (content: Document["content"]) => {
     if (!content.message) return null;
@@ -919,7 +1076,7 @@ export function DocumentDetailView({
     );
   }
 
-  if (error || !document) {
+  if (error || !currentDocument) {
     return (
       <div className="p-6 min-h-screen w-full">
         <div className="w-full">
@@ -939,7 +1096,7 @@ export function DocumentDetailView({
   return (
     <div className="flex min-h-screen w-full">
       {/* Left Sidebar - Table of Contents (Fixed) - Only show for message documents */}
-      {document.content.message && (
+      {currentDocument.content.message && (
         <div
           className={`hidden lg:flex flex-col border-r bg-background fixed h-[calc(100vh-var(--top-bar-height))] z-10 ${
             leftSidebarCollapsed ? "w-0 overflow-hidden" : "w-64"
@@ -966,7 +1123,7 @@ export function DocumentDetailView({
       <div
         ref={scrollContainerRef}
         className={`flex-1 min-w-0 p-6 ${
-          leftSidebarCollapsed || !document.content.message
+          leftSidebarCollapsed || !currentDocument.content.message
             ? "lg:ml-0"
             : "lg:ml-64"
         } ${rightSidebarCollapsed ? "lg:mr-0" : "lg:mr-64"}`}
@@ -999,34 +1156,35 @@ export function DocumentDetailView({
               <div className="flex-1 min-w-0">
                 {/* Title */}
                 <h1 className="text-3xl font-bold text-foreground mb-4 line-clamp-3">
-                  {document.metadata.title}
+                  {currentDocument.metadata.title}
                 </h1>
 
                 {/* Author/Uploader info */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                   <span>Posted by</span>
                   <span className="font-medium text-blue-600">
-                    {document.metadata.uploader_id}
+                    {currentDocument.metadata.uploader_id}
                   </span>
                   <span>•</span>
-                  <span>{formatDate(document.metadata.created_at)}</span>
-                  {document.metadata.reply_to && (
+                  <span>{formatDate(currentDocument.metadata.created_at)}</span>
+                  {currentDocument.metadata.reply_to && (
                     <>
                       <span>•</span>
                       <span className="text-orange-600">
-                        Reply to #{document.metadata.reply_to.document_id} (Post{" "}
-                        {document.metadata.reply_to.post_id})
+                        Reply to #
+                        {currentDocument.metadata.reply_to.document_id} (Post{" "}
+                        {currentDocument.metadata.reply_to.post_id})
                       </span>
                     </>
                   )}
                 </div>
 
                 {/* Authors (if different from uploader) */}
-                {document.metadata.authors.length > 0 && (
+                {currentDocument.metadata.authors.length > 0 && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                     <span>Authors:</span>
                     <div className="flex gap-2">
-                      {document.metadata.authors.map((author, index) => (
+                      {currentDocument.metadata.authors.map((author, index) => (
                         <Badge
                           key={index}
                           variant="secondary"
@@ -1040,9 +1198,9 @@ export function DocumentDetailView({
                 )}
 
                 {/* Tags */}
-                {document.metadata.tags.length > 0 && (
+                {currentDocument.metadata.tags.length > 0 && (
                   <div className="flex items-center gap-2 mb-6">
-                    {document.metadata.tags.map((tag, index) => (
+                    {currentDocument.metadata.tags.map((tag, index) => (
                       <Badge
                         key={index}
                         variant="outline"
@@ -1060,7 +1218,7 @@ export function DocumentDetailView({
                 {/* Sidebar Toggle Buttons */}
                 <div className="hidden lg:flex items-center gap-1">
                   {/* Only show TOC toggle for message documents */}
-                  {document.content.message && (
+                  {currentDocument.content.message && (
                     <Button
                       onClick={() =>
                         setLeftSidebarCollapsed(!leftSidebarCollapsed)
@@ -1112,7 +1270,8 @@ export function DocumentDetailView({
                   </Button>
                   {/* Edit button - only show for document owner */}
                   {currentUsername &&
-                    document.metadata.uploader_id === currentUsername && (
+                    currentDocument.metadata.uploader_id ===
+                      currentUsername && (
                       <Button
                         onClick={handleEditDocument}
                         variant="outline"
@@ -1125,7 +1284,8 @@ export function DocumentDetailView({
                     )}
                   {/* Delete button - only show for document owner */}
                   {currentUsername &&
-                    document.metadata.uploader_id === currentUsername && (
+                    currentDocument.metadata.uploader_id ===
+                      currentUsername && (
                       <Button
                         onClick={handleDeleteDocument}
                         disabled={isDeleting}
@@ -1166,31 +1326,32 @@ export function DocumentDetailView({
           )}
 
           {/* Document Content - Main Focus */}
-          <div ref={contentRef} className="mb-8">
+          <div ref={contentRef} className="mb-8 select-text">
             {/* Render message content if it exists */}
-            {document.content.message && (
+            {currentDocument.content.message && (
               <div className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6">
-                {renderContent(document.content)}
+                {renderContent(currentDocument.content)}
               </div>
             )}
 
             {/* If no message content but there's a file, render the file content */}
-            {!document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
+            {!currentDocument.content.message &&
+              currentDocument.content.file &&
+              renderFileAttachment(currentDocument.content.file)}
 
             {/* If there's both message and file, render file as attachment */}
-            {document.content.message &&
-              document.content.file &&
-              renderFileAttachment(document.content.file)}
+            {currentDocument.content.message &&
+              currentDocument.content.file &&
+              renderFileAttachment(currentDocument.content.file)}
 
             {/* Render URL if it exists */}
-            {document.content.url && renderUrl(document.content.url)}
+            {currentDocument.content.url &&
+              renderUrl(currentDocument.content.url)}
 
             {/* Show empty state only if no content at all */}
-            {!document.content.message &&
-              !document.content.file &&
-              !document.content.url && (
+            {!currentDocument.content.message &&
+              !currentDocument.content.file &&
+              !currentDocument.content.url && (
                 <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
                   <FileTextIcon className="h-12 w-12 mx-auto mb-2" />
                   <p>Content not available or unsupported format</p>
@@ -1203,7 +1364,8 @@ export function DocumentDetailView({
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <MessageSquareIcon className="h-5 w-5" />
-                Replies to Post #{document.metadata.post_id} ({replies.length})
+                Replies to Post #{currentDocument.metadata.post_id} (
+                {replies.length})
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Showing replies to all versions of this post
@@ -1255,7 +1417,7 @@ export function DocumentDetailView({
                     Document ID:
                   </span>
                   <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                    #{document.metadata.id}
+                    #{currentDocument.metadata.id}
                   </div>
                 </div>
 
@@ -1264,7 +1426,7 @@ export function DocumentDetailView({
                     Post ID:
                   </span>
                   <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                    #{document.metadata.post_id}
+                    #{currentDocument.metadata.post_id}
                   </div>
                 </div>
 
@@ -1273,7 +1435,7 @@ export function DocumentDetailView({
                     Revision:
                   </span>
                   <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                    r{document.metadata.revision}
+                    r{currentDocument.metadata.revision}
                   </div>
                 </div>
 
@@ -1282,7 +1444,7 @@ export function DocumentDetailView({
                     Content ID:
                   </span>
                   <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1 break-all">
-                    {document.metadata.content_id}
+                    {currentDocument.metadata.content_id}
                   </div>
                 </div>
 
@@ -1291,7 +1453,7 @@ export function DocumentDetailView({
                     Verified Upvotes:
                   </span>
                   <div className="text-xs font-mono bg-muted px-2 py-1 rounded mt-1">
-                    {document.metadata.upvote_count}
+                    {currentDocument.metadata.upvote_count}
                   </div>
                 </div>
               </div>

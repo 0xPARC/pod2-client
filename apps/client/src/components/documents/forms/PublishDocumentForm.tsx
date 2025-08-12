@@ -1,10 +1,11 @@
-import { MessageSquareIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { fetchDocument, type DocumentMetadata } from "../../../lib/documentApi";
+import { fetchDocument, type Document } from "../../../lib/documentApi";
 import { useDraftAutoSave, type DraftContent } from "../../../lib/drafts";
 import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { InlineChipInput } from "../../ui/inline-chip-input";
+import { ContextPreview } from "../ContextPreview";
 import { PublishButton } from "../PublishButton";
 import { MarkdownEditor } from "../editors/MarkdownEditor";
 
@@ -21,7 +22,8 @@ export function PublishDocumentForm({
   replyTo,
   editingDraftId
 }: PublishDocumentFormProps) {
-  const { currentRoute, navigateToDrafts } = useDocuments();
+  const { currentRoute, navigateToDrafts, navigateToDocument, goBack } =
+    useDocuments();
 
   // Get route-specific edit document data
   const editDocumentData = currentRoute?.editDocumentData;
@@ -44,8 +46,7 @@ export function PublishDocumentForm({
   const [authors, setAuthors] = useState<string[]>(
     initialContent?.authors ?? []
   );
-  const [replyToDocument, setReplyToDocument] =
-    useState<DocumentMetadata | null>(null);
+  const [replyToDocument, setReplyToDocument] = useState<Document | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
   // Update form state when initial content loads
@@ -104,11 +105,35 @@ export function PublishDocumentForm({
   const handleDiscardDraft = async () => {
     const success = await discardDraft();
     if (success) {
-      // Navigate based on context
-      if (editingDraftId) {
-        navigateToDrafts();
-      } else if (onCancel) {
+      // Navigate based on context priority:
+
+      // 1. Modal context - highest priority (user expects modal behavior)
+      if (onCancel) {
         onCancel();
+
+        // 2. Existing draft context - navigate back to drafts list
+      } else if (editingDraftId) {
+        navigateToDrafts();
+
+        // 3. Reply context - navigate back to the document being replied to
+      } else if (replyTo) {
+        try {
+          // replyTo format is "post_id:document_id", we want the document_id
+          const documentId = parseInt(replyTo.split(":")[1]);
+          if (!isNaN(documentId)) {
+            navigateToDocument(documentId);
+          } else {
+            // If we can't parse document ID, use history navigation
+            goBack();
+          }
+        } catch (error) {
+          console.error("Failed to parse replyTo document ID:", error);
+          goBack();
+        }
+
+        // 4. Fallback - use browser-like back navigation
+      } else {
+        goBack();
       }
     }
   };
@@ -153,7 +178,7 @@ export function PublishDocumentForm({
       const documentId = parseInt(replyTo.split(":")[1]);
       fetchDocument(documentId)
         .then((doc) => {
-          setReplyToDocument(doc.metadata);
+          setReplyToDocument(doc);
         })
         .catch((error) => {
           console.error("Failed to fetch reply-to document:", error);
@@ -236,17 +261,21 @@ export function PublishDocumentForm({
         </div>
       </div>
 
-      {/* Reply To Banner */}
+      {/* Reply Context Preview */}
       {replyTo && replyToDocument && (
-        <div className="px-6 py-2 bg-muted/50 border-b shrink-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MessageSquareIcon className="h-4 w-4" />
-            <span>Replying to:</span>
-            <span className="font-medium text-foreground">
-              {replyToDocument.title}
-            </span>
-            <span className="text-xs">by {replyToDocument.uploader_id}</span>
-          </div>
+        <div className="shrink-0 border-b">
+          <ContextPreview
+            document={replyToDocument}
+            onQuoteText={(quotedText) => {
+              // Append quoted text to current message
+              const currentMessage = message;
+              const newMessage = currentMessage
+                ? `${currentMessage}\n\n${quotedText}`
+                : quotedText;
+              setMessage(newMessage);
+              markContentChanged();
+            }}
+          />
         </div>
       )}
 
