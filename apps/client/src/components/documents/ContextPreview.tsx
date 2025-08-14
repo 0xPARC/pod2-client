@@ -3,7 +3,7 @@ import {
   ChevronUpIcon,
   MessageSquareIcon
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { type Document } from "../../lib/documentApi";
 import { Button } from "../ui/button";
 import { renderMarkdownToHtml, useMarkdownRenderer } from "./markdownRenderer";
@@ -236,7 +236,7 @@ export function ContextPreview({
 
       {/* Expandable Content */}
       {isExpanded && (
-        <div className="p-4 space-y-3 overflow-auto max-h-[calc(50vh-4rem)]">
+        <div className="p-4 space-y-3 overflow-auto max-h-[calc(45vh-4rem)]">
           {/* Tags */}
           {metadata.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
