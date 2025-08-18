@@ -317,8 +317,9 @@ export function renderMarkdownWithBlocks(
     return { html: "", blocks: [] };
   }
 
-  // Parse markdown into blocks
-  const blocks = parseMarkdownBlocks(content);
+  // Use MarkdownIt's parse method to get tokens
+  const tokens = md.parse(content, {});
+  const blocks = extractBlocksFromTokens(tokens, content);
 
   // Reset block counter and container flag, then render
   blockCounter = 0;
@@ -328,78 +329,103 @@ export function renderMarkdownWithBlocks(
   return { html, blocks };
 }
 
-// Parse markdown content into individual blocks
-function parseMarkdownBlocks(content: string): string[] {
+// Extract block content from MarkdownIt tokens
+function extractBlocksFromTokens(tokens: any[], content: string): string[] {
   const lines = content.split("\n");
   const blocks: string[] = [];
-  let currentBlock = "";
-  let inCodeBlock = false;
-  let inMathBlock = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  // Track which block-level tokens we care about
+  const blockTokenTypes = new Set([
+    "paragraph_open",
+    "heading_open",
+    "blockquote_open",
+    "bullet_list_open",
+    "ordered_list_open",
+    "fence",
+    "code_block",
+    "hr",
+    "table_open",
+    "math_block",
+    "html_block"
+  ]);
 
-    // Track code block boundaries
-    if (line.startsWith("```")) {
-      inCodeBlock = !inCodeBlock;
-      currentBlock += line + "\n";
-      if (!inCodeBlock) {
-        // End of code block
-        blocks.push(currentBlock.trim());
-        currentBlock = "";
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+
+    // Skip non-block tokens
+    if (!blockTokenTypes.has(token.type)) {
+      i++;
+      continue;
+    }
+
+    // Get the content for this block
+    let blockContent = "";
+    let endTokenType = "";
+
+    // Determine the closing token type and extract content
+    switch (token.type) {
+      case "paragraph_open":
+        endTokenType = "paragraph_close";
+        break;
+      case "heading_open":
+        endTokenType = "heading_close";
+        break;
+      case "blockquote_open":
+        endTokenType = "blockquote_close";
+        break;
+      case "bullet_list_open":
+        endTokenType = "bullet_list_close";
+        break;
+      case "ordered_list_open":
+        endTokenType = "ordered_list_close";
+        break;
+      case "table_open":
+        endTokenType = "table_close";
+        break;
+      case "fence":
+      case "code_block":
+      case "math_block":
+      case "html_block":
+        // These are self-contained tokens with content
+        if (token.content) {
+          // For fenced code blocks, include the fence markers
+          if (token.type === "fence") {
+            const info = token.info || "";
+            blockContent = "```" + info + "\n" + token.content + "```";
+          } else if (token.type === "math_block") {
+            blockContent = "$$\n" + token.content + "$$";
+          } else {
+            blockContent = token.content;
+          }
+          blocks.push(blockContent.trim());
+        }
+        i++;
+        continue;
+      case "hr":
+        // Horizontal rules are self-contained
+        blocks.push("---");
+        i++;
+        continue;
+    }
+
+    // For container tokens, extract content from source lines
+    if (endTokenType && token.map) {
+      const [startLine, endLine] = token.map;
+      const blockLines = lines.slice(startLine, endLine);
+      blockContent = blockLines.join("\n");
+
+      if (blockContent.trim()) {
+        blocks.push(blockContent.trim());
       }
-      continue;
-    }
 
-    // Track math block boundaries
-    if (line.startsWith("$$")) {
-      inMathBlock = !inMathBlock;
-      currentBlock += line + "\n";
-      if (!inMathBlock) {
-        // End of math block
-        blocks.push(currentBlock.trim());
-        currentBlock = "";
+      // Skip to the closing token
+      while (i < tokens.length && tokens[i].type !== endTokenType) {
+        i++;
       }
-      continue;
     }
 
-    // If we're inside a code or math block, just accumulate
-    if (inCodeBlock || inMathBlock) {
-      currentBlock += line + "\n";
-      continue;
-    }
-
-    // Empty line - end current block if it exists
-    if (line.trim() === "") {
-      if (currentBlock.trim()) {
-        blocks.push(currentBlock.trim());
-        currentBlock = "";
-      }
-      continue;
-    }
-
-    // Check if this line starts a new block type
-    const isBlockStart =
-      line.startsWith("#") || // Heading
-      line.startsWith("- ") || // List item
-      line.startsWith("* ") || // List item
-      line.match(/^\d+\. /) || // Numbered list
-      line.startsWith("> ") || // Blockquote
-      line.startsWith("---") || // HR
-      line.startsWith("| "); // Table
-
-    // If we have accumulated content and this is a new block start, save the previous block
-    if (isBlockStart && currentBlock.trim()) {
-      blocks.push(currentBlock.trim());
-      currentBlock = line + "\n";
-    } else {
-      currentBlock += line + "\n";
-    }
-  }
-
-  // Add any remaining block
-  if (currentBlock.trim()) {
-    blocks.push(currentBlock.trim());
+    i++;
   }
 
   return blocks;
