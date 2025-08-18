@@ -18,7 +18,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { QuoteRail } from "./QuoteRail";
-import { useBlockSelection } from "../../hooks/useBlockSelection";
+import { useDocuments } from "../../lib/store";
 
 interface DocumentContentProps {
   document: Document;
@@ -35,6 +35,7 @@ export function DocumentContent({
 }: DocumentContentProps) {
   const md = useMarkdownRenderer();
   const contentRef = useRef<HTMLDivElement>(null);
+  const renderedContentRef = useRef<HTMLDivElement>(null);
 
   // Memoize rendered HTML and blocks for message content
   const renderedMessageData = useMemo(() => {
@@ -53,30 +54,59 @@ export function DocumentContent({
     return { html: null, blocks: [], isMarkdown };
   }, [document.content.message, md]);
 
-  // Block selection for quoting
-  const blockSelection = useBlockSelection({
-    blocks: renderedMessageData?.blocks || [],
-    onQuoteText
-  });
+  // Get block selection state from store
+  const { selectedBlockIndices, setSelectedBlockTexts, setViewingDocument } =
+    useDocuments();
 
-  const renderContent = (content: Document["content"]) => {
-    if (!content.message) return null;
+  // Set viewing document on mount
+  useEffect(() => {
+    if (document.metadata.id) {
+      setViewingDocument(document.metadata.id);
+    }
+    return () => {
+      setViewingDocument(null);
+    };
+  }, [document.metadata.id, setViewingDocument]);
+
+  // Update selected block texts when selection changes
+  useEffect(() => {
+    if (selectedBlockIndices.length > 0 && renderedMessageData?.blocks) {
+      const texts = selectedBlockIndices.map(
+        (idx) => renderedMessageData.blocks[idx] || ""
+      );
+      setSelectedBlockTexts(texts);
+    } else {
+      setSelectedBlockTexts([]);
+    }
+  }, [
+    selectedBlockIndices,
+    renderedMessageData?.blocks,
+    setSelectedBlockTexts
+  ]);
+
+  // Memoize the rendered content to prevent re-rendering on selection changes
+  const renderedContent = useMemo(() => {
+    if (!document.content.message) return null;
 
     if (renderedMessageData?.isMarkdown) {
       return (
         <div
+          ref={renderedContentRef}
           className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
-          dangerouslySetInnerHTML={{ __html: renderedMessageData.html! }}
+          dangerouslySetInnerHTML={{ __html: renderedMessageData?.html! }}
         />
       );
     } else {
       return (
-        <div className="prose prose-neutral max-w-none dark:prose-invert">
-          <p className="whitespace-pre-wrap">{content.message}</p>
+        <div
+          ref={renderedContentRef}
+          className="prose prose-neutral max-w-none dark:prose-invert"
+        >
+          <p className="whitespace-pre-wrap">{document.content.message}</p>
         </div>
       );
     }
-  };
+  }, [document.content.message, renderedMessageData]);
 
   const renderFileAttachment = (file: DocumentFile) => {
     if (!file) return null;
@@ -248,25 +278,27 @@ export function DocumentContent({
 
   // Add highlighting effect to selected blocks
   useEffect(() => {
-    if (!contentRef.current) return;
+    // Use either the rendered content ref or the content ref
+    const searchContainer = renderedContentRef.current || contentRef.current;
+    if (!searchContainer) return;
 
     // Remove any existing highlights
     const existingHighlights =
-      contentRef.current.querySelectorAll(".block-selected");
+      searchContainer.querySelectorAll(".block-selected");
     existingHighlights.forEach((el) => {
       el.classList.remove("block-selected");
     });
 
     // Add highlights to selected blocks
-    blockSelection.selectedBlocks.forEach((blockIndex) => {
-      const blockElement = contentRef.current?.querySelector(
+    selectedBlockIndices.forEach((blockIndex) => {
+      const blockElement = searchContainer.querySelector(
         `[data-block-index="${blockIndex}"]`
       );
       if (blockElement) {
         blockElement.classList.add("block-selected");
       }
     });
-  }, [blockSelection.selectedBlocks]);
+  }, [selectedBlockIndices]);
 
   return (
     <div className="relative mb-8 select-text">
@@ -292,20 +324,14 @@ export function DocumentContent({
           {renderedMessageData?.isMarkdown &&
             renderedMessageData.blocks.length > 0 &&
             onQuoteText && (
-              <QuoteRail
-                contentRef={contentRef}
-                selectedBlocks={blockSelection.selectedBlocks}
-                onBlockToggle={blockSelection.toggleBlock}
-                onQuoteSelected={blockSelection.handleQuoteSelected}
-                className="left-[-48px]"
-              />
+              <QuoteRail contentRef={contentRef} className="left-[-48px]" />
             )}
 
           <div
             ref={contentRef}
             className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6"
           >
-            {renderContent(document.content)}
+            {renderedContent}
           </div>
         </div>
       )}

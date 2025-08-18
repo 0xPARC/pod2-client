@@ -1,26 +1,21 @@
+import { MessageSquareQuote } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { MessageSquareIcon } from "lucide-react";
-import { Button } from "../ui/button";
 import { getBlockPositions, type BlockPosition } from "../../lib/blockUtils";
+import { useDocuments } from "../../lib/store";
 
 interface QuoteRailProps {
   contentRef: React.RefObject<HTMLElement | null>;
-  selectedBlocks: Set<number>;
-  onBlockToggle: (blockIndex: number, shiftKey?: boolean) => void;
-  onQuoteSelected: () => void;
   className?: string;
 }
 
-export function QuoteRail({
-  contentRef,
-  selectedBlocks,
-  onBlockToggle,
-  onQuoteSelected,
-  className = ""
-}: QuoteRailProps) {
+export function QuoteRail({ contentRef, className = "" }: QuoteRailProps) {
   const railRef = useRef<HTMLDivElement>(null);
   const [blockPositions, setBlockPositions] = useState<BlockPosition[]>([]);
   const [isVisible, setIsVisible] = useState(false);
+
+  // Get selection state and actions from store
+  const { selectedBlockIndices, toggleBlockSelection } = useDocuments();
+  const selectedBlocks = new Set(selectedBlockIndices);
 
   // Update block positions when content changes
   useEffect(() => {
@@ -89,21 +84,20 @@ export function QuoteRail({
   }, [contentRef]);
 
   const handleBlockClick = (blockIndex: number, event: React.MouseEvent) => {
-    onBlockToggle(blockIndex, event.shiftKey);
+    // Just toggle the block selection using store action
+    toggleBlockSelection(blockIndex, event.shiftKey);
   };
 
   return (
     <div
       ref={railRef}
-      className={`absolute left-0 w-12 h-full bg-background/80 backdrop-blur-sm border-r transition-opacity duration-200 z-20 ${
+      className={`absolute left-0 w-12 h-full bg-background/80 backdrop-blur-sm transition-opacity duration-200 z-20 ${
         isVisible || selectedBlocks.size > 0 ? "opacity-100" : "opacity-0"
       } ${className}`}
     >
       {/* Rail hint */}
-      <div className="absolute top-4 left-0 right-0 text-center">
-        <div className="text-xs text-muted-foreground font-medium rotate-90 origin-center whitespace-nowrap">
-          Select to quote
-        </div>
+      <div className="absolute top-2 left-0 right-3 text-center">
+        <div className="text-xs text-muted-foreground font-medium">Quote</div>
       </div>
 
       {/* Block nodes */}
@@ -111,34 +105,19 @@ export function QuoteRail({
         {blockPositions.map(({ index, top, height }) => (
           <button
             key={index}
-            className={`absolute left-3 w-4 h-4 rounded-full border-2 transition-all duration-150 hover:scale-110 ${
+            className={`absolute left-2 w-5 h-5 flex items-center justify-center transition-all duration-150 hover:scale-110 ${
               selectedBlocks.has(index)
-                ? "bg-blue-500 border-blue-600 shadow-sm"
-                : "bg-muted border-border hover:border-blue-300 hover:bg-blue-50"
+                ? "text-blue-600 opacity-100"
+                : "text-muted-foreground opacity-30 hover:opacity-100 hover:text-blue-500"
             } ${!isVisible && selectedBlocks.size === 0 ? "pointer-events-none" : ""}`}
-            style={{ top: `${top + height / 2 - 8}px` }}
+            style={{ top: `${top + height / 2 - 10}px` }}
             onClick={(e) => handleBlockClick(index, e)}
             title={`Block ${index + 1}${selectedBlocks.has(index) ? " (selected)" : ""}`}
-          />
+          >
+            <MessageSquareQuote className="h-4 w-4" />
+          </button>
         ))}
       </div>
-
-      {/* Quote button */}
-      {selectedBlocks.size > 0 && (
-        <div className="absolute bottom-4 left-1 right-1">
-          <Button
-            onClick={onQuoteSelected}
-            size="sm"
-            className={`w-10 h-10 p-0 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg ${!isVisible && selectedBlocks.size === 0 ? "pointer-events-none" : ""}`}
-            title={`Quote ${selectedBlocks.size} block${selectedBlocks.size > 1 ? "s" : ""}`}
-          >
-            <MessageSquareIcon className="h-4 w-4" />
-          </Button>
-          <div className="text-xs text-center text-muted-foreground mt-1 font-medium">
-            {selectedBlocks.size}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

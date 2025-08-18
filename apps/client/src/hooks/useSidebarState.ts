@@ -5,8 +5,6 @@ export interface UseSidebarStateReturn {
   rightSidebarCollapsed: boolean;
   setLeftSidebarCollapsed: (collapsed: boolean) => void;
   setRightSidebarCollapsed: (collapsed: boolean) => void;
-  toggleLeftSidebar: () => void;
-  toggleRightSidebar: () => void;
 }
 
 export const useSidebarState = (
@@ -19,20 +17,10 @@ export const useSidebarState = (
     initialRightCollapsed
   );
 
-  const toggleLeftSidebar = () => {
-    setLeftSidebarCollapsed(!leftSidebarCollapsed);
-  };
-
-  const toggleRightSidebar = () => {
-    setRightSidebarCollapsed(!rightSidebarCollapsed);
-  };
-
   return {
     leftSidebarCollapsed,
     rightSidebarCollapsed,
     setLeftSidebarCollapsed,
-    setRightSidebarCollapsed,
-    toggleLeftSidebar,
-    toggleRightSidebar
+    setRightSidebarCollapsed
   };
 };

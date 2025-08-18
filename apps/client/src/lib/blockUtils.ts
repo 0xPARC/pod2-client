@@ -23,10 +23,25 @@ export function formatBlockQuotes(selectedBlocks: string[]): string {
 }
 
 // Get block elements from the DOM by their data-block-index attributes
+// Only returns top-level blocks (not nested within other blocks)
 export function getBlockElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(
+  const allBlocks = Array.from(
     container.querySelectorAll("[data-block-index]")
   ) as HTMLElement[];
+
+  // Filter out blocks that are nested within other blocks
+  return allBlocks.filter((block) => {
+    // Check if this block has any parent with data-block-index
+    let parent = block.parentElement;
+    while (parent && parent !== container) {
+      if (parent.hasAttribute("data-block-index")) {
+        // This block is nested within another block, exclude it
+        return false;
+      }
+      parent = parent.parentElement;
+    }
+    return true;
+  });
 }
 
 // Get block index from DOM element

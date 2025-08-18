@@ -89,7 +89,7 @@ export interface DocumentVerificationResult {
 export interface DraftInfo {
   id: string; // UUID
   title: string;
-  content_type: string; // "message", "file", or "url"
+  content_type: "message" | "file" | "url";
   message?: string;
   file_name?: string;
   file_content?: number[]; // File bytes as array
@@ -108,7 +108,7 @@ export interface DraftInfo {
  */
 export interface DraftRequest {
   title: string;
-  content_type: string;
+  content_type: "message" | "file" | "url";
   message: string | null;
   file_name: string | null;
   file_content: number[] | null;

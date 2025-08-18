@@ -4,7 +4,7 @@ import {
   MessageSquareIcon
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type Document } from "../../lib/documentApi";
+import type { Document } from "../../lib/documentApi";
 import { Button } from "../ui/button";
 import { renderMarkdownToHtml, useMarkdownRenderer } from "./markdownRenderer";
 

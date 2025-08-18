@@ -76,6 +76,13 @@ export interface DocumentRoute {
   editDocumentData?: EditDocumentData; // Route-specific document editing data
 }
 
+export interface DocumentInteractionState {
+  selectedBlockIndices: number[]; // Array for easier serialization
+  selectedBlockTexts: string[]; // Cache of selected block texts
+  viewingDocumentId: number | null; // Track which document is being viewed
+  lastSelectedIndex: number | null; // For shift-click range selection
+}
+
 export interface DocumentsState {
   browsingHistory: {
     stack: DocumentRoute[];
@@ -83,6 +90,7 @@ export interface DocumentsState {
   };
   searchQuery: string;
   selectedTag: string | null;
+  interaction: DocumentInteractionState; // Document viewing interactions
 }
 
 export interface EditorTab {
@@ -140,6 +148,11 @@ export interface DocumentsActions {
   updateSearch: (query: string) => void;
   selectTag: (tag: string | null) => void;
   updateCurrentRouteTitle: (title: string) => void;
+  // Block selection actions
+  toggleBlockSelection: (index: number, shiftKey?: boolean) => void;
+  clearBlockSelection: () => void;
+  setSelectedBlockTexts: (texts: string[]) => void;
+  setViewingDocument: (id: number | null) => void;
 }
 
 export interface PodEditorActions {
@@ -248,7 +261,13 @@ export const useAppStore = create<AppStoreState>()(
         currentIndex: 0
       },
       searchQuery: "",
-      selectedTag: null
+      selectedTag: null,
+      interaction: {
+        selectedBlockIndices: [],
+        selectedBlockTexts: [],
+        viewingDocumentId: null,
+        lastSelectedIndex: null
+      }
     },
 
     podEditor: {
@@ -288,8 +307,6 @@ export const useAppStore = create<AppStoreState>()(
           state.appState = appState;
           state.isLoading = false;
         });
-
-        console.log("appState", appState);
 
         // Load folders
         await get().loadFolders();
@@ -377,6 +394,14 @@ export const useAppStore = create<AppStoreState>()(
           // Add new route
           history.stack.push(newRoute);
           history.currentIndex = history.stack.length - 1;
+
+          // Update viewing document and clear selection if changing documents
+          if (state.documents.interaction.viewingDocumentId !== id) {
+            state.documents.interaction.viewingDocumentId = id;
+            state.documents.interaction.selectedBlockIndices = [];
+            state.documents.interaction.selectedBlockTexts = [];
+            state.documents.interaction.lastSelectedIndex = null;
+          }
         });
       },
 
@@ -476,6 +501,66 @@ export const useAppStore = create<AppStoreState>()(
           if (currentRoute && currentRoute.type === "document-detail") {
             currentRoute.title = title;
           }
+        });
+      },
+
+      toggleBlockSelection: (index: number, shiftKey = false) => {
+        set((state) => {
+          const indices = state.documents.interaction.selectedBlockIndices;
+          const lastIndex = state.documents.interaction.lastSelectedIndex;
+
+          if (shiftKey && lastIndex !== null) {
+            // Range selection - select all blocks between last selected and current
+            const start = Math.min(lastIndex, index);
+            const end = Math.max(lastIndex, index);
+            const newIndices = new Set(indices);
+
+            for (let i = start; i <= end; i++) {
+              newIndices.add(i);
+            }
+
+            state.documents.interaction.selectedBlockIndices = Array.from(
+              newIndices
+            ).sort((a, b) => a - b);
+          } else {
+            // Single block toggle
+            const existingIndex = indices.indexOf(index);
+            if (existingIndex >= 0) {
+              // Remove if already selected
+              indices.splice(existingIndex, 1);
+            } else {
+              // Add if not selected
+              indices.push(index);
+              indices.sort((a, b) => a - b);
+            }
+            state.documents.interaction.lastSelectedIndex = index;
+          }
+        });
+      },
+
+      clearBlockSelection: () => {
+        set((state) => {
+          state.documents.interaction.selectedBlockIndices = [];
+          state.documents.interaction.selectedBlockTexts = [];
+          state.documents.interaction.lastSelectedIndex = null;
+        });
+      },
+
+      setSelectedBlockTexts: (texts: string[]) => {
+        set((state) => {
+          state.documents.interaction.selectedBlockTexts = texts;
+        });
+      },
+
+      setViewingDocument: (id: number | null) => {
+        set((state) => {
+          // Clear selection when changing documents
+          if (state.documents.interaction.viewingDocumentId !== id) {
+            state.documents.interaction.selectedBlockIndices = [];
+            state.documents.interaction.selectedBlockTexts = [];
+            state.documents.interaction.lastSelectedIndex = null;
+          }
+          state.documents.interaction.viewingDocumentId = id;
         });
       }
     },
@@ -951,6 +1036,11 @@ export const useDocuments = () => {
     searchQuery: documents.searchQuery,
     selectedTag: documents.selectedTag,
 
+    // Interaction state
+    selectedBlockIndices: documents.interaction.selectedBlockIndices,
+    selectedBlockTexts: documents.interaction.selectedBlockTexts,
+    viewingDocumentId: documents.interaction.viewingDocumentId,
+
     // Actions
     navigateToDocument: documentsActions.navigateToDocument,
     navigateToDrafts: documentsActions.navigateToDrafts,
@@ -961,7 +1051,13 @@ export const useDocuments = () => {
     goForward: documentsActions.goForward,
     updateSearch: documentsActions.updateSearch,
     selectTag: documentsActions.selectTag,
-    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle
+    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle,
+
+    // Block selection actions
+    toggleBlockSelection: documentsActions.toggleBlockSelection,
+    clearBlockSelection: documentsActions.clearBlockSelection,
+    setSelectedBlockTexts: documentsActions.setSelectedBlockTexts,
+    setViewingDocument: documentsActions.setViewingDocument
   };
 };
 

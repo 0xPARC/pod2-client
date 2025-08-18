@@ -19,7 +19,7 @@ export interface UseDocumentActionsReturn {
   handleVerifyDocument: () => Promise<void>;
   handleUpvote: () => Promise<void>;
   handleDeleteDocument: () => Promise<void>;
-  handleReplyToDocument: () => void;
+  handleReplyToDocument: (selectedQuote?: string) => void;
   handleEditDocument: () => void;
   handleQuoteAndReply: (selectedText: string) => Promise<void>;
 }
@@ -168,7 +168,7 @@ export const useDocumentActions = (
     }
   };
 
-  const handleReplyToDocument = () => {
+  const handleReplyToDocument = async (selectedQuote?: string) => {
     if (!currentDocument) return;
 
     // Format: "post_id:document_id"
@@ -176,9 +176,37 @@ export const useDocumentActions = (
       currentDocument.metadata.post_id,
       currentDocument.metadata.id!
     );
-    console.log("Navigating to reply with replyTo:", replyToId);
-    // Navigate to publish page with reply context
-    navigateToPublish(undefined, "document", replyToId);
+
+    // If there's a selected quote, create a draft with the quote first
+    if (selectedQuote) {
+      try {
+        const draftRequest: DraftRequest = {
+          title: `Re: ${currentDocument.metadata.title}`,
+          content_type: "message", // Use "message" instead of "document"
+          message: selectedQuote,
+          reply_to: replyToId,
+          tags: [],
+          authors: [],
+          file_name: null,
+          file_content: null,
+          file_mime_type: null,
+          url: null
+        };
+
+        const draftId = await createDraft(draftRequest);
+
+        // Navigate to publish page with the draft
+        navigateToPublish(draftId, undefined, replyToId);
+      } catch (error) {
+        console.error("Failed to create draft with quote:", error);
+        toast.error("Failed to create draft with quote");
+        // Fall back to normal reply without quote
+        navigateToPublish(undefined, undefined, replyToId);
+      }
+    } else {
+      // Navigate to publish page with reply context
+      navigateToPublish(undefined, undefined, replyToId);
+    }
   };
 
   const handleEditDocument = () => {

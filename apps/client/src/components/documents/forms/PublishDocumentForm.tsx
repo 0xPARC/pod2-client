@@ -111,25 +111,31 @@ export function PublishDocumentForm({
       if (onCancel) {
         onCancel();
 
-        // 2. Existing draft context - navigate back to drafts list
-      } else if (editingDraftId) {
-        navigateToDrafts();
-
-        // 3. Reply context - navigate back to the document being replied to
-      } else if (replyTo) {
-        try {
-          // replyTo format is "post_id:document_id", we want the document_id
-          const documentId = parseInt(replyTo.split(":")[1]);
-          if (!isNaN(documentId)) {
-            navigateToDocument(documentId);
-          } else {
-            // If we can't parse document ID, use history navigation
+        // 2. Reply context - navigate back to the document being replied to
+        // Check both props replyTo and draft's replyTo
+      } else if (replyTo || initialContent?.replyTo) {
+        const replyToId = replyTo || initialContent?.replyTo;
+        if (replyToId) {
+          try {
+            // replyTo format is "post_id:document_id", we want the document_id
+            const documentId = parseInt(replyToId.split(":")[1]);
+            if (!isNaN(documentId)) {
+              navigateToDocument(documentId);
+            } else {
+              // If we can't parse document ID, use history navigation
+              goBack();
+            }
+          } catch (error) {
+            console.error("Failed to parse replyTo document ID:", error);
             goBack();
           }
-        } catch (error) {
-          console.error("Failed to parse replyTo document ID:", error);
+        } else {
           goBack();
         }
+
+        // 3. Existing draft context - navigate back to drafts list
+      } else if (editingDraftId) {
+        navigateToDrafts();
 
         // 4. Fallback - use browser-like back navigation
       } else {

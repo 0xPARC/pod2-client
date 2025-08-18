@@ -4,8 +4,9 @@ import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 import { useMemo } from "react";
 
-// Global variable to track block indices during rendering
+// Global variables to track block indices during rendering
 let blockCounter = 0;
+let insideContainer = false; // Track if we're inside a container block
 
 // Reusable markdown-it instance creator with consistent configuration
 export function useMarkdownRenderer() {
@@ -64,9 +65,14 @@ export function useMarkdownRenderer() {
       ]);
 
     // Helper function to add block indexing attributes
-    function addBlockIndex(tokens: any[], idx: number) {
+    function addBlockIndex(
+      tokens: any[],
+      idx: number,
+      forceAdd: boolean = false
+    ) {
       const token = tokens[idx];
-      if (token && token.attrSet) {
+      // Only add index if we're not inside a container (or if forced for container blocks)
+      if (token && token.attrSet && (!insideContainer || forceAdd)) {
         token.attrSet("data-block-index", blockCounter.toString());
         blockCounter++;
       }
@@ -119,10 +125,23 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, true); // Force add for container blocks
+      insideContainer = true; // Mark that we're inside a container
       return originalRules.blockquote_open
         ? originalRules.blockquote_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
+    };
+
+    // Add blockquote_close handler to reset container flag
+    mdInstance.renderer.rules.blockquote_close = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      insideContainer = false; // Reset container flag
+      return renderer.renderToken(tokens, idx, options);
     };
 
     mdInstance.renderer.rules.code_block = function (
@@ -164,6 +183,53 @@ export function useMarkdownRenderer() {
         : renderer.renderToken(tokens, idx, options);
     };
 
+    // For lists, we want to track the list itself, not individual items
+    mdInstance.renderer.rules.bullet_list_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      addBlockIndex(tokens, idx, true);
+      insideContainer = true;
+      return renderer.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.bullet_list_close = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      insideContainer = false;
+      return renderer.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.ordered_list_open = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      addBlockIndex(tokens, idx, true);
+      insideContainer = true;
+      return renderer.renderToken(tokens, idx, options);
+    };
+
+    mdInstance.renderer.rules.ordered_list_close = function (
+      tokens,
+      idx,
+      options,
+      _env,
+      renderer
+    ) {
+      insideContainer = false;
+      return renderer.renderToken(tokens, idx, options);
+    };
+
     mdInstance.renderer.rules.list_item_open = function (
       tokens,
       idx,
@@ -171,7 +237,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      // Don't add index to list items - they're inside a container
       return originalRules.list_item_open
         ? originalRules.list_item_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -236,8 +302,9 @@ export function renderMarkdownToHtml(md: MarkdownIt, content: string): string {
   if (!content.trim()) {
     return "";
   }
-  // Reset block counter for each render
+  // Reset block counter and container flag for each render
   blockCounter = 0;
+  insideContainer = false;
   return md.render(content);
 }
 
@@ -253,8 +320,9 @@ export function renderMarkdownWithBlocks(
   // Parse markdown into blocks
   const blocks = parseMarkdownBlocks(content);
 
-  // Reset block counter and render
+  // Reset block counter and container flag, then render
   blockCounter = 0;
+  insideContainer = false;
   const html = md.render(content);
 
   return { html, blocks };

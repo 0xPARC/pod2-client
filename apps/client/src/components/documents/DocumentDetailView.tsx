@@ -1,17 +1,18 @@
 import "highlight.js/styles/github-dark.css";
 import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
+import { useDocumentActions } from "../../hooks/useDocumentActions";
+import { useDocumentData } from "../../hooks/useDocumentData";
 import { useDocuments } from "../../lib/store";
+import { formatBlockQuotes, groupAdjacentBlocks } from "../../lib/blockUtils";
 import { Card, CardContent } from "../ui/card";
 import { useSidebar } from "../ui/sidebar";
-import { TableOfContents } from "./TableOfContents";
-import { DocumentHeader } from "./DocumentHeader";
 import { DocumentContent } from "./DocumentContent";
-import { RepliesSection } from "./RepliesSection";
+import { DocumentHeader } from "./DocumentHeader";
 import { DocumentMetadata } from "./DocumentMetadata";
+import { RepliesSection } from "./RepliesSection";
+import { TableOfContents } from "./TableOfContents";
 import { VerificationDisplay } from "./VerificationDisplay";
-import { useDocumentData } from "../../hooks/useDocumentData";
-import { useDocumentActions } from "../../hooks/useDocumentActions";
 // import { useTextSelection } from "../../hooks/useTextSelection"; // Replaced with block selection
 import { useFileDownload } from "../../hooks/useFileDownload";
 import { useSidebarState } from "../../hooks/useSidebarState";
@@ -34,6 +35,9 @@ export function DocumentDetailView({
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { state: appSidebarState } = useSidebar();
+
+  // Get block selection from store
+  const { selectedBlockIndices, selectedBlockTexts } = useDocuments();
 
   // Custom hooks for data and state management
   const {
@@ -58,7 +62,7 @@ export function DocumentDetailView({
     handleVerifyDocument,
     handleUpvote,
     handleDeleteDocument,
-    handleReplyToDocument,
+    handleReplyToDocument: handleReplyToDocumentBase,
     handleEditDocument,
     handleQuoteAndReply
   } = useDocumentActions(
@@ -71,12 +75,37 @@ export function DocumentDetailView({
 
   const { downloadingFiles, handleDownloadFile } = useFileDownload();
 
-  const {
-    leftSidebarCollapsed,
-    rightSidebarCollapsed,
-    toggleLeftSidebar,
-    toggleRightSidebar
-  } = useSidebarState();
+  // Enhanced reply handler that includes selected quotes
+  const handleReplyToDocument = () => {
+    // Get selected quote from store if any blocks are selected
+    let selectedQuote: string | undefined;
+
+    if (selectedBlockIndices.length > 0 && selectedBlockTexts.length > 0) {
+      // Group adjacent blocks for better quote formatting
+      const groups = groupAdjacentBlocks(selectedBlockIndices);
+      const groupedBlockTexts = groups.map((group) =>
+        group.map((index) => {
+          const textIndex = selectedBlockIndices.indexOf(index);
+          return selectedBlockTexts[textIndex] || "";
+        })
+      );
+
+      // Format as quotes
+      if (groups.length === 1) {
+        // Single group of blocks
+        selectedQuote = formatBlockQuotes(groupedBlockTexts[0]);
+      } else {
+        // Multiple groups - separate them
+        selectedQuote = groupedBlockTexts
+          .map((groupBlocks) => formatBlockQuotes(groupBlocks))
+          .join("\n");
+      }
+    }
+
+    handleReplyToDocumentBase(selectedQuote);
+  };
+
+  const { leftSidebarCollapsed, rightSidebarCollapsed } = useSidebarState();
 
   // Text selection replaced with block selection in DocumentContent component
 
@@ -174,8 +203,6 @@ export function DocumentDetailView({
             onVerify={handleVerifyDocument}
             onEdit={handleEditDocument}
             onDelete={handleDeleteDocument}
-            onToggleLeftSidebar={toggleLeftSidebar}
-            onToggleRightSidebar={toggleRightSidebar}
           />
 
           {/* Show verification error if it exists */}
