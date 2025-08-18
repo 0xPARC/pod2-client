@@ -95,10 +95,12 @@ export function DocumentDetailView({
         // Single group of blocks
         selectedQuote = formatBlockQuotes(groupedBlockTexts[0]);
       } else {
-        // Multiple groups - separate them
-        selectedQuote = groupedBlockTexts
-          .map((groupBlocks) => formatBlockQuotes(groupBlocks))
-          .join("\n");
+        // Multiple groups - format each group and join with just the separator
+        // formatBlockQuotes already adds "\n\n" at the end, so we just need to trim and join
+        selectedQuote =
+          groupedBlockTexts
+            .map((groupBlocks) => formatBlockQuotes(groupBlocks).trimEnd())
+            .join("\n\n") + "\n\n";
       }
     }
 

@@ -6,16 +6,32 @@ import { useDocuments } from "../../lib/store";
 interface QuoteRailProps {
   contentRef: React.RefObject<HTMLElement | null>;
   className?: string;
+  mode?: "view" | "context";
 }
 
-export function QuoteRail({ contentRef, className = "" }: QuoteRailProps) {
+export function QuoteRail({
+  contentRef,
+  className = "",
+  mode = "view"
+}: QuoteRailProps) {
   const railRef = useRef<HTMLDivElement>(null);
   const [blockPositions, setBlockPositions] = useState<BlockPosition[]>([]);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Get selection state and actions from store
-  const { selectedBlockIndices, toggleBlockSelection } = useDocuments();
-  const selectedBlocks = new Set(selectedBlockIndices);
+  // Get selection state and actions from store based on mode
+  const {
+    selectedBlockIndices,
+    toggleBlockSelection,
+    contextSelectedBlockIndices,
+    toggleContextBlockSelection
+  } = useDocuments();
+
+  // Use different state/actions based on mode
+  const activeSelectedIndices =
+    mode === "view" ? selectedBlockIndices : contextSelectedBlockIndices;
+  const activeToggleSelection =
+    mode === "view" ? toggleBlockSelection : toggleContextBlockSelection;
+  const selectedBlocks = new Set(activeSelectedIndices);
 
   // Update block positions when content changes
   useEffect(() => {
@@ -85,7 +101,7 @@ export function QuoteRail({ contentRef, className = "" }: QuoteRailProps) {
 
   const handleBlockClick = (blockIndex: number, event: React.MouseEvent) => {
     // Just toggle the block selection using store action
-    toggleBlockSelection(blockIndex, event.shiftKey);
+    activeToggleSelection(blockIndex, event.shiftKey);
   };
 
   return (

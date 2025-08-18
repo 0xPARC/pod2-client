@@ -1,10 +1,10 @@
 import { CheckCircleIcon, EditIcon, ReplyIcon, TrashIcon } from "lucide-react";
 import { formatDate } from "../../lib/dateUtils";
 import { Document } from "../../lib/documentApi";
+import { useDocuments } from "../../lib/store";
 import { TopBarSlot } from "../TopBarContext";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { useDocuments } from "../../lib/store";
 
 interface DocumentHeaderProps {
   currentDocument: Document;
@@ -158,7 +158,7 @@ export function DocumentHeader({
                 size="sm"
               >
                 <ReplyIcon className="h-3 w-3 mr-1" />
-                {quotesSelected ? "Quote" : "Reply"}
+                Reply
               </Button>
               <Button
                 onClick={onVerify}
