@@ -6,7 +6,7 @@ import { getFrogedex, FrogedexEntry } from "@/lib/rpc";
 import { listen } from "@tauri-apps/api/event";
 import { RARITY_TEXT_COLORS, RARITY_BG_COLORS } from "./FrogCrypto";
 
-const RARITY_NAMES = ["NORM", "RARE", "EPIC", "LGND", "MYTH"];
+const RARITY_NAMES = ["NORM", "RARE", "EPIC", "LGND", "MYTH", "MYTH", "GOD", "GOD", "????", "ART", "JUNK"];
 
 export function Frogedex() {
   const [frogedex, setFrogedex] = useState<FrogedexEntry[]>([]);

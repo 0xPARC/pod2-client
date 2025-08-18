@@ -1,7 +1,11 @@
 mod level;
 mod mining;
+mod types;
 
-use std::fmt::Display;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use num::traits::Euclid;
 use pod2::{
@@ -10,7 +14,7 @@ use pod2::{
         signedpod::Signer,
     },
     frontend::{MainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
-    middleware::{Hash, PodId, RawValue, Statement, TypedValue, Value},
+    middleware::{Hash, Key, PodId, RawValue, Statement, TypedValue, Value},
 };
 use pod2_db::{
     store::{self, create_space, space_exists, PodData, PodInfo},
@@ -21,7 +25,14 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
-use crate::{config::config, frog::level::LEVEL_UP_2, AppState};
+use crate::{
+    config::config,
+    frog::types::{
+        compute_frog_stats, description_for, get_frog_pod_info, AsTyped, Frog, FrogDerived,
+        FrogPodInfo, FrogedexData, IntoFrogPod, SerializablePod,
+    },
+    AppState,
+};
 
 fn server_url(path: &str) -> String {
     let domain = &config().network.frogcrypto_server;
@@ -83,22 +94,7 @@ async fn download_frog(client: &Client, private_key: SecretKey) -> Result<Respon
         .map_err(|e| e.to_string())
 }
 
-#[derive(Serialize)]
-pub struct FrogData {
-    #[serde(flatten)]
-    desc: FrogedexData,
-    #[serde(flatten)]
-    stats: FrogStats,
-}
-
-#[derive(Serialize)]
-pub struct FrogPod {
-    id: PodId,
-    data: Option<FrogData>,
-    level: i64,
-    offer_level_up: bool,
-}
-
+/*
 impl FrogPod {
     fn index(&self) -> Option<usize> {
         let frog_id = self.data.as_ref()?.desc.frog_id;
@@ -117,135 +113,67 @@ impl FrogPod {
         }
     }
 }
+*/
 
-#[derive(Serialize, Clone)]
-pub struct FrogedexData {
-    frog_id: i64,
-    level: i64,
-    rarity: i64,
-    seed_range: RawValue,
-    name: String,
-    image_url: String,
-    description: String,
-    can_level_up: bool,
-    seen: bool,
-}
+const RARE_RARITY: i64 = 1;
+const EPIC_RARITY: i64 = 2;
+const JUNK_RARITY: i64 = 10;
 
-const FROG_RARITIES: [i64; 80] = [
+const FROG_RARITIES: [i64; 201] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 3,
-    3, 3, 4, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1, 2,
+    1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2,
+    1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2,
+    1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 6, 5, 5, 5, 5, 7,
+    9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8,
 ];
 
-trait AsTyped {
-    fn as_str(&self) -> Option<&str>;
-    fn as_string(&self) -> Option<String>;
-    fn as_int(&self) -> Option<i64>;
-    fn as_bool(&self) -> Option<bool>;
-}
-
-impl AsTyped for Value {
-    fn as_str(&self) -> Option<&str> {
-        match self.typed() {
-            TypedValue::String(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    fn as_int(&self) -> Option<i64> {
-        match self.typed() {
-            TypedValue::Int(i) => Some(*i),
-            _ => None,
-        }
-    }
-
-    fn as_bool(&self) -> Option<bool> {
-        match self.typed() {
-            TypedValue::Bool(b) => Some(*b),
-            _ => None,
-        }
-    }
-
-    fn as_string(&self) -> Option<String> {
-        match self.typed() {
-            TypedValue::String(s) => Some(s.clone()),
-            _ => None,
-        }
+fn index_for_id(frog_id: i64) -> Option<usize> {
+    if (1..=FROG_RARITIES.len() as i64).contains(&frog_id) {
+        Some((frog_id as usize) - 1)
+    } else {
+        None
     }
 }
 
 fn rarity_for(frog_id: i64) -> i64 {
-    if (1..=80).contains(&frog_id) {
-        FROG_RARITIES[(frog_id - 1) as usize]
+    if let Some(index) = index_for_id(frog_id) {
+        FROG_RARITIES[index]
     } else {
-        1
-    }
-}
-
-fn frog_data_for(pod: &FrogPodInfo, desc: &FrogedexData) -> FrogData {
-    let stats = compute_frog_stats(desc.frog_id, pod.base_id);
-    FrogData {
-        desc: desc.clone(),
-        stats,
+        0
     }
 }
 
 #[tauri::command]
-pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod>, String> {
+pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<Frog>, String> {
     let app_state = state.lock().await;
     let frog_pods = frog_pods(&app_state.db).await?;
-    let mut max_levels = [0; 80];
+    //let mut epics_seen = HashSet::new();
     let frog_descs = description_pods(&app_state.db).await?;
     drop(app_state);
-    let mut frogs: Vec<_> = frog_pods
+    let frogs: Vec<_> = frog_pods
         .into_iter()
         .map(|pod| {
             let desc = description_for(&pod, &frog_descs);
-            let data = desc.map(|d| frog_data_for(&pod, d));
-            let frog_pod = FrogPod {
-                id: PodId(Hash(pod.pod_id.0)),
-                data,
-                level: pod.level,
+            let derived = desc.map(|d| FrogDerived::from_info(&pod, d));
+            let pod_id = PodId(Hash(pod.id.0));
+            let id = if pod.leveled_up {
+                format!("{pod_id}+")
+            } else {
+                pod_id.to_string()
+            };
+            // TODO: allow rare to be leveled up if there is no corresponding
+            // epic frog
+            let frog_pod = Frog {
+                id,
+                derived,
                 offer_level_up: false,
             };
-            if let Some(idx) = frog_pod.index() {
-                if pod.level > max_levels[idx] {
-                    max_levels[idx] = pod.level;
-                }
-            }
-
             frog_pod
         })
         .collect();
-    for frog in frogs.iter_mut() {
-        if let Some(idx) = frog.index() {
-            if frog.can_level_up() && frog.level == max_levels[idx] && frog.level < LEVEL_UP_2 {
-                frog.offer_level_up = true;
-            }
-        }
-    }
     Ok(frogs)
-}
-
-fn frogedex_data_for(desc: &SignedPod) -> Option<FrogedexData> {
-    // for backward compatibility, interpret missing level as 0
-    let level = if let Some(lvl) = desc.get("level") {
-        lvl.as_int()?
-    } else {
-        0
-    };
-    let frog_id = desc.get("frog_id")?.as_int()?;
-    Some(FrogedexData {
-        frog_id,
-        level,
-        rarity: rarity_for(frog_id),
-        seed_range: desc.get("seed_range")?.raw(),
-        name: desc.get("name")?.as_string()?,
-        image_url: desc.get("image_url")?.as_string()?,
-        description: desc.get("description")?.as_string()?,
-        can_level_up: desc.get("can_level_up")?.as_bool()?,
-        seen: true,
-    })
 }
 
 #[tauri::command]
@@ -258,23 +186,19 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
         .enumerate()
         .map(|(n, &rarity)| FrogedexData {
             frog_id: (n + 1) as i64,
-            level: 0,
             rarity,
             seed_range: Default::default(),
             name: "???".to_string(),
             image_url: "https://frogcrypto.vercel.app/images/pixel_frog.png".to_string(),
             description: Default::default(),
             seen: false,
-            can_level_up: false,
         })
         .collect();
     for data in frog_descs {
-        if (1..=80).contains(&data.frog_id) && data.level == 0 {
-            let index = (data.frog_id - 1) as usize;
+        if let Some(index) = index_for_id(data.frog_id) {
             entries[index].name = data.name;
             entries[index].image_url = data.image_url;
             entries[index].seen = true;
-            entries[index].can_level_up = data.can_level_up;
         }
     }
     Ok(entries)
@@ -310,38 +234,6 @@ fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
     }
 }
 
-fn description_for<'a>(
-    frog: &'_ FrogPodInfo,
-    descs: &'a [FrogedexData],
-) -> Option<&'a FrogedexData> {
-    if (0..=1).contains(&frog.biome) {
-        let offset = 2 * (frog.biome as usize);
-        let id = frog.base_id.0[0].0;
-        descs
-            .iter()
-            .filter(|desc| {
-                frog.level == desc.level
-                    && id >= desc.seed_range.0[offset].0
-                    && id <= desc.seed_range.0[offset + 1].0
-            })
-            .next()
-    } else {
-        None
-    }
-}
-
-trait IntoFrogPod: Clone {
-    fn info(self) -> Option<FrogPodInfo>;
-    fn pod_data(self) -> PodData;
-}
-
-#[derive(Serialize)]
-#[serde(untagged)]
-enum SerializablePod {
-    Signed(SignedPod),
-    Main(MainPod),
-}
-
 #[derive(Serialize)]
 enum TaggedPod {
     Signed(SignedPod),
@@ -352,72 +244,6 @@ enum TaggedPod {
 struct FrogRegistry {
     public_key: Point,
     frogs: Vec<TaggedPod>,
-}
-
-struct FrogPodInfo {
-    pod_id: RawValue,
-    base_id: RawValue,
-    biome: i64,
-    level: i64,
-    pod: SerializablePod,
-}
-
-impl IntoFrogPod for SignedPod {
-    fn info(self) -> Option<FrogPodInfo> {
-        let biome: i64 = self.get("biome")?.typed().try_into().ok()?;
-        let pod_id = RawValue::from(self.id().0);
-        Some(FrogPodInfo {
-            pod_id,
-            base_id: pod_id,
-            biome,
-            level: 0,
-            pod: SerializablePod::Signed(self),
-        })
-    }
-    fn pod_data(self) -> PodData {
-        PodData::Signed(Box::new(self.into()))
-    }
-}
-
-impl IntoFrogPod for MainPod {
-    fn info(self) -> Option<FrogPodInfo> {
-        let statements = self.pod.pub_statements();
-        let (base_id, level) = statements
-            .into_iter()
-            .filter_map(|st| match st {
-                Statement::Custom(cpr, args) if cpr.index == 0 => {
-                    let base_id = args.first()?.raw();
-                    let level: i64 = args.get(1)?.typed().try_into().ok()?;
-                    Some((base_id, level))
-                }
-                _ => None,
-            })
-            .next()?;
-        let pod_id = RawValue::from(self.id().0);
-        Some(FrogPodInfo {
-            pod_id,
-            base_id,
-            biome: 1,
-            level,
-            pod: SerializablePod::Main(self),
-        })
-    }
-    fn pod_data(self) -> PodData {
-        PodData::Main(Box::new(self.into()))
-    }
-}
-
-fn get_frog_pod_info(pod: PodInfo) -> Option<FrogPodInfo> {
-    match pod.data {
-        PodData::Signed(s) => {
-            let inner = SignedPod::try_from(s.as_ref().clone()).ok()?;
-            inner.info()
-        }
-        PodData::Main(s) => {
-            let inner = MainPod::try_from(s.as_ref().clone()).ok()?;
-            inner.info()
-        }
-    }
 }
 
 async fn frog_pods(db: &Db) -> Result<Vec<FrogPodInfo>, String> {
@@ -435,7 +261,7 @@ async fn description_pods(db: &Db) -> Result<Vec<FrogedexData>, String> {
             infos
                 .into_iter()
                 .filter_map(|info| {
-                    frogedex_data_for(&SignedPod::try_from(as_signed_owned(info)?).ok()?)
+                    FrogedexData::from_pod(&SignedPod::try_from(as_signed_owned(info)?).ok()?)
                 })
                 .collect()
         })
@@ -618,46 +444,6 @@ pub async fn request_leaderboard(
         .json()
         .await
         .map_err(|e| e.to_string())
-}
-
-#[derive(Serialize)]
-pub struct FrogStats {
-    jump: u64,
-    speed: u64,
-    intelligence: u64,
-    beauty: u64,
-    temperament: u64,
-}
-
-const DEFAULT_TEMPERAMENTS: [u64; 7] = [2, 3, 4, 7, 10, 16, 18];
-
-fn compute_frog_stats(frog_id: i64, id: RawValue) -> FrogStats {
-    let val = id.0[1].0;
-    match frog_id {
-        81..=90 => FrogStats {
-            jump: 0,
-            speed: 0,
-            intelligence: 0,
-            beauty: val.rem_euclid(8) + 8,
-            temperament: 1,
-        },
-        _ => {
-            let bonus = if (61..=70).contains(&frog_id) { 8 } else { 0 };
-            let (val, temperament_index) = val.div_rem_euclid(&7);
-            let temperament = DEFAULT_TEMPERAMENTS[temperament_index as usize];
-            let (val, beauty) = val.div_rem_euclid(&8);
-            let (val, intelligence) = val.div_rem_euclid(&8);
-            let (val, speed) = val.div_rem_euclid(&8);
-            let jump = val.rem_euclid(8);
-            FrogStats {
-                jump: jump + bonus,
-                speed: speed + bonus,
-                intelligence: intelligence + bonus,
-                beauty: beauty + bonus,
-                temperament,
-            }
-        }
-    }
 }
 
 #[cfg(test)]

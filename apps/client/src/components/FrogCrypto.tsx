@@ -12,6 +12,12 @@ export const RARITY_TEXT_COLORS = [
   "text-sky-500",
   "text-purple-500",
   "text-orange-500",
+  "text-rose-500",
+  "text-gray-500",
+  "text-yellow-500",
+  "text-gray-700",
+  "text-teal-500",
+  "text-black",
   "text-black"
 ];
 export const RARITY_SHADOW_COLORS = [
@@ -19,13 +25,25 @@ export const RARITY_SHADOW_COLORS = [
   "shadow-[0_0_25px_theme(colors.sky.500)]",
   "shadow-[0_0_25px_theme(colors.purple.500)]",
   "shadow-[0_0_25px_theme(colors.orange.500)]",
-  "shadow-[0_0_25px_theme(colors.black.500)]"
+  "shadow-[0_0_25px_theme(colors.rose.500)]",
+  "shadow-[0_0_25px_theme(colors.gray.500)]",
+  "shadow-[0_0_25px_theme(colors.yellow.500)]",
+  "shadow-[0_0_25px_theme(colors.gray.700)]",
+  "shadow-[0_0_25px_theme(colors.teal.500)]",
+  "shadow-[0_0_25px_theme(colors.black)]",
+  "shadow-[0_0_25px_theme(colors.black)]"
 ];
 export const RARITY_BG_COLORS = [
   "bg-green-500",
   "bg-sky-500",
   "bg-purple-500",
   "bg-orange-500",
+  "bg-rose-500",
+  "bg-gray-500",
+  "bg-yellow-500",
+  "bg-gray-700",
+  "bg-teal-500",
+  "bg-black",
   "bg-black"
 ];
 

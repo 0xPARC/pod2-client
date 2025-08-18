@@ -135,27 +135,27 @@ export async function requestFrog(): RpcResult<number> {
   return invokeCommand<number>("request_frog");
 }
 
-export interface FrogPod {
+export interface Frog {
   id: string;
-  data: FrogData | null;
+  derived: FrogData | null;
   offer_level_up: boolean;
 }
 
-export interface FrogData {
+export interface FrogDerived {
   frog_id: number;
+  rarity: number;
   name: string;
-  description: string;
   image_url: string;
+  description: string;
   jump: number;
   speed: number;
   intelligence: number;
   beauty: number;
   temperament: number;
-  rarity: number;
 }
 
-export async function listFrogs(): RpcResult<FrogPod[]> {
-  return invokeCommand<FrogPod[]>("list_frogs");
+export async function listFrogs(): RpcResult<Frog[]> {
+  return invokeCommand<Frog[]>("list_frogs");
 }
 
 export interface FrogedexEntry {

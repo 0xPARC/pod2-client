@@ -7,8 +7,8 @@ import {
   requestFrog,
   requestScore,
   listFrogs,
-  FrogPod,
-  FrogData
+  Frog,
+  FrogDerived
 } from "@/lib/rpc";
 import { toast } from "sonner";
 import {
@@ -163,13 +163,13 @@ function vibeEntry(index: number | undefined): string {
 }
 
 interface FrogCardProps {
-  pod: FrogPod;
+  pod: Frog;
 }
 
 function FrogCard({ pod }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const haveDesc = pod.data != null;
+  const haveDesc = pod.derived != null;
   const { levelUpId, setLevelUpId } = useFrogCrypto();
   const [levelProgress, setLevelProgress] = useState("");
 
@@ -190,11 +190,11 @@ function FrogCard({ pod }: FrogCardProps) {
         <div className="space-y-2">
           {haveDesc && (
             <img
-              src={(pod.data as FrogData).image_url}
-              className={`mx-auto max-w-xs ${RARITY_SHADOW_COLORS[(pod.data as FrogData).rarity]}`}
+              src={(pod.derived as FrogDerived).image_url}
+              className={`mx-auto max-w-xs ${RARITY_SHADOW_COLORS[(pod.derived as FrogData).rarity]}`}
             ></img>
           )}
-          <h2>{(pod.data?.name ?? "???").toUpperCase()}</h2>
+          <h2>{(pod.derived?.name ?? "???").toUpperCase()}</h2>
         </div>
         <div>
           <table className="[&_th]:px-4 text-center">
@@ -209,11 +209,11 @@ function FrogCard({ pod }: FrogCardProps) {
             </thead>
             <tbody>
               <tr>
-                <td>{pod.data?.jump ?? "???"}</td>
-                <td>{vibeEntry(pod.data?.temperament)}</td>
-                <td>{pod.data?.speed ?? "???"}</td>
-                <td>{pod.data?.intelligence ?? "???"}</td>
-                <td>{pod.data?.beauty ?? "???"}</td>
+                <td>{pod.derived?.jump ?? "???"}</td>
+                <td>{vibeEntry(pod.derived?.temperament)}</td>
+                <td>{pod.derived?.speed ?? "???"}</td>
+                <td>{pod.derived?.intelligence ?? "???"}</td>
+                <td>{pod.derived?.beauty ?? "???"}</td>
               </tr>
             </tbody>
           </table>
@@ -242,7 +242,7 @@ function FrogCard({ pod }: FrogCardProps) {
               {expanded ? <span>Collapse</span> : <span>See more</span>}
             </CollapsibleTrigger>
             <CollapsibleContent>
-              {(pod.data as FrogData).description}
+              {(pod.derived as FrogDerived).description}
             </CollapsibleContent>
           </Collapsible>
         )}
