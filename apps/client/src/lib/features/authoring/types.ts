@@ -53,6 +53,8 @@ export interface ExecuteCodeRequest {
 export interface ExecuteCodeResponse {
   main_pod: any; // MainPod structure from POD2
   diagram: string; // Mermaid diagram markdown
+  solver_time_ms: number;
+  pod_build_time_ms: number;
 }
 
 /**

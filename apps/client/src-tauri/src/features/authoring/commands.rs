@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use pod2::{
     backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer},
@@ -60,6 +60,8 @@ pub struct ValidateCodeResponse {
 pub struct ExecuteCodeResponse {
     pub main_pod: MainPod,
     pub diagram: String,
+    pub solver_time_ms: u64,
+    pub pod_build_time_ms: u64,
 }
 
 /// Convert LangError to diagnostics
@@ -215,6 +217,9 @@ pub async fn execute_code_command(
         log::warn!("No PODs found for execution. Proceeding with empty facts.");
     }
 
+    // Start solver timing
+    let solver_start = Instant::now();
+
     let mut owned_signed_pods: Vec<SignedPod> = Vec::new();
     let mut owned_main_pods: Vec<MainPod> = Vec::new();
 
@@ -287,6 +292,9 @@ pub async fn execute_code_command(
         }
     };
 
+    // End solver timing
+    let solver_time = solver_start.elapsed();
+
     let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
@@ -323,13 +331,21 @@ pub async fn execute_code_command(
         Box::new(Prover {})
     };
 
+    // Start POD build timing
+    let pod_build_start = Instant::now();
+
     let result_main_pod = builder
         .prove(&*prover)
         .map_err(|e| format!("Failed to prove: {e}"))?;
 
+    // End POD build timing
+    let pod_build_time = pod_build_start.elapsed();
+
     let result = ExecuteCodeResponse {
         main_pod: result_main_pod,
         diagram: pod2_solver::vis::mermaid_markdown(&proof),
+        solver_time_ms: solver_time.as_millis() as u64,
+        pod_build_time_ms: pod_build_time.as_millis() as u64,
     };
 
     Ok(result)
