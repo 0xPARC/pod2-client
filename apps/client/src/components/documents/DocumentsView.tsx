@@ -405,7 +405,7 @@ export function DocumentsView() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-blue-600 hover:underline line-clamp-2 mb-1">
+                      <h3 className="text-sm font-medium text-accent-foreground hover:underline line-clamp-2 mb-1">
                         {doc.title}
                       </h3>
 
@@ -413,7 +413,9 @@ export function DocumentsView() {
                         <span>submitted</span>
                         <span>{formatDate(doc.created_at)}</span>
                         <span>by</span>
-                        <span className="text-blue-600">{doc.uploader_id}</span>
+                        <span className="text-accent-foreground">
+                          {doc.uploader_id}
+                        </span>
                         {doc.reply_to && (
                           <>
                             <span>•</span>
@@ -451,7 +453,10 @@ export function DocumentsView() {
                               authors:
                             </span>
                             {doc.authors.slice(0, 2).map((author, index) => (
-                              <span key={index} className="text-blue-600">
+                              <span
+                                key={index}
+                                className="text-accent-foreground"
+                              >
                                 {author}
                                 {index < Math.min(doc.authors.length, 2) - 1 &&
                                   ","}

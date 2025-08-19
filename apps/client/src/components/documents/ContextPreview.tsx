@@ -86,10 +86,10 @@ export function ContextPreview({
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <MessageSquareIcon className="h-4 w-4 text-blue-600 shrink-0" />
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-blue-900 dark:text-blue-100 line-clamp-1">
+            <div className="text-sm font-medium text-accent-foreground line-clamp-1">
               Replying to: {metadata.title || "Untitled"}
             </div>
-            <div className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300 mt-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
               <span>by {metadata.uploader_id}</span>
               <span>•</span>
               <span>{formatDate(metadata.created_at)}</span>

@@ -77,7 +77,7 @@ export function DocumentHeader({
           {/* Author/Uploader info */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
             <span>Posted by</span>
-            <span className="font-medium text-blue-600">
+            <span className="font-medium text-accent-foreground">
               {currentDocument.metadata.uploader_id}
             </span>
             <span>•</span>
