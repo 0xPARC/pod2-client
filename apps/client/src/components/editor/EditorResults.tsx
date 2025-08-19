@@ -63,7 +63,7 @@ export function EditorResults({
     );
   } else if (executionResult) {
     statusIcon = <CheckCircle className="h-4 w-4 text-green-500" />;
-    statusText = "Execution successful";
+    statusText = `Execution successful (solving: ${executionResult.solver_time_ms}ms, building: ${executionResult.pod_build_time_ms}ms)`;
     content = (
       <div className="p-4">
         {/* <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
