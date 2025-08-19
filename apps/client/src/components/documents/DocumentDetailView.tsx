@@ -3,6 +3,8 @@ import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { useDocumentActions } from "../../hooks/useDocumentActions";
 import { useDocumentData } from "../../hooks/useDocumentData";
+import { useDocumentSidebarState } from "../../hooks/useDocumentSidebarState";
+import { useFileDownload } from "../../hooks/useFileDownload";
 import { formatBlockQuotes, groupAdjacentBlocks } from "../../lib/blockUtils";
 import { useDocuments } from "../../lib/store";
 import { Card, CardContent } from "../ui/card";
@@ -13,9 +15,6 @@ import { DocumentMetadata } from "./DocumentMetadata";
 import { RepliesSection } from "./RepliesSection";
 import { TableOfContents } from "./TableOfContents";
 import { VerificationDisplay } from "./VerificationDisplay";
-// import { useTextSelection } from "../../hooks/useTextSelection"; // Replaced with block selection
-import { useDocumentSidebarState } from "../../hooks/useDocumentSidebarState";
-import { useFileDownload } from "../../hooks/useFileDownload";
 
 interface DocumentDetailViewProps {
   documentId: number;
