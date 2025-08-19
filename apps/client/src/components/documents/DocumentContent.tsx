@@ -124,15 +124,6 @@ export function DocumentContent({
     ) {
       // Convert byte array to string properly
       const fileContent = fileContentToString(file.content);
-      console.log("📁 File detected as markdown:", file.name);
-      console.log("📁 File MIME type:", file.mime_type);
-      console.log("📁 File content length:", file.content.length);
-      console.log(
-        "📁 File content preview:",
-        fileContent.substring(0, 100) + "..."
-      );
-      console.log("📁 isMarkdown flag:", isMarkdown);
-      console.log("📁 isText flag:", isText);
 
       return (
         <div className="mt-6">

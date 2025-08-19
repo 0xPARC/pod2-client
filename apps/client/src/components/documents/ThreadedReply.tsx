@@ -27,9 +27,7 @@ export function ThreadedReply({
     return (
       <div key={reply.id} className="space-y-4">
         <div
-          className={`border-l-2 border-muted pl-4 ${
-            displayDepth > 0 ? `ml-${Math.min(displayDepth * 4, 16)}` : ""
-          }`}
+          className="border-l-2 border-muted pl-4"
           style={{
             marginLeft: displayDepth > 0 ? `${displayDepth * 16}px` : "0"
           }}

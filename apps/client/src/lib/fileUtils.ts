@@ -92,7 +92,22 @@ export const isTextFile = (mimeType: string): boolean => {
 
 // Convert file content byte array to string
 export const fileContentToString = (content: number[]): string => {
-  return String.fromCharCode(...content);
+  try {
+    // Prefer TextDecoder for correctness and performance on large arrays
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+    return decoder.decode(new Uint8Array(content));
+  } catch {
+    // Fallback: chunked conversion to avoid call stack/argument limits
+    const u8 = new Uint8Array(content);
+    const chunkSize = 0x8000; // 32KB
+    let result = "";
+    for (let i = 0; i < u8.length; i += chunkSize) {
+      const sub = u8.subarray(i, i + chunkSize);
+      // Using apply on a small chunk keeps us under argument limits
+      result += String.fromCharCode.apply(null, Array.from(sub) as any);
+    }
+    return result;
+  }
 };
 
 // Convert file content to base64 data URL
@@ -100,5 +115,13 @@ export const fileContentToDataUrl = (
   content: number[],
   mimeType: string
 ): string => {
-  return `data:${mimeType};base64,${btoa(String.fromCharCode(...content))}`;
+  const u8 = new Uint8Array(content);
+  const chunkSize = 0x8000; // 32KB
+  let binary = "";
+  for (let i = 0; i < u8.length; i += chunkSize) {
+    const sub = u8.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(sub) as any);
+  }
+  const base64 = btoa(binary);
+  return `data:${mimeType};base64,${base64}`;
 };

@@ -4,9 +4,16 @@ import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 import { useMemo } from "react";
 
-// Global variables to track block indices during rendering
-let blockCounter = 0;
-let insideContainer = false; // Track if we're inside a container block
+// Per-render state carried via markdown-it env
+type RenderState = { counter: number; insideContainer: boolean };
+type RenderEnv = { __blockState?: RenderState } & Record<string, any>;
+
+function getState(env: RenderEnv): RenderState {
+  if (!env.__blockState) {
+    env.__blockState = { counter: 0, insideContainer: false };
+  }
+  return env.__blockState;
+}
 
 // Reusable markdown-it instance creator with consistent configuration
 export function useMarkdownRenderer() {
@@ -68,13 +75,15 @@ export function useMarkdownRenderer() {
     function addBlockIndex(
       tokens: any[],
       idx: number,
+      env: RenderEnv,
       forceAdd: boolean = false
     ) {
       const token = tokens[idx];
+      const state = getState(env);
       // Only add index if we're not inside a container (or if forced for container blocks)
-      if (token && token.attrSet && (!insideContainer || forceAdd)) {
-        token.attrSet("data-block-index", blockCounter.toString());
-        blockCounter++;
+      if (token && token.attrSet && (!state.insideContainer || forceAdd)) {
+        token.attrSet("data-block-index", state.counter.toString());
+        state.counter++;
       }
     }
 
@@ -99,7 +108,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       return originalRules.paragraph_open
         ? originalRules.paragraph_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -112,7 +121,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       return originalRules.heading_open
         ? originalRules.heading_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -125,8 +134,9 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, true); // Force add for container blocks
-      insideContainer = true; // Mark that we're inside a container
+      addBlockIndex(tokens, idx, env as RenderEnv, true); // Force add for container blocks
+      // Mark that we're inside a container
+      getState(env as RenderEnv).insideContainer = true;
       return originalRules.blockquote_open
         ? originalRules.blockquote_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -140,7 +150,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      insideContainer = false; // Reset container flag
+      // Reset container flag
+      getState(_env as RenderEnv).insideContainer = false;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -151,7 +162,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       return originalRules.code_block
         ? originalRules.code_block(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -164,7 +175,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       return originalRules.fence
         ? originalRules.fence(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -177,7 +188,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       return originalRules.hr
         ? originalRules.hr(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -191,8 +202,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, true);
-      insideContainer = true;
+      addBlockIndex(tokens, idx, _env as RenderEnv, true);
+      getState(_env as RenderEnv).insideContainer = true;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -203,7 +214,7 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      insideContainer = false;
+      getState(_env as RenderEnv).insideContainer = false;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -214,8 +225,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, true);
-      insideContainer = true;
+      addBlockIndex(tokens, idx, _env as RenderEnv, true);
+      getState(_env as RenderEnv).insideContainer = true;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -226,7 +237,7 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      insideContainer = false;
+      getState(_env as RenderEnv).insideContainer = false;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -250,10 +261,24 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      // Treat table as a container block
+      addBlockIndex(tokens, idx, env as RenderEnv, true);
+      getState(env as RenderEnv).insideContainer = true;
       return originalRules.table_open
         ? originalRules.table_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
+    };
+
+    // Close handler for table container
+    mdInstance.renderer.rules.table_close = function (
+      tokens,
+      idx,
+      options,
+      env,
+      renderer
+    ) {
+      getState(env as RenderEnv).insideContainer = false;
+      return renderer.renderToken(tokens, idx, options);
     };
 
     mdInstance.renderer.rules.math_block = function (
@@ -263,7 +288,7 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx);
+      addBlockIndex(tokens, idx, env as RenderEnv);
       const mathHtml = originalRules.math_block
         ? originalRules.math_block(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -302,10 +327,9 @@ export function renderMarkdownToHtml(md: MarkdownIt, content: string): string {
   if (!content.trim()) {
     return "";
   }
-  // Reset block counter and container flag for each render
-  blockCounter = 0;
-  insideContainer = false;
-  return md.render(content);
+  // Use isolated per-render env state
+  const env: RenderEnv = {};
+  return md.render(content, env);
 }
 
 // Enhanced render function that returns both HTML and block mapping
@@ -321,10 +345,9 @@ export function renderMarkdownWithBlocks(
   const tokens = md.parse(content, {});
   const blocks = extractBlocksFromTokens(tokens, content);
 
-  // Reset block counter and container flag, then render
-  blockCounter = 0;
-  insideContainer = false;
-  const html = md.render(content);
+  // env will be used to track block indices within the rendering process
+  const env: RenderEnv = {};
+  const html = md.render(content, env);
 
   return { html, blocks };
 }
