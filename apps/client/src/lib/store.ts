@@ -76,6 +76,20 @@ export interface DocumentRoute {
   editDocumentData?: EditDocumentData; // Route-specific document editing data
 }
 
+export interface DocumentInteractionState {
+  // Document viewing selection
+  selectedBlockIndices: number[]; // Array for easier serialization
+  selectedBlockTexts: string[]; // Cache of selected block texts
+  viewingDocumentId: number | null; // Track which document is being viewed
+  lastSelectedIndex: number | null; // For shift-click range selection
+
+  // Context document selection (for replies)
+  contextSelectedBlockIndices: number[];
+  contextSelectedBlockTexts: string[];
+  contextDocumentId: number | null;
+  contextLastSelectedIndex: number | null;
+}
+
 export interface DocumentsState {
   browsingHistory: {
     stack: DocumentRoute[];
@@ -83,6 +97,7 @@ export interface DocumentsState {
   };
   searchQuery: string;
   selectedTag: string | null;
+  interaction: DocumentInteractionState; // Document viewing interactions
 }
 
 export interface EditorTab {
@@ -140,6 +155,17 @@ export interface DocumentsActions {
   updateSearch: (query: string) => void;
   selectTag: (tag: string | null) => void;
   updateCurrentRouteTitle: (title: string) => void;
+  // Block selection actions (document viewing)
+  toggleBlockSelection: (index: number, shiftKey?: boolean) => void;
+  clearBlockSelection: () => void;
+  setSelectedBlockTexts: (texts: string[]) => void;
+  setViewingDocument: (id: number | null) => void;
+
+  // Context document selection actions (for replies)
+  toggleContextBlockSelection: (index: number, shiftKey?: boolean) => void;
+  clearContextBlockSelection: () => void;
+  setContextSelectedBlockTexts: (texts: string[]) => void;
+  setContextDocument: (id: number | null) => void;
 }
 
 export interface PodEditorActions {
@@ -248,7 +274,17 @@ export const useAppStore = create<AppStoreState>()(
         currentIndex: 0
       },
       searchQuery: "",
-      selectedTag: null
+      selectedTag: null,
+      interaction: {
+        selectedBlockIndices: [],
+        selectedBlockTexts: [],
+        viewingDocumentId: null,
+        lastSelectedIndex: null,
+        contextSelectedBlockIndices: [],
+        contextSelectedBlockTexts: [],
+        contextDocumentId: null,
+        contextLastSelectedIndex: null
+      }
     },
 
     podEditor: {
@@ -288,8 +324,6 @@ export const useAppStore = create<AppStoreState>()(
           state.appState = appState;
           state.isLoading = false;
         });
-
-        console.log("appState", appState);
 
         // Load folders
         await get().loadFolders();
@@ -377,6 +411,14 @@ export const useAppStore = create<AppStoreState>()(
           // Add new route
           history.stack.push(newRoute);
           history.currentIndex = history.stack.length - 1;
+
+          // Update viewing document and clear selection if changing documents
+          if (state.documents.interaction.viewingDocumentId !== id) {
+            state.documents.interaction.viewingDocumentId = id;
+            state.documents.interaction.selectedBlockIndices = [];
+            state.documents.interaction.selectedBlockTexts = [];
+            state.documents.interaction.lastSelectedIndex = null;
+          }
         });
       },
 
@@ -476,6 +518,128 @@ export const useAppStore = create<AppStoreState>()(
           if (currentRoute && currentRoute.type === "document-detail") {
             currentRoute.title = title;
           }
+        });
+      },
+
+      toggleBlockSelection: (index: number, shiftKey = false) => {
+        set((state) => {
+          const indices = state.documents.interaction.selectedBlockIndices;
+          const lastIndex = state.documents.interaction.lastSelectedIndex;
+
+          if (shiftKey && lastIndex !== null) {
+            // Range selection - select all blocks between last selected and current
+            const start = Math.min(lastIndex, index);
+            const end = Math.max(lastIndex, index);
+            const newIndices = new Set(indices);
+
+            for (let i = start; i <= end; i++) {
+              newIndices.add(i);
+            }
+
+            state.documents.interaction.selectedBlockIndices = Array.from(
+              newIndices
+            ).sort((a, b) => a - b);
+          } else {
+            // Single block toggle
+            const existingIndex = indices.indexOf(index);
+            if (existingIndex >= 0) {
+              // Remove if already selected
+              indices.splice(existingIndex, 1);
+            } else {
+              // Add if not selected
+              indices.push(index);
+              indices.sort((a, b) => a - b);
+            }
+            state.documents.interaction.lastSelectedIndex = index;
+          }
+        });
+      },
+
+      clearBlockSelection: () => {
+        set((state) => {
+          state.documents.interaction.selectedBlockIndices = [];
+          state.documents.interaction.selectedBlockTexts = [];
+          state.documents.interaction.lastSelectedIndex = null;
+        });
+      },
+
+      setSelectedBlockTexts: (texts: string[]) => {
+        set((state) => {
+          state.documents.interaction.selectedBlockTexts = texts;
+        });
+      },
+
+      setViewingDocument: (id: number | null) => {
+        set((state) => {
+          // Clear selection when changing documents
+          if (state.documents.interaction.viewingDocumentId !== id) {
+            state.documents.interaction.selectedBlockIndices = [];
+            state.documents.interaction.selectedBlockTexts = [];
+            state.documents.interaction.lastSelectedIndex = null;
+          }
+          state.documents.interaction.viewingDocumentId = id;
+        });
+      },
+
+      // Context document selection actions
+      toggleContextBlockSelection: (index: number, shiftKey = false) => {
+        set((state) => {
+          const indices =
+            state.documents.interaction.contextSelectedBlockIndices;
+          const lastIndex =
+            state.documents.interaction.contextLastSelectedIndex;
+
+          if (shiftKey && lastIndex !== null) {
+            // Range selection - select all blocks between last selected and current
+            const start = Math.min(lastIndex, index);
+            const end = Math.max(lastIndex, index);
+            const newIndices = new Set(indices);
+
+            for (let i = start; i <= end; i++) {
+              newIndices.add(i);
+            }
+
+            state.documents.interaction.contextSelectedBlockIndices =
+              Array.from(newIndices).sort((a, b) => a - b);
+          } else {
+            // Single block toggle
+            const existingIndex = indices.indexOf(index);
+            if (existingIndex >= 0) {
+              // Remove if already selected
+              indices.splice(existingIndex, 1);
+            } else {
+              // Add if not selected
+              indices.push(index);
+              indices.sort((a, b) => a - b);
+            }
+            state.documents.interaction.contextLastSelectedIndex = index;
+          }
+        });
+      },
+
+      clearContextBlockSelection: () => {
+        set((state) => {
+          state.documents.interaction.contextSelectedBlockIndices = [];
+          state.documents.interaction.contextSelectedBlockTexts = [];
+          state.documents.interaction.contextLastSelectedIndex = null;
+        });
+      },
+
+      setContextSelectedBlockTexts: (texts: string[]) => {
+        set((state) => {
+          state.documents.interaction.contextSelectedBlockTexts = texts;
+        });
+      },
+
+      setContextDocument: (id: number | null) => {
+        set((state) => {
+          // Clear selection when changing context documents
+          if (state.documents.interaction.contextDocumentId !== id) {
+            state.documents.interaction.contextSelectedBlockIndices = [];
+            state.documents.interaction.contextSelectedBlockTexts = [];
+            state.documents.interaction.contextLastSelectedIndex = null;
+          }
+          state.documents.interaction.contextDocumentId = id;
         });
       }
     },
@@ -951,6 +1115,17 @@ export const useDocuments = () => {
     searchQuery: documents.searchQuery,
     selectedTag: documents.selectedTag,
 
+    // Document viewing interaction state
+    selectedBlockIndices: documents.interaction.selectedBlockIndices,
+    selectedBlockTexts: documents.interaction.selectedBlockTexts,
+    viewingDocumentId: documents.interaction.viewingDocumentId,
+
+    // Context document interaction state (for replies)
+    contextSelectedBlockIndices:
+      documents.interaction.contextSelectedBlockIndices,
+    contextSelectedBlockTexts: documents.interaction.contextSelectedBlockTexts,
+    contextDocumentId: documents.interaction.contextDocumentId,
+
     // Actions
     navigateToDocument: documentsActions.navigateToDocument,
     navigateToDrafts: documentsActions.navigateToDrafts,
@@ -961,7 +1136,19 @@ export const useDocuments = () => {
     goForward: documentsActions.goForward,
     updateSearch: documentsActions.updateSearch,
     selectTag: documentsActions.selectTag,
-    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle
+    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle,
+
+    // Block selection actions (document viewing)
+    toggleBlockSelection: documentsActions.toggleBlockSelection,
+    clearBlockSelection: documentsActions.clearBlockSelection,
+    setSelectedBlockTexts: documentsActions.setSelectedBlockTexts,
+    setViewingDocument: documentsActions.setViewingDocument,
+
+    // Context document selection actions (for replies)
+    toggleContextBlockSelection: documentsActions.toggleContextBlockSelection,
+    clearContextBlockSelection: documentsActions.clearContextBlockSelection,
+    setContextSelectedBlockTexts: documentsActions.setContextSelectedBlockTexts,
+    setContextDocument: documentsActions.setContextDocument
   };
 };
 

@@ -22,17 +22,13 @@ export function PublishPage({
     }
   };
 
-  const handleCancel = () => {
-    // Navigation is now handled by the top-level back/forward buttons
-  };
-
   const renderForm = () => {
     switch (contentType) {
       case "document":
         return (
           <PublishDocumentForm
             onPublishSuccess={handlePublishSuccess}
-            onCancel={handleCancel}
+            // Don't pass onCancel - let the form handle navigation internally
             replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
           />
@@ -41,21 +37,21 @@ export function PublishPage({
         return (
           <PublishLinkForm
             onPublishSuccess={handlePublishSuccess}
-            onCancel={handleCancel}
+            // Don't pass onCancel - let the form handle navigation internally
           />
         );
       case "file":
         return (
           <PublishFileForm
             onPublishSuccess={handlePublishSuccess}
-            onCancel={handleCancel}
+            // Don't pass onCancel - let the form handle navigation internally
           />
         );
       default:
         return (
           <PublishDocumentForm
             onPublishSuccess={handlePublishSuccess}
-            onCancel={handleCancel}
+            // Don't pass onCancel - let the form handle navigation internally
             replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
           />

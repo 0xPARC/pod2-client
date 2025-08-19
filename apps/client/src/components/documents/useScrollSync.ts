@@ -140,7 +140,30 @@ export function useScrollSync(
 
       // Note: MathJax containers are now properly wrapped with line mapping attributes
 
-      setBlockGeometries(newGeometries);
+      // Only update state if geometries have actually changed to prevent infinite loops
+      setBlockGeometries((prevGeometries) => {
+        // Check if geometries are effectively the same
+        if (prevGeometries.length === newGeometries.length) {
+          const areEqual = prevGeometries.every((prev, index) => {
+            const curr = newGeometries[index];
+            return (
+              prev.mapping.elementIndex === curr.mapping.elementIndex &&
+              prev.mapping.startLine === curr.mapping.startLine &&
+              prev.mapping.endLine === curr.mapping.endLine &&
+              Math.abs(prev.offsetTop - curr.offsetTop) < 1 && // Allow tiny differences due to rounding
+              Math.abs(prev.offsetHeight - curr.offsetHeight) < 1 &&
+              Math.abs(prev.editorStartPixel - curr.editorStartPixel) < 1 &&
+              Math.abs(prev.editorEndPixel - curr.editorEndPixel) < 1
+            );
+          });
+
+          if (areEqual) {
+            return prevGeometries; // Return the same reference to prevent re-render
+          }
+        }
+
+        return newGeometries;
+      });
     },
     [cooldownMs]
   );
@@ -386,23 +409,28 @@ export function useScrollSync(
     preview.addEventListener("scroll", handlePreviewScroll, { passive: true });
 
     // Set up ResizeObserver to detect preview container size changes (view mode transitions, window resizes)
+    let resizeDebounceTimer: NodeJS.Timeout | null = null;
     const handlePreviewResize = () => {
+      // Clear any existing debounce timer
+      if (resizeDebounceTimer) {
+        clearTimeout(resizeDebounceTimer);
+      }
+
       // Mark that layout is changing to prevent scroll sync with stale geometry
-      console.log("📏 ResizeObserver fired - blocking scroll sync");
       isLayoutChanging.current = true;
 
-      // Delay geometry refresh to ensure layout has settled after resize
-      setTimeout(() => {
-        console.log("📏 Updating block geometries after resize");
+      // Debounce the geometry update to prevent rapid repeated calls
+      resizeDebounceTimer = setTimeout(() => {
         // Use stored current mappings instead of extracting from stale blockGeometries
         updateBlockGeometries(currentMappings.current);
 
         // Re-enable scroll sync after geometry is updated
         setTimeout(() => {
-          console.log("✅ Re-enabling scroll sync after layout");
           isLayoutChanging.current = false;
         }, 50);
-      }, 100);
+
+        resizeDebounceTimer = null;
+      }, 150); // Increased debounce time to prevent rapid updates
     };
 
     const resizeObserver = new ResizeObserver(handlePreviewResize);
@@ -479,6 +507,11 @@ export function useScrollSync(
 
       // Disconnect ResizeObserver
       resizeObserver.disconnect();
+
+      // Clear any pending resize debounce timer
+      if (resizeDebounceTimer) {
+        clearTimeout(resizeDebounceTimer);
+      }
 
       // Remove all MathJax event listeners
       mathJaxEvents.forEach((eventName) => {
