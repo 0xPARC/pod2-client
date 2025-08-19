@@ -3,8 +3,8 @@ import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { useDocumentActions } from "../../hooks/useDocumentActions";
 import { useDocumentData } from "../../hooks/useDocumentData";
-import { useDocuments } from "../../lib/store";
 import { formatBlockQuotes, groupAdjacentBlocks } from "../../lib/blockUtils";
+import { useDocuments } from "../../lib/store";
 import { Card, CardContent } from "../ui/card";
 import { useSidebar } from "../ui/sidebar";
 import { DocumentContent } from "./DocumentContent";
@@ -14,8 +14,8 @@ import { RepliesSection } from "./RepliesSection";
 import { TableOfContents } from "./TableOfContents";
 import { VerificationDisplay } from "./VerificationDisplay";
 // import { useTextSelection } from "../../hooks/useTextSelection"; // Replaced with block selection
+import { useDocumentSidebarState } from "../../hooks/useDocumentSidebarState";
 import { useFileDownload } from "../../hooks/useFileDownload";
-import { useSidebarState } from "../../hooks/useSidebarState";
 
 interface DocumentDetailViewProps {
   documentId: number;
@@ -107,7 +107,8 @@ export function DocumentDetailView({
     handleReplyToDocumentBase(selectedQuote);
   };
 
-  const { leftSidebarCollapsed, rightSidebarCollapsed } = useSidebarState();
+  const { leftSidebarCollapsed, rightSidebarCollapsed } =
+    useDocumentSidebarState();
 
   // Text selection replaced with block selection in DocumentContent component
 

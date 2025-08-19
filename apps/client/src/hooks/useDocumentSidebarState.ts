@@ -1,16 +1,16 @@
 import { useState } from "react";
 
-export interface UseSidebarStateReturn {
+export interface UseDocumentSidebarStateReturn {
   leftSidebarCollapsed: boolean;
   rightSidebarCollapsed: boolean;
   setLeftSidebarCollapsed: (collapsed: boolean) => void;
   setRightSidebarCollapsed: (collapsed: boolean) => void;
 }
 
-export const useSidebarState = (
+export const useDocumentSidebarState = (
   initialLeftCollapsed = false,
   initialRightCollapsed = true
-): UseSidebarStateReturn => {
+): UseDocumentSidebarStateReturn => {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] =
     useState(initialLeftCollapsed);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(
