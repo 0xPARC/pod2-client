@@ -47,7 +47,9 @@ export function DocumentsView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
+  const [sortBy, setSortBy] = useState<"activity" | "newest" | "upvotes">(
+    "activity"
+  );
   const [showHackMDImport, setShowHackMDImport] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,14 +117,16 @@ export function DocumentsView() {
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === "recent") {
-        // Sort by activity: latest_reply_at OR created_at (most recently active first)
-        const getActivityTime = (doc: DocumentMetadata) => {
-          return doc.latest_reply_at || doc.created_at || "";
-        };
-        const dateA = new Date(getActivityTime(a)).getTime();
-        const dateB = new Date(getActivityTime(b)).getTime();
-        return dateB - dateA;
+      if (sortBy === "activity") {
+        // Sort by recent activity: max(created_at, latest_reply_at)
+        const timeA = a.latest_reply_at || a.created_at || "";
+        const timeB = b.latest_reply_at || b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      } else if (sortBy === "newest") {
+        // Sort strictly by post creation time
+        const timeA = a.created_at || "";
+        const timeB = b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
       } else if (sortBy === "upvotes") {
         // Sort by upvote count (highest first)
         return b.upvote_count - a.upvote_count;
@@ -272,16 +276,27 @@ export function DocumentsView() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
                 <ArrowUpDownIcon className="h-4 w-4" />
-                Sort: {sortBy === "recent" ? "Most Recent" : "Most Upvoted"}
+                Sort:{" "}
+                {sortBy === "activity"
+                  ? "Recent Activity"
+                  : sortBy === "newest"
+                    ? "Newest Posts"
+                    : "Most Upvoted"}
                 <ChevronDownIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
               <DropdownMenuLabel>Sort By</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSortBy("recent")}>
-                <span>Most Recent</span>
-                {sortBy === "recent" && (
+              <DropdownMenuItem onClick={() => setSortBy("activity")}>
+                <span>Recent Activity</span>
+                {sortBy === "activity" && (
+                  <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("newest")}>
+                <span>Newest Posts</span>
+                {sortBy === "newest" && (
                   <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
                 )}
               </DropdownMenuItem>
