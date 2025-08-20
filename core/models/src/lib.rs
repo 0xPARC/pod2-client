@@ -153,6 +153,19 @@ pub struct DocumentMetadata {
     pub title: String, // Document title
 }
 
+/// Extended document metadata for list views, including latest reply information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentListItem {
+    #[serde(flatten)]
+    pub metadata: DocumentMetadata,
+
+    /// Timestamp of the most recent reply in this thread (or None if no replies)
+    pub latest_reply_at: Option<String>,
+
+    /// Username of the author of the most recent reply (None if no replies exist)  
+    pub latest_reply_by: Option<String>,
+}
+
 /// Hierarchical reply tree structure for efficiently representing document replies
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DocumentReplyTree {

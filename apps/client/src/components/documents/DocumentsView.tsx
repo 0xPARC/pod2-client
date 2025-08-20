@@ -47,7 +47,9 @@ export function DocumentsView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
+  const [sortBy, setSortBy] = useState<"activity" | "newest" | "upvotes">(
+    "activity"
+  );
   const [showHackMDImport, setShowHackMDImport] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,11 +117,16 @@ export function DocumentsView() {
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === "recent") {
-        // Sort by created_at in reverse chronological order (most recent first)
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return dateB - dateA;
+      if (sortBy === "activity") {
+        // Sort by recent activity: max(created_at, latest_reply_at)
+        const timeA = a.latest_reply_at || a.created_at || "";
+        const timeB = b.latest_reply_at || b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      } else if (sortBy === "newest") {
+        // Sort strictly by post creation time
+        const timeA = a.created_at || "";
+        const timeB = b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
       } else if (sortBy === "upvotes") {
         // Sort by upvote count (highest first)
         return b.upvote_count - a.upvote_count;
@@ -269,16 +276,27 @@ export function DocumentsView() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
                 <ArrowUpDownIcon className="h-4 w-4" />
-                Sort: {sortBy === "recent" ? "Most Recent" : "Most Upvoted"}
+                Sort:{" "}
+                {sortBy === "activity"
+                  ? "Recent Activity"
+                  : sortBy === "newest"
+                    ? "Newest Posts"
+                    : "Most Upvoted"}
                 <ChevronDownIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
               <DropdownMenuLabel>Sort By</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSortBy("recent")}>
-                <span>Most Recent</span>
-                {sortBy === "recent" && (
+              <DropdownMenuItem onClick={() => setSortBy("activity")}>
+                <span>Recent Activity</span>
+                {sortBy === "activity" && (
+                  <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("newest")}>
+                <span>Newest Posts</span>
+                {sortBy === "newest" && (
                   <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
                 )}
               </DropdownMenuItem>
@@ -427,6 +445,22 @@ export function DocumentsView() {
                         )}
                       </div>
 
+                      {doc.latest_reply_at && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                          <MessageSquareIcon className="h-3 w-3" />
+                          <span>last comment</span>
+                          <span>{formatDate(doc.latest_reply_at)}</span>
+                          {doc.latest_reply_by && (
+                            <>
+                              <span>by</span>
+                              <span className="text-accent-foreground">
+                                {doc.latest_reply_by}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       {/* Tags and authors in compact format */}
                       <div className="flex items-center gap-2 text-xs">
                         {doc.tags.length > 0 && (
@@ -472,12 +506,6 @@ export function DocumentsView() {
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Right side info */}
-                <div className="text-xs text-muted-foreground text-right">
-                  <div>#{doc.id}</div>
-                  <div>r{doc.revision}</div>
                 </div>
               </div>
             ))}
