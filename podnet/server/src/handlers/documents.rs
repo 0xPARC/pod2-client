@@ -126,6 +126,24 @@ pub async fn publish_document(
     })?;
     log::info!("✓ Document content validated");
 
+    // Validate reply content restrictions
+    if payload.reply_to.is_some() {
+        // Replies can only be messages, not files or URLs
+        if payload.content.file.is_some() {
+            log::error!("Replies cannot contain file attachments");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if payload.content.url.is_some() {
+            log::error!("Replies cannot contain URLs");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if payload.content.message.is_none() {
+            log::error!("Replies must contain a message");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        log::info!("✓ Reply content restrictions validated");
+    }
+
     // Validate the title
     if payload.title.trim().is_empty() {
         log::error!("Document title cannot be empty");
@@ -435,7 +453,7 @@ pub async fn get_document_reply_tree(
 ) -> Result<Json<podnet_models::DocumentReplyTree>, StatusCode> {
     let reply_tree = state
         .db
-        .get_reply_tree_for_document(id)
+        .get_reply_tree_for_document(id, &state.storage)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
@@ -640,7 +658,7 @@ mod tests {
         let state = create_mock_app_state().await;
 
         // Insert a test document using the test helper from db module
-        let doc_id = insert_dummy_document(&state.db, "Test Document", None);
+        let doc_id = insert_dummy_document(&state.db, &state.storage, "Test Document", None);
 
         // Call the handler
         let result = get_document_reply_tree(Path(doc_id), axum::extract::State(state)).await;
@@ -675,9 +693,10 @@ mod tests {
         let state = create_mock_app_state().await;
 
         // Create a document with replies using test helpers
-        let root_id = insert_dummy_document(&state.db, "Root Document", None);
+        let root_id = insert_dummy_document(&state.db, &state.storage, "Root Document", None);
         let _reply_id = insert_dummy_document(
             &state.db,
+            &state.storage,
             "Reply Document",
             Some(create_reply_reference(root_id)),
         );
@@ -703,9 +722,10 @@ mod tests {
         let state = create_mock_app_state().await;
 
         // Create a document with replies using test helpers
-        let root_id = insert_dummy_document(&state.db, "Root Document", None);
+        let root_id = insert_dummy_document(&state.db, &state.storage, "Root Document", None);
         let _reply_id = insert_dummy_document(
             &state.db,
+            &state.storage,
             "Reply Document",
             Some(create_reply_reference(root_id)),
         );

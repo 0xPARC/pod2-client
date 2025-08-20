@@ -84,6 +84,7 @@ export interface DocumentVerificationResult {
  */
 export interface DocumentReplyTree {
   document: DocumentMetadata;
+  content: DocumentContent;
   replies: DocumentReplyTree[];
 }
 

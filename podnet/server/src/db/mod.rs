@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentMetadata, DocumentPods, DocumentReplyTree, IdentityServer, Post, RawDocument,
-    ReplyReference, Upvote, lazy_pod::LazyDeser,
+    Document, DocumentContent, DocumentMetadata, DocumentPods, DocumentReplyTree, IdentityServer,
+    Post, RawDocument, ReplyReference, Upvote, lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
 
@@ -1079,6 +1079,7 @@ impl Database {
     pub fn get_reply_tree_for_document(
         &self,
         document_id: i64,
+        storage: &crate::storage::ContentAddressedStorage,
     ) -> Result<Option<DocumentReplyTree>> {
         // First verify the document exists and get its thread_root_id
         let document_thread_root_id = match self.get_document_thread_root_id(document_id)? {
@@ -1090,7 +1091,7 @@ impl Database {
         let all_thread_documents = self.get_documents_by_thread_root_id(document_thread_root_id)?;
 
         // Build the tree structure from the flat list, starting with the requested document
-        self.build_reply_tree_from_documents(all_thread_documents, document_id)
+        self.build_reply_tree_from_documents(all_thread_documents, document_id, storage)
     }
 
     // Helper method to get thread_root_id for a document
@@ -1150,6 +1151,7 @@ impl Database {
         &self,
         raw_documents: Vec<RawDocument>,
         requested_document_id: i64,
+        storage: &crate::storage::ContentAddressedStorage,
     ) -> Result<Option<DocumentReplyTree>> {
         use std::collections::HashMap;
 
@@ -1157,15 +1159,32 @@ impl Database {
             return Ok(None);
         }
 
-        // Convert raw documents to metadata and organize by ID
+        // Convert raw documents to metadata and content, organize by ID
         let mut document_map: HashMap<i64, DocumentMetadata> = HashMap::new();
+        let mut content_map: HashMap<i64, DocumentContent> = HashMap::new();
         let mut children_map: HashMap<i64, Vec<i64>> = HashMap::new();
 
         for raw_doc in raw_documents {
             let doc_id = raw_doc.id.unwrap_or(-1);
-            let metadata = self.raw_document_to_metadata(raw_doc)?;
+            let metadata = self.raw_document_to_metadata(raw_doc.clone())?;
+
+            // Fetch content from storage
+            let content_hash = Hash::from_hex(raw_doc.content_id).map_err(|_| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "content_id".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
+            let content = storage
+                .retrieve_document_content(&content_hash)
+                .map_err(|_| rusqlite::Error::InvalidPath("storage error".into()))?
+                .ok_or_else(|| {
+                    rusqlite::Error::InvalidPath("content not found in storage".into())
+                })?;
 
             document_map.insert(doc_id, metadata.clone());
+            content_map.insert(doc_id, content);
 
             // Build parent-child relationships
             if let Some(ref reply_to) = metadata.reply_to {
@@ -1185,14 +1204,18 @@ impl Database {
         fn build_tree_node(
             document_id: i64,
             document_map: &HashMap<i64, DocumentMetadata>,
+            content_map: &HashMap<i64, DocumentContent>,
             children_map: &HashMap<i64, Vec<i64>>,
         ) -> Option<DocumentReplyTree> {
             let document = document_map.get(&document_id)?.clone();
+            let content = content_map.get(&document_id)?.clone();
             let child_ids = children_map.get(&document_id).cloned().unwrap_or_default();
 
             let mut replies = Vec::new();
             for child_id in child_ids {
-                if let Some(child_tree) = build_tree_node(child_id, document_map, children_map) {
+                if let Some(child_tree) =
+                    build_tree_node(child_id, document_map, content_map, children_map)
+                {
                     replies.push(child_tree);
                 }
             }
@@ -1205,12 +1228,17 @@ impl Database {
                     .cmp(&b.document.created_at.as_ref())
             });
 
-            Some(DocumentReplyTree { document, replies })
+            Some(DocumentReplyTree {
+                document,
+                content,
+                replies,
+            })
         }
 
         Ok(build_tree_node(
             requested_document_id,
             &document_map,
+            &content_map,
             &children_map,
         ))
     }
@@ -1220,7 +1248,7 @@ impl Database {
 pub mod tests {
     use std::collections::HashSet;
 
-    use pod2::middleware::hash_str;
+    use podnet_models::DocumentContent;
 
     use super::*;
 
@@ -1232,17 +1260,39 @@ pub mod tests {
             .expect("Failed to create test database")
     }
 
+    fn create_test_storage() -> crate::storage::ContentAddressedStorage {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("podnet_test_storage_{}", timestamp));
+        crate::storage::ContentAddressedStorage::new(temp_dir.to_str().unwrap())
+            .expect("Failed to create test storage")
+    }
+
     pub fn insert_dummy_document(
         db: &Database,
+        storage: &crate::storage::ContentAddressedStorage,
         title: &str,
         reply_to: Option<ReplyReference>,
     ) -> i64 {
         let conn = db.conn.lock().unwrap();
 
+        // Create dummy content and store it
+        let content = DocumentContent {
+            message: Some(format!("Test content for {}", title)),
+            file: None,
+            url: None,
+        };
+        let content_hash = storage
+            .store_document_content(&content)
+            .expect("Failed to store test content")
+            .encode_hex::<String>();
+
         // Create dummy data
         let dummy_pod_json = r#"{"mock": "pod"}"#;
         let dummy_timestamp_pod_json = r#"{"mock": "timestamp_pod"}"#;
-        let content_hash = hash_str(title).encode_hex::<String>();
         let tags_json = "[]";
         let authors_json = "[]";
         let reply_to_json = reply_to.as_ref().map(|r| serde_json::to_string(r).unwrap());
@@ -1322,27 +1372,39 @@ pub mod tests {
     #[test]
     fn test_single_document_no_replies() {
         let db = create_test_database();
-        let doc_id = insert_dummy_document(&db, "Root Document", None);
+        let storage = create_test_storage();
+        let doc_id = insert_dummy_document(&db, &storage, "Root Document", None);
 
-        let tree = db.get_reply_tree_for_document(doc_id).unwrap();
+        let tree = db.get_reply_tree_for_document(doc_id, &storage).unwrap();
         assert!(tree.is_some());
 
         let tree = tree.unwrap();
         assert_eq!(tree.document.title, "Root Document");
+        assert_eq!(
+            tree.content.message,
+            Some("Test content for Root Document".to_string())
+        );
         assert_eq!(tree.replies.len(), 0);
     }
 
     #[test]
     fn test_linear_reply_chain() {
         let db = create_test_database();
+        let storage = create_test_storage();
 
         // Create: A -> B -> C -> D
-        let doc_a = insert_dummy_document(&db, "Doc A", None);
-        let doc_b = insert_dummy_document(&db, "Doc B", Some(create_reply_reference(doc_a)));
-        let doc_c = insert_dummy_document(&db, "Doc C", Some(create_reply_reference(doc_b)));
-        let _doc_d = insert_dummy_document(&db, "Doc D", Some(create_reply_reference(doc_c)));
+        let doc_a = insert_dummy_document(&db, &storage, "Doc A", None);
+        let doc_b =
+            insert_dummy_document(&db, &storage, "Doc B", Some(create_reply_reference(doc_a)));
+        let doc_c =
+            insert_dummy_document(&db, &storage, "Doc C", Some(create_reply_reference(doc_b)));
+        let _doc_d =
+            insert_dummy_document(&db, &storage, "Doc D", Some(create_reply_reference(doc_c)));
 
-        let tree = db.get_reply_tree_for_document(doc_a).unwrap().unwrap();
+        let tree = db
+            .get_reply_tree_for_document(doc_a, &storage)
+            .unwrap()
+            .unwrap();
 
         // Verify structure: A has 1 reply (B)
         assert_eq!(tree.document.title, "Doc A");
@@ -1367,16 +1429,25 @@ pub mod tests {
     #[test]
     fn test_branching_reply_tree() {
         let db = create_test_database();
+        let storage = create_test_storage();
 
         // Create: A -> B, C; B -> D, E; C -> F
-        let doc_a = insert_dummy_document(&db, "Doc A", None);
-        let doc_b = insert_dummy_document(&db, "Doc B", Some(create_reply_reference(doc_a)));
-        let doc_c = insert_dummy_document(&db, "Doc C", Some(create_reply_reference(doc_a)));
-        let _doc_d = insert_dummy_document(&db, "Doc D", Some(create_reply_reference(doc_b)));
-        let _doc_e = insert_dummy_document(&db, "Doc E", Some(create_reply_reference(doc_b)));
-        let _doc_f = insert_dummy_document(&db, "Doc F", Some(create_reply_reference(doc_c)));
+        let doc_a = insert_dummy_document(&db, &storage, "Doc A", None);
+        let doc_b =
+            insert_dummy_document(&db, &storage, "Doc B", Some(create_reply_reference(doc_a)));
+        let doc_c =
+            insert_dummy_document(&db, &storage, "Doc C", Some(create_reply_reference(doc_a)));
+        let _doc_d =
+            insert_dummy_document(&db, &storage, "Doc D", Some(create_reply_reference(doc_b)));
+        let _doc_e =
+            insert_dummy_document(&db, &storage, "Doc E", Some(create_reply_reference(doc_b)));
+        let _doc_f =
+            insert_dummy_document(&db, &storage, "Doc F", Some(create_reply_reference(doc_c)));
 
-        let tree = db.get_reply_tree_for_document(doc_a).unwrap().unwrap();
+        let tree = db
+            .get_reply_tree_for_document(doc_a, &storage)
+            .unwrap()
+            .unwrap();
 
         // A has 2 direct replies (B and C)
         assert_eq!(tree.document.title, "Doc A");
@@ -1414,7 +1485,8 @@ pub mod tests {
     #[test]
     fn test_nonexistent_document() {
         let db = create_test_database();
-        let tree = db.get_reply_tree_for_document(99999).unwrap();
+        let storage = create_test_storage();
+        let tree = db.get_reply_tree_for_document(99999, &storage).unwrap();
         assert!(tree.is_none());
     }
 
@@ -1423,14 +1495,21 @@ pub mod tests {
         let db = create_test_database();
 
         // Create two separate root documents
-        let doc1 = insert_dummy_document(&db, "Root 1", None);
-        let doc2 = insert_dummy_document(&db, "Root 2", None);
+        let storage = create_test_storage();
+        let doc1 = insert_dummy_document(&db, &storage, "Root 1", None);
+        let doc2 = insert_dummy_document(&db, &storage, "Root 2", None);
 
-        let tree1 = db.get_reply_tree_for_document(doc1).unwrap().unwrap();
+        let tree1 = db
+            .get_reply_tree_for_document(doc1, &storage)
+            .unwrap()
+            .unwrap();
         assert_eq!(tree1.document.title, "Root 1");
         assert_eq!(tree1.replies.len(), 0);
 
-        let tree2 = db.get_reply_tree_for_document(doc2).unwrap().unwrap();
+        let tree2 = db
+            .get_reply_tree_for_document(doc2, &storage)
+            .unwrap()
+            .unwrap();
         assert_eq!(tree2.document.title, "Root 2");
         assert_eq!(tree2.replies.len(), 0);
     }
@@ -1438,19 +1517,24 @@ pub mod tests {
     #[test]
     fn test_deep_nesting_within_limit() {
         let db = create_test_database();
+        let storage = create_test_storage();
 
         // Create a chain of 5 documents (within the 10-level limit)
-        let root_id = insert_dummy_document(&db, "Doc 0", None);
+        let root_id = insert_dummy_document(&db, &storage, "Doc 0", None);
         let mut current_id = root_id;
 
         for i in 1..=5 {
             let title = format!("Doc {i}");
-            current_id =
-                insert_dummy_document(&db, &title, Some(create_reply_reference(current_id)));
+            current_id = insert_dummy_document(
+                &db,
+                &storage,
+                &title,
+                Some(create_reply_reference(current_id)),
+            );
         }
 
         // Should successfully retrieve the entire chain starting from the root
-        let tree = db.get_reply_tree_for_document(root_id).unwrap();
+        let tree = db.get_reply_tree_for_document(root_id, &storage).unwrap();
         assert!(tree.is_some());
 
         // Walk down the chain to verify depth
@@ -1471,17 +1555,25 @@ pub mod tests {
     #[test]
     fn test_mixed_scenario() {
         let db = create_test_database();
+        let storage = create_test_storage();
 
         // Create complex tree: Root -> A, B; A -> A1; B -> B1, B2; B1 -> B1a
-        let root = insert_dummy_document(&db, "Root", None);
-        let doc_a = insert_dummy_document(&db, "A", Some(create_reply_reference(root)));
-        let doc_b = insert_dummy_document(&db, "B", Some(create_reply_reference(root)));
-        let _doc_a1 = insert_dummy_document(&db, "A1", Some(create_reply_reference(doc_a)));
-        let doc_b1 = insert_dummy_document(&db, "B1", Some(create_reply_reference(doc_b)));
-        let _doc_b2 = insert_dummy_document(&db, "B2", Some(create_reply_reference(doc_b)));
-        let _doc_b1a = insert_dummy_document(&db, "B1a", Some(create_reply_reference(doc_b1)));
+        let root = insert_dummy_document(&db, &storage, "Root", None);
+        let doc_a = insert_dummy_document(&db, &storage, "A", Some(create_reply_reference(root)));
+        let doc_b = insert_dummy_document(&db, &storage, "B", Some(create_reply_reference(root)));
+        let _doc_a1 =
+            insert_dummy_document(&db, &storage, "A1", Some(create_reply_reference(doc_a)));
+        let doc_b1 =
+            insert_dummy_document(&db, &storage, "B1", Some(create_reply_reference(doc_b)));
+        let _doc_b2 =
+            insert_dummy_document(&db, &storage, "B2", Some(create_reply_reference(doc_b)));
+        let _doc_b1a =
+            insert_dummy_document(&db, &storage, "B1a", Some(create_reply_reference(doc_b1)));
 
-        let tree = db.get_reply_tree_for_document(root).unwrap().unwrap();
+        let tree = db
+            .get_reply_tree_for_document(root, &storage)
+            .unwrap()
+            .unwrap();
 
         // Root has 2 replies
         assert_eq!(tree.replies.len(), 2);

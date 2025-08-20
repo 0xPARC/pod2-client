@@ -19,6 +19,7 @@ export function DocumentReply({
   depth
 }: DocumentReplyProps) {
   const { document } = replyTree;
+
   const isReplyToCurrentDoc = document.reply_to?.document_id === documentId;
   const isReplyToCurrentPost =
     document.reply_to?.post_id === currentDocumentPostId;
@@ -86,6 +87,32 @@ export function DocumentReply({
 
           {/* Title */}
           <h4 className="font-medium text-sm leading-5">{document.title}</h4>
+
+          {/* Content Preview */}
+          {replyTree.content && (
+            <div className="text-sm text-muted-foreground bg-muted/20 rounded p-3 border-l-2 border-muted">
+              {replyTree.content.message && (
+                <div className="line-clamp-3 whitespace-pre-wrap overflow-hidden">
+                  {replyTree.content.message}
+                </div>
+              )}
+              {replyTree.content.file && (
+                <div className="flex items-center gap-2 text-xs">
+                  📎{" "}
+                  <span className="font-medium">
+                    {replyTree.content.file.name}
+                  </span>
+                  <span>({replyTree.content.file.mime_type})</span>
+                </div>
+              )}
+              {replyTree.content.url && (
+                <div className="flex items-center gap-2 text-xs">
+                  🔗 <span className="font-medium">URL:</span>
+                  <span className="truncate">{replyTree.content.url}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tags */}
           {document.tags && document.tags.length > 0 && (

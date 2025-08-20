@@ -157,6 +157,7 @@ pub struct DocumentMetadata {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DocumentReplyTree {
     pub document: DocumentMetadata,
+    pub content: DocumentContent,
     pub replies: Vec<DocumentReplyTree>,
 }
 
