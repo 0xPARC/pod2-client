@@ -29,3 +29,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 config = "0.14"
 sha2 = "0.10"
 rand = "0.9.1"
+
+[dev-dependencies]
+tokio-test = "0.4"

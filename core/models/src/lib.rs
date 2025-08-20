@@ -135,7 +135,7 @@ pub struct DocumentPods {
 }
 
 /// Lightweight document metadata without cryptographic proofs (for listing)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMetadata {
     pub id: Option<i64>,
     pub content_id: Hash,
@@ -151,6 +151,13 @@ pub struct DocumentMetadata {
     /// This may be -1 for new documents, while post_id is the actual assigned ID
     pub requested_post_id: Option<i64>,
     pub title: String, // Document title
+}
+
+/// Hierarchical reply tree structure for efficiently representing document replies
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocumentReplyTree {
+    pub document: DocumentMetadata,
+    pub replies: Vec<DocumentReplyTree>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

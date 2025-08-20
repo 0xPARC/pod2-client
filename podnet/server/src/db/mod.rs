@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentMetadata, DocumentPods, IdentityServer, Post, RawDocument, ReplyReference,
-    Upvote, lazy_pod::LazyDeser,
+    Document, DocumentMetadata, DocumentPods, DocumentReplyTree, IdentityServer, Post, RawDocument,
+    ReplyReference, Upvote, lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
 
@@ -52,7 +52,9 @@ impl Database {
                 reply_to TEXT,
                 requested_post_id INTEGER,
                 title TEXT NOT NULL,
+                thread_root_id INTEGER,
                 FOREIGN KEY (post_id) REFERENCES posts (id),
+                FOREIGN KEY (thread_root_id) REFERENCES documents (id),
                 UNIQUE (post_id, revision)
             )",
             [],
@@ -72,8 +74,24 @@ impl Database {
             [],
         );
 
+        // Add thread_root_id column to existing databases (migration)
+        // This will fail silently if the column already exists
+        let _ = conn.execute(
+            "ALTER TABLE documents ADD COLUMN thread_root_id INTEGER",
+            [],
+        );
+
         // Migrate reply_to column to TEXT for ReplyReference support
         self.migrate_reply_to_column(&conn)?;
+
+        // Migrate existing documents to populate thread_root_id
+        self.migrate_thread_root_id(&conn)?;
+
+        // Create index for thread_root_id for performance
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_thread_root_id ON documents(thread_root_id)",
+            [],
+        );
 
         // Create identity_servers table
         conn.execute(
@@ -166,6 +184,88 @@ impl Database {
         }
 
         Ok(())
+    }
+
+    fn migrate_thread_root_id(&self, conn: &Connection) -> Result<()> {
+        // Check if migration is needed - if any document has null thread_root_id
+        let needs_migration: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM documents WHERE thread_root_id IS NULL)",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if !needs_migration {
+            return Ok(());
+        }
+
+        // Get all documents without thread_root_id
+        let mut stmt = conn.prepare(
+            "SELECT id, reply_to FROM documents WHERE thread_root_id IS NULL ORDER BY id",
+        )?;
+
+        let documents: Vec<(i64, Option<String>)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Process each document
+        for (doc_id, reply_to_json) in documents {
+            let thread_root_id = if let Some(reply_json) = reply_to_json {
+                // This is a reply - find the thread root by traversing up the chain
+                if let Ok(reply_ref) = serde_json::from_str::<ReplyReference>(&reply_json) {
+                    self.find_thread_root_id(conn, reply_ref.document_id)?
+                } else {
+                    // Invalid reply_to, treat as root document
+                    doc_id
+                }
+            } else {
+                // This is a root document - thread_root_id is itself
+                doc_id
+            };
+
+            // Update the document with its thread_root_id
+            conn.execute(
+                "UPDATE documents SET thread_root_id = ?1 WHERE id = ?2",
+                [thread_root_id, doc_id],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn find_thread_root_id(&self, conn: &Connection, mut document_id: i64) -> Result<i64> {
+        let mut visited = std::collections::HashSet::new();
+
+        loop {
+            // Prevent infinite loops
+            if visited.contains(&document_id) {
+                return Ok(document_id);
+            }
+            visited.insert(document_id);
+
+            // Check if this document has a reply_to
+            let reply_to_json: Option<String> = conn
+                .query_row(
+                    "SELECT reply_to FROM documents WHERE id = ?1",
+                    [document_id],
+                    |row| row.get(0),
+                )
+                .optional()?
+                .flatten();
+
+            if let Some(reply_json) = reply_to_json {
+                if let Ok(reply_ref) = serde_json::from_str::<ReplyReference>(&reply_json) {
+                    document_id = reply_ref.document_id;
+                } else {
+                    // Invalid reply_to, this is the root
+                    break;
+                }
+            } else {
+                // No reply_to, this is the root
+                break;
+            }
+        }
+
+        Ok(document_id)
     }
 
     // Post methods
@@ -283,9 +383,25 @@ impl Database {
             None
         };
 
+        // Determine thread_root_id
+        let thread_root_id = if let Some(ref reply_ref) = reply_to {
+            // This is a reply - get the thread_root_id from the parent document
+            tx.query_row(
+                "SELECT thread_root_id FROM documents WHERE id = ?1",
+                [reply_ref.document_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|_| {
+                rusqlite::Error::InvalidColumnName("Parent document not found".to_string())
+            })?
+        } else {
+            // This is a root document - we'll set thread_root_id to document_id after insert
+            -1i64 // Placeholder - will be updated after insert
+        };
+
         // Insert document with empty timestamp_pod and null upvote_count_pod initially
         tx.execute(
-            "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title) VALUES (?1, ?2, ?3, ?4, '', ?5, NULL, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title, thread_root_id) VALUES (?1, ?2, ?3, ?4, '', ?5, NULL, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 content_id_string,
                 post_id,
@@ -297,6 +413,7 @@ impl Database {
                 reply_to_json,
                 requested_post_id,
                 title,
+                thread_root_id,
             ],
         )?;
 
@@ -315,6 +432,14 @@ impl Database {
             "UPDATE documents SET timestamp_pod = ?1 WHERE id = ?2",
             [&timestamp_pod_json, &document_id.to_string()],
         )?;
+
+        // If this is a root document, update thread_root_id to point to itself
+        if thread_root_id == -1 {
+            tx.execute(
+                "UPDATE documents SET thread_root_id = ?1 WHERE id = ?1",
+                [document_id],
+            )?;
+        }
 
         // Update the post's last_edited_at timestamp
         tx.execute(
@@ -948,5 +1073,458 @@ impl Database {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(documents)
+    }
+
+    // Get complete reply tree for a specific document using thread_root_id
+    pub fn get_reply_tree_for_document(
+        &self,
+        document_id: i64,
+    ) -> Result<Option<DocumentReplyTree>> {
+        // First verify the document exists and get its thread_root_id
+        let document_thread_root_id = match self.get_document_thread_root_id(document_id)? {
+            Some(thread_root_id) => thread_root_id,
+            None => return Ok(None), // Document doesn't exist
+        };
+
+        // Get all documents in the same thread using simple query
+        let all_thread_documents = self.get_documents_by_thread_root_id(document_thread_root_id)?;
+
+        // Build the tree structure from the flat list, starting with the requested document
+        self.build_reply_tree_from_documents(all_thread_documents, document_id)
+    }
+
+    // Helper method to get thread_root_id for a document
+    pub fn get_document_thread_root_id(&self, document_id: i64) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT thread_root_id FROM documents WHERE id = ?1",
+            [document_id],
+            |row| row.get(0),
+        )
+        .optional()
+    }
+
+    // Helper method to get all documents in a thread
+    pub fn get_documents_by_thread_root_id(&self, thread_root_id: i64) -> Result<Vec<RawDocument>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, content_id, post_id, revision, created_at, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title, thread_root_id
+             FROM documents WHERE thread_root_id = ?1 ORDER BY created_at ASC",
+        )?;
+
+        let documents = stmt
+            .query_map([thread_root_id], |row| {
+                let tags_json: String = row.get(9)?;
+                let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+                let authors_json: String = row.get(10)?;
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
+
+                Ok(RawDocument {
+                    id: Some(row.get(0)?),
+                    content_id: row.get(1)?,
+                    post_id: row.get(2)?,
+                    revision: row.get(3)?,
+                    created_at: Some(row.get(4)?),
+                    pod: row.get(5)?,
+                    timestamp_pod: row.get(6)?,
+                    uploader_id: row.get(7)?,
+                    upvote_count_pod: row.get(8)?,
+                    tags,
+                    authors,
+                    reply_to,
+                    requested_post_id: row.get(12)?,
+                    title: row.get(13)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(documents)
+    }
+
+    // Helper method to build tree structure from flat list of documents
+    fn build_reply_tree_from_documents(
+        &self,
+        raw_documents: Vec<RawDocument>,
+        requested_document_id: i64,
+    ) -> Result<Option<DocumentReplyTree>> {
+        use std::collections::HashMap;
+
+        if raw_documents.is_empty() {
+            return Ok(None);
+        }
+
+        // Convert raw documents to metadata and organize by ID
+        let mut document_map: HashMap<i64, DocumentMetadata> = HashMap::new();
+        let mut children_map: HashMap<i64, Vec<i64>> = HashMap::new();
+
+        for raw_doc in raw_documents {
+            let doc_id = raw_doc.id.unwrap_or(-1);
+            let metadata = self.raw_document_to_metadata(raw_doc)?;
+
+            document_map.insert(doc_id, metadata.clone());
+
+            // Build parent-child relationships
+            if let Some(ref reply_to) = metadata.reply_to {
+                children_map
+                    .entry(reply_to.document_id)
+                    .or_default()
+                    .push(doc_id);
+            }
+        }
+
+        // Find the requested document to use as root
+        if !document_map.contains_key(&requested_document_id) {
+            return Ok(None);
+        }
+
+        // Recursively build the tree starting from the requested document
+        fn build_tree_node(
+            document_id: i64,
+            document_map: &HashMap<i64, DocumentMetadata>,
+            children_map: &HashMap<i64, Vec<i64>>,
+        ) -> Option<DocumentReplyTree> {
+            let document = document_map.get(&document_id)?.clone();
+            let child_ids = children_map.get(&document_id).cloned().unwrap_or_default();
+
+            let mut replies = Vec::new();
+            for child_id in child_ids {
+                if let Some(child_tree) = build_tree_node(child_id, document_map, children_map) {
+                    replies.push(child_tree);
+                }
+            }
+
+            // Sort replies by creation time
+            replies.sort_by(|a, b| {
+                a.document
+                    .created_at
+                    .as_ref()
+                    .cmp(&b.document.created_at.as_ref())
+            });
+
+            Some(DocumentReplyTree { document, replies })
+        }
+
+        Ok(build_tree_node(
+            requested_document_id,
+            &document_map,
+            &children_map,
+        ))
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::collections::HashSet;
+
+    use pod2::middleware::hash_str;
+
+    use super::*;
+
+    // Test helper functions
+    fn create_test_database() -> Database {
+        // Use in-memory database for testing
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(Database::new(":memory:"))
+            .expect("Failed to create test database")
+    }
+
+    pub fn insert_dummy_document(
+        db: &Database,
+        title: &str,
+        reply_to: Option<ReplyReference>,
+    ) -> i64 {
+        let conn = db.conn.lock().unwrap();
+
+        // Create dummy data
+        let dummy_pod_json = r#"{"mock": "pod"}"#;
+        let dummy_timestamp_pod_json = r#"{"mock": "timestamp_pod"}"#;
+        let content_hash = hash_str(title).encode_hex::<String>();
+        let tags_json = "[]";
+        let authors_json = "[]";
+        let reply_to_json = reply_to.as_ref().map(|r| serde_json::to_string(r).unwrap());
+
+        // Determine thread_root_id
+        let thread_root_id = if let Some(ref reply_ref) = reply_to {
+            // This is a reply - get thread_root_id from parent
+            conn.query_row(
+                "SELECT thread_root_id FROM documents WHERE id = ?1",
+                [reply_ref.document_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(reply_ref.document_id) // Fallback to parent ID if no thread_root_id
+        } else {
+            // This will be a root document - use placeholder, update after insert
+            -1i64
+        };
+
+        // First ensure we have a post
+        conn.execute("INSERT OR IGNORE INTO posts (id) VALUES (1)", [])
+            .unwrap();
+
+        if thread_root_id == -1 {
+            // Root document: insert without thread_root_id first, then update
+            let _result = conn.execute(
+                "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title) 
+                 VALUES (?1, 1, (SELECT COALESCE(MAX(revision), 0) + 1 FROM documents WHERE post_id = 1), ?2, ?3, 'test_user', NULL, ?4, ?5, ?6, NULL, ?7)",
+                (
+                    &content_hash,
+                    dummy_pod_json,
+                    dummy_timestamp_pod_json,
+                    tags_json,
+                    authors_json,
+                    reply_to_json.as_deref(),
+                    title,
+                ),
+            ).unwrap();
+
+            let document_id = conn.last_insert_rowid();
+
+            // Update thread_root_id to point to itself
+            conn.execute(
+                "UPDATE documents SET thread_root_id = ?1 WHERE id = ?1",
+                [document_id],
+            )
+            .unwrap();
+
+            document_id
+        } else {
+            // Reply document: insert with proper thread_root_id
+            let _result = conn.execute(
+                "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title, thread_root_id) 
+                 VALUES (?1, 1, (SELECT COALESCE(MAX(revision), 0) + 1 FROM documents WHERE post_id = 1), ?2, ?3, 'test_user', NULL, ?4, ?5, ?6, NULL, ?7, ?8)",
+                (
+                    &content_hash,
+                    dummy_pod_json,
+                    dummy_timestamp_pod_json,
+                    tags_json,
+                    authors_json,
+                    reply_to_json.as_deref(),
+                    title,
+                    thread_root_id,
+                ),
+            ).unwrap();
+
+            conn.last_insert_rowid()
+        }
+    }
+
+    pub fn create_reply_reference(document_id: i64) -> ReplyReference {
+        ReplyReference {
+            post_id: 1,
+            document_id,
+        }
+    }
+
+    #[test]
+    fn test_single_document_no_replies() {
+        let db = create_test_database();
+        let doc_id = insert_dummy_document(&db, "Root Document", None);
+
+        let tree = db.get_reply_tree_for_document(doc_id).unwrap();
+        assert!(tree.is_some());
+
+        let tree = tree.unwrap();
+        assert_eq!(tree.document.title, "Root Document");
+        assert_eq!(tree.replies.len(), 0);
+    }
+
+    #[test]
+    fn test_linear_reply_chain() {
+        let db = create_test_database();
+
+        // Create: A -> B -> C -> D
+        let doc_a = insert_dummy_document(&db, "Doc A", None);
+        let doc_b = insert_dummy_document(&db, "Doc B", Some(create_reply_reference(doc_a)));
+        let doc_c = insert_dummy_document(&db, "Doc C", Some(create_reply_reference(doc_b)));
+        let _doc_d = insert_dummy_document(&db, "Doc D", Some(create_reply_reference(doc_c)));
+
+        let tree = db.get_reply_tree_for_document(doc_a).unwrap().unwrap();
+
+        // Verify structure: A has 1 reply (B)
+        assert_eq!(tree.document.title, "Doc A");
+        assert_eq!(tree.replies.len(), 1);
+
+        // B has 1 reply (C)
+        let reply_b = &tree.replies[0];
+        assert_eq!(reply_b.document.title, "Doc B");
+        assert_eq!(reply_b.replies.len(), 1);
+
+        // C has 1 reply (D)
+        let reply_c = &reply_b.replies[0];
+        assert_eq!(reply_c.document.title, "Doc C");
+        assert_eq!(reply_c.replies.len(), 1);
+
+        // D has no replies
+        let reply_d = &reply_c.replies[0];
+        assert_eq!(reply_d.document.title, "Doc D");
+        assert_eq!(reply_d.replies.len(), 0);
+    }
+
+    #[test]
+    fn test_branching_reply_tree() {
+        let db = create_test_database();
+
+        // Create: A -> B, C; B -> D, E; C -> F
+        let doc_a = insert_dummy_document(&db, "Doc A", None);
+        let doc_b = insert_dummy_document(&db, "Doc B", Some(create_reply_reference(doc_a)));
+        let doc_c = insert_dummy_document(&db, "Doc C", Some(create_reply_reference(doc_a)));
+        let _doc_d = insert_dummy_document(&db, "Doc D", Some(create_reply_reference(doc_b)));
+        let _doc_e = insert_dummy_document(&db, "Doc E", Some(create_reply_reference(doc_b)));
+        let _doc_f = insert_dummy_document(&db, "Doc F", Some(create_reply_reference(doc_c)));
+
+        let tree = db.get_reply_tree_for_document(doc_a).unwrap().unwrap();
+
+        // A has 2 direct replies (B and C)
+        assert_eq!(tree.document.title, "Doc A");
+        assert_eq!(tree.replies.len(), 2);
+
+        // Find B and C replies (order might vary)
+        let mut reply_b = None;
+        let mut reply_c = None;
+        for reply in &tree.replies {
+            match reply.document.title.as_str() {
+                "Doc B" => reply_b = Some(reply),
+                "Doc C" => reply_c = Some(reply),
+                _ => panic!("Unexpected reply title: {}", reply.document.title),
+            }
+        }
+
+        let reply_b = reply_b.unwrap();
+        let reply_c = reply_c.unwrap();
+
+        // B has 2 replies (D and E)
+        assert_eq!(reply_b.replies.len(), 2);
+        let b_reply_titles: HashSet<_> = reply_b
+            .replies
+            .iter()
+            .map(|r| r.document.title.as_str())
+            .collect();
+        assert!(b_reply_titles.contains("Doc D"));
+        assert!(b_reply_titles.contains("Doc E"));
+
+        // C has 1 reply (F)
+        assert_eq!(reply_c.replies.len(), 1);
+        assert_eq!(reply_c.replies[0].document.title, "Doc F");
+    }
+
+    #[test]
+    fn test_nonexistent_document() {
+        let db = create_test_database();
+        let tree = db.get_reply_tree_for_document(99999).unwrap();
+        assert!(tree.is_none());
+    }
+
+    #[test]
+    fn test_document_with_empty_reply_to() {
+        let db = create_test_database();
+
+        // Create two separate root documents
+        let doc1 = insert_dummy_document(&db, "Root 1", None);
+        let doc2 = insert_dummy_document(&db, "Root 2", None);
+
+        let tree1 = db.get_reply_tree_for_document(doc1).unwrap().unwrap();
+        assert_eq!(tree1.document.title, "Root 1");
+        assert_eq!(tree1.replies.len(), 0);
+
+        let tree2 = db.get_reply_tree_for_document(doc2).unwrap().unwrap();
+        assert_eq!(tree2.document.title, "Root 2");
+        assert_eq!(tree2.replies.len(), 0);
+    }
+
+    #[test]
+    fn test_deep_nesting_within_limit() {
+        let db = create_test_database();
+
+        // Create a chain of 5 documents (within the 10-level limit)
+        let root_id = insert_dummy_document(&db, "Doc 0", None);
+        let mut current_id = root_id;
+
+        for i in 1..=5 {
+            let title = format!("Doc {i}");
+            current_id =
+                insert_dummy_document(&db, &title, Some(create_reply_reference(current_id)));
+        }
+
+        // Should successfully retrieve the entire chain starting from the root
+        let tree = db.get_reply_tree_for_document(root_id).unwrap();
+        assert!(tree.is_some());
+
+        // Walk down the chain to verify depth
+        let mut current_tree = &tree.unwrap();
+        let mut depth = 0;
+
+        loop {
+            depth += 1;
+            if current_tree.replies.is_empty() {
+                break;
+            }
+            current_tree = &current_tree.replies[0];
+        }
+
+        assert_eq!(depth, 6); // 6 total documents in chain (0 through 5)
+    }
+
+    #[test]
+    fn test_mixed_scenario() {
+        let db = create_test_database();
+
+        // Create complex tree: Root -> A, B; A -> A1; B -> B1, B2; B1 -> B1a
+        let root = insert_dummy_document(&db, "Root", None);
+        let doc_a = insert_dummy_document(&db, "A", Some(create_reply_reference(root)));
+        let doc_b = insert_dummy_document(&db, "B", Some(create_reply_reference(root)));
+        let _doc_a1 = insert_dummy_document(&db, "A1", Some(create_reply_reference(doc_a)));
+        let doc_b1 = insert_dummy_document(&db, "B1", Some(create_reply_reference(doc_b)));
+        let _doc_b2 = insert_dummy_document(&db, "B2", Some(create_reply_reference(doc_b)));
+        let _doc_b1a = insert_dummy_document(&db, "B1a", Some(create_reply_reference(doc_b1)));
+
+        let tree = db.get_reply_tree_for_document(root).unwrap().unwrap();
+
+        // Root has 2 replies
+        assert_eq!(tree.replies.len(), 2);
+
+        // Find A and B branches
+        let mut branch_a = None;
+        let mut branch_b = None;
+        for reply in &tree.replies {
+            match reply.document.title.as_str() {
+                "A" => branch_a = Some(reply),
+                "B" => branch_b = Some(reply),
+                _ => panic!("Unexpected reply: {}", reply.document.title),
+            }
+        }
+
+        let branch_a = branch_a.unwrap();
+        let branch_b = branch_b.unwrap();
+
+        // A has 1 reply (A1)
+        assert_eq!(branch_a.replies.len(), 1);
+        assert_eq!(branch_a.replies[0].document.title, "A1");
+        assert_eq!(branch_a.replies[0].replies.len(), 0); // A1 has no replies
+
+        // B has 2 replies (B1, B2)
+        assert_eq!(branch_b.replies.len(), 2);
+
+        // Find B1 and B2
+        let mut reply_b1 = None;
+        let mut reply_b2 = None;
+        for reply in &branch_b.replies {
+            match reply.document.title.as_str() {
+                "B1" => reply_b1 = Some(reply),
+                "B2" => reply_b2 = Some(reply),
+                _ => panic!("Unexpected B reply: {}", reply.document.title),
+            }
+        }
+
+        let reply_b1 = reply_b1.unwrap();
+        let reply_b2 = reply_b2.unwrap();
+
+        // B1 has 1 reply (B1a), B2 has no replies
+        assert_eq!(reply_b1.replies.len(), 1);
+        assert_eq!(reply_b1.replies[0].document.title, "B1a");
+        assert_eq!(reply_b2.replies.len(), 0);
     }
 }
