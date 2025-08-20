@@ -972,45 +972,41 @@ impl Database {
                  ORDER BY d.created_at DESC",
             )?;
 
-            let document_list_items = stmt
-                .query_map([], |row| {
-                    // Parse the same fields as RawDocument
-                    let tags_json: String = row.get(9)?;
-                    let tags: HashSet<String> =
-                        serde_json::from_str(&tags_json).unwrap_or_default();
-                    let authors_json: String = row.get(10)?;
-                    let authors: HashSet<String> =
-                        serde_json::from_str(&authors_json).unwrap_or_default();
-                    let reply_to_json: Option<String> = row.get(11)?;
-                    let reply_to: Option<ReplyReference> =
-                        reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
+            stmt.query_map([], |row| {
+                // Parse the same fields as RawDocument
+                let tags_json: String = row.get(9)?;
+                let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+                let authors_json: String = row.get(10)?;
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
 
-                    // Create RawDocument first
-                    let raw_doc = RawDocument {
-                        id: Some(row.get(0)?),
-                        content_id: row.get(1)?,
-                        post_id: row.get(2)?,
-                        revision: row.get(3)?,
-                        created_at: Some(row.get(4)?),
-                        pod: row.get(5)?,
-                        timestamp_pod: row.get(6)?,
-                        uploader_id: row.get(7)?,
-                        upvote_count_pod: row.get(8)?,
-                        tags,
-                        authors,
-                        reply_to,
-                        requested_post_id: row.get(12)?,
-                        title: row.get(13)?,
-                    };
+                // Create RawDocument first
+                let raw_doc = RawDocument {
+                    id: Some(row.get(0)?),
+                    content_id: row.get(1)?,
+                    post_id: row.get(2)?,
+                    revision: row.get(3)?,
+                    created_at: Some(row.get(4)?),
+                    pod: row.get(5)?,
+                    timestamp_pod: row.get(6)?,
+                    uploader_id: row.get(7)?,
+                    upvote_count_pod: row.get(8)?,
+                    tags,
+                    authors,
+                    reply_to,
+                    requested_post_id: row.get(12)?,
+                    title: row.get(13)?,
+                };
 
-                    let latest_reply_at: Option<String> = row.get(14)?;
-                    let latest_reply_by: Option<String> = row.get(15)?;
+                let latest_reply_at: Option<String> = row.get(14)?;
+                let latest_reply_by: Option<String> = row.get(15)?;
 
-                    Ok((raw_doc, latest_reply_at, latest_reply_by))
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-
-            document_list_items
+                Ok((raw_doc, latest_reply_at, latest_reply_by))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
         };
 
         // Now, outside of the DB lock, convert to DocumentListItem
