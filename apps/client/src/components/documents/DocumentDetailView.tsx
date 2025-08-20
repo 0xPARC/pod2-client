@@ -228,6 +228,7 @@ export function DocumentDetailView({
             documentId={documentId}
             postId={currentDocument.metadata.post_id}
             onNavigateToDocument={onNavigateToDocument}
+            rootPostTitle={currentDocument.metadata.title}
           />
 
           {/* Technical Details - Moved to Bottom */}

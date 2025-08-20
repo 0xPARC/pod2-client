@@ -1266,7 +1266,7 @@ pub mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let temp_dir = std::env::temp_dir().join(format!("podnet_test_storage_{}", timestamp));
+        let temp_dir = std::env::temp_dir().join(format!("podnet_test_storage_{timestamp}"));
         crate::storage::ContentAddressedStorage::new(temp_dir.to_str().unwrap())
             .expect("Failed to create test storage")
     }
@@ -1281,7 +1281,7 @@ pub mod tests {
 
         // Create dummy content and store it
         let content = DocumentContent {
-            message: Some(format!("Test content for {}", title)),
+            message: Some(format!("Test content for {title}")),
             file: None,
             url: None,
         };
