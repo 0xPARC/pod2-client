@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import {
   Document,
-  DocumentMetadata,
+  DocumentReplyTree,
   DocumentVerificationResult,
   fetchDocument,
-  fetchPostReplies,
-  fetchDocumentReplies,
+  fetchDocumentReplyTree,
   getCurrentUsername
 } from "../lib/documentApi";
 
@@ -14,7 +13,7 @@ export interface UseDocumentDataReturn {
   loading: boolean;
   error: string | null;
   verificationResult: DocumentVerificationResult | null;
-  replies: DocumentMetadata[];
+  replyTree: DocumentReplyTree | null;
   repliesLoading: boolean;
   repliesError: string | null;
   currentUsername: string | null;
@@ -23,48 +22,6 @@ export interface UseDocumentDataReturn {
   setVerificationResult: (result: DocumentVerificationResult | null) => void;
   loadDocument: () => Promise<void>;
 }
-
-// Recursively fetch all replies to build complete conversation tree
-const fetchAllRepliesRecursively = async (
-  postId: number,
-  visited: Set<number> = new Set()
-): Promise<DocumentMetadata[]> => {
-  // Get direct replies to this post
-  const directReplies = await fetchPostReplies(postId);
-  const allReplies: DocumentMetadata[] = [...directReplies];
-
-  // For each direct reply, recursively fetch its replies
-  for (const reply of directReplies) {
-    if (!reply.id || visited.has(reply.id)) {
-      continue;
-    }
-
-    visited.add(reply.id);
-
-    try {
-      // Fetch replies to this specific document
-      const nestedReplies = await fetchDocumentReplies(reply.id);
-
-      if (nestedReplies.length > 0) {
-        allReplies.push(...nestedReplies);
-
-        // Recursively fetch replies to nested replies
-        for (const nestedReply of nestedReplies) {
-          if (nestedReply.id && !visited.has(nestedReply.id)) {
-            visited.add(nestedReply.id);
-            const deeperReplies = await fetchDocumentReplies(nestedReply.id);
-            allReplies.push(...deeperReplies);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn(`Failed to fetch replies for document ${reply.id}:`, error);
-      // Continue with other replies even if one fails
-    }
-  }
-
-  return allReplies;
-};
 
 export const useDocumentData = (
   documentId: number,
@@ -76,7 +33,7 @@ export const useDocumentData = (
   const [verificationResult, setVerificationResult] =
     useState<DocumentVerificationResult | null>(null);
   const [upvoteCount, setUpvoteCount] = useState<number>(0);
-  const [replies, setReplies] = useState<DocumentMetadata[]>([]);
+  const [replyTree, setReplyTree] = useState<DocumentReplyTree | null>(null);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
@@ -107,30 +64,14 @@ export const useDocumentData = (
       setRepliesLoading(true);
       setRepliesError(null);
 
-      // Use recursive fetching to get complete conversation tree
-      const allRepliesData = await fetchAllRepliesRecursively(
-        currentDocument.metadata.post_id
-      );
-      setReplies(allRepliesData);
+      // Use new reply tree endpoint for single efficient API call
+      const replyTreeData = await fetchDocumentReplyTree(documentId);
+      setReplyTree(replyTreeData);
     } catch (err) {
-      // Fallback to basic post replies if recursive fails
-      try {
-        console.warn(
-          "Recursive replies failed, falling back to basic post replies:",
-          err
-        );
-        const postRepliesData = await fetchPostReplies(
-          currentDocument.metadata.post_id
-        );
-        setReplies(postRepliesData);
-      } catch (fallbackErr) {
-        console.error("Both recursive and basic replies failed:", fallbackErr);
-        setRepliesError(
-          fallbackErr instanceof Error
-            ? fallbackErr.message
-            : "Failed to load replies"
-        );
-      }
+      console.error("Failed to load reply tree:", err);
+      setRepliesError(
+        err instanceof Error ? err.message : "Failed to load replies"
+      );
     } finally {
       setRepliesLoading(false);
     }
@@ -164,7 +105,7 @@ export const useDocumentData = (
     loading,
     error,
     verificationResult,
-    replies,
+    replyTree,
     repliesLoading,
     repliesError,
     currentUsername,

@@ -1,11 +1,10 @@
 import { AlertCircleIcon, MessageSquareIcon } from "lucide-react";
-import { DocumentMetadata } from "../../lib/documentApi";
-import { buildReplyTree } from "../../lib/replyUtils";
+import { DocumentReplyTree } from "../../lib/documentApi";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { ThreadedReply } from "./ThreadedReply";
+import { DocumentReply } from "./DocumentReply";
 
 interface RepliesSectionProps {
-  replies: DocumentMetadata[];
+  replyTree: DocumentReplyTree | null;
   repliesLoading: boolean;
   repliesError: string | null;
   documentId: number;
@@ -14,21 +13,21 @@ interface RepliesSectionProps {
 }
 
 export function RepliesSection({
-  replies,
+  replyTree,
   repliesLoading,
   repliesError,
   documentId,
   postId,
   onNavigateToDocument
 }: RepliesSectionProps) {
-  const replyTree = buildReplyTree(replies);
+  const replyCount = replyTree?.replies.length || 0;
 
   return (
     <Card className="mb-8">
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <MessageSquareIcon className="h-5 w-5" />
-          Replies to Post #{postId} ({replies.length})
+          Replies to Post #{postId} ({replyCount})
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           Showing replies to all versions of this post
@@ -49,22 +48,23 @@ export function RepliesSection({
           </div>
         )}
 
-        {!repliesLoading && !repliesError && replies.length === 0 && (
+        {!repliesLoading && !repliesError && replyCount === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             <MessageSquareIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
             <p>No replies yet</p>
           </div>
         )}
 
-        {!repliesLoading && !repliesError && replies.length > 0 && (
+        {!repliesLoading && !repliesError && replyCount > 0 && (
           <div className="space-y-4">
-            {replyTree.map((reply) => (
-              <ThreadedReply
-                key={reply.id}
-                reply={reply}
+            {replyTree!.replies.map((reply) => (
+              <DocumentReply
+                key={reply.document.id}
+                replyTree={reply}
                 documentId={documentId}
                 currentDocumentPostId={postId}
                 onNavigateToDocument={onNavigateToDocument}
+                depth={0}
               />
             ))}
           </div>

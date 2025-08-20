@@ -44,7 +44,7 @@ export function DocumentDetailView({
     loading,
     error,
     verificationResult,
-    replies,
+    replyTree,
     repliesLoading,
     repliesError,
     currentUsername,
@@ -222,7 +222,7 @@ export function DocumentDetailView({
 
           {/* Replies Section */}
           <RepliesSection
-            replies={replies}
+            replyTree={replyTree}
             repliesLoading={repliesLoading}
             repliesError={repliesError}
             documentId={documentId}
