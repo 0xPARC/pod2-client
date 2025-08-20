@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Mutex};
 use hex::{FromHex, ToHex};
 use pod2::{frontend::MainPod, middleware::Hash};
 use podnet_models::{
-    Document, DocumentContent, DocumentMetadata, DocumentPods, DocumentReplyTree, IdentityServer,
-    Post, RawDocument, ReplyReference, Upvote, lazy_pod::LazyDeser,
+    Document, DocumentContent, DocumentListItem, DocumentMetadata, DocumentPods, DocumentReplyTree,
+    IdentityServer, Post, RawDocument, ReplyReference, Upvote, lazy_pod::LazyDeser,
 };
 use rusqlite::{Connection, OptionalExtension, Result};
 
@@ -14,12 +14,16 @@ pub struct Database {
 
 impl Database {
     pub async fn new(db_path: &str) -> anyhow::Result<Self> {
-        let conn = Connection::open(db_path)?;
-        let db = Database {
-            conn: Mutex::new(conn),
-        };
-        db.init_tables()?;
-        Ok(db)
+        let db_path = db_path.to_string();
+        tokio::task::spawn_blocking(move || {
+            let conn = Connection::open(&db_path)?;
+            let db = Database {
+                conn: Mutex::new(conn),
+            };
+            db.init_tables()?;
+            Ok(db)
+        })
+        .await?
     }
 
     fn init_tables(&self) -> Result<()> {
@@ -942,6 +946,87 @@ impl Database {
         Ok(documents_metadata)
     }
 
+    // Get top-level documents with latest reply information for list views
+    pub fn get_top_level_documents_with_latest_reply(&self) -> Result<Vec<DocumentListItem>> {
+        // First, query all raw rows while holding the lock
+        let rows: Vec<(RawDocument, Option<String>, Option<String>)> = {
+            let conn = self.conn.lock().unwrap();
+            let mut stmt = conn.prepare(
+                "SELECT 
+                    d.id, d.content_id, d.post_id, d.revision, d.created_at, d.pod, d.timestamp_pod,
+                    d.uploader_id, d.upvote_count_pod, d.tags, d.authors, d.reply_to, d.requested_post_id, d.title,
+                    (
+                        SELECT r.created_at FROM documents r
+                        WHERE r.thread_root_id = d.id AND r.reply_to IS NOT NULL
+                        ORDER BY r.created_at DESC
+                        LIMIT 1
+                    ) AS latest_reply_at,
+                    (
+                        SELECT r.uploader_id FROM documents r
+                        WHERE r.thread_root_id = d.id AND r.reply_to IS NOT NULL
+                        ORDER BY r.created_at DESC
+                        LIMIT 1
+                    ) AS latest_reply_by
+                 FROM documents d
+                 WHERE d.thread_root_id = d.id
+                 ORDER BY d.created_at DESC",
+            )?;
+
+            let document_list_items = stmt
+                .query_map([], |row| {
+                    // Parse the same fields as RawDocument
+                    let tags_json: String = row.get(9)?;
+                    let tags: HashSet<String> =
+                        serde_json::from_str(&tags_json).unwrap_or_default();
+                    let authors_json: String = row.get(10)?;
+                    let authors: HashSet<String> =
+                        serde_json::from_str(&authors_json).unwrap_or_default();
+                    let reply_to_json: Option<String> = row.get(11)?;
+                    let reply_to: Option<ReplyReference> =
+                        reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
+
+                    // Create RawDocument first
+                    let raw_doc = RawDocument {
+                        id: Some(row.get(0)?),
+                        content_id: row.get(1)?,
+                        post_id: row.get(2)?,
+                        revision: row.get(3)?,
+                        created_at: Some(row.get(4)?),
+                        pod: row.get(5)?,
+                        timestamp_pod: row.get(6)?,
+                        uploader_id: row.get(7)?,
+                        upvote_count_pod: row.get(8)?,
+                        tags,
+                        authors,
+                        reply_to,
+                        requested_post_id: row.get(12)?,
+                        title: row.get(13)?,
+                    };
+
+                    let latest_reply_at: Option<String> = row.get(14)?;
+                    let latest_reply_by: Option<String> = row.get(15)?;
+
+                    Ok((raw_doc, latest_reply_at, latest_reply_by))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            document_list_items
+        };
+
+        // Now, outside of the DB lock, convert to DocumentListItem
+        let mut result = Vec::new();
+        for (raw_doc, latest_reply_at, latest_reply_by) in rows {
+            let metadata = self.raw_document_to_metadata(raw_doc)?;
+            result.push(DocumentListItem {
+                metadata,
+                latest_reply_at,
+                latest_reply_by,
+            });
+        }
+
+        Ok(result)
+    }
+
     // Get documents by post ID (metadata only)
     pub fn get_documents_metadata_by_post_id(&self, post_id: i64) -> Result<Vec<DocumentMetadata>> {
         let raw_documents = self.get_documents_by_post_id(post_id)?;
@@ -991,7 +1076,7 @@ impl Database {
             [&document_id.to_string()],
         )?;
 
-        log::info!("Deleted document {document_id} and associated upvotes");
+        tracing::info!("Deleted document {document_id} and associated upvotes");
         Ok(uploader_id)
     }
 

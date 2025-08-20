@@ -57,6 +57,8 @@ export interface DocumentMetadata {
   reply_to?: ReplyReference; // Post and document IDs this replies to
   requested_post_id?: number; // Original post_id from request
   title: string; // Document title
+  latest_reply_at?: string; // Most recent reply timestamp in this thread
+  latest_reply_by?: string; // Username of most recent reply author
 }
 
 /**

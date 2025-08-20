@@ -116,9 +116,12 @@ export function DocumentsView() {
     // Sort
     const sorted = [...filtered].sort((a, b) => {
       if (sortBy === "recent") {
-        // Sort by created_at in reverse chronological order (most recent first)
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
+        // Sort by activity: latest_reply_at OR created_at (most recently active first)
+        const getActivityTime = (doc: DocumentMetadata) => {
+          return doc.latest_reply_at || doc.created_at || "";
+        };
+        const dateA = new Date(getActivityTime(a)).getTime();
+        const dateB = new Date(getActivityTime(b)).getTime();
         return dateB - dateA;
       } else if (sortBy === "upvotes") {
         // Sort by upvote count (highest first)
@@ -427,6 +430,22 @@ export function DocumentsView() {
                         )}
                       </div>
 
+                      {doc.latest_reply_at && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                          <MessageSquareIcon className="h-3 w-3" />
+                          <span>last comment</span>
+                          <span>{formatDate(doc.latest_reply_at)}</span>
+                          {doc.latest_reply_by && (
+                            <>
+                              <span>by</span>
+                              <span className="text-accent-foreground">
+                                {doc.latest_reply_by}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       {/* Tags and authors in compact format */}
                       <div className="flex items-center gap-2 text-xs">
                         {doc.tags.length > 0 && (
@@ -472,12 +491,6 @@ export function DocumentsView() {
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Right side info */}
-                <div className="text-xs text-muted-foreground text-right">
-                  <div>#{doc.id}</div>
-                  <div>r{doc.revision}</div>
                 </div>
               </div>
             ))}

@@ -16,7 +16,7 @@ pub async fn request_identity_challenge(
     };
     use rand::Rng;
 
-    log::info!(
+    tracing::info!(
         "Challenge requested for identity server: {}",
         payload.server_id
     );
@@ -31,12 +31,12 @@ pub async fn request_identity_challenge(
     let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
     let expires_at_str = expires_at.to_rfc3339();
 
-    log::info!(
+    tracing::info!(
         "Generated challenge for {}: {}",
         payload.server_id,
         challenge
     );
-    log::info!("Challenge expires at: {expires_at_str}");
+    tracing::info!("Challenge expires at: {expires_at_str}");
 
     // Create challenge pod signed by server
     let params = Params::default();
@@ -53,11 +53,11 @@ pub async fn request_identity_challenge(
         server_secret_key.0.clone(),
     ));
     let challenge_pod = challenge_builder.sign(&server_signer).map_err(|e| {
-        log::error!("Failed to sign challenge pod: {e}");
+        tracing::error!("Failed to sign challenge pod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    log::info!(
+    tracing::info!(
         "Challenge pod created and signed for identity server: {}",
         payload.server_id
     );
@@ -69,11 +69,11 @@ pub async fn register_identity_server(
     State(state): State<Arc<crate::AppState>>,
     Json(payload): Json<IdentityServerRegistration>,
 ) -> Result<Json<ServerInfo>, StatusCode> {
-    log::info!("Processing identity server registration");
+    tracing::info!("Processing identity server registration");
 
     // 1. Verify the server's challenge pod signature
     payload.server_challenge_pod.verify().map_err(|e| {
-        log::error!("Failed to verify server challenge pod: {e}");
+        tracing::error!("Failed to verify server challenge pod: {e}");
         StatusCode::BAD_REQUEST
     })?;
 
@@ -84,12 +84,12 @@ pub async fn register_identity_server(
         .get("_signer")
         .and_then(|v| v.as_public_key())
         .ok_or_else(|| {
-            log::error!("Server challenge pod missing signer");
+            tracing::error!("Server challenge pod missing signer");
             StatusCode::BAD_REQUEST
         })?;
 
     if *challenge_signer != server_public_key {
-        log::error!("Server challenge pod not signed by this server");
+        tracing::error!("Server challenge pod not signed by this server");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -99,17 +99,17 @@ pub async fn register_identity_server(
         .get("expires_at")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            log::error!("Server challenge pod missing expires_at");
+            tracing::error!("Server challenge pod missing expires_at");
             StatusCode::BAD_REQUEST
         })?;
 
     let expires_at = chrono::DateTime::parse_from_rfc3339(expires_at_str).map_err(|e| {
-        log::error!("Invalid expires_at format: {e}");
+        tracing::error!("Invalid expires_at format: {e}");
         StatusCode::BAD_REQUEST
     })?;
 
     if chrono::Utc::now() > expires_at {
-        log::error!("Challenge has expired");
+        tracing::error!("Challenge has expired");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -119,7 +119,7 @@ pub async fn register_identity_server(
         .get("challenge")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            log::error!("Server challenge pod missing challenge");
+            tracing::error!("Server challenge pod missing challenge");
             StatusCode::BAD_REQUEST
         })?;
 
@@ -128,7 +128,7 @@ pub async fn register_identity_server(
         .get("identity_server_public_key")
         .and_then(|v| v.as_public_key())
         .ok_or_else(|| {
-            log::error!("Server challenge pod missing identity_server_public_key");
+            tracing::error!("Server challenge pod missing identity_server_public_key");
             StatusCode::BAD_REQUEST
         })?;
 
@@ -137,13 +137,13 @@ pub async fn register_identity_server(
         .get("server_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            log::error!("Server challenge pod missing server_id");
+            tracing::error!("Server challenge pod missing server_id");
             StatusCode::BAD_REQUEST
         })?;
 
     // 5. Verify identity server's response pod
     payload.identity_response_pod.verify().map_err(|e| {
-        log::error!("Failed to verify identity response pod: {e}");
+        tracing::error!("Failed to verify identity response pod: {e}");
         StatusCode::BAD_REQUEST
     })?;
 
@@ -153,12 +153,12 @@ pub async fn register_identity_server(
         .get("_signer")
         .and_then(|v| v.as_public_key())
         .ok_or_else(|| {
-            log::error!("Identity response pod missing signer");
+            tracing::error!("Identity response pod missing signer");
             StatusCode::BAD_REQUEST
         })?;
 
     if *response_signer != *identity_server_public_key {
-        log::error!("Identity response pod not signed by expected identity server");
+        tracing::error!("Identity response pod not signed by expected identity server");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -168,12 +168,12 @@ pub async fn register_identity_server(
         .get("challenge")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            log::error!("Identity response pod missing challenge");
+            tracing::error!("Identity response pod missing challenge");
             StatusCode::BAD_REQUEST
         })?;
 
     if response_challenge != challenge {
-        log::error!("Challenge mismatch between server and identity server pods");
+        tracing::error!("Challenge mismatch between server and identity server pods");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -183,38 +183,38 @@ pub async fn register_identity_server(
         .get("server_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            log::error!("Identity response pod missing server_id");
+            tracing::error!("Identity response pod missing server_id");
             StatusCode::BAD_REQUEST
         })?;
 
     if response_server_id != server_id {
-        log::error!("Server ID mismatch between challenge and response pods");
+        tracing::error!("Server ID mismatch between challenge and response pods");
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    log::info!("✓ All verifications passed for identity server: {server_id}");
+    tracing::info!("✓ All verifications passed for identity server: {server_id}");
 
     // Check if identity server already exists
     if let Ok(Some(_)) = state.db.get_identity_server_by_id(server_id) {
-        log::warn!("Identity server {server_id} already exists");
+        tracing::warn!("Identity server {server_id} already exists");
         return Err(StatusCode::CONFLICT);
     }
 
     let pk_string = serde_json::to_string(&identity_server_public_key).map_err(|e| {
-        log::error!("Unable to serialize identity server public key: {e}");
+        tracing::error!("Unable to serialize identity server public key: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     // Store both the server's challenge pod and identity server's response pod
     let challenge_pod_string =
         serde_json::to_string(&payload.server_challenge_pod).map_err(|e| {
-            log::error!("Unable to serialize challenge pod: {e}");
+            tracing::error!("Unable to serialize challenge pod: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let identity_pod_string =
         serde_json::to_string(&payload.identity_response_pod).map_err(|e| {
-            log::error!("Unable to serialize identity pod: {e}");
+            tracing::error!("Unable to serialize identity pod: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -228,11 +228,11 @@ pub async fn register_identity_server(
             &identity_pod_string,
         )
         .map_err(|e| {
-            log::error!("Failed to create identity server {server_id}: {e}");
+            tracing::error!("Failed to create identity server {server_id}: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    log::info!("Identity server {server_id} registered successfully");
+    tracing::info!("Identity server {server_id} registered successfully");
 
     // Return server info
     let server_pk = crate::pod::get_server_public_key();
