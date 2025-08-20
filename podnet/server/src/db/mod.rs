@@ -387,20 +387,22 @@ impl Database {
             None
         };
 
-        // Determine thread_root_id
-        let thread_root_id = if let Some(ref reply_ref) = reply_to {
+        // Determine thread_root_id: use parent's thread root for replies, NULL for roots
+        let thread_root_id: Option<i64> = if let Some(ref reply_ref) = reply_to {
             // This is a reply - get the thread_root_id from the parent document
-            tx.query_row(
-                "SELECT thread_root_id FROM documents WHERE id = ?1",
-                [reply_ref.document_id],
-                |row| row.get::<_, i64>(0),
+            Some(
+                tx.query_row(
+                    "SELECT thread_root_id FROM documents WHERE id = ?1",
+                    [reply_ref.document_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map_err(|_| {
+                    rusqlite::Error::InvalidColumnName("Parent document not found".to_string())
+                })?,
             )
-            .map_err(|_| {
-                rusqlite::Error::InvalidColumnName("Parent document not found".to_string())
-            })?
         } else {
-            // This is a root document - we'll set thread_root_id to document_id after insert
-            -1i64 // Placeholder - will be updated after insert
+            // Root document: set NULL initially to satisfy FK constraint, then update to self
+            None
         };
 
         // Insert document with empty timestamp_pod and null upvote_count_pod initially
@@ -417,7 +419,7 @@ impl Database {
                 reply_to_json,
                 requested_post_id,
                 title,
-                thread_root_id,
+                thread_root_id, // Option<i64> -> NULL for roots, parent thread id for replies
             ],
         )?;
 
@@ -437,8 +439,8 @@ impl Database {
             [&timestamp_pod_json, &document_id.to_string()],
         )?;
 
-        // If this is a root document, update thread_root_id to point to itself
-        if thread_root_id == -1 {
+        // If this is a root document (thread_root_id was NULL), update it to point to itself
+        if thread_root_id.is_none() {
             tx.execute(
                 "UPDATE documents SET thread_root_id = ?1 WHERE id = ?1",
                 [document_id],
