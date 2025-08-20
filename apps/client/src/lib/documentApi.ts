@@ -79,6 +79,15 @@ export interface DocumentVerificationResult {
   verification_errors: string[];
 }
 
+/**
+ * Hierarchical document reply tree structure
+ */
+export interface DocumentReplyTree {
+  document: DocumentMetadata;
+  content: DocumentContent;
+  replies: DocumentReplyTree[];
+}
+
 // =============================================================================
 // Draft Types
 // =============================================================================
@@ -186,53 +195,25 @@ export async function fetchDocument(id: number): Promise<Document> {
 }
 
 /**
- * Fetch replies to a specific document
+ * Fetch hierarchical reply tree for a specific document
  * @param id - The document ID
- * @param serverUrl - Optional server URL (defaults to configuration value)
- * @returns Array of document metadata for replies
+ * @returns Hierarchical document reply tree
  */
-export async function fetchDocumentReplies(
+export async function fetchDocumentReplyTree(
   id: number
-): Promise<DocumentMetadata[]> {
+): Promise<DocumentReplyTree> {
   const serverUrl = await getDocumentServerUrl();
-  const response = await fetch(`${serverUrl}/documents/${id}/replies`);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch replies for document ${id}: ${response.statusText}`
-    );
-  }
-  return response.json();
-}
-
-/**
- * Fetch replies to all versions of a post
- * @param postId - The post ID
- * @param serverUrl - Optional server URL (defaults to localhost:3000)
- * @returns Array of document metadata for replies to any version of the post
- */
-export async function fetchPostReplies(
-  postId: number
-): Promise<DocumentMetadata[]> {
   try {
-    // Since there's no direct post replies endpoint, we'll fetch all documents
-    // and filter for those that reply to any document in this post
-    const allDocuments = await fetchDocuments();
-
-    // Filter documents that have reply_to.post_id matching our postId
-    const postReplies = allDocuments.filter(
-      (doc) => doc.reply_to?.post_id === postId
-    );
-
-    // Sort by creation date (oldest first, like comment threads)
-    return postReplies.sort((a, b) => {
-      const dateA = new Date(a.created_at || 0).getTime();
-      const dateB = new Date(b.created_at || 0).getTime();
-      return dateA - dateB;
-    });
+    const response = await fetch(`${serverUrl}/documents/${id}/reply-tree`);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch reply tree for document ${id}: ${response.statusText}`
+      );
+    }
+    return response.json();
   } catch (error) {
-    throw new Error(
-      `Failed to fetch replies for post ${postId}: ${error instanceof Error ? error.message : String(error)}`
-    );
+    console.error(`[documentApi] Error fetching reply tree:`, error);
+    throw error;
   }
 }
 

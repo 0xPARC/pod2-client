@@ -146,7 +146,8 @@ export interface DocumentsActions {
     editingDraftId?: string,
     contentType?: "document" | "link" | "file",
     replyTo?: string,
-    editDocumentData?: EditDocumentData
+    editDocumentData?: EditDocumentData,
+    initialTitle?: string
   ) => void;
   navigateToDocumentsList: () => void;
   navigateToDebug: () => void;
@@ -438,7 +439,8 @@ export const useAppStore = create<AppStoreState>()(
         editingDraftId?: string,
         contentType?: "document" | "link" | "file",
         replyTo?: string,
-        editDocumentData?: EditDocumentData
+        editDocumentData?: EditDocumentData,
+        initialTitle?: string
       ) => {
         set((state) => {
           const newRoute: DocumentRoute = {
@@ -446,7 +448,8 @@ export const useAppStore = create<AppStoreState>()(
             editingDraftId,
             contentType: contentType || "document", // Default to document if not specified
             replyTo,
-            editDocumentData
+            editDocumentData,
+            title: initialTitle
           };
           const history = state.documents.browsingHistory;
           // Trim forward history

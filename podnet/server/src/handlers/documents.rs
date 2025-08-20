@@ -126,6 +126,24 @@ pub async fn publish_document(
     })?;
     log::info!("✓ Document content validated");
 
+    // Validate reply content restrictions
+    if payload.reply_to.is_some() {
+        // Replies can only be messages, not files or URLs
+        if payload.content.file.is_some() {
+            log::error!("Replies cannot contain file attachments");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if payload.content.url.is_some() {
+            log::error!("Replies cannot contain URLs");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if payload.content.message.is_none() {
+            log::error!("Replies must contain a message");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        log::info!("✓ Reply content restrictions validated");
+    }
+
     // Validate the title
     if payload.title.trim().is_empty() {
         log::error!("Document title cannot be empty");
@@ -429,6 +447,19 @@ pub async fn get_document_replies(
     Ok(Json(replies))
 }
 
+pub async fn get_document_reply_tree(
+    Path(id): Path<i64>,
+    State(state): State<Arc<crate::AppState>>,
+) -> Result<Json<podnet_models::DocumentReplyTree>, StatusCode> {
+    let reply_tree = state
+        .db
+        .get_reply_tree_for_document(id, &state.storage)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(reply_tree))
+}
+
 pub async fn delete_document(
     Path(id): Path<i64>,
     State(state): State<Arc<crate::AppState>>,
@@ -587,4 +618,141 @@ pub async fn delete_document(
         "deleted_by": payload.username,
         "original_uploader": deleted_uploader
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::{extract::Path, http::StatusCode};
+
+    use super::*;
+    use crate::db::Database;
+
+    // Mock AppState for testing
+    async fn create_mock_app_state() -> Arc<crate::AppState> {
+        let db = Arc::new(
+            Database::new(":memory:")
+                .await
+                .expect("Failed to create test database"),
+        );
+
+        // Create minimal storage and config for testing
+        let storage =
+            Arc::new(crate::storage::ContentAddressedStorage::new("/tmp/test_storage").unwrap());
+        let config = crate::config::ServerConfig::load();
+        let pod_config = crate::pod::PodConfig::new(true); // Use mock proofs
+
+        Arc::new(crate::AppState {
+            db,
+            storage,
+            config,
+            pod_config,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_get_document_reply_tree_success() {
+        use crate::db::tests::insert_dummy_document;
+
+        let state = create_mock_app_state().await;
+
+        // Insert a test document using the test helper from db module
+        let doc_id = insert_dummy_document(&state.db, &state.storage, "Test Document", None);
+
+        // Call the handler
+        let result = get_document_reply_tree(Path(doc_id), axum::extract::State(state)).await;
+
+        // Verify success response
+        assert!(result.is_ok());
+        let response = result.unwrap();
+
+        // Extract the tree from the JSON response
+        let tree = response.0;
+        assert_eq!(tree.document.title, "Test Document");
+        assert_eq!(tree.replies.len(), 0); // No replies in this test
+    }
+
+    #[tokio::test]
+    async fn test_get_document_reply_tree_not_found() {
+        let state = create_mock_app_state().await;
+
+        // Call the handler with a non-existent document ID
+        let result = get_document_reply_tree(Path(99999), axum::extract::State(state)).await;
+
+        // Verify 404 response
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_get_document_reply_tree_with_replies() {
+        use crate::db::tests::{create_reply_reference, insert_dummy_document};
+
+        let state = create_mock_app_state().await;
+
+        // Create a document with replies using test helpers
+        let root_id = insert_dummy_document(&state.db, &state.storage, "Root Document", None);
+        let _reply_id = insert_dummy_document(
+            &state.db,
+            &state.storage,
+            "Reply Document",
+            Some(create_reply_reference(root_id)),
+        );
+
+        // Call the handler
+        let result = get_document_reply_tree(Path(root_id), axum::extract::State(state)).await;
+
+        // Verify success response with reply
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        let tree = response.0;
+
+        assert_eq!(tree.document.title, "Root Document");
+        assert_eq!(tree.replies.len(), 1);
+        assert_eq!(tree.replies[0].document.title, "Reply Document");
+    }
+
+    // Test the existing get_document_replies handler for comparison
+    #[tokio::test]
+    async fn test_get_document_replies_success() {
+        use crate::db::tests::{create_reply_reference, insert_dummy_document};
+
+        let state = create_mock_app_state().await;
+
+        // Create a document with replies using test helpers
+        let root_id = insert_dummy_document(&state.db, &state.storage, "Root Document", None);
+        let _reply_id = insert_dummy_document(
+            &state.db,
+            &state.storage,
+            "Reply Document",
+            Some(create_reply_reference(root_id)),
+        );
+
+        // Call the original replies handler
+        let result = get_document_replies(Path(root_id), axum::extract::State(state)).await;
+
+        // Verify success response
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        let replies = response.0;
+
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0].title, "Reply Document");
+    }
+
+    #[tokio::test]
+    async fn test_get_document_replies_not_found() {
+        let state = create_mock_app_state().await;
+
+        // Call with non-existent document - should return empty array, not error
+        let result = get_document_replies(Path(99999), axum::extract::State(state)).await;
+
+        // The existing handler returns empty array for non-existent documents
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        let replies = response.0;
+        assert_eq!(replies.len(), 0);
+    }
 }

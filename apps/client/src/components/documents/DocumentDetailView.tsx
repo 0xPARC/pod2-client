@@ -44,7 +44,7 @@ export function DocumentDetailView({
     loading,
     error,
     verificationResult,
-    replies,
+    replyTree,
     repliesLoading,
     repliesError,
     currentUsername,
@@ -222,12 +222,13 @@ export function DocumentDetailView({
 
           {/* Replies Section */}
           <RepliesSection
-            replies={replies}
+            replyTree={replyTree}
             repliesLoading={repliesLoading}
             repliesError={repliesError}
             documentId={documentId}
             postId={currentDocument.metadata.post_id}
             onNavigateToDocument={onNavigateToDocument}
+            rootPostTitle={currentDocument.metadata.title}
           />
 
           {/* Technical Details - Moved to Bottom */}

@@ -39,7 +39,9 @@ export function PublishDocumentForm({
   } = useDraftAutoSave({ editingDraftId });
 
   // Form state - initialize from loaded draft or defaults
-  const [title, setTitle] = useState(initialContent?.title ?? "");
+  const [title, setTitle] = useState(
+    initialContent?.title ?? currentRoute?.title ?? ""
+  );
   const [titleTouched, setTitleTouched] = useState(false);
   const [message, setMessage] = useState(initialContent?.message ?? "");
   const [tags, setTags] = useState<string[]>(initialContent?.tags ?? []);
@@ -56,8 +58,11 @@ export function PublishDocumentForm({
       setMessage(initialContent.message);
       setTags(initialContent.tags);
       setAuthors(initialContent.authors);
+    } else if (currentRoute?.title && !title) {
+      // If no draft but route has a title (e.g., reply title), use it
+      setTitle(currentRoute.title);
     }
-  }, [initialContent]);
+  }, [initialContent, currentRoute?.title, title]);
 
   // Helper functions that mark content as changed
   const handleTagsChange = (newTags: string[]) => {
