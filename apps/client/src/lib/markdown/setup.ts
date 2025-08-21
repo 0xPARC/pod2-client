@@ -2,6 +2,7 @@ import MarkdownIt from "markdown-it";
 import anchor from "markdown-it-anchor";
 // @ts-expect-error no types
 import taskLists from "@hackmd/markdown-it-task-lists";
+import footnote from "markdown-it-footnote";
 import hljs from "markdown-it-highlightjs";
 import markdownItMathjax from "markdown-it-mathjax3";
 
@@ -41,6 +42,7 @@ export function createBaseMarkdownIt(
       code: true
     })
     .use(taskLists)
+    .use(footnote)
     .use(markdownItMathjax, {
       tex: {
         inlineMath: [

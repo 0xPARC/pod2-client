@@ -7,7 +7,14 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // Exclude worker and non-React markdown utils from React Fast Refresh
+    react({
+      fastRefresh: true,
+      exclude: [/src\/workers\//, /src\/lib\/markdown\//]
+    }),
+    tailwindcss()
+  ],
 
   build: {
     sourcemap: !!process.env.TAURI_ENV_DEBUG
