@@ -989,13 +989,15 @@ impl Database {
     // Get top-level documents with latest reply information for list views
     pub fn get_top_level_documents_with_latest_reply(&self) -> Result<Vec<DocumentListItem>> {
         // Query latest document per root post, capturing both new-model (post-based) and old-model (doc-based) latest reply
-        let rows: Vec<(
+        type Row = (
             RawDocument,
             Option<String>,
             Option<String>,
             Option<String>,
             Option<String>,
-        )> = {
+        );
+
+        let rows: Vec<Row> = {
             let conn = self.conn.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT 
@@ -1168,7 +1170,7 @@ impl Database {
         // Delete documents in this post
         let deleted = conn.execute("DELETE FROM documents WHERE post_id = ?1", [post_id])?;
 
-        Ok(deleted as usize)
+        Ok(deleted)
     }
 
     /// Get uploader username for a document
