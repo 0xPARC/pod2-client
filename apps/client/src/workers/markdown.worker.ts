@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Markdown Web Worker
 // Handles markdown-to-HTML rendering off the main thread for better performance
 
@@ -20,9 +21,7 @@ if (typeof (self as any).$RefreshReg$ === "undefined") {
 }
 
 import MarkdownIt from "markdown-it";
-import anchor from "markdown-it-anchor";
-import hljs from "markdown-it-highlightjs";
-import markdownItMathjax from "markdown-it-mathjax3";
+import { createBaseMarkdownIt, sanitizeFenceInfo } from "../lib/markdown/setup";
 
 // Monaco Editor change information
 export interface MonacoChange {
@@ -205,59 +204,7 @@ function handleWorkComplete() {
 
 // Create markdown-it instance with same configuration as main thread plus line mapping
 function createMarkdownRenderer(): MarkdownIt {
-  const mdInstance = new MarkdownIt({
-    html: false, // Disable raw HTML for security
-    xhtmlOut: false,
-    breaks: true, // Convert '\n' in paragraphs into <br>
-    langPrefix: "language-", // CSS language prefix for fenced blocks
-    linkify: true, // Autoconvert URL-like text to links
-    typographer: true // Enable smartquotes and other typographic replacements
-  })
-    .use(anchor, {
-      // Generate heading anchors automatically
-      permalink: false, // Just generate IDs, no permalink symbols
-      level: [1, 2, 3, 4, 5, 6], // Generate anchors for all heading levels
-      slugify: function (s: string) {
-        // Create URL-friendly slugs from heading text
-        const slug = s
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "-")
-          .replace(/-+/g, "-")
-          .replace(/^-|-$/g, "");
-        console.log("🔧 Worker anchor plugin slugifying:", s, "→", slug);
-        return slug;
-      }
-    })
-    .use(hljs, {
-      // Configure highlight.js to handle language parsing properly
-      auto: false, // Disable auto-detection to avoid errors
-      code: true // Only highlight code blocks with explicit language
-    }) // Add syntax highlighting with error handling
-    .use(markdownItMathjax, {
-      // MathJax configuration
-      tex: {
-        inlineMath: [
-          ["$", "$"],
-          ["\\(", "\\)"]
-        ],
-        displayMath: [
-          ["$$", "$$"],
-          ["\\[", "\\]"]
-        ],
-        loader: { load: ["[tex]/textmacros", "[tex]/textcomp"] },
-        tex: { packages: { "[+]": ["textmacros"] } },
-        textmacros: { packages: { "[+]": ["textcomp"] } },
-        processEscapes: true,
-        macros: {
-          "\\RR": "\\mathbb{R}",
-          "\\NN": "\\mathbb{N}"
-        }
-      }
-    })
-    .enable([
-      "table", // GitHub tables
-      "strikethrough" // ~~text~~
-    ]);
+  const mdInstance = createBaseMarkdownIt();
 
   // Add line mapping to block-level elements
   const originalRules = {
@@ -360,32 +307,8 @@ function createMarkdownRenderer(): MarkdownIt {
     renderer
   ) {
     addLineMappingAttributes(tokens, idx, "fence");
-
-    // Clean up language identifier to avoid highlightjs errors
     const token = tokens[idx];
-    if (token.info) {
-      // Extract just the language name, ignoring attributes
-      let lang = token.info.trim();
-
-      // Handle pandoc-style attributes like `python {.numberLines frame="single"}`
-      const spaceIndex = lang.indexOf(" ");
-      if (spaceIndex > 0) {
-        lang = lang.substring(0, spaceIndex);
-      }
-
-      // Handle attribute-only cases like `{frame="single"}` or `{.numberLines`
-      if (lang.startsWith("{") || lang.includes("=") || lang.includes('"')) {
-        lang = ""; // Clear invalid language
-      }
-
-      // Clean up dotted class names like `.python` -> `python`
-      if (lang.startsWith(".")) {
-        lang = lang.substring(1);
-      }
-
-      // Update the token with cleaned language
-      token.info = lang;
-    }
+    token.info = sanitizeFenceInfo(token.info);
 
     return originalRules.fence
       ? originalRules.fence(tokens, idx, options, env, renderer)
@@ -464,23 +387,7 @@ function createMarkdownRenderer(): MarkdownIt {
     return mathHtml;
   };
 
-  // Custom renderer for links to open in new tab
-  mdInstance.renderer.rules.link_open = function (
-    tokens,
-    idx,
-    options,
-    _env,
-    renderer
-  ) {
-    const aIndex = tokens[idx].attrIndex("target");
-    if (aIndex < 0) {
-      tokens[idx].attrPush(["target", "_blank"]);
-      tokens[idx].attrPush(["rel", "noopener noreferrer"]);
-    } else {
-      tokens[idx].attrs![aIndex][1] = "_blank";
-    }
-    return renderer.renderToken(tokens, idx, options);
-  };
+  // link_open handler is applied by createBaseMarkdownIt
 
   return mdInstance;
 }

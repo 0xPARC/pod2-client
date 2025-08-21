@@ -14,6 +14,7 @@
     "test:ui": "vitest --ui --config vitest.config.ts"
   },
   "dependencies": {
+    "@hackmd/markdown-it-task-lists": "^2.1.4",
     "@monaco-editor/react": "^4.7.0",
     "@pod2/pod2js": "workspace:*",
     "@radix-ui/react-alert-dialog": "^1.1.14",

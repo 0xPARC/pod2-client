@@ -12,6 +12,7 @@ import {
   ItalicIcon,
   LinkIcon,
   ListIcon,
+  ListTodoIcon,
   QuoteIcon,
   SplitIcon
 } from "lucide-react";
@@ -362,6 +363,7 @@ export function MarkdownEditor({
   const handleItalic = () => insertFormatting("*", "*", "italic text");
   const handleLink = () => insertFormatting("[", "](url)", "link text");
   const handleList = () => insertFormatting("- ", "", "list item");
+  const handleTodoItem = () => insertFormatting("- [ ] ", "", "task list item");
   const handleQuote = () => insertFormatting("> ", "", "quote");
   const handleCode = () => insertFormatting("`", "`", "code");
 
@@ -391,6 +393,14 @@ export function MarkdownEditor({
           </Button>
           <Button variant="ghost" size="sm" onClick={handleList} title="List">
             <ListIcon className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleTodoItem}
+            title="Task List"
+          >
+            <ListTodoIcon className="w-4 h-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={handleQuote} title="Quote">
             <QuoteIcon className="w-4 h-4" />

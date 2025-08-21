@@ -30,6 +30,9 @@ importers:
 
   apps/client:
     dependencies:
+      '@hackmd/markdown-it-task-lists':
+        specifier: ^2.1.4
+        version: 2.1.4
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.52.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -556,6 +559,9 @@ packages:
 
   '@floating-ui/utils@0.2.9':
     resolution: {integrity: sha512-MDWhGtE+eHw5JW7lq4qhc5yRLS11ERl1c7Z6Xd0a58DozHES6EnNNwUWbMiG4J9Cgj053Bhk8zvlhFYKVhULwg==}
+
+  '@hackmd/markdown-it-task-lists@2.1.4':
+    resolution: {integrity: sha512-njMloWVihC7a7N4zxczv547bgNxPVG3GBzh6Z6f2xnO8/92JaxTmQuMV7YvaKKkOyhh2RW4RT84uSgax8u4qfQ==}
 
   '@img/sharp-darwin-arm64@0.33.5':
     resolution: {integrity: sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==}
@@ -4122,6 +4128,8 @@ snapshots:
       react-dom: 19.1.0(react@19.1.0)
 
   '@floating-ui/utils@0.2.9': {}
+
+  '@hackmd/markdown-it-task-lists@2.1.4': {}
 
   '@img/sharp-darwin-arm64@0.33.5':
     optionalDependencies:

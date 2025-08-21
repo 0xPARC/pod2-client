@@ -613,6 +613,39 @@ svg {
   .prose hr {
     @apply border-t border-border my-6;
   }
+
+  .prose ul li.task-list-item {
+    @apply list-none;
+    @apply flex items-center;
+  }
+
+  .prose ul li.task-list-item input[type="checkbox"] {
+    @apply mr-2;
+  }
+
+  .prose ul li.task-list-item input[type="checkbox"]:disabled {
+    appearance: none; /* Remove default styling */
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ddd; /* Light border */
+    background-color: #f9f9f9; /* Very light background */
+    border-radius: 2px;
+  }
+
+  .prose ul li.task-list-item input[type="checkbox"]:disabled:checked {
+    background-color: #e0e0e0; /* Light grey when checked */
+    position: relative;
+  }
+
+  /* Add a light checkmark */
+  .prose ul li.task-list-item input[type="checkbox"]:disabled:checked:after {
+    content: "✓";
+    position: absolute;
+    color: #555; /* Light grey checkmark */
+    font-size: 12px;
+    top: -2px;
+    left: 1px;
+  }
 }
 
 kbd {
