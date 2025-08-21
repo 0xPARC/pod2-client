@@ -39,6 +39,29 @@ impl Database {
             [],
         )?;
 
+        // Add thread relationship columns to posts (migration-safe if already exist)
+        let _ = conn.execute(
+            "ALTER TABLE posts ADD COLUMN parent_post_id INTEGER REFERENCES posts(id)",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE posts ADD COLUMN thread_root_post_id INTEGER REFERENCES posts(id)",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE posts ADD COLUMN reply_to_document_id INTEGER REFERENCES documents(id)",
+            [],
+        );
+        // Indexes for thread navigation and activity queries
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_posts_parent_post_id ON posts(parent_post_id)",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_posts_thread_root_post_id ON posts(thread_root_post_id)",
+            [],
+        );
+
         // Create documents table (revisions of posts)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS documents (
@@ -124,6 +147,21 @@ impl Database {
             [],
         )?;
 
+        Ok(())
+    }
+
+    pub fn set_post_thread_links(
+        &self,
+        post_id: i64,
+        parent_post_id: Option<i64>,
+        thread_root_post_id: Option<i64>,
+        reply_to_document_id: Option<i64>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE posts SET parent_post_id = ?1, thread_root_post_id = ?2, reply_to_document_id = ?3 WHERE id = ?4",
+            rusqlite::params![parent_post_id, thread_root_post_id, reply_to_document_id, post_id],
+        )?;
         Ok(())
     }
 
@@ -950,32 +988,51 @@ impl Database {
 
     // Get top-level documents with latest reply information for list views
     pub fn get_top_level_documents_with_latest_reply(&self) -> Result<Vec<DocumentListItem>> {
-        // First, query all raw rows while holding the lock
-        let rows: Vec<(RawDocument, Option<String>, Option<String>)> = {
+        // Query latest document per root post, capturing both new-model (post-based) and old-model (doc-based) latest reply
+        let rows: Vec<(
+            RawDocument,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = {
             let conn = self.conn.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT 
                     d.id, d.content_id, d.post_id, d.revision, d.created_at, d.pod, d.timestamp_pod,
                     d.uploader_id, d.upvote_count_pod, d.tags, d.authors, d.reply_to, d.requested_post_id, d.title,
+                    -- New-model latest reply across descendant posts in this thread
                     (
-                        SELECT r.created_at FROM documents r
-                        WHERE r.thread_root_id = d.id AND r.reply_to IS NOT NULL
-                        ORDER BY r.created_at DESC
-                        LIMIT 1
-                    ) AS latest_reply_at,
+                        SELECT MAX(r.created_at) FROM documents r
+                        WHERE r.post_id IN (
+                            SELECT c.id FROM posts c WHERE c.thread_root_post_id = p.id AND c.parent_post_id IS NOT NULL
+                        )
+                    ) AS latest_reply_at_new,
                     (
                         SELECT r.uploader_id FROM documents r
-                        WHERE r.thread_root_id = d.id AND r.reply_to IS NOT NULL
-                        ORDER BY r.created_at DESC
-                        LIMIT 1
-                    ) AS latest_reply_by
-                 FROM documents d
-                 WHERE d.thread_root_id = d.id
+                        WHERE r.post_id IN (
+                            SELECT c.id FROM posts c WHERE c.thread_root_post_id = p.id AND c.parent_post_id IS NOT NULL
+                        )
+                        ORDER BY r.created_at DESC LIMIT 1
+                    ) AS latest_reply_by_new,
+                    -- Old-model latest reply within the same post using document-level reply_to
+                    (
+                        SELECT MAX(rr.created_at) FROM documents rr WHERE rr.post_id = p.id AND rr.reply_to IS NOT NULL
+                    ) AS latest_reply_at_old,
+                    (
+                        SELECT rr.uploader_id FROM documents rr WHERE rr.post_id = p.id AND rr.reply_to IS NOT NULL
+                        ORDER BY rr.created_at DESC LIMIT 1
+                    ) AS latest_reply_by_old
+                 FROM posts p
+                 JOIN documents d ON d.post_id = p.id AND d.revision = (
+                    SELECT MAX(x.revision) FROM documents x WHERE x.post_id = p.id AND (x.reply_to IS NULL)
+                 )
+                 WHERE p.parent_post_id IS NULL
                  ORDER BY d.created_at DESC",
             )?;
 
             stmt.query_map([], |row| {
-                // Parse the same fields as RawDocument
+                // Parse fields for latest root document
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
@@ -985,7 +1042,6 @@ impl Database {
                 let reply_to: Option<ReplyReference> =
                     reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
 
-                // Create RawDocument first
                 let raw_doc = RawDocument {
                     id: Some(row.get(0)?),
                     content_id: row.get(1)?,
@@ -1003,18 +1059,39 @@ impl Database {
                     title: row.get(13)?,
                 };
 
-                let latest_reply_at: Option<String> = row.get(14)?;
-                let latest_reply_by: Option<String> = row.get(15)?;
+                let latest_reply_at_new: Option<String> = row.get(14)?;
+                let latest_reply_by_new: Option<String> = row.get(15)?;
+                let latest_reply_at_old: Option<String> = row.get(16)?;
+                let latest_reply_by_old: Option<String> = row.get(17)?;
 
-                Ok((raw_doc, latest_reply_at, latest_reply_by))
+                Ok((
+                    raw_doc,
+                    latest_reply_at_new,
+                    latest_reply_by_new,
+                    latest_reply_at_old,
+                    latest_reply_by_old,
+                ))
             })?
             .collect::<Result<Vec<_>, _>>()?
         };
 
-        // Now, outside of the DB lock, convert to DocumentListItem
+        // Now, outside of the DB lock, convert and choose latest between models
         let mut result = Vec::new();
-        for (raw_doc, latest_reply_at, latest_reply_by) in rows {
+        for (raw_doc, at_new, by_new, at_old, by_old) in rows {
             let metadata = self.raw_document_to_metadata(raw_doc)?;
+            let (latest_reply_at, latest_reply_by) = match (at_new.as_ref(), at_old.as_ref()) {
+                (Some(a), Some(b)) => {
+                    if a >= b {
+                        (at_new, by_new)
+                    } else {
+                        (at_old, by_old)
+                    }
+                }
+                (Some(_), None) => (at_new, by_new),
+                (None, Some(_)) => (at_old, by_old),
+                (None, None) => (None, None),
+            };
+
             result.push(DocumentListItem {
                 metadata,
                 latest_reply_at,
@@ -1076,6 +1153,22 @@ impl Database {
 
         tracing::info!("Deleted document {document_id} and associated upvotes");
         Ok(uploader_id)
+    }
+
+    /// Delete all documents in a post. Returns number of deleted documents.
+    pub fn delete_documents_by_post_id(&self, post_id: i64) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+
+        // Delete upvotes for documents in this post
+        conn.execute(
+            "DELETE FROM upvotes WHERE document_id IN (SELECT id FROM documents WHERE post_id = ?1)",
+            [post_id],
+        )?;
+
+        // Delete documents in this post
+        let deleted = conn.execute("DELETE FROM documents WHERE post_id = ?1", [post_id])?;
+
+        Ok(deleted as usize)
     }
 
     /// Get uploader username for a document

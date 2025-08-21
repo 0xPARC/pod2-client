@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
 use pod2::middleware::{
@@ -21,63 +21,63 @@ pub async fn get_documents(
     State(state): State<Arc<crate::AppState>>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    // Extract conditional request header
-    let if_modified_since = headers.get(header::IF_MODIFIED_SINCE);
+    /*    // Extract conditional request header
+        let if_modified_since = headers.get(header::IF_MODIFIED_SINCE);
 
-    // Get the most recent modification time for cache validation
-    let last_modified = state
-        .db
-        .get_most_recent_modification_time()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        // Get the most recent modification time for cache validation
+        let last_modified = state
+            .db
+            .get_most_recent_modification_time()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let mut headers = HeaderMap::new();
+        let mut headers = HeaderMap::new();
 
-    if let Some(last_modified_str) = &last_modified {
-        // Convert SQLite timestamp to HTTP date format
-        if let Ok(last_modified_time) =
-            chrono::NaiveDateTime::parse_from_str(last_modified_str, "%Y-%m-%d %H:%M:%S")
-        {
-            let last_modified_utc: chrono::DateTime<chrono::Utc> =
-                chrono::DateTime::from_naive_utc_and_offset(last_modified_time, chrono::Utc);
-            let http_date = last_modified_utc.to_rfc2822();
-
-            // Set Last-Modified header in proper HTTP date format
-            if let Ok(header_value) = HeaderValue::from_str(&http_date) {
-                headers.insert("last-modified", header_value);
-            }
-        }
-
-        // Check If-Modified-Since header (time-based conditional request)
-        if let Some(if_modified_since_value) = if_modified_since
-            && let Ok(if_modified_since_str) = if_modified_since_value.to_str()
-        {
-            // Parse the last_modified timestamp from SQLite format
+        if let Some(last_modified_str) = &last_modified {
+            // Convert SQLite timestamp to HTTP date format
             if let Ok(last_modified_time) =
                 chrono::NaiveDateTime::parse_from_str(last_modified_str, "%Y-%m-%d %H:%M:%S")
             {
                 let last_modified_utc: chrono::DateTime<chrono::Utc> =
                     chrono::DateTime::from_naive_utc_and_offset(last_modified_time, chrono::Utc);
+                let http_date = last_modified_utc.to_rfc2822();
 
-                // Parse the client's If-Modified-Since header
-                if let Ok(client_time) = chrono::DateTime::parse_from_rfc2822(if_modified_since_str)
+                // Set Last-Modified header in proper HTTP date format
+                if let Ok(header_value) = HeaderValue::from_str(&http_date) {
+                    headers.insert("last-modified", header_value);
+                }
+            }
+
+            // Check If-Modified-Since header (time-based conditional request)
+            if let Some(if_modified_since_value) = if_modified_since
+                && let Ok(if_modified_since_str) = if_modified_since_value.to_str()
+            {
+                // Parse the last_modified timestamp from SQLite format
+                if let Ok(last_modified_time) =
+                    chrono::NaiveDateTime::parse_from_str(last_modified_str, "%Y-%m-%d %H:%M:%S")
                 {
-                    let client_time_utc = client_time.with_timezone(&chrono::Utc);
+                    let last_modified_utc: chrono::DateTime<chrono::Utc> =
+                        chrono::DateTime::from_naive_utc_and_offset(last_modified_time, chrono::Utc);
 
-                    // Compare timestamps - if content hasn't been modified since client's timestamp
-                    let is_modified = last_modified_utc > client_time_utc;
+                    // Parse the client's If-Modified-Since header
+                    if let Ok(client_time) = chrono::DateTime::parse_from_rfc2822(if_modified_since_str)
+                    {
+                        let client_time_utc = client_time.with_timezone(&chrono::Utc);
 
-                    if !is_modified {
-                        // Content not modified, return 304 Not Modified
-                        return Ok(Response::builder()
-                            .status(StatusCode::NOT_MODIFIED)
-                            .body(axum::body::Body::empty())
-                            .unwrap());
+                        // Compare timestamps - if content hasn't been modified since client's timestamp
+                        let is_modified = last_modified_utc > client_time_utc;
+
+                        if !is_modified {
+                            // Content not modified, return 304 Not Modified
+                            return Ok(Response::builder()
+                                .status(StatusCode::NOT_MODIFIED)
+                                .body(axum::body::Body::empty())
+                                .unwrap());
+                        }
                     }
                 }
             }
         }
-    }
-
+    */
     // Content has been modified or no conditional headers, return full response
     // Fetch only top-level documents with latest reply info
     let documents_list = state
@@ -86,9 +86,9 @@ pub async fn get_documents(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Set Cache-Control to allow caching but require validation
-    if let Ok(cache_control) = HeaderValue::from_str("public, max-age=0, must-revalidate") {
+    /*   if let Ok(cache_control) = HeaderValue::from_str("public, max-age=0, must-revalidate") {
         headers.insert("cache-control", cache_control);
-    }
+    } */
 
     Ok((headers, Json(documents_list)).into_response())
 }
@@ -314,8 +314,70 @@ pub async fn publish_document(
 
     // Determine post_id: either create new post or use existing
     tracing::info!("Determining post ID");
-    let final_post_id = if post_id != -1 {
-        tracing::info!("Using existing post ID: {post_id}");
+    // Determine final_post_id with new thread model:
+    // - For replies: always create a new post that replies to the target's post
+    // - For non-replies: use existing post_id for revisions, or create a new root post
+    let final_post_id = if let Some(ref reply_ref) = payload.reply_to {
+        tracing::info!(
+            "Creating new reply post to post {} via document {}",
+            reply_ref.post_id,
+            reply_ref.document_id
+        );
+        // Verify parent target exists and get its metadata
+        let target_doc = state
+            .db
+            .get_document_metadata(reply_ref.document_id)
+            .map_err(|e| {
+                tracing::error!(
+                    "Database error checking reply_to document {}: {e}",
+                    reply_ref.document_id
+                );
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .ok_or_else(|| {
+                tracing::error!("Reply_to document {} not found", reply_ref.document_id);
+                StatusCode::NOT_FOUND
+            })?;
+        if target_doc.post_id != reply_ref.post_id {
+            tracing::error!(
+                "Reply_to post_id {} doesn't match document's actual post_id {}",
+                reply_ref.post_id,
+                target_doc.post_id
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        // Create a new post for the reply
+        let new_post_id = state.db.create_post().map_err(|e| {
+            tracing::error!("Failed to create reply post: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        // Set thread links: parent = target_doc.post_id, thread_root = parent's root or parent, reply_to_document_id = reply_ref.document_id
+        // Try to read parent's thread_root_post_id; if not set, use parent id
+        let parent_post = state
+            .db
+            .get_post(target_doc.post_id)
+            .map_err(|e| {
+                tracing::error!("Failed to read parent post {}: {e}", target_doc.post_id);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .ok_or(StatusCode::NOT_FOUND)?;
+        let thread_root_post_id = parent_post.id.unwrap();
+        state
+            .db
+            .set_post_thread_links(
+                new_post_id,
+                Some(target_doc.post_id),
+                Some(thread_root_post_id),
+                Some(reply_ref.document_id),
+            )
+            .map_err(|e| {
+                tracing::error!("Failed to set thread links for reply post: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        tracing::info!("Reply post created with ID: {new_post_id}");
+        new_post_id
+    } else if post_id != -1 {
+        tracing::info!("Using existing post ID for new revision: {post_id}");
         // Verify the post exists
         state
             .db
@@ -328,15 +390,22 @@ pub async fn publish_document(
                 tracing::error!("Post {post_id} not found");
                 StatusCode::NOT_FOUND
             })?;
-        tracing::info!("Post {post_id} exists");
         post_id
     } else {
-        tracing::info!("Creating new post");
+        tracing::info!("Creating new root post");
         let id = state.db.create_post().map_err(|e| {
             tracing::error!("Failed to create new post: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-        tracing::info!("New post created with ID: {id}");
+        // For root posts, set thread_root_post_id to itself
+        state
+            .db
+            .set_post_thread_links(id, None, Some(id), None)
+            .map_err(|e| {
+                tracing::error!("Failed to set thread links for root post: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        tracing::info!("New root post created with ID: {id}");
         id
     };
 
@@ -604,12 +673,24 @@ pub async fn delete_document(
         payload.document_id
     );
 
-    // Delete the document
-    tracing::info!("Deleting document {id}");
-    let deleted_uploader = state.db.delete_document(id).map_err(|e| {
-        tracing::error!("Failed to delete document {id}: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Delete all documents in this post (temporary behavior)
+    tracing::info!(
+        "Deleting all documents in post {} (requested by delete of document {})",
+        document.metadata.post_id,
+        id
+    );
+    let deleted_uploader = document.metadata.uploader_id.clone();
+    let _deleted_count = state
+        .db
+        .delete_documents_by_post_id(document.metadata.post_id)
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to delete documents for post {}: {}",
+                document.metadata.post_id,
+                e
+            );
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tracing::info!("Document deletion completed successfully for document {id}");
 

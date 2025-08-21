@@ -1,7 +1,7 @@
 procs:
   podnet-server:
     cwd: ./
-    shell: RUST_LOG=trace cargo run --profile release-with-debug -p podnet-server
+    shell: RUST_LOG=info cargo run --profile release-with-debug -p podnet-server
   podnet-identity:
     cwd: ./
     shell: RUST_LOG=info sleep 1 && cargo run --profile release-with-debug -p identity-github
