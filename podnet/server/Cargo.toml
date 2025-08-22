@@ -22,6 +22,9 @@ axum = { version = "0.7", features = ["macros"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs"] }
 rusqlite = { workspace = true, features = ["bundled"] }
+rusqlite_migration = { workspace = true }
+lazy_static = { workspace = true }
+include_dir = { workspace = true }
 pulldown-cmark = "0.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
