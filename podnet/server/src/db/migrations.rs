@@ -168,5 +168,12 @@ lazy_static! {
 
             Ok(())
         }),
+        // V8: user identities table (with unique + index via UNIQUE constraint)
+        M::up(
+            "CREATE TABLE IF NOT EXISTS user_identities (
+                name TEXT PRIMARY KEY,
+                public_key_json TEXT NOT NULL UNIQUE
+            );",
+        ).down("DROP TABLE IF EXISTS user_identities;"),
     ]);
 }

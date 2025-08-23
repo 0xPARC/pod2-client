@@ -563,6 +563,61 @@ impl Database {
         Ok(identity_servers)
     }
 
+    // User identities methods
+    pub fn create_user_identity(&self, name: &str, public_key_json: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO user_identities (name, public_key_json) VALUES (?1, ?2)",
+            [name, public_key_json],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_user_identity_by_name(&self, name: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT public_key_json FROM user_identities WHERE name = ?1",
+            [name],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(pk) => Ok(Some(pk)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn get_user_identity_by_public_key(&self, public_key_json: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT name FROM user_identities WHERE public_key_json = ?1",
+            [public_key_json],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(name) => Ok(Some(name)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn delete_user_identity_by_name(&self, name: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let deleted = conn.execute("DELETE FROM user_identities WHERE name = ?1", [name])? as usize;
+        Ok(deleted)
+    }
+
+    pub fn delete_user_identity_by_public_key(&self, public_key_json: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let deleted = conn.execute(
+            "DELETE FROM user_identities WHERE public_key_json = ?1",
+            [public_key_json],
+        )? as usize;
+        Ok(deleted)
+    }
+
     // Upvote methods
     pub fn create_upvote(&self, document_id: i64, username: &str, pod_json: &str) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
