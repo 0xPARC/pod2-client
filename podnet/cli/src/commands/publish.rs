@@ -209,13 +209,18 @@ pub async fn publish_content(
             .collect(),
     )?;
 
-    let authors_set = Set::new(
-        5,
-        document_authors
-            .iter()
-            .map(|author| Value::from(author.as_str()))
-            .collect(),
-    )?;
+    // Build structured authors dict set for document pod
+    let authors_values: std::collections::HashSet<Value> = document_authors
+        .iter()
+        .map(|author| {
+            let mut m = HashMap::new();
+            m.insert(Key::from("author_type"), Value::from("user"));
+            m.insert(Key::from("username"), Value::from(author.clone()));
+            let dict = Dictionary::new(2, m).unwrap();
+            Value::from(dict)
+        })
+        .collect();
+    let authors_set = Set::new(5, authors_values)?;
 
     // Process reply_to parameter - expect format "post_id:document_id"
     let reply_to_ref: Option<ReplyReference> = if let Some(reply_to_str) = reply_to {
@@ -297,11 +302,16 @@ pub async fn publish_content(
 
     println!("Creating publish request");
     // Create the publish request using the proper struct
+    let authors_vec: Vec<podnet_models::Author> = document_authors
+        .into_iter()
+        .map(|u| podnet_models::Author::User { username: u })
+        .collect();
+
     let publish_request = PublishRequest {
         title: title.to_string(),
         content: document_content,
         tags: document_tags,
-        authors: document_authors,
+        authors: authors_vec,
         reply_to: reply_to_ref,
         post_id: post_id_num,
         username: username.clone(),

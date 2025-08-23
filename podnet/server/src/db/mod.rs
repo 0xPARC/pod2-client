@@ -145,7 +145,7 @@ impl Database {
         pod: &MainPod,
         uploader_id: &str,
         tags: &HashSet<String>,
-        authors: &HashSet<String>,
+        authors: &Vec<podnet_models::Author>,
         reply_to: Option<ReplyReference>,
         requested_post_id: Option<i64>,
         title: &str,
@@ -171,7 +171,7 @@ impl Database {
         let tags_json = serde_json::to_string(tags)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
-        // Serialize authors to JSON
+        // Serialize authors to JSON (structured objects)
         let authors_json = serde_json::to_string(authors)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
@@ -334,7 +334,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -373,7 +373,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -412,7 +412,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -451,7 +451,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -853,7 +853,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -1041,7 +1041,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -1111,7 +1111,7 @@ impl Database {
                 let tags_json: String = row.get(9)?;
                 let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
                 let authors_json: String = row.get(10)?;
-                let authors: HashSet<String> =
+                let authors: Vec<podnet_models::Author> =
                     serde_json::from_str(&authors_json).unwrap_or_default();
                 let reply_to_json: Option<String> = row.get(11)?;
                 let reply_to: Option<ReplyReference> =
@@ -1359,6 +1359,57 @@ pub mod tests {
         ReplyReference {
             post_id: 1,
             document_id,
+        }
+    }
+
+    #[test]
+    fn test_authors_roundtrip_structured() {
+        let db = create_test_database();
+        let storage = create_test_storage();
+
+        // Prepare authors: one user and one github
+        let authors = vec![
+            podnet_models::Author::User {
+                username: "alice".to_string(),
+            },
+            podnet_models::Author::Github {
+                github_username: "octocat".to_string(),
+                github_userid: "12345".to_string(),
+            },
+        ];
+
+        // Insert a minimal document row directly with structured authors JSON
+        let content = DocumentContent {
+            message: Some("Structured authors test".to_string()),
+            file: None,
+            url: None,
+        };
+        let content_hash = storage
+            .store_document_content(&content)
+            .expect("Failed to store content")
+            .encode_hex::<String>();
+
+        let authors_json = serde_json::to_string(&authors).unwrap();
+
+        let conn = db.conn.lock().unwrap();
+        conn.execute("INSERT OR IGNORE INTO posts (id) VALUES (1)", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO documents (content_id, post_id, revision, pod, timestamp_pod, uploader_id, upvote_count_pod, tags, authors, reply_to, requested_post_id, title) VALUES (?1, 1, 1, '{}', '{}', 'alice', NULL, '[]', ?2, NULL, NULL, 'Authors Test')",
+            (&content_hash, &authors_json),
+        )
+        .unwrap();
+        let doc_id = conn.last_insert_rowid();
+
+        let meta = db
+            .get_document_metadata(doc_id)
+            .expect("get_document_metadata failed")
+            .unwrap();
+
+        assert_eq!(meta.authors.len(), 2);
+        match &meta.authors[0] {
+            podnet_models::Author::User { username } => assert_eq!(username, "alice"),
+            _ => panic!("Expected user author"),
         }
     }
 

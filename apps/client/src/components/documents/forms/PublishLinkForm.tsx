@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Author } from "../../../lib/documentApi";
 import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
@@ -7,6 +8,7 @@ import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { PublishButton } from "../PublishButton";
 import { LinkEditor } from "../editors/LinkEditor";
+import { AuthorSelector } from "./AuthorSelector";
 
 interface PublishLinkFormProps {
   onPublishSuccess?: (documentId: number) => void;
@@ -26,7 +28,7 @@ export function PublishLinkForm({
   const [titleTouched, setTitleTouched] = useState(false);
   const [url, setUrl] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [authors, setAuthors] = useState<string[]>([]);
+  const [authors, setAuthors] = useState<Author[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
 
   const getPublishData = () => {
@@ -34,7 +36,12 @@ export function PublishLinkForm({
       title: title.trim(),
       url: url.trim(),
       tags: tags.length > 0 ? tags : undefined,
-      authors: authors.length > 0 ? authors : undefined,
+      authors:
+        authors.length > 0
+          ? authors.map((a) =>
+              a.author_type === "github" ? a.github_username : a.username
+            )
+          : undefined,
       postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
   };
@@ -130,13 +137,10 @@ export function PublishLinkForm({
         />
 
         {/* Authors */}
-        <ChipInput
+        <AuthorSelector
           label="Authors (optional)"
-          placeholder="Add an author..."
-          values={authors}
-          onValuesChange={setAuthors}
-          variant="outline"
-          helpText="If no authors are specified, you will be listed as the default author."
+          value={authors}
+          onChange={setAuthors}
         />
 
         {/* Action Buttons */}

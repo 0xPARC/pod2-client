@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger
 } from "../ui/dropdown-menu";
 import { Input } from "../ui/input";
+import { AuthorName } from "./AuthorName";
 import { HackMDImportDialog } from "./import/HackMDImportDialog";
 
 export function DocumentsView() {
@@ -491,7 +492,7 @@ export function DocumentsView() {
                                 key={index}
                                 className="text-accent-foreground"
                               >
-                                {author}
+                                <AuthorName author={author} />
                                 {index < Math.min(doc.authors.length, 2) - 1 &&
                                   ","}
                               </span>

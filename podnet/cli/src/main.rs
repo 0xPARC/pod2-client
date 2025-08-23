@@ -565,7 +565,17 @@ async fn view_post_in_browser(
         let uploader_username = document.metadata.uploader_id.clone();
         let upvote_count = document.metadata.upvote_count;
         let tags = document.metadata.tags.clone();
-        let authors = document.metadata.authors.clone();
+        let authors: std::collections::HashSet<String> = document
+            .metadata
+            .authors
+            .iter()
+            .map(|a| match a {
+                podnet_models::Author::User { username } => username.clone(),
+                podnet_models::Author::Github {
+                    github_username, ..
+                } => github_username.clone(),
+            })
+            .collect();
 
         // Verify all cryptographic proofs using the new Document.verify() method
         println!("Verifying signatures for revision {revision}...");

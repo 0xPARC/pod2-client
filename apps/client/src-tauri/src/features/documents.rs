@@ -487,14 +487,20 @@ pub async fn publish_document(
     )
     .map_err(|e| format!("Failed to create tag set: {e}"))?;
 
-    let authors_set = Set::new(
-        5,
-        document_authors
-            .iter()
-            .map(|author| Value::from(author.as_str()))
-            .collect(),
-    )
-    .map_err(|e| format!("Failed to create authors set: {e}"))?;
+    // Build structured authors (dicts) for the document pod data
+    let authors_values: std::collections::HashSet<Value> = document_authors
+        .iter()
+        .map(|author| {
+            let mut m = std::collections::HashMap::new();
+            m.insert(Key::from("author_type"), Value::from("user"));
+            m.insert(Key::from("username"), Value::from(author.clone()));
+            let dict =
+                Dictionary::new(2, m).map_err(|e| format!("Failed to build author dict: {e}"))?;
+            Ok::<Value, String>(Value::from(dict))
+        })
+        .collect::<Result<_, _>>()?;
+    let authors_set =
+        Set::new(5, authors_values).map_err(|e| format!("Failed to create authors set: {e}"))?;
 
     // Create reply_to value
     let reply_to_value = if let Some(ref reply_ref) = reply_to {
@@ -595,11 +601,17 @@ pub async fn publish_document(
     }
 
     // Step 8: Create the publish request
+    // Convert to new Author vector for server payload
+    let authors_vec: Vec<podnet_models::Author> = document_authors
+        .into_iter()
+        .map(|u| podnet_models::Author::User { username: u })
+        .collect();
+
     let publish_request = PublishRequest {
         title: title.trim().to_string(),
         content: document_content,
         tags: document_tags,
-        authors: document_authors,
+        authors: authors_vec,
         reply_to,
         post_id, // Use provided post_id for revisions, or None for new documents
         username: username.clone(),

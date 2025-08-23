@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { Author } from "./documentApi";
 import {
   loadEditorContent,
   saveEditorContent
@@ -56,7 +57,7 @@ export interface EditDocumentData {
     url?: string;
   };
   tags: string[];
-  authors: string[];
+  authors: Author[];
   replyTo: string | null;
 }
 

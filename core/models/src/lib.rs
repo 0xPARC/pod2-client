@@ -7,7 +7,7 @@ use lazy_pod::LazyDeser;
 use pod2::{
     backends::plonky2::primitives::ec::curve::Point as PublicKey,
     frontend::{MainPod, SignedPod},
-    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Key, PodType, Value},
+    middleware::{Hash, KEY_SIGNER, KEY_TYPE, Key, PodType, Value, containers::Dictionary},
 };
 use serde::{Deserialize, Serialize};
 
@@ -89,7 +89,7 @@ pub struct RawDocument {
     pub uploader_id: String,              // Username of the uploader
     pub upvote_count_pod: Option<String>, // JSON string of the upvote count main pod
     pub tags: HashSet<String>,            // Set of tags for document organization
-    pub authors: HashSet<String>,         // Set of authors for document attribution
+    pub authors: Vec<Author>,             // Authors for document attribution (typed)
     pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     pub requested_post_id: Option<i64>,   // Original post_id from request used in MainPod proof
     pub title: String,                    // Document title
@@ -145,7 +145,7 @@ pub struct DocumentMetadata {
     pub uploader_id: String,              // Username of the uploader
     pub upvote_count: i64,                // Number of upvotes for this document
     pub tags: HashSet<String>,            // Set of tags for document organization and discovery
-    pub authors: HashSet<String>,         // Set of authors for document attribution
+    pub authors: Vec<Author>,             // Authors for document attribution (typed)
     pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
     /// Original post_id value from the publish request used in the MainPod proof
     /// This may be -1 for new documents, while post_id is the actual assigned ID
@@ -236,17 +236,17 @@ impl Document {
         .map_err(|e| format!("Failed to create tags set: {e:?}"))?;
         data_map.insert(Key::from("tags"), Value::from(tags_set));
 
-        // Convert authors to Set
-        let authors_set = Set::new(
-            5,
-            self.metadata
-                .authors
-                .iter()
-                .map(|author| Value::from(author.clone()))
-                .collect::<HashSet<_>>(),
-        )
-        .map_err(|e| format!("Failed to create authors set: {e:?}"))?;
-        data_map.insert(Key::from("authors"), Value::from(authors_set));
+        // Authors are stored as structured objects now, but we must remain back-compat
+        // Try new shape first (Set<Dict>), and if verification fails later, we'll retry with legacy shape (Set<String>)
+        let authors_as_dicts: HashSet<Value> = self
+            .metadata
+            .authors
+            .iter()
+            .map(|a| a.to_pod_value())
+            .collect();
+        let authors_set_dicts = Set::new(5, authors_as_dicts)
+            .map_err(|e| format!("Failed to create authors set (dicts): {e:?}"))?;
+        data_map.insert(Key::from("authors"), Value::from(authors_set_dicts.clone()));
 
         // Add reply_to (convert ReplyReference to dictionary or use -1 if None)
         if let Some(ref reply_ref) = self.metadata.reply_to {
@@ -267,18 +267,75 @@ impl Document {
             .unwrap_or(self.metadata.post_id);
         data_map.insert(Key::from("post_id"), Value::from(verification_post_id));
 
-        // Create expected data dictionary
-        let expected_data = Dictionary::new(6, data_map)
+        // Create expected data dictionary (dict authors)
+        let expected_data_dict_authors = Dictionary::new(6, data_map)
             .map_err(|e| format!("Failed to create expected data dictionary: {e:?}"))?;
 
         // Use solver-based verification
-        mainpod::publish::verify_publish_verification_with_solver(
+        // Attempt verification with dict authors first
+        let verified = mainpod::publish::verify_publish_verification_with_solver(
             main_pod,
             &self.metadata.uploader_id,
-            &expected_data,
+            &expected_data_dict_authors,
             identity_server_pk,
         )
-        .map_err(|e| format!("Publish verification failed: {e}"))?;
+        .is_ok();
+
+        if !verified {
+            // Fallback: legacy shape Set<String> using only usernames from user authors
+            let legacy_authors: HashSet<Value> = self
+                .metadata
+                .authors
+                .iter()
+                .filter_map(|a| a.legacy_username_value())
+                .collect();
+            let authors_set_strings = Set::new(5, legacy_authors)
+                .map_err(|e| format!("Failed to create legacy authors set: {e:?}"))?;
+
+            // Rebuild expected data with legacy authors
+            let mut data_map_legacy = std::collections::HashMap::new();
+            data_map_legacy.insert(
+                Key::from("content_hash"),
+                Value::from(self.metadata.content_id),
+            );
+            let tags_set = Set::new(
+                5,
+                self.metadata
+                    .tags
+                    .iter()
+                    .map(|tag| Value::from(tag.clone()))
+                    .collect::<HashSet<_>>(),
+            )
+            .map_err(|e| format!("Failed to create tags set: {e:?}"))?;
+            data_map_legacy.insert(Key::from("tags"), Value::from(tags_set));
+            data_map_legacy.insert(Key::from("authors"), Value::from(authors_set_strings));
+            if let Some(ref reply_ref) = self.metadata.reply_to {
+                let mut reply_map = std::collections::HashMap::new();
+                reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+                reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+                let reply_dict = Dictionary::new(2, reply_map)
+                    .map_err(|e| format!("Failed to create reply_to dictionary: {e:?}"))?;
+                data_map_legacy.insert(Key::from("reply_to"), Value::from(reply_dict));
+            } else {
+                data_map_legacy.insert(Key::from("reply_to"), Value::from(-1));
+            }
+            let verification_post_id = self
+                .metadata
+                .requested_post_id
+                .unwrap_or(self.metadata.post_id);
+            data_map_legacy.insert(Key::from("post_id"), Value::from(verification_post_id));
+
+            let expected_data_legacy = Dictionary::new(6, data_map_legacy)
+                .map_err(|e| format!("Failed to create expected data dictionary: {e:?}"))?;
+
+            mainpod::publish::verify_publish_verification_with_solver(
+                main_pod,
+                &self.metadata.uploader_id,
+                &expected_data_legacy,
+                identity_server_pk,
+            )
+            .map_err(|e| format!("Publish verification failed: {e}"))?;
+        }
 
         println!("✓ Publish verification successful");
         Ok(())
@@ -341,15 +398,63 @@ impl Document {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(tag = "author_type")]
+pub enum Author {
+    #[serde(rename = "user")]
+    User { username: String },
+    #[serde(rename = "github")]
+    Github {
+        github_username: String,
+        github_userid: String,
+    },
+}
+
+impl Author {
+    pub fn to_pod_value(&self) -> Value {
+        match self {
+            Author::User { username } => {
+                let mut m = std::collections::HashMap::new();
+                m.insert(Key::from("author_type"), Value::from("user"));
+                m.insert(Key::from("username"), Value::from(username.clone()));
+                Dictionary::new(2, m).map(Value::from).unwrap()
+            }
+            Author::Github {
+                github_username,
+                github_userid,
+            } => {
+                let mut m = std::collections::HashMap::new();
+                m.insert(Key::from("author_type"), Value::from("github"));
+                m.insert(
+                    Key::from("github_username"),
+                    Value::from(github_username.clone()),
+                );
+                m.insert(
+                    Key::from("github_userid"),
+                    Value::from(github_userid.clone()),
+                );
+                Dictionary::new(3, m).map(Value::from).unwrap()
+            }
+        }
+    }
+
+    pub fn legacy_username_value(&self) -> Option<Value> {
+        match self {
+            Author::User { username } => Some(Value::from(username.clone())),
+            Author::Github { .. } => None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PublishRequest {
     pub title: String, // Document title
     pub content: DocumentContent,
-    pub tags: HashSet<String>,    // Set of tags for document organization
-    pub authors: HashSet<String>, // Set of authors for document attribution
+    pub tags: HashSet<String>, // Set of tags for document organization
+    pub authors: Vec<Author>,  // Authors for document attribution (typed)
     pub reply_to: Option<ReplyReference>, // Post and document IDs this document is replying to
-    pub post_id: Option<i64>,     // Post ID (None means create new post)
-    pub username: String,         // Expected username from identity verification
+    pub post_id: Option<i64>,  // Post ID (None means create new post)
+    pub username: String,      // Expected username from identity verification
     /// MainPod that cryptographically proves the user's identity and document authenticity:
     ///
     /// Uses the new solver-based approach with:

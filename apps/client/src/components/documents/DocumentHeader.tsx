@@ -1,10 +1,11 @@
 import { CheckCircleIcon, EditIcon, ReplyIcon, TrashIcon } from "lucide-react";
 import { formatDate } from "../../lib/dateUtils";
-import { Document } from "../../lib/documentApi";
+import { Author, Document } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
 import { TopBarSlot } from "../TopBarContext";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { AuthorName } from "./AuthorName";
 
 interface DocumentHeaderProps {
   currentDocument: Document;
@@ -98,15 +99,19 @@ export function DocumentHeader({
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
               <span>Authors:</span>
               <div className="flex gap-2">
-                {currentDocument.metadata.authors.map((author, index) => (
-                  <Badge
-                    key={index}
-                    variant="secondary"
-                    className="text-xs bg-blue-100 text-blue-800"
-                  >
-                    {author}
-                  </Badge>
-                ))}
+                {currentDocument.metadata.authors.map(
+                  (author: Author, index: number) => {
+                    return (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="text-xs bg-blue-100 text-blue-800"
+                      >
+                        <AuthorName author={author} />
+                      </Badge>
+                    );
+                  }
+                )}
               </div>
             </div>
           )}

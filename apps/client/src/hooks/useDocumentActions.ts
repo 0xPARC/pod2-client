@@ -222,7 +222,12 @@ export const useDocumentActions = (
       title: currentDocument.metadata.title || "",
       content: currentDocument.content,
       tags: currentDocument.metadata.tags,
-      authors: currentDocument.metadata.authors,
+      // For editing UI, flatten Author objects to usernames (github: github_username)
+      authors: currentDocument.metadata.authors.map((a) =>
+        (a as any).author_type === "github"
+          ? (a as any).github_username
+          : (a as any).username
+      ),
       replyTo: currentDocument.metadata.reply_to
         ? formatReplyToId(
             currentDocument.metadata.reply_to.post_id,

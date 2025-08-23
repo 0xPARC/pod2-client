@@ -175,5 +175,107 @@ lazy_static! {
                 public_key_json TEXT NOT NULL UNIQUE
             );",
         ).down("DROP TABLE IF EXISTS user_identities;"),
+        // V9: transform documents.authors from array of strings to array of objects
+        M::up_with_hook("-- V9 transform authors to structured objects", |tx| {
+            // Iterate documents and transform authors JSON if needed
+            let mut stmt = tx.prepare(
+                "SELECT id, authors, uploader_id FROM documents ORDER BY id",
+            )?;
+            let rows = stmt
+                .query_map([], |row| {
+                    let id: i64 = row.get(0)?;
+                    let authors: String = row.get(1)?;
+                    let uploader_id: String = row.get(2)?;
+                    Ok((id, authors, uploader_id))
+                })?
+                .collect::<rusqlite::Result<Vec<_>, _>>()?;
+
+            for (id, authors_json, uploader_id) in rows {
+                // Attempt to parse as array of strings
+                let parsed_strings: serde_json::Result<Vec<String>> = serde_json::from_str(&authors_json);
+                if let Ok(list) = parsed_strings {
+                    // Transform strings -> objects; if empty, default to uploader
+                    let objs: Vec<serde_json::Value> = if list.is_empty() {
+                        vec![serde_json::json!({
+                            "author_type": "user",
+                            "username": uploader_id
+                        })]
+                    } else {
+                        list.into_iter()
+                            .map(|s| serde_json::json!({
+                                "author_type": "user",
+                                "username": s
+                            }))
+                            .collect()
+                    };
+                    let new_json = serde_json::to_string(&objs).unwrap_or_else(|_| "[]".to_string());
+                    tx.execute(
+                        "UPDATE documents SET authors = ?1 WHERE id = ?2",
+                        rusqlite::params![new_json, id],
+                    )?;
+                    continue;
+                }
+
+                // If already array of objects or invalid, leave as-is
+                // But if empty string, set default to uploader
+                if authors_json.trim().is_empty() {
+                    let default_json = serde_json::to_string(&vec![serde_json::json!({
+                        "author_type": "user",
+                        "username": uploader_id
+                    })])
+                    .unwrap();
+                    tx.execute(
+                        "UPDATE documents SET authors = ?1 WHERE id = ?2",
+                        rusqlite::params![default_json, id],
+                    )?;
+                }
+            }
+
+            Ok(())
+        })
+        .down_with_hook("-- V9 down: transform authors back to strings", |tx| {
+            // Convert array of objects back to array of strings (best-effort)
+            let mut stmt = tx.prepare(
+                "SELECT id, authors FROM documents ORDER BY id",
+            )?;
+            let rows = stmt
+                .query_map([], |row| {
+                    let id: i64 = row.get(0)?;
+                    let authors: String = row.get(1)?;
+                    Ok((id, authors))
+                })?
+                .collect::<rusqlite::Result<Vec<_>, _>>()?;
+
+            for (id, authors_json) in rows {
+                let parsed_objs: serde_json::Result<Vec<serde_json::Value>> =
+                    serde_json::from_str(&authors_json);
+                if let Ok(list) = parsed_objs {
+                    let strings: Vec<String> = list
+                        .into_iter()
+                        .filter_map(|v| {
+                            if let Some(t) = v.get("author_type").and_then(|x| x.as_str()) {
+                                match t {
+                                    "user" => v.get("username").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                                    "github" => v
+                                        .get("github_username")
+                                        .and_then(|x| x.as_str())
+                                        .map(|s| s.to_string()),
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let new_json = serde_json::to_string(&strings).unwrap_or_else(|_| "[]".to_string());
+                    tx.execute(
+                        "UPDATE documents SET authors = ?1 WHERE id = ?2",
+                        rusqlite::params![new_json, id],
+                    )?;
+                }
+            }
+
+            Ok(())
+        }),
     ]);
 }

@@ -41,6 +41,10 @@ export interface DocumentPods {
   upvote_count_pod?: MainPod; // MainPod proving upvote count
 }
 
+export type Author =
+  | { author_type: "user"; username: string }
+  | { author_type: "github"; github_username: string; github_userid: string };
+
 /**
  * Lightweight document metadata (without PODs - for listing)
  */
@@ -53,7 +57,7 @@ export interface DocumentMetadata {
   uploader_id: string; // Username of uploader
   upvote_count: number; // Number of upvotes
   tags: string[]; // Tags for organization
-  authors: string[]; // Authors for attribution
+  authors: Author[]; // Authors for attribution
   reply_to?: ReplyReference; // Post and document IDs this replies to
   requested_post_id?: number; // Original post_id from request
   title: string; // Document title

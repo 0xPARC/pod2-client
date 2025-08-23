@@ -1,6 +1,10 @@
 import { Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { fetchDocument, type Document } from "../../../lib/documentApi";
+import {
+  fetchDocument,
+  type Author,
+  type Document
+} from "../../../lib/documentApi";
 import { useDraftAutoSave, type DraftContent } from "../../../lib/drafts";
 import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
@@ -8,6 +12,7 @@ import { InlineChipInput } from "../../ui/inline-chip-input";
 import { ContextPreview } from "../ContextPreview";
 import { PublishButton } from "../PublishButton";
 import { MarkdownEditor } from "../editors/MarkdownEditor";
+import { AuthorSelector } from "./AuthorSelector";
 
 interface PublishDocumentFormProps {
   onPublishSuccess?: (documentId: number) => void;
@@ -45,8 +50,11 @@ export function PublishDocumentForm({
   const [titleTouched, setTitleTouched] = useState(false);
   const [message, setMessage] = useState(initialContent?.message ?? "");
   const [tags, setTags] = useState<string[]>(initialContent?.tags ?? []);
-  const [authors, setAuthors] = useState<string[]>(
-    initialContent?.authors ?? []
+  const [authors, setAuthors] = useState<Author[]>(
+    (initialContent?.authors ?? []).map((u) => ({
+      author_type: "user",
+      username: u
+    }))
   );
   const [replyToDocument, setReplyToDocument] = useState<Document | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
@@ -57,7 +65,12 @@ export function PublishDocumentForm({
       setTitle(initialContent.title);
       setMessage(initialContent.message);
       setTags(initialContent.tags);
-      setAuthors(initialContent.authors);
+      setAuthors(
+        initialContent.authors.map((u) => ({
+          author_type: "user",
+          username: u
+        }))
+      );
     } else if (currentRoute?.title && !title) {
       // If no draft but route has a title (e.g., reply title), use it
       setTitle(currentRoute.title);
@@ -70,7 +83,7 @@ export function PublishDocumentForm({
     markContentChanged();
   };
 
-  const handleAuthorsChange = (newAuthors: string[]) => {
+  const handleAuthorsChange = (newAuthors: Author[]) => {
     setAuthors(newAuthors);
     markContentChanged();
   };
@@ -80,7 +93,9 @@ export function PublishDocumentForm({
     title,
     message,
     tags,
-    authors,
+    authors: authors.map((a) =>
+      a.author_type === "github" ? a.github_username : a.username
+    ),
     replyTo
   });
 
@@ -89,7 +104,13 @@ export function PublishDocumentForm({
       title: title.trim(),
       message: message.trim(),
       tags: tags.length > 0 ? tags : undefined,
-      authors: authors.length > 0 ? authors : undefined,
+      // For now, pass just usernames to Tauri; typed authors will be wired later
+      authors:
+        authors.length > 0
+          ? authors.map((a) =>
+              a.author_type === "github" ? a.github_username : a.username
+            )
+          : undefined,
       replyTo,
       draftId: currentDraftId || editingDraftId, // Pass the draft ID for deletion after publish
       postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
@@ -238,11 +259,10 @@ export function PublishDocumentForm({
         />
 
         {/* Authors Section */}
-        <InlineChipInput
+        <AuthorSelector
           label="Authors"
-          placeholder="Add authors..."
-          values={authors}
-          onValuesChange={handleAuthorsChange}
+          value={authors}
+          onChange={handleAuthorsChange}
         />
 
         {/* Action Buttons */}

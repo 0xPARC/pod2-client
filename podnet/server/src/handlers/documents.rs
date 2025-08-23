@@ -191,22 +191,19 @@ pub async fn publish_document(
         tracing::error!("Failed to create tags set: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    data_map.insert(Key::from("tags"), Value::from(tags_set));
+    data_map.insert(Key::from("tags"), Value::from(tags_set.clone()));
 
-    // Convert authors HashSet to Set
-    let authors_set = Set::new(
-        5,
-        payload
-            .authors
-            .iter()
-            .map(|author| Value::from(author.clone()))
-            .collect(),
-    )
-    .map_err(|e| {
-        tracing::error!("Failed to create authors set: {e:?}");
+    // Authors: prefer structured dicts; fallback to legacy at verification time
+    let authors_values_dicts: std::collections::HashSet<Value> = payload
+        .authors
+        .iter()
+        .map(|a| Value::from(a.to_pod_value()))
+        .collect();
+    let authors_set_dicts = Set::new(5, authors_values_dicts).map_err(|e| {
+        tracing::error!("Failed to create authors set (dicts): {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    data_map.insert(Key::from("authors"), Value::from(authors_set));
+    data_map.insert(Key::from("authors"), Value::from(authors_set_dicts.clone()));
 
     // Add reply_to (convert ReplyReference to dictionary or use -1 if None)
     if let Some(ref reply_ref) = payload.reply_to {
@@ -231,7 +228,7 @@ pub async fn publish_document(
         },
     );
 
-    // Create expected data dictionary
+    // Create expected data dictionary (dict authors)
     let expected_data = Dictionary::new(6, data_map).map_err(|e| {
         tracing::error!("Failed to create expected data dictionary: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -283,11 +280,74 @@ pub async fn publish_document(
                 identity_server_pk = Some(server_pk);
                 break;
             }
-            Err(_) => {
+            Err(e) => {
                 tracing::debug!(
-                    "Verification failed with identity server: {}",
-                    identity_server.server_id
+                    "Verification failed with identity server (dict authors): {}",
+                    e
                 );
+                // Fallback: legacy authors as strings (use only usernames)
+                let legacy_authors: std::collections::HashSet<Value> = payload
+                    .authors
+                    .iter()
+                    .filter_map(|a| a.legacy_username_value())
+                    .collect();
+                let legacy_set = match Set::new(5, legacy_authors) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::error!("Failed to create legacy authors set: {e:?}");
+                        continue;
+                    }
+                };
+                let mut data_map_legacy = std::collections::HashMap::new();
+                data_map_legacy.insert(Key::from("content_hash"), Value::from(stored_content_hash));
+                // rebuild tags and reply_to, post_id
+                data_map_legacy.insert(Key::from("tags"), Value::from(tags_set.clone()));
+                data_map_legacy.insert(Key::from("authors"), Value::from(legacy_set));
+                if let Some(ref reply_ref) = payload.reply_to {
+                    let mut reply_map = std::collections::HashMap::new();
+                    reply_map.insert(Key::from("post_id"), Value::from(reply_ref.post_id));
+                    reply_map.insert(Key::from("document_id"), Value::from(reply_ref.document_id));
+                    let reply_dict = match Dictionary::new(2, reply_map) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            tracing::error!("Failed to create legacy reply_to dictionary: {e:?}");
+                            continue;
+                        }
+                    };
+                    data_map_legacy.insert(Key::from("reply_to"), Value::from(reply_dict));
+                } else {
+                    data_map_legacy.insert(Key::from("reply_to"), Value::from(-1i64));
+                }
+                data_map_legacy.insert(
+                    Key::from("post_id"),
+                    match payload.post_id {
+                        Some(id) => Value::from(id),
+                        None => Value::from(-1i64),
+                    },
+                );
+                let expected_data_legacy = match Dictionary::new(6, data_map_legacy) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::error!("Failed to build legacy expected data: {e:?}");
+                        continue;
+                    }
+                };
+                if verify_publish_verification_with_solver(
+                    &payload.main_pod,
+                    &payload.username,
+                    &expected_data_legacy,
+                    &server_pk_value,
+                )
+                .is_ok()
+                {
+                    tracing::info!(
+                        "✓ Solver verification succeeded with legacy authors shape on identity server: {}",
+                        identity_server.server_id
+                    );
+                    verification_succeeded = true;
+                    identity_server_pk = Some(server_pk);
+                    break;
+                }
                 continue;
             }
         }
