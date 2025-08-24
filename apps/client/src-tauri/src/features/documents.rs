@@ -469,7 +469,7 @@ pub async fn publish_document(
 
     log::info!("Content hash: {content_hash}");
     log::info!("Tags: {document_tags:?}");
-    log::info!("Authors: {:?}", normalized_authors);
+    log::info!("Authors: {normalized_authors:?}");
 
     // Step 5: Create document pod
     let params = Params::default();

@@ -605,7 +605,7 @@ impl Database {
 
     pub fn delete_user_identity_by_name(&self, name: &str) -> Result<usize> {
         let conn = self.conn.lock().unwrap();
-        let deleted = conn.execute("DELETE FROM user_identities WHERE name = ?1", [name])? as usize;
+        let deleted = conn.execute("DELETE FROM user_identities WHERE name = ?1", [name])?;
         Ok(deleted)
     }
 
@@ -614,7 +614,7 @@ impl Database {
         let deleted = conn.execute(
             "DELETE FROM user_identities WHERE public_key_json = ?1",
             [public_key_json],
-        )? as usize;
+        )?;
         Ok(deleted)
     }
 

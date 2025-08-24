@@ -194,11 +194,8 @@ pub async fn publish_document(
     data_map.insert(Key::from("tags"), Value::from(tags_set.clone()));
 
     // Authors: prefer structured dicts; fallback to legacy at verification time
-    let authors_values_dicts: std::collections::HashSet<Value> = payload
-        .authors
-        .iter()
-        .map(|a| Value::from(a.to_pod_value()))
-        .collect();
+    let authors_values_dicts: std::collections::HashSet<Value> =
+        payload.authors.iter().map(|a| a.to_pod_value()).collect();
     let authors_set_dicts = Set::new(5, authors_values_dicts).map_err(|e| {
         tracing::error!("Failed to create authors set (dicts): {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
