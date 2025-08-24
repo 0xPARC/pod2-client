@@ -335,7 +335,7 @@ pub async fn publish_document(
     file: Option<DocumentFile>,
     url: Option<String>,
     tags: Vec<String>,
-    authors: Vec<String>,
+    authors: Vec<podnet_models::Author>,
     reply_to: Option<ReplyReference>,
     server_url: String,
     draft_id: Option<String>, // UUID of draft to delete after successful publish
@@ -453,17 +453,13 @@ pub async fn publish_document(
         .filter(|tag| !tag.is_empty())
         .collect();
 
-    let document_authors: HashSet<String> = if authors.is_empty() {
-        // Default to uploader if no authors provided
-        let mut default_authors = HashSet::new();
-        default_authors.insert(username.clone());
-        default_authors
+    // Normalize authors (typed). Default to uploader if none provided.
+    let normalized_authors: Vec<podnet_models::Author> = if authors.is_empty() {
+        vec![podnet_models::Author::User {
+            username: username.clone(),
+        }]
     } else {
         authors
-            .into_iter()
-            .map(|author| author.trim().to_string())
-            .filter(|author| !author.is_empty())
-            .collect()
     };
 
     // Step 4: Compute content hash from the entire DocumentContent structure
@@ -473,7 +469,7 @@ pub async fn publish_document(
 
     log::info!("Content hash: {content_hash}");
     log::info!("Tags: {document_tags:?}");
-    log::info!("Authors: {document_authors:?}");
+    log::info!("Authors: {:?}", normalized_authors);
 
     // Step 5: Create document pod
     let params = Params::default();
@@ -487,16 +483,36 @@ pub async fn publish_document(
     )
     .map_err(|e| format!("Failed to create tag set: {e}"))?;
 
-    // Build structured authors (dicts) for the document pod data
-    let authors_values: std::collections::HashSet<Value> = document_authors
+    // Build structured authors (dicts) from typed authors
+    let authors_values: std::collections::HashSet<Value> = normalized_authors
         .iter()
-        .map(|author| {
-            let mut m = std::collections::HashMap::new();
-            m.insert(Key::from("author_type"), Value::from("user"));
-            m.insert(Key::from("username"), Value::from(author.clone()));
-            let dict =
-                Dictionary::new(2, m).map_err(|e| format!("Failed to build author dict: {e}"))?;
-            Ok::<Value, String>(Value::from(dict))
+        .map(|a| match a {
+            podnet_models::Author::User { username } => {
+                let mut m = std::collections::HashMap::new();
+                m.insert(Key::from("author_type"), Value::from("user"));
+                m.insert(Key::from("username"), Value::from(username.clone()));
+                let dict = Dictionary::new(2, m)
+                    .map_err(|e| format!("Failed to build author dict: {e}"))?;
+                Ok::<Value, String>(Value::from(dict))
+            }
+            podnet_models::Author::Github {
+                github_username,
+                github_userid,
+            } => {
+                let mut m = std::collections::HashMap::new();
+                m.insert(Key::from("author_type"), Value::from("github"));
+                m.insert(
+                    Key::from("github_username"),
+                    Value::from(github_username.clone()),
+                );
+                m.insert(
+                    Key::from("github_userid"),
+                    Value::from(github_userid.clone()),
+                );
+                let dict = Dictionary::new(3, m)
+                    .map_err(|e| format!("Failed to build github author dict: {e}"))?;
+                Ok::<Value, String>(Value::from(dict))
+            }
         })
         .collect::<Result<_, _>>()?;
     let authors_set =
@@ -515,7 +531,7 @@ pub async fn publish_document(
     };
 
     let data_dict = Dictionary::new(
-        6,
+        params.max_depth_mt_containers,
         HashMap::from([
             (Key::from("authors"), Value::from(authors_set)),
             (Key::from("content_hash"), Value::from(content_hash)),
@@ -602,16 +618,11 @@ pub async fn publish_document(
 
     // Step 8: Create the publish request
     // Convert to new Author vector for server payload
-    let authors_vec: Vec<podnet_models::Author> = document_authors
-        .into_iter()
-        .map(|u| podnet_models::Author::User { username: u })
-        .collect();
-
     let publish_request = PublishRequest {
         title: title.trim().to_string(),
         content: document_content,
         tags: document_tags,
-        authors: authors_vec,
+        authors: normalized_authors,
         reply_to,
         post_id, // Use provided post_id for revisions, or None for new documents
         username: username.clone(),
@@ -834,13 +845,19 @@ pub async fn publish_draft(
     });
 
     // Call the existing publish_document function with draft_id for automatic deletion
+    let authors_typed: Vec<podnet_models::Author> = draft
+        .authors
+        .into_iter()
+        .map(|u| podnet_models::Author::User { username: u })
+        .collect();
+
     publish_document(
         draft.title,
         draft.message,
         file,
         draft.url,
         draft.tags,
-        draft.authors,
+        authors_typed,
         reply_to,
         server_url,
         Some(draft_id), // Pass draft_id for automatic deletion

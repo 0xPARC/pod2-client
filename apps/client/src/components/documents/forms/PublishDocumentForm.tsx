@@ -104,13 +104,7 @@ export function PublishDocumentForm({
       title: title.trim(),
       message: message.trim(),
       tags: tags.length > 0 ? tags : undefined,
-      // For now, pass just usernames to Tauri; typed authors will be wired later
-      authors:
-        authors.length > 0
-          ? authors.map((a) =>
-              a.author_type === "github" ? a.github_username : a.username
-            )
-          : undefined,
+      authors: authors.length > 0 ? authors : undefined,
       replyTo,
       draftId: currentDraftId || editingDraftId, // Pass the draft ID for deletion after publish
       postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)

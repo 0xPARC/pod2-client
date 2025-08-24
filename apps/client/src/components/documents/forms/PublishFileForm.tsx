@@ -36,12 +36,7 @@ export function PublishFileForm({
       title: title.trim(),
       file: file || undefined,
       tags: tags.length > 0 ? tags : undefined,
-      authors:
-        authors.length > 0
-          ? authors.map((a) =>
-              a.author_type === "github" ? a.github_username : a.username
-            )
-          : undefined,
+      authors: authors.length > 0 ? authors : undefined,
       postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
     };
   };

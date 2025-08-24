@@ -3,6 +3,7 @@ import { SendIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
+import type { Author } from "../../lib/documentApi";
 
 function AnimatedDots() {
   const [dotCount, setDotCount] = useState(1);
@@ -33,7 +34,7 @@ interface PublishData {
   file?: File;
   url?: string;
   tags?: string[];
-  authors?: string[];
+  authors?: Author[];
   replyTo?: string;
   draftId?: string; // UUID of draft to delete after successful publish
   postId?: number; // Optional post ID for creating revisions (editing documents)
