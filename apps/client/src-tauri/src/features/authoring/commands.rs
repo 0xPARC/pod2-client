@@ -13,17 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{config::config, AppState};
-
-/// Macro to check if authoring feature is enabled
-macro_rules! check_feature_enabled {
-    () => {
-        if !config().features.authoring {
-            log::warn!("Authoring feature is disabled");
-            return Err("Authoring feature is disabled".to_string());
-        }
-    };
-}
+use crate::AppState;
 
 // =============================================================================
 // Editor Types
@@ -107,7 +97,6 @@ fn lang_error_to_diagnostics(lang_error: &LangError) -> Vec<Diagnostic> {
 pub async fn get_private_key_info(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<serde_json::Value, String> {
-    check_feature_enabled!();
     let app_state = state.lock().await;
 
     store::get_default_private_key_info(&app_state.db)
@@ -153,8 +142,6 @@ pub async fn sign_pod(
 /// Validate Podlang code for syntax and semantic errors
 #[tauri::command]
 pub async fn validate_code_command(code: String) -> Result<ValidateCodeResponse, String> {
-    check_feature_enabled!();
-
     log::debug!(
         "Validating code: {:?}",
         code.chars().take(50).collect::<String>()
@@ -182,8 +169,6 @@ pub async fn execute_code_command(
     code: String,
     mock: bool,
 ) -> Result<ExecuteCodeResponse, String> {
-    check_feature_enabled!();
-
     log::debug!(
         "Executing code (mock: {}): {:?}",
         mock,

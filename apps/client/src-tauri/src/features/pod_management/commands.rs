@@ -9,22 +9,11 @@ use pod2_db::store;
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{config::config, AppState, AppStateData};
-
-/// Macro to check if pod management feature is enabled
-macro_rules! check_feature_enabled {
-    () => {
-        if !config().features.pod_management {
-            log::warn!("Pod management feature is disabled");
-            return Err("Pod management feature is disabled".to_string());
-        }
-    };
-}
+use crate::{AppState, AppStateData};
 
 /// Get the current application state
 #[tauri::command]
 pub async fn get_app_state(state: State<'_, Mutex<AppState>>) -> Result<AppStateData, String> {
-    check_feature_enabled!();
     let app_state = state.lock().await;
     Ok(app_state.state_data.clone())
 }
@@ -32,7 +21,6 @@ pub async fn get_app_state(state: State<'_, Mutex<AppState>>) -> Result<AppState
 /// Trigger a state synchronization
 #[tauri::command]
 pub async fn trigger_sync(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    check_feature_enabled!();
     let mut app_state = state.lock().await;
     app_state.trigger_state_sync().await?;
     Ok(())
@@ -43,7 +31,6 @@ pub async fn trigger_sync(state: State<'_, Mutex<AppState>>) -> Result<(), Strin
 pub async fn list_spaces(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    check_feature_enabled!();
     let app_state = state.lock().await;
 
     let spaces = store::list_spaces(&app_state.db)
@@ -64,7 +51,6 @@ pub async fn import_pod(
     pod_type: String,
     label: Option<String>,
 ) -> Result<(), String> {
-    check_feature_enabled!();
     use pod2_db::store::PodData;
 
     use crate::DEFAULT_SPACE_ID;
@@ -94,7 +80,6 @@ pub async fn delete_pod(
     space_id: String,
     pod_id: String,
 ) -> Result<(), String> {
-    check_feature_enabled!();
     let mut app_state = state.lock().await;
 
     let rows_deleted = store::delete_pod(&app_state.db, &space_id, &pod_id)
@@ -114,7 +99,6 @@ pub async fn delete_pod(
 /// Debug command to insert ZuKYC sample pods
 #[tauri::command]
 pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    check_feature_enabled!();
     use crate::insert_zukyc_pods;
 
     let mut app_state = state.lock().await;
@@ -132,7 +116,6 @@ pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), 
 /// Return pretty-printed Podlang for custom predicates
 #[tauri::command]
 pub async fn pretty_print_custom_predicates(serialized_main_pod: String) -> Result<String, String> {
-    check_feature_enabled!();
     let main_pod: MainPod = serde_json::from_str(&serialized_main_pod).unwrap();
 
     let batches = main_pod

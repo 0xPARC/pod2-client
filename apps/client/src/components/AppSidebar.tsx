@@ -46,8 +46,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { FeatureGate } from "../lib/features/config";
-import { useAppStore, usePodCollection, useDocuments } from "../lib/store";
+import { useAppStore, useDocuments, usePodCollection } from "../lib/store";
 import CreateSignedPodDialog from "./CreateSignedPodDialog";
 import { ImportPodDialog } from "./ImportPodDialog";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
@@ -241,67 +240,63 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <FeatureGate feature="authoring">
-          <SidebarGroup>
-            <SidebarGroupLabel>Authoring</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => {
-                      setActiveApp("pod-editor");
-                    }}
-                    isActive={activeApp === "pod-editor"}
-                  >
-                    <EditIcon />
-                    POD Editor
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <ImportPodDialog
-                    trigger={
-                      <SidebarMenuButton>
-                        <ImportIcon />
-                        Import POD
-                      </SidebarMenuButton>
-                    }
-                  />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setIsCreateSignedPodDialogOpen(true)}
-                  >
-                    <FilePenLineIcon />
-                    Sign POD
-                  </SidebarMenuButton>
-                  <CreateSignedPodDialog
-                    isOpen={isCreateSignedPodDialogOpen}
-                    onOpenChange={setIsCreateSignedPodDialogOpen}
-                  />
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </FeatureGate>
-        <FeatureGate feature="frogcrypto">
-          <SidebarGroup>
-            <SidebarGroupLabel>Extras</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => {
-                      setActiveApp("frogcrypto");
-                    }}
-                    isActive={activeApp === "frogcrypto"}
-                  >
-                    FrogCrypto
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </FeatureGate>
+        <SidebarGroup>
+          <SidebarGroupLabel>Authoring</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setActiveApp("pod-editor");
+                  }}
+                  isActive={activeApp === "pod-editor"}
+                >
+                  <EditIcon />
+                  POD Editor
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <ImportPodDialog
+                  trigger={
+                    <SidebarMenuButton>
+                      <ImportIcon />
+                      Import POD
+                    </SidebarMenuButton>
+                  }
+                />
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setIsCreateSignedPodDialogOpen(true)}
+                >
+                  <FilePenLineIcon />
+                  Sign POD
+                </SidebarMenuButton>
+                <CreateSignedPodDialog
+                  isOpen={isCreateSignedPodDialogOpen}
+                  onOpenChange={setIsCreateSignedPodDialogOpen}
+                />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Extras</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setActiveApp("frogcrypto");
+                  }}
+                  isActive={activeApp === "frogcrypto"}
+                >
+                  FrogCrypto
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         {/* Public Key Display */}

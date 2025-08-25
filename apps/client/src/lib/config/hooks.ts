@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useConfigStore } from "./store";
-import type { AppConfig, FeatureConfig } from "./types";
+import type { AppConfig } from "./types";
 
 /**
  * Hook to initialize config system - should be called once at app level
@@ -19,15 +19,6 @@ export function useConfigInitialization() {
     // No cleanup needed here
   }, [initialize]);
 }
-
-/**
- * Hook for checking if a feature is enabled
- * Component automatically re-renders when feature config changes
- */
-export function useFeature(feature: keyof FeatureConfig): boolean {
-  return useConfigStore((state) => state.config?.features[feature] ?? false);
-}
-
 /**
  * Hook for accessing a specific config section
  * Only re-renders when that specific section changes

@@ -11,7 +11,6 @@ import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
 import { testDeepLink, useDeepLinkManager } from "./lib/deeplink";
-import { FeatureConfigProvider } from "./lib/features/config";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { createShortcut } from "./lib/keyboard/types";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
@@ -147,11 +146,10 @@ function App() {
 
   return (
     <ThemeProvider>
-      <FeatureConfigProvider>
-        <KeyboardProvider>
-          <div className="h-screen overflow-hidden overscroll-none">
-            {/* TODO: Maybe make this MacOS-only? */}
-            {/* <div
+      <KeyboardProvider>
+        <div className="h-screen overflow-hidden overscroll-none">
+          {/* TODO: Maybe make this MacOS-only? */}
+          {/* <div
               data-tauri-drag-region
               className="fixed top-0 left-0 right-0 z-[99]! h-[20px]"
               onDoubleClick={() => {
@@ -159,26 +157,25 @@ function App() {
               }}
             ></div> */}
 
-            <SidebarProvider className="h-screen">
-              <TopBarProvider>
-                <GlobalKeyboardShortcuts />
-                <TopBar />
-                <AppSidebar />
-                <div className="pt-(--top-bar-height) w-full h-full">
-                  <MainContent />
-                </div>
-              </TopBarProvider>
-            </SidebarProvider>
-            <Toaster />
+          <SidebarProvider className="h-screen">
+            <TopBarProvider>
+              <GlobalKeyboardShortcuts />
+              <TopBar />
+              <AppSidebar />
+              <div className="pt-(--top-bar-height) w-full h-full">
+                <MainContent />
+              </div>
+            </TopBarProvider>
+          </SidebarProvider>
+          <Toaster />
 
-            {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
-            <GitHubIdentitySetupModal
-              open={!isSetupCompleted}
-              onComplete={handleSetupComplete}
-            />
-          </div>
-        </KeyboardProvider>
-      </FeatureConfigProvider>
+          {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
+          <GitHubIdentitySetupModal
+            open={!isSetupCompleted}
+            onComplete={handleSetupComplete}
+          />
+        </div>
+      </KeyboardProvider>
     </ThemeProvider>
   );
 }
