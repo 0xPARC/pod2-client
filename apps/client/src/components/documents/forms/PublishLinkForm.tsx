@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useDocuments } from "../../../lib/store";
+import { useState } from "react";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { ChipInput } from "../../ui/chip-input";
@@ -7,27 +6,28 @@ import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { PublishButton } from "../PublishButton";
 import { LinkEditor } from "../editors/LinkEditor";
+import type { EditingDocument } from "../PublishPage";
 
 interface PublishLinkFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
+  editingDocument?: EditingDocument; // For editing existing documents
 }
 
 export function PublishLinkForm({
   onPublishSuccess,
-  onCancel
+  onCancel,
+  editingDocument
 }: PublishLinkFormProps) {
-  const { currentRoute } = useDocuments();
+  const isEditMode = !!editingDocument;
 
-  // Get route-specific edit document data
-  const editDocumentData = currentRoute?.editDocumentData;
-
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(editingDocument?.title ?? "");
   const [titleTouched, setTitleTouched] = useState(false);
-  const [url, setUrl] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [authors, setAuthors] = useState<string[]>([]);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [url, setUrl] = useState(editingDocument?.content.url ?? "");
+  const [tags, setTags] = useState<string[]>(editingDocument?.tags ?? []);
+  const [authors, setAuthors] = useState<string[]>(
+    editingDocument?.authors ?? []
+  );
 
   const getPublishData = () => {
     return {
@@ -35,7 +35,8 @@ export function PublishLinkForm({
       url: url.trim(),
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
-      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
+      replyTo: editingDocument?.replyTo ?? undefined,
+      postId: editingDocument?.postId // Include postId when editing existing document
     };
   };
 
@@ -54,22 +55,7 @@ export function PublishLinkForm({
     }
   };
 
-  // Load existing document data for editing
-  useEffect(() => {
-    if (editDocumentData) {
-      console.log("Loading link edit document data:", editDocumentData);
-      setIsEditMode(true);
-
-      setTitle(editDocumentData.title);
-      setTags(editDocumentData.tags);
-      setAuthors(editDocumentData.authors);
-
-      // Pre-populate the URL from existing document
-      if (editDocumentData.content.url) {
-        setUrl(editDocumentData.content.url);
-      }
-    }
-  }, [editDocumentData]);
+  // No additional effects needed for this form
 
   return (
     <Card className="w-full max-w-4xl">
@@ -79,11 +65,10 @@ export function PublishLinkForm({
             {isEditMode ? "Edit Link" : "Share Link"}
           </CardTitle>
         </div>
-        {isEditMode && editDocumentData?.content.url && (
-          <div className="text-sm text-muted-foreground">
-            Currently editing link:{" "}
-            <span className="font-medium">{editDocumentData.content.url}</span>
-          </div>
+        {isEditMode && (
+          <p className="text-sm text-muted-foreground">
+            Editing: {editingDocument?.title}
+          </p>
         )}
       </CardHeader>
 

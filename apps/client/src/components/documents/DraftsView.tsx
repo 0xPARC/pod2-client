@@ -10,9 +10,9 @@ import {
   Trash2Icon
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { deleteDraft, DraftInfo, listDrafts } from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
 import { formatTimeAgo } from "../../lib/timeUtils";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -27,7 +27,13 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const [publishingDrafts, setPublishingDrafts] = useState<Set<string>>(
     new Set()
   );
-  const { navigateToPublish } = useDocuments();
+  const navigate = useNavigate();
+  const navigateToPublish = (draftId?: string) => {
+    navigate({
+      to: "/documents/publish",
+      search: { draftId }
+    });
+  };
 
   const loadDrafts = async () => {
     try {
@@ -46,8 +52,8 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     loadDrafts();
   }, []);
 
-  // Reload drafts when component mounts (handled by DocumentsApp routing)
-  // This component is now managed by DocumentsApp navigation
+  // Reload drafts when component mounts (handled by TanStack Router)
+  // This component is now managed by TanStack Router navigation
 
   const handleDeleteDraft = async (draftId: string) => {
     try {

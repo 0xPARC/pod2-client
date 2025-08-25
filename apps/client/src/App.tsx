@@ -1,20 +1,20 @@
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
-import { AppSidebar } from "./components/AppSidebar";
-import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
-import { MainContent } from "./components/MainContent";
-import { ThemeProvider } from "./components/theme-provider";
-import { TopBar } from "./components/TopBar";
-import { TopBarProvider } from "./components/TopBarContext";
+import { ThemeProvider } from "./components/core/theme-provider";
+import { TopBar } from "./components/core/TopBar";
+import { TopBarProvider } from "./components/core/TopBarContext";
+import { GitHubIdentitySetupModal } from "./components/identity/GitHubIdentitySetupModal";
 import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
-import { testDeepLink, useDeepLinkManager } from "./lib/deeplink";
+import { testDeepLink } from "./lib/deeplink-simple";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { createShortcut } from "./lib/keyboard/types";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
 import { useAppStore } from "./lib/store";
+import { RouterProvider } from "@tanstack/react-router";
+import { router } from "./lib/router";
 
 // Component that handles global keyboard shortcuts within the sidebar context
 function GlobalKeyboardShortcuts() {
@@ -44,44 +44,16 @@ function App() {
   // Initialize config store
   useConfigInitialization();
 
-  // Initialize deep-link manager with navigation functions
-  const setActiveApp = useAppStore((state) => state.setActiveApp);
-  const navigateToDocumentsList = useAppStore(
-    (state) => state.documentsActions.navigateToDocumentsList
-  );
-  const navigateToDocument = useAppStore(
-    (state) => state.documentsActions.navigateToDocument
-  );
-  const navigateToDrafts = useAppStore(
-    (state) => state.documentsActions.navigateToDrafts
-  );
-  const navigateToPublish = useAppStore(
-    (state) => state.documentsActions.navigateToPublish
-  );
-  const navigateToDebug = useAppStore(
-    (state) => state.documentsActions.navigateToDebug
-  );
+  // Initialize simplified deep-link manager
+  useEffect(() => {
+    const { simpleDeepLinkManager } = require("./lib/deeplink-simple");
+    simpleDeepLinkManager.initialize(router);
+    simpleDeepLinkManager.startListening();
 
-  const navigation = useMemo(
-    () => ({
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
-    }),
-    [
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
-    ]
-  );
-
-  useDeepLinkManager(navigation);
+    return () => {
+      simpleDeepLinkManager.stopListening();
+    };
+  }, [router]);
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
@@ -161,10 +133,8 @@ function App() {
             <TopBarProvider>
               <GlobalKeyboardShortcuts />
               <TopBar />
-              <AppSidebar />
-              <div className="pt-(--top-bar-height) w-full h-full">
-                <MainContent />
-              </div>
+              {/* Router renders AppSidebar + route content via file-based Root route */}
+              <RouterProvider router={router} />
             </TopBarProvider>
           </SidebarProvider>
           <Toaster />

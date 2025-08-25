@@ -8,7 +8,6 @@ interface RepliesSectionProps {
   repliesError: string | null;
   documentId: number;
   postId: number;
-  onNavigateToDocument?: (documentId: number) => void;
   rootPostTitle: string;
 }
 
@@ -18,7 +17,6 @@ export function RepliesSection({
   repliesError,
   documentId,
   postId,
-  onNavigateToDocument,
   rootPostTitle
 }: RepliesSectionProps) {
   const replyCount = replyTree?.replies.length || 0;
@@ -70,7 +68,6 @@ export function RepliesSection({
               replyTree={reply}
               documentId={documentId}
               currentDocumentPostId={postId}
-              onNavigateToDocument={onNavigateToDocument}
               depth={0}
               rootPostTitle={rootPostTitle}
             />

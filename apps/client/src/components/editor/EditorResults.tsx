@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 import { usePodEditor } from "../../lib/store";
-import MainPodCard from "../MainPodCard";
+import MainPodCard from "../core/MainPodCard";
 import { Button } from "../ui/button";
 
 interface EditorResultsProps {

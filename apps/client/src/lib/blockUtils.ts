@@ -24,7 +24,7 @@ export function formatBlockQuotes(selectedBlocks: string[]): string {
 
 // Get block elements from the DOM by their data-block-index attributes
 // Only returns top-level blocks (not nested within other blocks)
-export function getBlockElements(container: HTMLElement): HTMLElement[] {
+function getBlockElements(container: HTMLElement): HTMLElement[] {
   const allBlocks = Array.from(
     container.querySelectorAll("[data-block-index]")
   ) as HTMLElement[];
@@ -45,19 +45,9 @@ export function getBlockElements(container: HTMLElement): HTMLElement[] {
 }
 
 // Get block index from DOM element
-export function getBlockIndex(element: HTMLElement): number {
+function getBlockIndex(element: HTMLElement): number {
   const index = element.getAttribute("data-block-index");
   return index ? parseInt(index, 10) : -1;
-}
-
-// Find block element by index
-export function findBlockByIndex(
-  container: HTMLElement,
-  index: number
-): HTMLElement | null {
-  return container.querySelector(
-    `[data-block-index="${index}"]`
-  ) as HTMLElement | null;
 }
 
 // Get the vertical position information for a block element
@@ -86,17 +76,6 @@ export function getBlockPositions(container: HTMLElement): BlockPosition[] {
     })
     .filter((pos) => pos.index >= 0)
     .sort((a, b) => a.index - b.index);
-}
-
-// Check if two block indices are adjacent
-export function areBlocksAdjacent(indices: number[]): boolean {
-  const sorted = [...indices].sort((a, b) => a - b);
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] - sorted[i - 1] !== 1) {
-      return false;
-    }
-  }
-  return true;
 }
 
 // Group adjacent block indices into ranges

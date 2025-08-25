@@ -688,7 +688,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
               </p>
             ) : (
               <div className="space-y-4">
-                {entries.map((entry, _index) => (
+                {entries.map((entry) => (
                   <div
                     key={entry.id}
                     className="p-3 border rounded-lg shadow-sm bg-background"

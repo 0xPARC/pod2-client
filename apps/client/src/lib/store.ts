@@ -42,38 +42,10 @@ export type MiniApp =
 
 export type FolderFilter = "all" | string; // "all" or specific folder ID
 
-export interface EditDocumentData {
-  documentId: number;
-  postId: number;
-  title: string;
-  content: {
-    message?: string;
-    file?: {
-      name: string;
-      content: number[];
-      mime_type: string;
-    };
-    url?: string;
-  };
-  tags: string[];
-  authors: string[];
-  replyTo: string | null;
-}
-
 // Mini-app state types
 export interface PodCollectionState {
   selectedFolderId: FolderFilter;
   selectedPodId: string | null;
-}
-
-export interface DocumentRoute {
-  type: "documents-list" | "document-detail" | "drafts" | "publish" | "debug";
-  id?: number;
-  title?: string; // Optional document title for navigation display
-  editingDraftId?: string;
-  contentType?: "document" | "link" | "file";
-  replyTo?: string;
-  editDocumentData?: EditDocumentData; // Route-specific document editing data
 }
 
 export interface DocumentInteractionState {
@@ -91,10 +63,6 @@ export interface DocumentInteractionState {
 }
 
 export interface DocumentsState {
-  browsingHistory: {
-    stack: DocumentRoute[];
-    currentIndex: number;
-  };
   searchQuery: string;
   selectedTag: string | null;
   interaction: DocumentInteractionState; // Document viewing interactions
@@ -140,22 +108,8 @@ export interface PodCollectionActions {
 }
 
 export interface DocumentsActions {
-  navigateToDocument: (id: number) => void;
-  navigateToDrafts: () => void;
-  navigateToPublish: (
-    editingDraftId?: string,
-    contentType?: "document" | "link" | "file",
-    replyTo?: string,
-    editDocumentData?: EditDocumentData,
-    initialTitle?: string
-  ) => void;
-  navigateToDocumentsList: () => void;
-  navigateToDebug: () => void;
-  goBack: () => void;
-  goForward: () => void;
   updateSearch: (query: string) => void;
   selectTag: (tag: string | null) => void;
-  updateCurrentRouteTitle: (title: string) => void;
   // Block selection actions (document viewing)
   toggleBlockSelection: (index: number, shiftKey?: boolean) => void;
   clearBlockSelection: () => void;
@@ -233,7 +187,7 @@ interface AppStoreState {
 
   // Derived getters
   getFilteredPods: () => PodInfo[];
-  getPodsInFolder: (folder: String) => PodInfo[];
+  getPodsInFolder: (folder: string) => PodInfo[];
   getSelectedPod: () => PodInfo | null;
   getSelectedFolder: () => string | null;
 }
@@ -270,10 +224,6 @@ export const useAppStore = create<AppStoreState>()(
     },
 
     documents: {
-      browsingHistory: {
-        stack: [{ type: "documents-list" }],
-        currentIndex: 0
-      },
       searchQuery: "",
       selectedTag: null,
       interaction: {
@@ -403,105 +353,6 @@ export const useAppStore = create<AppStoreState>()(
     },
 
     documentsActions: {
-      navigateToDocument: (id: number) => {
-        set((state) => {
-          const newRoute: DocumentRoute = { type: "document-detail", id };
-          const history = state.documents.browsingHistory;
-          // Trim forward history
-          history.stack.splice(history.currentIndex + 1);
-          // Add new route
-          history.stack.push(newRoute);
-          history.currentIndex = history.stack.length - 1;
-
-          // Update viewing document and clear selection if changing documents
-          if (state.documents.interaction.viewingDocumentId !== id) {
-            state.documents.interaction.viewingDocumentId = id;
-            state.documents.interaction.selectedBlockIndices = [];
-            state.documents.interaction.selectedBlockTexts = [];
-            state.documents.interaction.lastSelectedIndex = null;
-          }
-        });
-      },
-
-      navigateToDrafts: () => {
-        set((state) => {
-          const newRoute: DocumentRoute = { type: "drafts" };
-          const history = state.documents.browsingHistory;
-          // Trim forward history
-          history.stack.splice(history.currentIndex + 1);
-          // Add new route
-          history.stack.push(newRoute);
-          history.currentIndex = history.stack.length - 1;
-        });
-      },
-
-      navigateToPublish: (
-        editingDraftId?: string,
-        contentType?: "document" | "link" | "file",
-        replyTo?: string,
-        editDocumentData?: EditDocumentData,
-        initialTitle?: string
-      ) => {
-        set((state) => {
-          const newRoute: DocumentRoute = {
-            type: "publish",
-            editingDraftId,
-            contentType: contentType || "document", // Default to document if not specified
-            replyTo,
-            editDocumentData,
-            title: initialTitle
-          };
-          const history = state.documents.browsingHistory;
-          // Trim forward history
-          history.stack.splice(history.currentIndex + 1);
-          // Add new route
-          history.stack.push(newRoute);
-          history.currentIndex = history.stack.length - 1;
-        });
-      },
-
-      navigateToDocumentsList: () => {
-        set((state) => {
-          const newRoute: DocumentRoute = { type: "documents-list" };
-          const history = state.documents.browsingHistory;
-          // Trim forward history
-          history.stack.splice(history.currentIndex + 1);
-          // Add new route
-          history.stack.push(newRoute);
-          history.currentIndex = history.stack.length - 1;
-        });
-      },
-
-      navigateToDebug: () => {
-        set((state) => {
-          const newRoute: DocumentRoute = { type: "debug" };
-          const history = state.documents.browsingHistory;
-          // Trim forward history
-          history.stack.splice(history.currentIndex + 1);
-          // Add new route
-          history.stack.push(newRoute);
-          history.currentIndex = history.stack.length - 1;
-        });
-      },
-
-      goBack: () => {
-        set((state) => {
-          const history = state.documents.browsingHistory;
-          if (history.currentIndex > 0) {
-            history.currentIndex -= 1;
-          }
-        });
-      },
-
-      goForward: () => {
-        set((state) => {
-          const history = state.documents.browsingHistory;
-          if (history.currentIndex < history.stack.length - 1) {
-            history.currentIndex += 1;
-          }
-        });
-      },
-
       updateSearch: (query: string) => {
         set((state) => {
           state.documents.searchQuery = query;
@@ -511,16 +362,6 @@ export const useAppStore = create<AppStoreState>()(
       selectTag: (tag: string | null) => {
         set((state) => {
           state.documents.selectedTag = tag;
-        });
-      },
-
-      updateCurrentRouteTitle: (title: string) => {
-        set((state) => {
-          const history = state.documents.browsingHistory;
-          const currentRoute = history.stack[history.currentIndex];
-          if (currentRoute && currentRoute.type === "document-detail") {
-            currentRoute.title = title;
-          }
         });
       },
 
@@ -1056,7 +897,7 @@ export const useAppStore = create<AppStoreState>()(
       }
     },
 
-    getPodsInFolder: (folder: String) => {
+    getPodsInFolder: (folder: string) => {
       const { appState } = get();
 
       const pods = [
@@ -1107,14 +948,8 @@ export const useDocuments = () => {
   const documents = useAppStore((state) => state.documents);
   const documentsActions = useAppStore((state) => state.documentsActions);
 
-  // Get current route
-  const currentRoute =
-    documents.browsingHistory.stack[documents.browsingHistory.currentIndex];
-
   return {
     // State
-    browsingHistory: documents.browsingHistory,
-    currentRoute, // Current route with route-specific data
     searchQuery: documents.searchQuery,
     selectedTag: documents.selectedTag,
 
@@ -1130,16 +965,8 @@ export const useDocuments = () => {
     contextDocumentId: documents.interaction.contextDocumentId,
 
     // Actions
-    navigateToDocument: documentsActions.navigateToDocument,
-    navigateToDrafts: documentsActions.navigateToDrafts,
-    navigateToPublish: documentsActions.navigateToPublish,
-    navigateToDocumentsList: documentsActions.navigateToDocumentsList,
-    navigateToDebug: documentsActions.navigateToDebug,
-    goBack: documentsActions.goBack,
-    goForward: documentsActions.goForward,
     updateSearch: documentsActions.updateSearch,
     selectTag: documentsActions.selectTag,
-    updateCurrentRouteTitle: documentsActions.updateCurrentRouteTitle,
 
     // Block selection actions (document viewing)
     toggleBlockSelection: documentsActions.toggleBlockSelection,

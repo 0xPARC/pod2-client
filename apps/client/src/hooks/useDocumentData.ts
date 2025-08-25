@@ -23,10 +23,7 @@ export interface UseDocumentDataReturn {
   loadDocument: () => Promise<void>;
 }
 
-export const useDocumentData = (
-  documentId: number,
-  updateCurrentRouteTitle?: (title: string) => void
-): UseDocumentDataReturn => {
+export const useDocumentData = (documentId: number): UseDocumentDataReturn => {
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +43,7 @@ export const useDocumentData = (
       setCurrentDocument(doc);
       setUpvoteCount(doc.metadata.upvote_count);
 
-      // Update the route title with the document title
-      if (doc.metadata.title && updateCurrentRouteTitle) {
-        updateCurrentRouteTitle(doc.metadata.title);
-      }
+      // Route title is now handled by route loader and breadcrumb system
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load document");
     } finally {

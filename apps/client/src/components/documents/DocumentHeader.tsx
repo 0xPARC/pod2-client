@@ -2,7 +2,7 @@ import { CheckCircleIcon, EditIcon, ReplyIcon, TrashIcon } from "lucide-react";
 import { formatDate } from "../../lib/dateUtils";
 import { Document } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
-import { TopBarSlot } from "../TopBarContext";
+import { TopBarSlot } from "../core/TopBarContext";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 

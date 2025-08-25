@@ -21,7 +21,7 @@ import {
   initializeMonacoWorkers,
   isWorkerSupported
 } from "../../../lib/monacoWorkers";
-import { useTheme } from "../../theme-provider";
+import { useTheme } from "../../core/theme-provider";
 import { Button } from "../../ui/button";
 import { MarkdownPreview } from "../MarkdownPreview";
 import { useMarkdownWorker } from "../useMarkdownWorker";
