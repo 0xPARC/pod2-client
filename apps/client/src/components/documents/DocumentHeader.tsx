@@ -1,4 +1,6 @@
+import { Route } from "@/routes/documents/document/$documentId";
 import { CheckCircleIcon, EditIcon, ReplyIcon, TrashIcon } from "lucide-react";
+import { use } from "react";
 import { formatDate } from "../../lib/dateUtils";
 import { Document } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
@@ -9,7 +11,6 @@ import { Button } from "../ui/button";
 interface DocumentHeaderProps {
   currentDocument: Document;
   upvoteCount: number;
-  currentUsername: string | null;
   isUpvoting: boolean;
   isVerifying: boolean;
   isDeleting: boolean;
@@ -25,7 +26,6 @@ interface DocumentHeaderProps {
 export function DocumentHeader({
   currentDocument,
   upvoteCount,
-  currentUsername,
   isUpvoting,
   isVerifying,
   isDeleting,
@@ -37,6 +37,7 @@ export function DocumentHeader({
   onEdit,
   onDelete
 }: DocumentHeaderProps) {
+  const currentUsername = use(Route.useLoaderData().username);
   const isOwner =
     currentUsername && currentDocument.metadata.uploader_id === currentUsername;
 

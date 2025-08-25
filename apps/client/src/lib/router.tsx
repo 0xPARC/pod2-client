@@ -1,12 +1,20 @@
-import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "@/routeTree.gen";
+import type { QueryClient } from "@tanstack/react-query";
+import { createRouter } from "@tanstack/react-router";
 
-export const router = createRouter({ routeTree });
+export interface RouterContext {
+  queryClient: QueryClient;
+}
 
-// Augment TanStack Router types for our router instance
+export const router = createRouter({
+  routeTree,
+  context: {} as RouterContext
+});
+
 export type AppRouter = typeof router;
 declare module "@tanstack/react-router" {
   interface Register {
     router: AppRouter;
+    context: RouterContext;
   }
 }
