@@ -2,8 +2,12 @@
  * URL generator utilities for creating deep-link URLs
  */
 
-import type { DocumentRoute, MiniApp } from "../store";
-import type { DeepLinkParams, GenerateUrlOptions } from "./types";
+import type { MiniApp } from "../store";
+import type {
+  DeepLinkParams,
+  GenerateUrlOptions,
+  DocumentRoute
+} from "./types";
 
 /**
  * Generate a deep-link URL for a specific mini-app
@@ -100,36 +104,18 @@ export function generateDocumentsUrl(
 }
 
 /**
- * Generate a deep-link URL from current application state
+ * Generate a deep-link URL from current router state
+ * Note: This function now requires router context to work correctly
  */
 export function generateCurrentStateUrl(
   options: GenerateUrlOptions = {}
 ): string {
-  // Import the store dynamically to avoid circular dependencies
-  try {
-    const { useAppStore } = require("../store");
-    const state = useAppStore.getState();
-
-    const app = state.activeApp;
-
-    if (app === "documents") {
-      const documentsState = state.documentsState;
-      const currentRoute =
-        documentsState.browsingHistory.stack[
-          documentsState.browsingHistory.currentIndex
-        ];
-
-      if (currentRoute) {
-        return generateDocumentsUrl(currentRoute, options);
-      }
-    }
-
-    // Fallback to simple app URL for other apps
-    return generateAppUrl(app, options);
-  } catch (error) {
-    console.error("Failed to generate URL from current state:", error);
-    return generateAppUrl("documents", options);
-  }
+  // Since we've migrated to TanStack Router, this function would need
+  // router context to determine the current route. For now, return a
+  // fallback URL. This function should be called from a component with
+  // router context if specific route mapping is needed.
+  console.warn("generateCurrentStateUrl: Router-based implementation needed");
+  return generateAppUrl("documents", options);
 }
 
 /**

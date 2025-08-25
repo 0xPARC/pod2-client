@@ -45,8 +45,9 @@ import {
   SettingsIcon
 } from "lucide-react";
 import { useState } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useAppStore, useDocuments, usePodCollection } from "../../lib/store";
+import { useAppStore, usePodCollection } from "../../lib/store";
 import CreateSignedPodDialog from "../CreateSignedPodDialog";
 import { ImportPodDialog } from "../ImportPodDialog";
 import {
@@ -64,28 +65,13 @@ import { ScrollArea } from "../ui/scroll-area";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
 
 export function AppSidebar() {
-  const {
-    activeApp,
-    appState,
-    folders,
-    foldersLoading,
-    privateKeyInfo,
-    buildInfo,
-    setActiveApp
-  } = useAppStore();
+  const { appState, folders, foldersLoading, privateKeyInfo, buildInfo } =
+    useAppStore();
 
   const { selectedFolderId, selectFolder } = usePodCollection();
-  const {
-    navigateToDocumentsList,
-    navigateToDrafts,
-    navigateToDebug,
-    browsingHistory
-  } = useDocuments();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   // Get current route for active state
-  const currentRoute = browsingHistory.stack[browsingHistory.currentIndex] || {
-    type: "documents-list"
-  };
   const [isCreateSignedPodDialogOpen, setIsCreateSignedPodDialogOpen] =
     useState(false);
   const [allFoldersExpanded, setAllFoldersExpanded] = useState(true);
@@ -135,26 +121,19 @@ export function AppSidebar() {
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      onClick={() => {
-                        setActiveApp("pod-collection");
-                        selectFolder("all");
-                      }}
-                      isActive={
-                        activeApp === "pod-collection" &&
-                        selectedFolderId === "all"
-                      }
-                    >
-                      {allFoldersExpanded ? (
-                        <ChevronDownIcon size={16} />
-                      ) : (
-                        <ChevronRightIcon size={16} />
-                      )}
-                      <Folders />
-                      All
-                      <SidebarMenuBadge>
-                        {appState.pod_stats.total_pods}
-                      </SidebarMenuBadge>
+                    <SidebarMenuButton asChild isActive={pathname === "/pods"}>
+                      <Link to="/pods" onClick={() => selectFolder("all")}>
+                        {allFoldersExpanded ? (
+                          <ChevronDownIcon size={16} />
+                        ) : (
+                          <ChevronRightIcon size={16} />
+                        )}
+                        <Folders />
+                        <span>All</span>
+                        <SidebarMenuBadge>
+                          {appState.pod_stats.total_pods}
+                        </SidebarMenuBadge>
+                      </Link>
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                 </SidebarMenuItem>
@@ -178,18 +157,20 @@ export function AppSidebar() {
                           return (
                             <SidebarMenuSubItem key={folder.id}>
                               <SidebarMenuSubButton
-                                onClick={() => {
-                                  setActiveApp("pod-collection");
-                                  selectFolder(folder.id);
-                                }}
-                                isActive={
-                                  activeApp === "pod-collection" &&
-                                  selectedFolderId === folder.id
-                                }
+                                asChild
+                                isActive={selectedFolderId === folder.id}
                               >
-                                <FolderIcon />
-                                {folder.id}
-                                <SidebarMenuBadge>{podCount}</SidebarMenuBadge>
+                                <Link
+                                  to="/pods"
+                                  search={{ space: folder.id }}
+                                  onClick={() => selectFolder(folder.id)}
+                                >
+                                  <FolderIcon />
+                                  <span>{folder.id}</span>
+                                  <SidebarMenuBadge>
+                                    {podCount}
+                                  </SidebarMenuBadge>
+                                </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                           );
@@ -209,31 +190,27 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => {
-                    setActiveApp("documents");
-                    navigateToDocumentsList();
-                  }}
+                  asChild
                   isActive={
-                    activeApp === "documents" &&
-                    currentRoute.type === "documents-list"
+                    pathname.startsWith("/documents") &&
+                    !pathname.includes("/drafts")
                   }
                 >
-                  <FileTextIcon />
-                  Documents
+                  <Link to="/documents">
+                    <FileTextIcon />
+                    <span>Documents</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => {
-                    setActiveApp("documents");
-                    navigateToDrafts();
-                  }}
-                  isActive={
-                    activeApp === "documents" && currentRoute.type === "drafts"
-                  }
+                  asChild
+                  isActive={pathname.startsWith("/documents/drafts")}
                 >
-                  <PencilLineIcon />
-                  Drafts
+                  <Link to="/documents/drafts">
+                    <PencilLineIcon />
+                    <span>Drafts</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -245,14 +222,11 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setActiveApp("pod-editor");
-                  }}
-                  isActive={activeApp === "pod-editor"}
-                >
-                  <EditIcon />
-                  POD Editor
+                <SidebarMenuButton asChild isActive={pathname === "/editor"}>
+                  <Link to="/editor">
+                    <EditIcon />
+                    <span>POD Editor</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
@@ -286,12 +260,10 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => {
-                    setActiveApp("frogcrypto");
-                  }}
-                  isActive={activeApp === "frogcrypto"}
+                  asChild
+                  isActive={pathname === "/frogcrypto"}
                 >
-                  FrogCrypto
+                  <Link to="/frogcrypto">FrogCrypto</Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -348,14 +320,11 @@ export function AppSidebar() {
               Add ZuKYC PODs
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setActiveApp("documents");
-                navigateToDebug();
-              }}
-            >
-              <SettingsIcon className="h-4 w-4 mr-2" />
-              View Config
+            <DropdownMenuItem asChild>
+              <Link to="/debug">
+                <SettingsIcon className="h-4 w-4 mr-2" />
+                View Config
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setShowResetConfirmation(true)}

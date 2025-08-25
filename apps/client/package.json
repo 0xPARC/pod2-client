@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "routes:gen": "tsr generate src/routes --out=src/routeTree.gen.ts",
+    "routes:watch": "tsr watch src/routes --out=src/routeTree.gen.ts",
     "test": "vitest --config vitest.config.ts",
     "test:run": "vitest run --config vitest.config.ts",
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
@@ -64,6 +66,8 @@
     "zustand": "^5.0.4"
   },
   "devDependencies": {
+    "@tanstack/router-cli": "^1.131.27",
+    "@tanstack/router-plugin": "^1.131.27",
     "@tauri-apps/cli": "^2",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.4",
@@ -81,6 +85,7 @@
     "vite-bundle-visualizer": "^1.2.1",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.4",
-    "web-vitals": "^4.2.4"
+    "web-vitals": "^4.2.4",
+    "zod": "^3.23.8"
   }
 }

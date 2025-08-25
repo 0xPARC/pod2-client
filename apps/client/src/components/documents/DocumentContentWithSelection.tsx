@@ -99,7 +99,7 @@ export function DocumentContentWithSelection({
         <div
           ref={renderedContentRef}
           className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere"
-          dangerouslySetInnerHTML={{ __html: renderedMessageData?.html! }}
+          dangerouslySetInnerHTML={{ __html: renderedMessageData?.html || "" }}
         />
       );
     } else {

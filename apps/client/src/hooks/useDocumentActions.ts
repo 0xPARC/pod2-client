@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Document,
   deleteDocument,
@@ -9,7 +10,7 @@ import {
   createDraft,
   type DraftRequest
 } from "../lib/documentApi";
-import { detectContentType, formatReplyToId } from "../lib/contentUtils";
+import { formatReplyToId } from "../lib/contentUtils";
 
 export interface UseDocumentActionsReturn {
   isVerifying: boolean;
@@ -27,14 +28,7 @@ export interface UseDocumentActionsReturn {
 export const useDocumentActions = (
   currentDocument: Document | null,
   setVerificationResult: (result: DocumentVerificationResult | null) => void,
-  setUpvoteCount: (count: number) => void,
-  navigateToPublish: (
-    draftId?: string,
-    contentType?: "document" | "link" | "file",
-    replyTo?: string,
-    editDocumentData?: any
-  ) => void,
-  navigateToDocumentsList: () => void
+  setUpvoteCount: (count: number) => void
 ): UseDocumentActionsReturn => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(
@@ -151,7 +145,7 @@ export const useDocumentActions = (
       if (result.success) {
         toast.success("Document deleted successfully!");
         // Navigate back to documents list
-        navigateToDocumentsList();
+        navigate({ to: "/documents" });
       } else {
         toast.error(result.error_message || "Failed to delete document");
       }
@@ -196,43 +190,33 @@ export const useDocumentActions = (
         const draftId = await createDraft(draftRequest);
 
         // Navigate to publish page with the draft
-        navigateToPublish(draftId, undefined, replyToId);
+        navigate({
+          to: "/documents/publish",
+          search: { draftId, replyTo: replyToId }
+        });
       } catch (error) {
         console.error("Failed to create draft with quote:", error);
         toast.error("Failed to create draft with quote");
         // Fall back to normal reply without quote
-        navigateToPublish(undefined, undefined, replyToId);
+        navigate({ to: "/documents/publish", search: { replyTo: replyToId } });
       }
     } else {
       // Navigate to publish page with reply context
-      navigateToPublish(undefined, undefined, replyToId);
+      navigate({ to: "/documents/publish", search: { replyTo: replyToId } });
     }
   };
+
+  const navigate = useNavigate();
 
   const handleEditDocument = () => {
     if (!currentDocument) return;
 
-    // Detect the correct content type based on document content
-    const contentType = detectContentType(currentDocument);
-
-    // Create the document data for editing
-    const editDocumentData = {
-      documentId: currentDocument.metadata.id!,
-      postId: currentDocument.metadata.post_id,
-      title: currentDocument.metadata.title || "",
-      content: currentDocument.content,
-      tags: currentDocument.metadata.tags,
-      authors: currentDocument.metadata.authors,
-      replyTo: currentDocument.metadata.reply_to
-        ? formatReplyToId(
-            currentDocument.metadata.reply_to.post_id,
-            currentDocument.metadata.reply_to.document_id
-          )
-        : null
-    };
-
-    // Navigate to publish view in edit mode with route-specific data
-    navigateToPublish(undefined, contentType, undefined, editDocumentData);
+    // Navigate directly to the edit route - all document data will be loaded by the route loader
+    const documentId = currentDocument.metadata.id!;
+    navigate({
+      to: "/documents/document/$documentId/edit",
+      params: { documentId: documentId.toString() }
+    });
   };
 
   const handleQuoteAndReply = async (selectedText: string) => {
@@ -273,13 +257,19 @@ export const useDocumentActions = (
       const draftId = await createDraft(draftRequest);
 
       // Navigate to publish page with the draft ID
-      navigateToPublish(draftId, "document", replyToId);
+      navigate({
+        to: "/documents/publish",
+        search: { draftId, contentType: "document", replyTo: replyToId }
+      });
     } catch (error) {
       console.error("Failed to create draft with quote:", error);
       toast.error("Failed to create quote draft");
 
       // Fallback to regular reply
-      navigateToPublish(undefined, "document", replyToId);
+      navigate({
+        to: "/documents/publish",
+        search: { contentType: "document", replyTo: replyToId }
+      });
     }
   };
 

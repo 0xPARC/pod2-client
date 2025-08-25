@@ -14,6 +14,7 @@ import {
   XIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
@@ -36,14 +37,23 @@ import { Input } from "../ui/input";
 import { HackMDImportDialog } from "./import/HackMDImportDialog";
 
 export function DocumentsView() {
-  const {
-    searchQuery,
-    selectedTag,
-    navigateToDocument,
-    navigateToPublish,
-    updateSearch,
-    selectTag
-  } = useDocuments();
+  const { searchQuery, selectedTag, updateSearch, selectTag } = useDocuments();
+  const navigate = useNavigate();
+  const navigateToDocument = (documentId: number) => {
+    navigate({
+      to: "/documents/document/$documentId",
+      params: { documentId: documentId.toString() }
+    });
+  };
+  const navigateToPublish = (
+    draftId?: string,
+    contentType?: "document" | "link" | "file"
+  ) => {
+    navigate({
+      to: "/documents/publish",
+      search: { draftId, contentType }
+    });
+  };
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -2,7 +2,23 @@
  * Deep-link system types for podnet:// URL scheme
  */
 
-import type { MiniApp, DocumentRoute } from "../store";
+import type { MiniApp } from "../store";
+
+/**
+ * Document route types for deep linking
+ */
+export type DocumentRoute =
+  | { type: "documents-list" }
+  | { type: "document-detail"; id: number }
+  | {
+      type: "publish";
+      contentType?: string;
+      replyTo?: string;
+      title?: string;
+      editingDraftId?: string;
+    }
+  | { type: "drafts" }
+  | { type: "debug" };
 
 /**
  * Base interface for parsed deep-link URLs

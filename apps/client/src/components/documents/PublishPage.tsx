@@ -1,22 +1,43 @@
+import { useNavigate } from "@tanstack/react-router";
 import { PublishDocumentForm } from "./forms/PublishDocumentForm";
 import { PublishFileForm } from "./forms/PublishFileForm";
 import { PublishLinkForm } from "./forms/PublishLinkForm";
+import { DocumentContent } from "../../lib/documentApi";
+
+export interface EditingDocument {
+  documentId: number;
+  postId: number;
+  title: string;
+  content: DocumentContent;
+  tags: string[];
+  authors: string[];
+  replyTo?: string | null;
+}
 
 interface PublishPageProps {
   onPublishSuccess?: (documentId: number) => void;
   editingDraftId?: string | null; // UUID - only used for documents
   contentType?: "document" | "link" | "file";
   replyTo?: string;
+  editingDocument?: EditingDocument; // For editing existing documents
 }
 
 export function PublishPage({
   onPublishSuccess,
   editingDraftId,
   contentType = "document",
-  replyTo
+  replyTo,
+  editingDocument
 }: PublishPageProps) {
+  const navigate = useNavigate();
+
   const handlePublishSuccess = (documentId: number) => {
     console.log("Content published successfully with ID:", documentId);
+    // Navigate to the published document
+    navigate({
+      to: "/documents/document/$documentId",
+      params: { documentId: documentId.toString() }
+    });
     if (onPublishSuccess) {
       onPublishSuccess(documentId);
     }
@@ -31,6 +52,7 @@ export function PublishPage({
             // Don't pass onCancel - let the form handle navigation internally
             replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
+            editingDocument={editingDocument}
           />
         );
       case "link":
@@ -38,6 +60,7 @@ export function PublishPage({
           <PublishLinkForm
             onPublishSuccess={handlePublishSuccess}
             // Don't pass onCancel - let the form handle navigation internally
+            editingDocument={editingDocument}
           />
         );
       case "file":
@@ -45,6 +68,7 @@ export function PublishPage({
           <PublishFileForm
             onPublishSuccess={handlePublishSuccess}
             // Don't pass onCancel - let the form handle navigation internally
+            editingDocument={editingDocument}
           />
         );
       default:
@@ -54,6 +78,7 @@ export function PublishPage({
             // Don't pass onCancel - let the form handle navigation internally
             replyTo={replyTo}
             editingDraftId={editingDraftId || undefined}
+            editingDocument={editingDocument}
           />
         );
     }

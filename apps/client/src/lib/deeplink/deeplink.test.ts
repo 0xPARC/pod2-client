@@ -70,7 +70,11 @@ describe("Deep-link URL Parsing", () => {
         result.data.route.route
       ) {
         expect(result.data.route.route.type).toBe(expected.route.type);
-        if ("id" in expected.route && result.data.route.route) {
+        if (
+          "id" in expected.route &&
+          result.data.route.route &&
+          "id" in result.data.route.route
+        ) {
           expect(result.data.route.route.id).toBe(expected.route.id);
         }
       }
@@ -113,13 +117,13 @@ describe("Deep-link URL Parsing", () => {
           const route = result.data.route.route;
           expect(route.type).toBe("publish");
 
-          if (expectedContentType && route) {
+          if (expectedContentType && route && "contentType" in route) {
             expect(route.contentType).toBe(expectedContentType);
           }
-          if (expectedReplyTo && route) {
+          if (expectedReplyTo && route && "replyTo" in route) {
             expect(route.replyTo).toBe(expectedReplyTo);
           }
-          if (expectedEditingDraftId && route) {
+          if (expectedEditingDraftId && route && "editingDraftId" in route) {
             expect(route.editingDraftId).toBe(expectedEditingDraftId);
           }
         }
@@ -398,10 +402,18 @@ describe("Roundtrip Testing", () => {
       ) {
         expect(parseResult.data.route.route.type).toBe(route.type);
 
-        if ("id" in route && parseResult.data.route.route) {
+        if (
+          "id" in route &&
+          parseResult.data.route.route &&
+          "id" in parseResult.data.route.route
+        ) {
           expect(parseResult.data.route.route.id).toBe(route.id);
         }
-        if ("contentType" in route && parseResult.data.route.route) {
+        if (
+          "contentType" in route &&
+          parseResult.data.route.route &&
+          "contentType" in parseResult.data.route.route
+        ) {
           expect(parseResult.data.route.route.contentType).toBe(
             route.contentType
           );

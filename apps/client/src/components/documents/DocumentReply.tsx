@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { formatReplyToId, isMarkdownContent } from "../../lib/contentUtils";
 import { formatDateCompact } from "../../lib/dateUtils";
 import { DocumentReplyTree } from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -14,7 +14,6 @@ interface DocumentReplyProps {
   replyTree: DocumentReplyTree;
   documentId: number;
   currentDocumentPostId: number;
-  onNavigateToDocument?: (documentId: number) => void;
   depth: number;
   rootPostTitle: string;
 }
@@ -23,13 +22,12 @@ export function DocumentReply({
   replyTree,
   documentId,
   currentDocumentPostId,
-  onNavigateToDocument,
   depth,
   rootPostTitle
 }: DocumentReplyProps) {
   const { document } = replyTree;
   const md = useMarkdownRenderer();
-  const { navigateToPublish } = useDocuments();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Memoize rendered HTML for reply content
@@ -56,7 +54,14 @@ export function DocumentReply({
   const handleReply = () => {
     const replyToId = formatReplyToId(document.post_id, document.id!);
     const replyTitle = generateReplyTitle();
-    navigateToPublish(undefined, "document", replyToId, undefined, replyTitle);
+    navigate({
+      to: "/documents/publish",
+      search: {
+        contentType: "document",
+        replyTo: replyToId,
+        title: replyTitle
+      }
+    });
   };
 
   const toggleCollapsed = () => {
@@ -199,7 +204,6 @@ export function DocumentReply({
                   replyTree={nestedReply}
                   documentId={documentId}
                   currentDocumentPostId={currentDocumentPostId}
-                  onNavigateToDocument={onNavigateToDocument}
                   depth={depth + 1}
                   rootPostTitle={rootPostTitle}
                 />

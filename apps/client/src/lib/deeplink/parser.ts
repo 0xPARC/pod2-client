@@ -2,13 +2,14 @@
  * URL parser for podnet:// deep-link scheme
  */
 
-import type { DocumentRoute, MiniApp } from "../store";
+import type { MiniApp } from "../store";
 import type {
   DeepLinkData,
   DeepLinkParams,
   ParseResult,
   DocumentsRouteData,
-  SimpleRouteData
+  SimpleRouteData,
+  DocumentRoute
 } from "./types";
 import { VALID_APPS, DEFAULT_ROUTES } from "./types";
 

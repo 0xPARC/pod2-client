@@ -17,25 +17,15 @@ import { VerificationDisplay } from "./VerificationDisplay";
 
 interface DocumentDetailViewProps {
   documentId: number;
-  onNavigateToDocument?: (documentId: number) => void;
 }
 
-export function DocumentDetailView({
-  documentId,
-  onNavigateToDocument
-}: DocumentDetailViewProps) {
-  const {
-    navigateToPublish,
-    navigateToDocumentsList,
-    updateCurrentRouteTitle
-  } = useDocuments();
+export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
+  // Get block selection from store
+  const { selectedBlockIndices, selectedBlockTexts } = useDocuments();
 
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { state: appSidebarState } = useSidebar();
-
-  // Get block selection from store
-  const { selectedBlockIndices, selectedBlockTexts } = useDocuments();
 
   // Custom hooks for data and state management
   const {
@@ -50,7 +40,7 @@ export function DocumentDetailView({
     upvoteCount,
     setUpvoteCount,
     setVerificationResult
-  } = useDocumentData(documentId, updateCurrentRouteTitle);
+  } = useDocumentData(documentId);
 
   const {
     isVerifying,
@@ -66,9 +56,7 @@ export function DocumentDetailView({
   } = useDocumentActions(
     currentDocument,
     setVerificationResult,
-    setUpvoteCount,
-    navigateToPublish,
-    navigateToDocumentsList
+    setUpvoteCount
   );
 
   const { downloadingFiles, handleDownloadFile } = useFileDownload();
@@ -226,7 +214,6 @@ export function DocumentDetailView({
             repliesError={repliesError}
             documentId={documentId}
             postId={currentDocument.metadata.post_id}
-            onNavigateToDocument={onNavigateToDocument}
             rootPostTitle={currentDocument.metadata.title}
           />
 

@@ -3,6 +3,7 @@
  */
 
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import type { Router } from "@tanstack/react-router";
 import type { DeepLinkData, DeepLinkHandler } from "./types";
 import {
   validateDeepLinkUrl,
@@ -168,42 +169,32 @@ export const deepLinkManager = new DeepLinkManager();
 type MiniApp = "pod-collection" | "documents" | "pod-editor" | "frogcrypto";
 
 /**
- * Navigation functions interface for dependency injection
+ * Router-based navigation interface for deep-link integration
  */
-export interface NavigationFunctions {
-  setActiveApp: (app: MiniApp) => void;
-  navigateToDocumentsList: () => void;
-  navigateToDocument: (id: number) => void;
-  navigateToDrafts: () => void;
-  navigateToPublish: (
-    editingDraftId?: string,
-    contentType?: "document" | "link" | "file",
-    replyTo?: string
-  ) => void;
-  navigateToDebug: () => void;
+export interface RouterNavigationFunctions {
+  router: Router<any, any>;
 }
 
 /**
- * Navigation handler that integrates with injected navigation functions
+ * Navigation handler that uses TanStack Router for navigation
  */
 export function createNavigationHandler(
-  navigation: NavigationFunctions
+  navigation: RouterNavigationFunctions
 ): DeepLinkHandler {
   return (data: DeepLinkData) => {
     console.log(`[DeepLink] Navigating to ${data.app}`);
 
     try {
-      // Navigate to the target app - convert string to MiniApp type
-      const app = data.app as MiniApp;
-      navigation.setActiveApp(app);
-
-      // Handle app-specific navigation
+      // Handle app-specific navigation using router
       if (
         data.app === "documents" &&
         data.route &&
         data.route.app === "documents"
       ) {
-        handleDocumentsNavigation(data.route.route, navigation);
+        handleDocumentsNavigation(data.route.route, navigation.router);
+      } else {
+        // Handle other apps by navigating to their base routes
+        handleAppNavigation(data.app as MiniApp, navigation.router);
       }
 
       console.log("[DeepLink] Navigation completed");
@@ -214,46 +205,72 @@ export function createNavigationHandler(
 }
 
 /**
- * Handle navigation within the documents app
+ * Handle navigation to different mini-apps
  */
-function handleDocumentsNavigation(
-  route: any,
-  navigation: NavigationFunctions
-): void {
+function handleAppNavigation(app: MiniApp, router: Router<any, any>): void {
+  switch (app) {
+    case "documents":
+      router.navigate({ to: "/documents" });
+      break;
+    case "pod-collection":
+      router.navigate({ to: "/pods" });
+      break;
+    case "pod-editor":
+      router.navigate({ to: "/editor" });
+      break;
+    case "frogcrypto":
+      router.navigate({ to: "/frogcrypto" });
+      break;
+    default:
+      console.warn(`[DeepLink] Unknown app: ${app}`);
+      router.navigate({ to: "/pods" });
+  }
+}
+
+/**
+ * Handle navigation within the documents app using TanStack Router
+ */
+function handleDocumentsNavigation(route: any, router: Router<any, any>): void {
   switch (route.type) {
     case "documents-list":
-      navigation.navigateToDocumentsList();
+      router.navigate({ to: "/documents" });
       break;
 
     case "document-detail":
       if (route.id) {
-        navigation.navigateToDocument(route.id);
+        router.navigate({
+          to: "/documents/document/$documentId",
+          params: { documentId: route.id.toString() }
+        });
       } else {
         console.warn(
           `[DeepLink] document-detail missing id, using documents-list`
         );
-        navigation.navigateToDocumentsList();
+        router.navigate({ to: "/documents" });
       }
       break;
 
     case "drafts":
-      navigation.navigateToDrafts();
+      router.navigate({ to: "/documents/drafts" });
       break;
 
     case "publish":
-      navigation.navigateToPublish(
-        route.editingDraftId,
-        (route.contentType as "document" | "link" | "file") || "document",
-        route.replyTo
-      );
+      router.navigate({
+        to: "/documents/publish",
+        search: {
+          draftId: route.editingDraftId,
+          contentType: route.contentType || "document",
+          replyTo: route.replyTo
+        }
+      });
       break;
 
     case "debug":
-      navigation.navigateToDebug();
+      router.navigate({ to: "/debug" });
       break;
 
     default:
       console.warn(`[DeepLink] Unknown route type: ${route.type}`);
-      navigation.navigateToDocumentsList();
+      router.navigate({ to: "/documents" });
   }
 }

@@ -1,8 +1,6 @@
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { AppSidebar } from "./components/core/AppSidebar";
-import { MainContent } from "./components/core/MainContent";
 import { ThemeProvider } from "./components/core/theme-provider";
 import { TopBar } from "./components/core/TopBar";
 import { TopBarProvider } from "./components/core/TopBarContext";
@@ -15,6 +13,8 @@ import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { createShortcut } from "./lib/keyboard/types";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
 import { useAppStore } from "./lib/store";
+import { RouterProvider } from "@tanstack/react-router";
+import { router } from "./lib/router";
 
 // Component that handles global keyboard shortcuts within the sidebar context
 function GlobalKeyboardShortcuts() {
@@ -44,41 +44,12 @@ function App() {
   // Initialize config store
   useConfigInitialization();
 
-  // Initialize deep-link manager with navigation functions
-  const setActiveApp = useAppStore((state) => state.setActiveApp);
-  const navigateToDocumentsList = useAppStore(
-    (state) => state.documentsActions.navigateToDocumentsList
-  );
-  const navigateToDocument = useAppStore(
-    (state) => state.documentsActions.navigateToDocument
-  );
-  const navigateToDrafts = useAppStore(
-    (state) => state.documentsActions.navigateToDrafts
-  );
-  const navigateToPublish = useAppStore(
-    (state) => state.documentsActions.navigateToPublish
-  );
-  const navigateToDebug = useAppStore(
-    (state) => state.documentsActions.navigateToDebug
-  );
-
+  // Initialize deep-link manager with router navigation
   const navigation = useMemo(
     () => ({
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
+      router
     }),
-    [
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
-    ]
+    [router]
   );
 
   useDeepLinkManager(navigation);
@@ -161,10 +132,8 @@ function App() {
             <TopBarProvider>
               <GlobalKeyboardShortcuts />
               <TopBar />
-              <AppSidebar />
-              <div className="pt-(--top-bar-height) w-full h-full">
-                <MainContent />
-              </div>
+              {/* Router renders AppSidebar + route content via file-based Root route */}
+              <RouterProvider router={router} />
             </TopBarProvider>
           </SidebarProvider>
           <Toaster />

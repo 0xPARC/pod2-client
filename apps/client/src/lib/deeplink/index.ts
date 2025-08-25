@@ -34,10 +34,7 @@ export {
   validateGeneratedUrl as validateGenerated
 } from "./generator";
 
-export {
-  deepLinkManager as manager,
-  createNavigationHandler as createNavigationHandler
-} from "./handler";
+export { deepLinkManager as manager, createNavigationHandler } from "./handler";
 
 export {
   useDeepLinkManager as useManager,

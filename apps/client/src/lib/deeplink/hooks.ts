@@ -7,7 +7,7 @@ import type { DeepLinkHandler } from "./types";
 import {
   deepLinkManager,
   createNavigationHandler,
-  type NavigationFunctions
+  type RouterNavigationFunctions
 } from "./handler";
 
 /**
@@ -26,9 +26,9 @@ export function useDeepLinkHandler(handler: DeepLinkHandler): void {
 
 /**
  * React hook to initialize deep-link listening for the entire app
- * Should be called once in the main App component with navigation functions
+ * Should be called once in the main App component with router navigation
  */
-export function useDeepLinkManager(navigation?: NavigationFunctions): {
+export function useDeepLinkManager(navigation?: RouterNavigationFunctions): {
   isActive: boolean;
   handlerCount: number;
   start: () => Promise<void>;
