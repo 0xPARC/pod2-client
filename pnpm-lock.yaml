@@ -120,9 +120,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      highlight.js:
-        specifier: ^11.11.1
-        version: 11.11.1
       immer:
         specifier: ^10.1.1
         version: 10.1.1
