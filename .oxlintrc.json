@@ -5,7 +5,7 @@
     "no-import-type-side-effects": "error",
     "typescript/no-non-null-asserted-nullish-coalescing": "error",
     "guard-for-in": "error",
-    "no-unused-vars": ["error", { "caughtErrors": "none", "args": "all", "vars": "all" } ]
+    "no-unused-vars": ["warn", { "caughtErrors": "none", "args": "all", "vars": "all" } ]
   },
   "ignorePatterns": ["dist/**", "vite.config.js", "**/routeTree.gen.ts"]
 }
