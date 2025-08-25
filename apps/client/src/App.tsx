@@ -1,5 +1,5 @@
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { ThemeProvider } from "./components/core/theme-provider";
 import { TopBar } from "./components/core/TopBar";
@@ -8,7 +8,7 @@ import { GitHubIdentitySetupModal } from "./components/identity/GitHubIdentitySe
 import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
-import { testDeepLink, useDeepLinkManager } from "./lib/deeplink";
+import { testDeepLink } from "./lib/deeplink-simple";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
 import { createShortcut } from "./lib/keyboard/types";
 import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
@@ -44,15 +44,16 @@ function App() {
   // Initialize config store
   useConfigInitialization();
 
-  // Initialize deep-link manager with router navigation
-  const navigation = useMemo(
-    () => ({
-      router
-    }),
-    [router]
-  );
+  // Initialize simplified deep-link manager
+  useEffect(() => {
+    const { simpleDeepLinkManager } = require("./lib/deeplink-simple");
+    simpleDeepLinkManager.initialize(router);
+    simpleDeepLinkManager.startListening();
 
-  useDeepLinkManager(navigation);
+    return () => {
+      simpleDeepLinkManager.stopListening();
+    };
+  }, [router]);
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
