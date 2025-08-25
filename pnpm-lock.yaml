@@ -171,6 +171,9 @@ importers:
       tailwindcss:
         specifier: ^4.0.6
         version: 4.1.11
+      zod:
+        specifier: ^4.0.0
+        version: 4.1.1
       zustand:
         specifier: ^5.0.4
         version: 5.0.4(@types/react@19.1.0)(immer@10.1.1)(react@19.1.0)(use-sync-external-store@1.5.0(react@19.1.0))
@@ -235,9 +238,6 @@ importers:
       web-vitals:
         specifier: ^4.2.4
         version: 4.2.4
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
 
   apps/simple-zukyc:
     dependencies:
@@ -4261,6 +4261,9 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+  zod@4.1.1:
+    resolution: {integrity: sha512-SgMZK/h8Tigt9nnKkfJMvB/mKjiJXaX26xegP4sa+0wHIFVFWVlsQGdhklDmuargBD3Hsi3rsQRIzwJIhTPJHA==}
+
   zustand@5.0.4:
     resolution: {integrity: sha512-39VFTN5InDtMd28ZhjLyuTnlytDr9HfwO512Ai4I8ZABCoyAj4F1+sr7sD1jP/+p7k77Iko0Pb5NhgBFDCX0kQ==}
     engines: {node: '>=12.20.0'}
@@ -7901,6 +7904,8 @@ snapshots:
       yargs-parser: 21.1.1
 
   zod@3.25.76: {}
+
+  zod@4.1.1: {}
 
   zustand@5.0.4(@types/react@19.1.0)(immer@10.1.1)(react@19.1.0)(use-sync-external-store@1.5.0(react@19.1.0)):
     optionalDependencies:

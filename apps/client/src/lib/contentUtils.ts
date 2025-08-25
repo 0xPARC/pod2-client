@@ -37,22 +37,3 @@ export const detectContentType = (
 export const formatReplyToId = (postId: number, documentId: number): string => {
   return `${postId}:${documentId}`;
 };
-
-// Parse reply-to ID back into components
-export const parseReplyToId = (
-  replyToId: string
-): { postId: number; documentId: number } | null => {
-  try {
-    const parts = replyToId.split(":");
-    if (parts.length !== 2) return null;
-
-    const postId = parseInt(parts[0]);
-    const documentId = parseInt(parts[1]);
-
-    if (isNaN(postId) || isNaN(documentId)) return null;
-
-    return { postId, documentId };
-  } catch {
-    return null;
-  }
-};

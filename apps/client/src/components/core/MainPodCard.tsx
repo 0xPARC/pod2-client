@@ -13,7 +13,7 @@ import { useAppStore } from "../../lib/store";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import ValueRenderer from "./ValueRenderer";
-import ValueTable from "./ValueTable";
+import { ValueTable } from "./ValueTable";
 
 interface MainPodCardProps {
   mainPod: MainPod;

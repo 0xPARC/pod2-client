@@ -40,5 +40,3 @@ export const ValueTable: React.FC<ValueTableProps> = ({ values }) => {
     </div>
   );
 };
-
-export default ValueTable;
