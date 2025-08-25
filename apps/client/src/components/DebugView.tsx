@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   AlertTriangleIcon,
-  CheckIcon,
   CopyIcon,
   DatabaseIcon,
   HardDriveIcon,
@@ -394,11 +393,6 @@ export function DebugView() {
                 title="Network Settings"
                 data={extendedConfig.config.network}
                 icon={<SettingsIcon className="h-5 w-5" />}
-              />
-              <ConfigSection
-                title="Feature Flags"
-                data={extendedConfig.config.features}
-                icon={<CheckIcon className="h-5 w-5" />}
               />
               <ConfigSection
                 title="UI Settings"

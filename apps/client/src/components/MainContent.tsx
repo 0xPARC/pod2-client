@@ -1,4 +1,3 @@
-import { FeatureGate } from "../lib/features/config";
 import { useAppStore } from "../lib/store";
 import { FrogCrypto } from "./FrogCrypto";
 import { PodViewer } from "./PodViewer";
@@ -17,11 +16,7 @@ export function MainContent() {
     case "frogcrypto":
       return <FrogCrypto />;
     case "pod-editor":
-      return (
-        <FeatureGate feature="authoring">
-          <EditorView />
-        </FeatureGate>
-      );
+      return <EditorView />;
     default:
       // Default to pod collection if no app is selected
       return <PodViewer />;
