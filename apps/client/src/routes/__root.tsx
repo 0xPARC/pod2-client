@@ -1,8 +1,7 @@
-import React from "react";
-import { Outlet, useMatches } from "@tanstack/react-router";
-import { createRootRoute } from "@tanstack/react-router";
-import { TopBarSlot } from "@/components/core/TopBarContext";
 import { AppSidebar } from "@/components/core/AppSidebar";
+import { TopBarSlot } from "@/components/core/TopBarContext";
+import { createRootRoute, Outlet, useMatches } from "@tanstack/react-router";
+import React from "react";
 
 function GlobalBreadcrumbs() {
   // We'll read staticData.breadcrumb from matches if provided
@@ -52,7 +51,7 @@ const RootComponent = function Root() {
         <GlobalBreadcrumbs />
       </TopBarSlot>
       <AppSidebar />
-      <div className="pt-(--top-bar-height) w-full h-full">
+      <div className="pt-(--top-bar-height) w-full h-full overflow-scroll">
         <Outlet />
       </div>
     </>
