@@ -9,32 +9,32 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useConfigSection } from "../lib/config/hooks";
+import { useConfigSection } from "../../lib/config/hooks";
 import {
+  extractGitHubInfoFromIdentityPod,
   GitHubOAuthClient,
-  setupGitHubIdentityServer,
-  extractGitHubInfoFromIdentityPod
-} from "../lib/github-oauth";
-import { useAppStore } from "../lib/store";
-import { Button } from "./ui/button";
+  setupGitHubIdentityServer
+} from "../../lib/github-oauth";
+import { useAppStore } from "../../lib/store";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle
-} from "./ui/card";
+} from "../ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Separator } from "./ui/separator";
-import { Badge } from "./ui/badge";
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Separator } from "../ui/separator";
 
 interface GitHubIdentitySetupModalProps {
   open: boolean;

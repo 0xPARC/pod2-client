@@ -46,10 +46,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useAppStore, useDocuments, usePodCollection } from "../lib/store";
-import CreateSignedPodDialog from "./CreateSignedPodDialog";
-import { ImportPodDialog } from "./ImportPodDialog";
-import { PublicKeyAvatar } from "./PublicKeyAvatar";
+import { useAppStore, useDocuments, usePodCollection } from "../../lib/store";
+import CreateSignedPodDialog from "../CreateSignedPodDialog";
+import { ImportPodDialog } from "../ImportPodDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,9 +58,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle
-} from "./ui/alert-dialog";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
+} from "../ui/alert-dialog";
+import { Button } from "../ui/button";
+import { ScrollArea } from "../ui/scroll-area";
+import { PublicKeyAvatar } from "./PublicKeyAvatar";
 
 export function AppSidebar() {
   const {

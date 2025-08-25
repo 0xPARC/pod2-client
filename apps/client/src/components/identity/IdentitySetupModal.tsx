@@ -1,26 +1,26 @@
 import { CheckCircle, Loader2, Server, Shield, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useConfigSection } from "../lib/config/hooks";
-import { useAppStore } from "../lib/store";
-import { Button } from "./ui/button";
+import { useConfigSection } from "../../lib/config/hooks";
+import { useAppStore } from "../../lib/store";
+import { Button } from "../ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle
-} from "./ui/card";
+} from "../ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Separator } from "./ui/separator";
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Separator } from "../ui/separator";
 
 interface IdentitySetupModalProps {
   open: boolean;

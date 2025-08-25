@@ -1,10 +1,10 @@
-import { ScrollArea } from "./ui/scroll-area";
-import { ListIcon, Grid3x3Icon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Button } from "./ui/button";
-import { getFrogedex, FrogedexEntry } from "@/lib/rpc";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { FrogedexEntry, getFrogedex } from "@/lib/rpc";
 import { listen } from "@tauri-apps/api/event";
-import { RARITY_TEXT_COLORS, RARITY_BG_COLORS } from "./FrogCrypto";
+import { Grid3x3Icon, ListIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { RARITY_BG_COLORS, RARITY_TEXT_COLORS } from "./FrogCrypto";
 
 const RARITY_NAMES = ["NORM", "RARE", "EPIC", "LGND", "MYTH"];
 

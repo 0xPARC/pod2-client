@@ -8,8 +8,8 @@ import {
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { useDocuments } from "../../lib/store";
-import { DebugView } from "../DebugView";
-import { TopBarSlot } from "../TopBarContext";
+import { TopBarSlot } from "../core/TopBarContext";
+import { DebugView } from "../settings/DebugView";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,

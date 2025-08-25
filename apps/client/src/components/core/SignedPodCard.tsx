@@ -3,8 +3,8 @@ import type { SignedPod } from "@pod2/pod2js";
 import { ClipboardCopy } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
+import { Button } from "../ui/button";
 import ValueRenderer from "./ValueRenderer";
-import { Button } from "./ui/button";
 
 interface SignedPodCardProps {
   signedPod: SignedPod;

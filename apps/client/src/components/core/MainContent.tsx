@@ -1,8 +1,8 @@
-import { useAppStore } from "../lib/store";
-import { FrogCrypto } from "./FrogCrypto";
-import { PodViewer } from "./PodViewer";
-import { DocumentsApp } from "./documents/DocumentsApp";
-import { EditorView } from "./editor/EditorView";
+import { useAppStore } from "../../lib/store";
+import { DocumentsApp } from "../documents/DocumentsApp";
+import { EditorView } from "../editor/EditorView";
+import { FrogCrypto } from "../frogcrypto/FrogCrypto";
+import { PodViewer } from "../pod-manager/PodViewer";
 
 export function MainContent() {
   const { activeApp } = useAppStore();

@@ -1,15 +1,15 @@
 import { cn } from "@/lib/utils";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SidebarIcon } from "lucide-react";
-import { useTopBar } from "./TopBarContext";
-import { Button } from "./ui/button";
-import { useSidebar } from "./ui/sidebar";
+import { Button } from "../ui/button";
+import { useSidebar } from "../ui/sidebar";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger
-} from "./ui/tooltip";
+} from "../ui/tooltip";
+import { useTopBar } from "./TopBarContext";
 
 export function TopBar() {
   const { toggleSidebar, state } = useSidebar();

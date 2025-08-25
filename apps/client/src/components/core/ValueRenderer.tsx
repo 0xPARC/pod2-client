@@ -6,8 +6,8 @@ import type {
   Value
 } from "@pod2/pod2js";
 import React, { useState } from "react";
+import { Badge } from "../ui/badge";
 import { PublicKeyAvatar } from "./PublicKeyAvatar";
-import { Badge } from "./ui/badge";
 
 interface ValueRendererProps {
   value: Value;

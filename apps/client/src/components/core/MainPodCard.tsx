@@ -8,10 +8,10 @@ import type {
 import { ClipboardCopy, Plus } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { importPod } from "../lib/rpc";
-import { useAppStore } from "../lib/store";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { importPod } from "../../lib/rpc";
+import { useAppStore } from "../../lib/store";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import ValueRenderer from "./ValueRenderer";
 import ValueTable from "./ValueTable";
 

@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { fixFrogDescriptions, requestScore } from "@/lib/rpc";
+import { useEffect, useState } from "react";
 import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
 import { Leaderboard } from "./Leaderboard";
-import { Button } from "./ui/button";
-import { requestScore, fixFrogDescriptions } from "@/lib/rpc";
-import { useEffect } from "react";
 
 // We need to write out all of the text, shadow, etc + color combinations, or tailwind won't generate the right css
 export const RARITY_TEXT_COLORS = [

@@ -1,12 +1,12 @@
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { AppSidebar } from "./components/AppSidebar";
-import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
-import { MainContent } from "./components/MainContent";
-import { ThemeProvider } from "./components/theme-provider";
-import { TopBar } from "./components/TopBar";
-import { TopBarProvider } from "./components/TopBarContext";
+import { AppSidebar } from "./components/core/AppSidebar";
+import { MainContent } from "./components/core/MainContent";
+import { ThemeProvider } from "./components/core/theme-provider";
+import { TopBar } from "./components/core/TopBar";
+import { TopBarProvider } from "./components/core/TopBarContext";
+import { GitHubIdentitySetupModal } from "./components/identity/GitHubIdentitySetupModal";
 import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";

@@ -9,7 +9,7 @@ import {
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
 import { usePodEditor } from "../../lib/store";
-import { TopBarSlot } from "../TopBarContext";
+import { TopBarSlot } from "../core/TopBarContext";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import {

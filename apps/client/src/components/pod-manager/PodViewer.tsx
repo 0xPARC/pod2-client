@@ -7,26 +7,26 @@ import {
   Trash2
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createShortcut } from "../lib/keyboard/types";
-import { useKeyboardShortcuts } from "../lib/keyboard/useKeyboardShortcuts";
-import { usePodCollection } from "../lib/store";
-import { DeletePodDialog } from "./DeletePodDialog";
-import MainPodCard from "./MainPodCard";
-import SignedPodCard from "./SignedPodCard";
-import { TopBarSlot } from "./TopBarContext";
-import { Button } from "./ui/button";
+import { createShortcut } from "../../lib/keyboard/types";
+import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { usePodCollection } from "../../lib/store";
+import { DeletePodDialog } from "../DeletePodDialog";
+import MainPodCard from "../core/MainPodCard";
+import SignedPodCard from "../core/SignedPodCard";
+import { TopBarSlot } from "../core/TopBarContext";
+import { Button } from "../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "./ui/dropdown-menu";
+} from "../ui/dropdown-menu";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup
-} from "./ui/resizable";
-import { ScrollArea } from "./ui/scroll-area";
+} from "../ui/resizable";
+import { ScrollArea } from "../ui/scroll-area";
 
 export function PodViewer() {
   const {
