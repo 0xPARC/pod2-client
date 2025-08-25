@@ -1,4 +1,3 @@
-import "highlight.js/styles/github-dark.css";
 import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { useDocumentActions } from "../../hooks/useDocumentActions";
