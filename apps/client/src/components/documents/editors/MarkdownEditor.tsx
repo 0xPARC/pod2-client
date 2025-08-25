@@ -3,7 +3,6 @@ import Editor, {
   type OnChange,
   loader
 } from "@monaco-editor/react";
-import "highlight.js/styles/github-dark.css";
 import {
   BoldIcon,
   CodeIcon,
