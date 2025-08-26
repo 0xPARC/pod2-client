@@ -65,6 +65,7 @@ export function RepliesSection({
           {replyTree!.replies.map((reply) => (
             <DocumentReply
               key={reply.document.id}
+              owner={reply.document.uploader_id}
               replyTree={reply}
               documentId={documentId}
               currentDocumentPostId={postId}

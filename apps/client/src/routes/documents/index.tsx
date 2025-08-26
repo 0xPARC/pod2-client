@@ -1,3 +1,4 @@
+import { Loading } from "@/components/core/Loading";
 import { DocumentsTopBar } from "@/components/documents/DocumentsTopBar";
 import { DocumentsView } from "@/components/documents/DocumentsView";
 import { fetchDocuments } from "@/lib/documentApi";
@@ -24,5 +25,7 @@ export const Route = createFileRoute("/documents/")({
       queryFn: fetchDocuments
     });
   },
+  pendingComponent: Loading,
+  pendingMs: 100,
   component: DocumentsPage
 });

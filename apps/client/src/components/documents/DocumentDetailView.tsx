@@ -28,26 +28,17 @@ export function DocumentDetailView() {
 
   const [verificationResult, setVerificationResult] =
     useState<DocumentVerificationResult | null>(null);
-  const [upvoteCount, setUpvoteCount] = useState<number>(
-    loaderData.document.metadata.upvote_count
-  );
 
   const {
     isVerifying,
     verificationError,
-    isUpvoting,
     isDeleting,
     handleVerifyDocument,
-    handleUpvote,
     handleDeleteDocument,
     handleReplyToDocument: handleReplyToDocumentBase,
     handleEditDocument,
     handleQuoteAndReply
-  } = useDocumentActions(
-    loaderData.document,
-    setVerificationResult,
-    setUpvoteCount
-  );
+  } = useDocumentActions(loaderData.document, setVerificationResult);
 
   const { downloadingFiles, handleDownloadFile } = useFileDownload();
 
@@ -96,7 +87,7 @@ export function DocumentDetailView() {
   );
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex min-h-calc(100vh - var(--top-bar-height)) w-full">
       {/* Left Sidebar - Table of Contents (Fixed) - Only show for message documents */}
       {loaderData.document.content.message && (
         <div
@@ -134,13 +125,11 @@ export function DocumentDetailView() {
           {/* Document Header */}
           <DocumentHeader
             currentDocument={loaderData.document}
-            upvoteCount={upvoteCount}
-            isUpvoting={isUpvoting}
+            upvoteCount={loaderData.document.metadata.upvote_count}
             isVerifying={isVerifying}
             isDeleting={isDeleting}
             isVerified={isVerified}
             verificationResult={verificationResult}
-            onUpvote={handleUpvote}
             onReply={handleReplyToDocument}
             onVerify={handleVerifyDocument}
             onEdit={handleEditDocument}
@@ -162,6 +151,7 @@ export function DocumentDetailView() {
 
           <Await promise={loaderData.replyTree}>
             {(replyTree) => (
+              // TODO Scroll to new reply if it exists
               <RepliesSection
                 replyTree={replyTree}
                 repliesLoading={false}
@@ -172,15 +162,6 @@ export function DocumentDetailView() {
               />
             )}
           </Await>
-          {/* Replies Section */}
-          {/* <RepliesSection
-            replyTree={replyTree}
-            repliesLoading={repliesLoading}
-            repliesError={repliesError}
-            documentId={documentId}
-            postId={currentDocument.metadata.post_id}
-            rootPostTitle={currentDocument.metadata.title}
-          /> */}
 
           {/* Technical Details - Moved to Bottom */}
           <DocumentMetadata document={loaderData.document} />

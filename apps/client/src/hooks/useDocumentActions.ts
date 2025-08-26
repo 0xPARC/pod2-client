@@ -1,24 +1,22 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
+import { invoke } from "@tauri-apps/api/core";
+import { useState } from "react";
+import { toast } from "sonner";
+import { formatReplyToId } from "../lib/contentUtils";
 import {
   Document,
-  deleteDocument,
-  verifyDocumentPod,
   DocumentVerificationResult,
   createDraft,
+  deleteDocument,
+  verifyDocumentPod,
   type DraftRequest
 } from "../lib/documentApi";
-import { formatReplyToId } from "../lib/contentUtils";
 
 export interface UseDocumentActionsReturn {
   isVerifying: boolean;
   verificationError: string | null;
-  isUpvoting: boolean;
   isDeleting: boolean;
   handleVerifyDocument: () => Promise<void>;
-  handleUpvote: () => Promise<void>;
   handleDeleteDocument: () => Promise<void>;
   handleReplyToDocument: (selectedQuote?: string) => void;
   handleEditDocument: () => void;
@@ -27,14 +25,12 @@ export interface UseDocumentActionsReturn {
 
 export const useDocumentActions = (
   currentDocument: Document | null,
-  setVerificationResult: (result: DocumentVerificationResult | null) => void,
-  setUpvoteCount: (count: number) => void
+  setVerificationResult: (result: DocumentVerificationResult | null) => void
 ): UseDocumentActionsReturn => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(
     null
   );
-  const [isUpvoting, setIsUpvoting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleVerifyDocument = async () => {
@@ -52,59 +48,6 @@ export const useDocumentActions = (
       );
     } finally {
       setIsVerifying(false);
-    }
-  };
-
-  const handleUpvote = async () => {
-    if (isUpvoting || !currentDocument) return;
-
-    setIsUpvoting(true);
-
-    // Show loading toast
-    const loadingToast = toast("Generating upvote POD...", {
-      duration: Infinity
-    });
-
-    try {
-      const networkConfig = await invoke<any>("get_config_section", {
-        section: "network"
-      });
-      const serverUrl = networkConfig.document_server;
-
-      // Call the Tauri upvote command
-      const result = await invoke<{
-        success: boolean;
-        new_upvote_count: number | null;
-        error_message: string | null;
-        already_upvoted: boolean;
-      }>("upvote_document", {
-        documentId: currentDocument.metadata.id,
-        serverUrl: serverUrl
-      });
-
-      // Dismiss loading toast
-      toast.dismiss(loadingToast);
-
-      if (result.success && result.new_upvote_count !== null) {
-        // Success - update count and show success message
-        toast.success("Document upvoted successfully!");
-        setUpvoteCount(result.new_upvote_count);
-      } else if (result.already_upvoted) {
-        // Already upvoted
-        toast.info("You have already upvoted this document");
-      } else {
-        // Other error
-        toast.error(result.error_message || "Failed to upvote document");
-      }
-    } catch (error) {
-      // Dismiss loading toast and show error
-      toast.dismiss(loadingToast);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to upvote document: ${errorMessage}`);
-      console.error("Upvote error:", error);
-    } finally {
-      setIsUpvoting(false);
     }
   };
 
@@ -171,38 +114,37 @@ export const useDocumentActions = (
       currentDocument.metadata.id!
     );
 
-    // If there's a selected quote, create a draft with the quote first
-    if (selectedQuote) {
-      try {
-        const draftRequest: DraftRequest = {
-          title: `Re: ${currentDocument.metadata.title}`,
-          content_type: "message", // Use "message" instead of "document"
-          message: selectedQuote,
-          reply_to: replyToId,
-          tags: [],
-          authors: [],
-          file_name: null,
-          file_content: null,
-          file_mime_type: null,
-          url: null
-        };
+    try {
+      const draftRequest: DraftRequest = {
+        title: `Re: ${currentDocument.metadata.title}`,
+        content_type: "message", // Use "message" instead of "document"
+        message: selectedQuote ?? "",
+        reply_to: replyToId,
+        tags: [],
+        authors: [],
+        file_name: null,
+        file_content: null,
+        file_mime_type: null,
+        url: null
+      };
 
-        const draftId = await createDraft(draftRequest);
+      const draftId = await createDraft(draftRequest);
 
-        // Navigate to publish page with the draft
-        navigate({
-          to: "/documents/publish",
-          search: { draftId, replyTo: replyToId }
-        });
-      } catch (error) {
-        console.error("Failed to create draft with quote:", error);
-        toast.error("Failed to create draft with quote");
-        // Fall back to normal reply without quote
-        navigate({ to: "/documents/publish", search: { replyTo: replyToId } });
-      }
-    } else {
-      // Navigate to publish page with reply context
-      navigate({ to: "/documents/publish", search: { replyTo: replyToId } });
+      // Navigate to publish page with the draft
+      navigate({
+        to: "/documents/publish",
+        search: { draftId, replyTo: replyToId }
+      });
+    } catch (error) {
+      console.error("Failed to create draft with quote:", error);
+
+      navigate({
+        to: "/documents/publish",
+        search: {
+          replyTo: replyToId,
+          title: "Re: " + currentDocument.metadata.title
+        }
+      });
     }
   };
 
@@ -276,10 +218,8 @@ export const useDocumentActions = (
   return {
     isVerifying,
     verificationError,
-    isUpvoting,
     isDeleting,
     handleVerifyDocument,
-    handleUpvote,
     handleDeleteDocument,
     handleReplyToDocument,
     handleEditDocument,

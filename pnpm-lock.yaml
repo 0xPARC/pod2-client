@@ -171,6 +171,9 @@ importers:
       tailwindcss:
         specifier: ^4.0.6
         version: 4.1.11
+      typescript-result:
+        specifier: ^3.5.2
+        version: 3.5.2
       zod:
         specifier: ^4.0.0
         version: 4.1.1
@@ -4006,6 +4009,10 @@ packages:
     resolution: {integrity: sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg==}
     engines: {node: '>=10'}
 
+  typescript-result@3.5.2:
+    resolution: {integrity: sha512-kYBOXx/WOdwnfRfkOgEy+Or0VKxR9No1znb+5jPBYplksjx/koluC/OwIgBgYCCPgukxMuwXqMcv1qSDlvrlFA==}
+    engines: {node: '>=18'}
+
   typescript@5.8.2:
     resolution: {integrity: sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ==}
     engines: {node: '>=14.17'}
@@ -7666,6 +7673,8 @@ snapshots:
   tw-animate-css@1.2.9: {}
 
   type-fest@0.13.1: {}
+
+  typescript-result@3.5.2: {}
 
   typescript@5.8.2: {}
 

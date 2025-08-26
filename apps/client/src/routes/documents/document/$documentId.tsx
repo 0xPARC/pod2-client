@@ -1,3 +1,4 @@
+import { Loading } from "@/components/core/Loading";
 import { DocumentDetailView } from "@/components/documents/DocumentDetailView";
 import { DocumentsTopBar } from "@/components/documents/DocumentsTopBar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,11 +7,17 @@ import { documentQueryOptions, replyTreeQueryOptions } from "@/lib/query";
 import type { RouterContext } from "@/lib/router";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertCircleIcon } from "lucide-react";
+import { z } from "zod";
+
+const searchSchema = z.object({
+  newReply: z.string().optional()
+});
 
 export const Route = createFileRoute("/documents/document/$documentId")({
   staticData: {
     breadcrumb: ({ loaderData }: any) => loaderData?.title ?? "Document"
   },
+  validateSearch: searchSchema,
   loader: async ({ params, context }) => {
     const { queryClient } = context as RouterContext;
     const id = Number(params.documentId);
@@ -20,6 +27,8 @@ export const Route = createFileRoute("/documents/document/$documentId")({
     const replyTree = queryClient.ensureQueryData(replyTreeQueryOptions(id));
     return { document: doc, replyTree, username: getCurrentUsername() };
   },
+  pendingComponent: Loading,
+  pendingMs: 100,
   component: function DocumentDetail() {
     const loaderData = Route.useLoaderData();
     const navigate = useNavigate();
@@ -41,7 +50,7 @@ export const Route = createFileRoute("/documents/document/$documentId")({
   },
   errorComponent: ({ error }) => {
     return (
-      <div className="p-6 min-h-screen w-full">
+      <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full">
         <div className="w-full">
           <Card className="border-destructive">
             <CardContent className="pt-6">

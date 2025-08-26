@@ -180,7 +180,7 @@ export function DocumentsView() {
   };
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
+    <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex gap-2">

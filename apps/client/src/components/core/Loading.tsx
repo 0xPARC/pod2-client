@@ -3,7 +3,7 @@ import { Card, CardContent } from "../ui/card";
 
 export function Loading(): ReactNode {
   return (
-    <div className="p-6 min-h-screen w-full">
+    <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full">
       <div className="w-full">
         <Card>
           <CardContent className="pt-6">

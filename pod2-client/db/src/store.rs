@@ -172,7 +172,7 @@ pub async fn import_pod(
 
     conn.interact(move |conn| {
         conn.execute(
-            "INSERT INTO pods (id, pod_type, data, label, created_at, space) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT OR IGNORE INTO pods (id, pod_type, data, label, created_at, space) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 id,
                 type_str,
