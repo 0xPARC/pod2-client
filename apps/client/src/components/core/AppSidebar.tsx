@@ -26,6 +26,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from "@radix-ui/react-collapsible";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -45,7 +46,6 @@ import {
   SettingsIcon
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAppStore, usePodCollection } from "../../lib/store";
 import CreateSignedPodDialog from "../CreateSignedPodDialog";
@@ -164,6 +164,7 @@ export function AppSidebar() {
                                   to="/pods"
                                   search={{ space: folder.id }}
                                   onClick={() => selectFolder(folder.id)}
+                                  resetScroll
                                 >
                                   <FolderIcon />
                                   <span>{folder.id}</span>
@@ -196,7 +197,7 @@ export function AppSidebar() {
                     !pathname.includes("/drafts")
                   }
                 >
-                  <Link to="/documents">
+                  <Link to="/documents" resetScroll>
                     <FileTextIcon />
                     <span>Documents</span>
                   </Link>
@@ -207,7 +208,7 @@ export function AppSidebar() {
                   asChild
                   isActive={pathname.startsWith("/documents/drafts")}
                 >
-                  <Link to="/documents/drafts">
+                  <Link to="/documents/drafts" resetScroll>
                     <PencilLineIcon />
                     <span>Drafts</span>
                   </Link>
@@ -263,7 +264,9 @@ export function AppSidebar() {
                   asChild
                   isActive={pathname === "/frogcrypto"}
                 >
-                  <Link to="/frogcrypto">FrogCrypto</Link>
+                  <Link to="/frogcrypto" resetScroll>
+                    FrogCrypto
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

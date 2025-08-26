@@ -6,12 +6,14 @@ import {
 import { useMemo } from "react";
 
 // Per-render state carried via markdown-it env
-type RenderState = { counter: number; insideContainer: boolean };
+// Track a nesting depth for container blocks so we only
+// assign indices to top-level blocks/containers.
+type RenderState = { counter: number; containerDepth: number };
 type RenderEnv = { __blockState?: RenderState } & Record<string, any>;
 
 function getState(env: RenderEnv): RenderState {
   if (!env.__blockState) {
-    env.__blockState = { counter: 0, insideContainer: false };
+    env.__blockState = { counter: 0, containerDepth: 0 };
   }
   return env.__blockState;
 }
@@ -22,16 +24,11 @@ export function useMarkdownRenderer() {
     const mdInstance = createBaseMarkdownIt();
 
     // Helper function to add block indexing attributes
-    function addBlockIndex(
-      tokens: any[],
-      idx: number,
-      env: RenderEnv,
-      forceAdd: boolean = false
-    ) {
+    function addBlockIndex(tokens: any[], idx: number, env: RenderEnv) {
       const token = tokens[idx];
       const state = getState(env);
-      // Only add index if we're not inside a container (or if forced for container blocks)
-      if (token && token.attrSet && (!state.insideContainer || forceAdd)) {
+      // Only add index if we're not inside any container depth
+      if (token && token.attrSet && state.containerDepth === 0) {
         token.attrSet("data-block-index", state.counter.toString());
         state.counter++;
       }
@@ -84,9 +81,9 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, env as RenderEnv, true); // Force add for container blocks
-      // Mark that we're inside a container
-      getState(env as RenderEnv).insideContainer = true;
+      // Add index only for top-level container, then increase depth
+      addBlockIndex(tokens, idx, env as RenderEnv);
+      getState(env as RenderEnv).containerDepth++;
       return originalRules.blockquote_open
         ? originalRules.blockquote_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -100,8 +97,9 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      // Reset container flag
-      getState(_env as RenderEnv).insideContainer = false;
+      // Decrease container depth on close
+      const state = getState(_env as RenderEnv);
+      state.containerDepth = Math.max(0, state.containerDepth - 1);
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -155,8 +153,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, _env as RenderEnv, true);
-      getState(_env as RenderEnv).insideContainer = true;
+      addBlockIndex(tokens, idx, _env as RenderEnv);
+      getState(_env as RenderEnv).containerDepth++;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -167,7 +165,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      getState(_env as RenderEnv).insideContainer = false;
+      const state = getState(_env as RenderEnv);
+      state.containerDepth = Math.max(0, state.containerDepth - 1);
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -178,8 +177,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      addBlockIndex(tokens, idx, _env as RenderEnv, true);
-      getState(_env as RenderEnv).insideContainer = true;
+      addBlockIndex(tokens, idx, _env as RenderEnv);
+      getState(_env as RenderEnv).containerDepth++;
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -190,7 +189,8 @@ export function useMarkdownRenderer() {
       _env,
       renderer
     ) {
-      getState(_env as RenderEnv).insideContainer = false;
+      const state = getState(_env as RenderEnv);
+      state.containerDepth = Math.max(0, state.containerDepth - 1);
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -215,8 +215,8 @@ export function useMarkdownRenderer() {
       renderer
     ) {
       // Treat table as a container block
-      addBlockIndex(tokens, idx, env as RenderEnv, true);
-      getState(env as RenderEnv).insideContainer = true;
+      addBlockIndex(tokens, idx, env as RenderEnv);
+      getState(env as RenderEnv).containerDepth++;
       return originalRules.table_open
         ? originalRules.table_open(tokens, idx, options, env, renderer)
         : renderer.renderToken(tokens, idx, options);
@@ -230,7 +230,8 @@ export function useMarkdownRenderer() {
       env,
       renderer
     ) {
-      getState(env as RenderEnv).insideContainer = false;
+      const state = getState(env as RenderEnv);
+      state.containerDepth = Math.max(0, state.containerDepth - 1);
       return renderer.renderToken(tokens, idx, options);
     };
 
@@ -248,9 +249,11 @@ export function useMarkdownRenderer() {
 
       // Wrap math block in div with block index
       const token = tokens[idx];
-      const blockIndex =
-        token.attrs?.find((attr) => attr[0] === "data-block-index")?.[1] || "0";
-      return `<div data-block-index="${blockIndex}">${mathHtml}</div>`;
+      const blockIndex = token.attrs?.find(
+        (attr) => attr[0] === "data-block-index"
+      )?.[1];
+      const attr = blockIndex ? ` data-block-index="${blockIndex}"` : "";
+      return `<div${attr}>${mathHtml}</div>`;
     };
 
     // link_open handler is applied by createBaseMarkdownIt
@@ -294,24 +297,76 @@ function extractBlocksFromTokens(tokens: any[], content: string): string[] {
   const lines = content.split("\n");
   const blocks: string[] = [];
 
-  // Track which block-level tokens we care about
-  const blockTokenTypes = new Set([
-    "paragraph_open",
-    "heading_open",
+  // Block-level tokens we care about
+  const containerOpens = new Set([
     "blockquote_open",
     "bullet_list_open",
     "ordered_list_open",
+    "table_open"
+  ]);
+  const containerCloses = new Set([
+    "blockquote_close",
+    "bullet_list_close",
+    "ordered_list_close",
+    "table_close"
+  ]);
+
+  const blockTokenTypes = new Set([
+    "paragraph_open",
+    "heading_open",
+    ...Array.from(containerOpens),
     "fence",
     "code_block",
     "hr",
-    "table_open",
     "math_block",
     "html_block"
   ]);
 
   let i = 0;
+  let depth = 0; // container nesting depth
+
   while (i < tokens.length) {
     const token = tokens[i];
+
+    // Maintain depth for containers
+    if (containerOpens.has(token.type)) {
+      if (depth === 0) {
+        // At top level: extract this entire container as one block
+        let blockContent = "";
+        const endTokenType = token.type.replace("_open", "_close");
+
+        if (token.map) {
+          const [startLine, endLine] = token.map;
+          const blockLines = lines.slice(startLine, endLine);
+          blockContent = blockLines.join("\n");
+          if (blockContent.trim()) {
+            blocks.push(blockContent.trim());
+          }
+        }
+
+        // Advance to matching close, tracking nested containers of any type
+        let localDepth = 1;
+        i++;
+        while (i < tokens.length && localDepth > 0) {
+          if (containerOpens.has(tokens[i].type)) localDepth++;
+          else if (tokens[i].type === endTokenType) localDepth--;
+          i++;
+        }
+        // We've advanced past the close; continue without further increment
+        continue;
+      } else {
+        // Nested container: just bump depth and move on
+        depth++;
+        i++;
+        continue;
+      }
+    }
+
+    if (containerCloses.has(token.type)) {
+      depth = Math.max(0, depth - 1);
+      i++;
+      continue;
+    }
 
     // Skip non-block tokens
     if (!blockTokenTypes.has(token.type)) {
@@ -319,37 +374,34 @@ function extractBlocksFromTokens(tokens: any[], content: string): string[] {
       continue;
     }
 
-    // Get the content for this block
-    let blockContent = "";
-    let endTokenType = "";
+    // Only capture non-container blocks when not inside a container
+    if (depth > 0) {
+      i++;
+      continue;
+    }
 
-    // Determine the closing token type and extract content
     switch (token.type) {
       case "paragraph_open":
-        endTokenType = "paragraph_close";
-        break;
-      case "heading_open":
-        endTokenType = "heading_close";
-        break;
-      case "blockquote_open":
-        endTokenType = "blockquote_close";
-        break;
-      case "bullet_list_open":
-        endTokenType = "bullet_list_close";
-        break;
-      case "ordered_list_open":
-        endTokenType = "ordered_list_close";
-        break;
-      case "table_open":
-        endTokenType = "table_close";
-        break;
+      case "heading_open": {
+        if (token.map) {
+          const [startLine, endLine] = token.map;
+          const blockLines = lines.slice(startLine, endLine);
+          const blockContent = blockLines.join("\n");
+          if (blockContent.trim()) blocks.push(blockContent.trim());
+        }
+        // Skip ahead to the corresponding close token
+        const endTokenType = token.type.replace("_open", "_close");
+        i++;
+        while (i < tokens.length && tokens[i].type !== endTokenType) i++;
+        i++;
+        continue;
+      }
       case "fence":
       case "code_block":
       case "math_block":
-      case "html_block":
-        // These are self-contained tokens with content
+      case "html_block": {
         if (token.content) {
-          // For fenced code blocks, include the fence markers
+          let blockContent = "";
           if (token.type === "fence") {
             const info = token.info || "";
             blockContent = "```" + info + "\n" + token.content + "```";
@@ -362,26 +414,11 @@ function extractBlocksFromTokens(tokens: any[], content: string): string[] {
         }
         i++;
         continue;
-      case "hr":
-        // Horizontal rules are self-contained
+      }
+      case "hr": {
         blocks.push("---");
         i++;
         continue;
-    }
-
-    // For container tokens, extract content from source lines
-    if (endTokenType && token.map) {
-      const [startLine, endLine] = token.map;
-      const blockLines = lines.slice(startLine, endLine);
-      blockContent = blockLines.join("\n");
-
-      if (blockContent.trim()) {
-        blocks.push(blockContent.trim());
-      }
-
-      // Skip to the closing token
-      while (i < tokens.length && tokens[i].type !== endTokenType) {
-        i++;
       }
     }
 

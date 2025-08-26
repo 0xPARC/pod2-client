@@ -179,6 +179,19 @@ export function DocumentsView() {
     navigateToPublish(undefined, contentType);
   };
 
+  const formatAuthors = (authors: string[]) => {
+    const formatter = new Intl.ListFormat("en", {
+      style: "long",
+      type: "conjunction"
+    });
+
+    return formatter.format(
+      authors.sort((a, b) =>
+        a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase())
+      )
+    );
+  };
+
   return (
     <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
       <div className="w-full">
@@ -428,9 +441,19 @@ export function DocumentsView() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-accent-foreground hover:underline line-clamp-2 mb-1">
-                        {doc.title}
-                      </h3>
+                      <div className="flex items-baseline">
+                        <h3 className="text-base font-medium text-accent-foreground hover:underline line-clamp-2 mb-1">
+                          {doc.title}
+                        </h3>
+                        {doc.authors && doc.authors.length > 0 && (
+                          <span className="text-sm line-clamp-2 mb-1 text-muted-foreground">
+                            , by{" "}
+                            <span className="text-accent-foreground">
+                              {formatAuthors(doc.authors)}
+                            </span>
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                         <span>submitted</span>
@@ -466,7 +489,7 @@ export function DocumentsView() {
                         </div>
                       )}
 
-                      {/* Tags and authors in compact format */}
+                      {/* Tags in compact format */}
                       <div className="flex items-center gap-2 text-xs">
                         {doc.tags.length > 0 && (
                           <div className="flex gap-1">
@@ -481,29 +504,6 @@ export function DocumentsView() {
                             {doc.tags.length > 3 && (
                               <span className="text-muted-foreground">
                                 +{doc.tags.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {doc.authors.length > 0 && (
-                          <div className="flex gap-1">
-                            <span className="text-muted-foreground">
-                              authors:
-                            </span>
-                            {doc.authors.slice(0, 2).map((author, index) => (
-                              <span
-                                key={index}
-                                className="text-accent-foreground"
-                              >
-                                {author}
-                                {index < Math.min(doc.authors.length, 2) - 1 &&
-                                  ","}
-                              </span>
-                            ))}
-                            {doc.authors.length > 2 && (
-                              <span className="text-muted-foreground">
-                                +{doc.authors.length - 2} more
                               </span>
                             )}
                           </div>

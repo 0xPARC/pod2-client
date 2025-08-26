@@ -1,24 +1,32 @@
-import { useMemo, useRef, useEffect } from "react";
-import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
+import {
+  CopyIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  FileTextIcon
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { isMarkdownContent } from "../../lib/contentUtils";
 import { Document, DocumentFile } from "../../lib/documentApi";
 import {
+  fileContentToDataUrl,
+  fileContentToString,
   isImageFile,
   isMarkdownFile,
-  isTextFile,
-  fileContentToString,
-  fileContentToDataUrl
+  isTextFile
 } from "../../lib/fileUtils";
-import { isMarkdownContent } from "../../lib/contentUtils";
+import { useDocuments } from "../../lib/store";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Label } from "../ui/label";
+import { Switch } from "../ui/switch";
 import {
   renderMarkdownToHtml,
   renderMarkdownWithBlocks,
   useMarkdownRenderer
 } from "./markdownRenderer";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { QuoteRail } from "./QuoteRail";
-import { useDocuments } from "../../lib/store";
 
 interface DocumentContentProps {
   document: Document;
@@ -291,6 +299,8 @@ export function DocumentContent({
     });
   }, [selectedBlockIndices]);
 
+  const [showMarkdown, setShowMarkdown] = useState(false);
+
   return (
     <div className="relative mb-8 select-text">
       {/* Add CSS for block highlighting */}
@@ -308,23 +318,57 @@ export function DocumentContent({
 
       {/* Render message content if it exists */}
       {document.content.message && (
-        <div
-          className={`relative ${renderedMessageData?.isMarkdown && renderedMessageData.blocks.length > 0 && onQuoteText ? "ml-12" : ""}`}
-        >
-          {/* Quote Rail - Only show for markdown content with blocks */}
-          {renderedMessageData?.isMarkdown &&
-            renderedMessageData.blocks.length > 0 &&
-            onQuoteText && (
-              <QuoteRail contentRef={contentRef} className="left-[-48px]" />
-            )}
-
-          <div
-            ref={contentRef}
-            className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6"
-          >
-            {renderedContent}
+        <>
+          <div className="flex justify-end items-center gap-2 mb-2">
+            <Label>Show Markdown</Label>
+            <Switch checked={showMarkdown} onCheckedChange={setShowMarkdown} />
           </div>
-        </div>
+          <div
+            className={`relative ${renderedMessageData?.isMarkdown && renderedMessageData.blocks.length > 0 && onQuoteText ? "ml-12" : ""}`}
+          >
+            {/* Quote Rail - Only show for markdown content with blocks */}
+            {renderedMessageData?.isMarkdown &&
+              !showMarkdown &&
+              renderedMessageData.blocks.length > 0 &&
+              onQuoteText && (
+                <QuoteRail contentRef={contentRef} className="left-[-48px]" />
+              )}
+
+            <div
+              ref={contentRef}
+              className="bg-white dark:bg-gray-900 rounded-lg border p-6 mb-6"
+            >
+              {showMarkdown ? (
+                <>
+                  {showMarkdown && (
+                    <div className="flex justify-end">
+                      {" "}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard
+                            .writeText(document.content.message ?? "")
+                            .then(() => {
+                              toast.success("Copied to clipboard");
+                            });
+                        }}
+                      >
+                        <CopyIcon className="h-4 w-4" />
+                        Copy
+                      </Button>
+                    </div>
+                  )}
+                  <code className="whitespace-pre-wrap">
+                    {document.content.message}
+                  </code>
+                </>
+              ) : (
+                renderedContent
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* If no message content but there's a file, render the file content */}
