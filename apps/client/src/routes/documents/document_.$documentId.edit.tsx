@@ -1,8 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { fetchDocument } from "@/lib/documentApi";
-import { detectContentType } from "@/lib/contentUtils";
-import { PublishPage } from "@/components/documents/PublishPage";
 import { DocumentsTopBar } from "@/components/documents/DocumentsTopBar";
+import { PublishPage } from "@/components/documents/PublishPage";
+import { detectContentType } from "@/lib/contentUtils";
+import { fetchDocument } from "@/lib/documentApi";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/documents/document_/$documentId/edit")({
   staticData: {
@@ -33,15 +33,6 @@ export const Route = createFileRoute("/documents/document_/$documentId/edit")({
       navigate({ to: "/documents/publish" });
     };
 
-    const handleEditSuccess = (newDocumentId: number) => {
-      console.log("Document edited successfully with ID:", newDocumentId);
-      // Navigate back to the document view (could be same ID or new revision)
-      navigate({
-        to: "/documents/document/$documentId",
-        params: { documentId: newDocumentId.toString() }
-      });
-    };
-
     // Prepare editing document data from loader
     const editingDocument = {
       documentId: loaderData.document.metadata.id!,
@@ -62,7 +53,6 @@ export const Route = createFileRoute("/documents/document_/$documentId/edit")({
           onNewDocument={handleNewDocument}
         />
         <PublishPage
-          onPublishSuccess={handleEditSuccess}
           contentType={loaderData.contentType}
           editingDocument={editingDocument}
         />

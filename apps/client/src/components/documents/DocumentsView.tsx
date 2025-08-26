@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
   ArrowUpDownIcon,
@@ -13,11 +15,11 @@ import {
   SearchIcon,
   XIcon
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { documentsQueryKey } from "../../lib/query";
 import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -54,9 +56,6 @@ export function DocumentsView() {
       search: { draftId, contentType }
     });
   };
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"activity" | "newest" | "upvotes">(
     "activity"
   );
@@ -82,22 +81,16 @@ export function DocumentsView() {
     context: "documents-list"
   });
 
-  const loadDocuments = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const docs = await fetchDocuments();
-      setDocuments(docs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load documents");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadDocuments();
-  }, []);
+  const {
+    data: documents = [],
+    error,
+    isPending, // initial load
+    isFetching, // background refetch (e.g., after Refresh)
+    refetch
+  } = useQuery<DocumentMetadata[]>({
+    queryKey: documentsQueryKey,
+    queryFn: fetchDocuments
+  });
 
   // Extract all unique tags from documents
   const availableTags = useMemo(() => {
@@ -187,7 +180,7 @@ export function DocumentsView() {
   };
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
+    <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex gap-2">
@@ -243,12 +236,12 @@ export function DocumentsView() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
-              onClick={loadDocuments}
-              disabled={loading}
+              onClick={() => refetch()}
+              disabled={isFetching}
               variant="outline"
             >
               <RefreshCwIcon
-                className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>
@@ -381,13 +374,15 @@ export function DocumentsView() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircleIcon className="h-5 w-5" />
-                <span>{error}</span>
+                <span>
+                  {error instanceof Error ? error.message : String(error)}
+                </span>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {loading ? (
+        {isPending ? (
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-center py-8">

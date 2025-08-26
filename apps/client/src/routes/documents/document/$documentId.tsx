@@ -1,24 +1,35 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { fetchDocument } from "@/lib/documentApi";
+import { Loading } from "@/components/core/Loading";
 import { DocumentDetailView } from "@/components/documents/DocumentDetailView";
 import { DocumentsTopBar } from "@/components/documents/DocumentsTopBar";
+import { Card, CardContent } from "@/components/ui/card";
+import { getCurrentUsername } from "@/lib/documentApi";
+import { documentQueryOptions, replyTreeQueryOptions } from "@/lib/query";
+import type { RouterContext } from "@/lib/router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { AlertCircleIcon } from "lucide-react";
+import { z } from "zod";
+
+const searchSchema = z.object({
+  newReply: z.string().optional()
+});
 
 export const Route = createFileRoute("/documents/document/$documentId")({
   staticData: {
     breadcrumb: ({ loaderData }: any) => loaderData?.title ?? "Document"
   },
-  loader: async ({ params }) => {
+  validateSearch: searchSchema,
+  loader: async ({ params, context }) => {
+    const { queryClient } = context as RouterContext;
     const id = Number(params.documentId);
     if (!Number.isFinite(id)) throw new Error("Invalid document id");
-    try {
-      const doc = await fetchDocument(id);
-      return { id, title: doc.metadata.title };
-    } catch {
-      return { id, title: `Document #${id}` };
-    }
+
+    const doc = await queryClient.ensureQueryData(documentQueryOptions(id));
+    const replyTree = queryClient.ensureQueryData(replyTreeQueryOptions(id));
+    return { document: doc, replyTree, username: getCurrentUsername() };
   },
+  pendingComponent: Loading,
+  pendingMs: 100,
   component: function DocumentDetail() {
-    const { documentId } = Route.useParams();
     const loaderData = Route.useLoaderData();
     const navigate = useNavigate();
 
@@ -29,12 +40,28 @@ export const Route = createFileRoute("/documents/document/$documentId")({
     return (
       <>
         <DocumentsTopBar
-          title={loaderData.title}
+          title={loaderData.document.metadata.title}
           prefix="Document:"
           onNewDocument={handleNewDocument}
         />
-        <DocumentDetailView documentId={Number(documentId)} />
+        <DocumentDetailView />
       </>
+    );
+  },
+  errorComponent: ({ error }) => {
+    return (
+      <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full">
+        <div className="w-full">
+          <Card className="border-destructive">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircleIcon className="h-5 w-5" />
+                <span>{error.message || "Document not found"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     );
   }
 });

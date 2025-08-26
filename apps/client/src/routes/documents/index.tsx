@@ -1,13 +1,13 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { DocumentsView } from "@/components/documents/DocumentsView";
+import { Loading } from "@/components/core/Loading";
 import { DocumentsTopBar } from "@/components/documents/DocumentsTopBar";
+import { DocumentsView } from "@/components/documents/DocumentsView";
+import { fetchDocuments } from "@/lib/documentApi";
+import { documentsQueryKey } from "@/lib/query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 function DocumentsPage() {
   const navigate = useNavigate();
-
-  const handleNewDocument = () => {
-    navigate({ to: "/documents/publish" });
-  };
+  const handleNewDocument = () => navigate({ to: "/documents/publish" });
 
   return (
     <>
@@ -19,5 +19,13 @@ function DocumentsPage() {
 
 export const Route = createFileRoute("/documents/")({
   staticData: { breadcrumb: () => "Documents" },
+  loader: async ({ context: { queryClient } }) => {
+    await queryClient.ensureQueryData({
+      queryKey: documentsQueryKey,
+      queryFn: fetchDocuments
+    });
+  },
+  pendingComponent: Loading,
+  pendingMs: 100,
   component: DocumentsPage
 });

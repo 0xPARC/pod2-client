@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { formatReplyToId, isMarkdownContent } from "../../lib/contentUtils";
+import { useUpvote } from "@/hooks/useUpvote";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatReplyToId } from "../../lib/contentUtils";
 import { formatDateCompact } from "../../lib/dateUtils";
 import { DocumentReplyTree } from "../../lib/documentApi";
 import { Badge } from "../ui/badge";
@@ -16,40 +17,50 @@ interface DocumentReplyProps {
   currentDocumentPostId: number;
   depth: number;
   rootPostTitle: string;
+  owner: string;
 }
 
 export function DocumentReply({
+  /* @ts-ignore */
+  owner,
   replyTree,
   documentId,
   currentDocumentPostId,
   depth,
   rootPostTitle
 }: DocumentReplyProps) {
+  //const currentUsername = use(Route.useLoaderData().username);
+  // const _isOwner = currentUsername && owner === currentUsername;
+
   const { document } = replyTree;
   const md = useMarkdownRenderer();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const replyRef = useRef<HTMLDivElement>(null);
 
   // Memoize rendered HTML for reply content
   const renderedMessageData = useMemo(() => {
     if (!replyTree.content?.message) return null;
-
-    const isMarkdown = isMarkdownContent(replyTree.content.message);
-
-    if (isMarkdown) {
-      const { html, blocks } = renderMarkdownWithBlocks(
-        md,
-        replyTree.content.message
-      );
-      return { html, blocks, isMarkdown };
-    }
-
-    return { html: null, blocks: [], isMarkdown };
+    const { html, blocks } = renderMarkdownWithBlocks(
+      md,
+      replyTree.content.message
+    );
+    return { html, blocks };
   }, [replyTree.content?.message, md]);
 
   const isReplyToCurrentDoc = document.reply_to?.document_id === documentId;
   const isReplyToCurrentPost =
     document.reply_to?.post_id === currentDocumentPostId;
+
+  // const handleEdit = useCallback(() => {
+  //   navigate({
+  //     to: "/documents/document/$documentId/edit",
+  //     params: {
+  //       documentId: Number(document.id).toString()
+  //     }
+  //   });
+  // }, [document.id, navigate]);
 
   const handleReply = () => {
     const replyToId = formatReplyToId(document.post_id, document.id!);
@@ -82,8 +93,24 @@ export function DocumentReply({
   // Alternate background colors based on depth
   const bgClass = depth % 2 === 0 ? "bg-background" : "bg-muted/20";
 
+  useEffect(() => {
+    if (location.hash === `reply-${document.id}`) {
+      if (replyRef.current) {
+        replyRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+      }
+    }
+  }, [document.id, location.hash]);
+
+  const { count, upvote, isPending } = useUpvote(
+    documentId,
+    document.upvote_count
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={replyRef} id={`reply-${document.id}`}>
       <div className={`border rounded-md p-3 space-y-3 ${bgClass}`}>
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -100,21 +127,32 @@ export function DocumentReply({
             <span className="text-sm text-muted-foreground">
               {formatDateCompact(document.created_at)}
             </span>
-            {document.upvote_count > 0 && (
-              <>
-                <span
-                  className={`text-sm text-muted-foreground ${isCollapsed ? "hidden" : ""}`}
-                >
-                  •
-                </span>
-                <span
-                  className={`text-sm text-muted-foreground ${isCollapsed ? "hidden" : ""}`}
-                >
-                  {document.upvote_count} upvote
-                  {document.upvote_count !== 1 ? "s" : ""}
-                </span>
-              </>
-            )}
+            <div className="flex items-center gap-1">
+              <span
+                className={`text-sm text-muted-foreground ${isCollapsed ? "hidden" : ""}`}
+              >
+                •
+              </span>
+              <button
+                onClick={upvote}
+                disabled={isPending}
+                className={`transition-colors ${
+                  isPending
+                    ? "text-muted-foreground cursor-not-allowed"
+                    : "text-muted-foreground hover:text-orange-500 cursor-pointer"
+                }`}
+                title="Upvote this document"
+              >
+                ▲
+              </button>
+
+              <span
+                className={`text-sm text-muted-foreground ${isCollapsed ? "hidden" : ""}`}
+              >
+                {count} upvote
+                {count !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
 
           <div
@@ -125,6 +163,19 @@ export function DocumentReply({
                 → This post
               </Badge>
             )}
+
+            {/*
+            TODO: Add edit button back in once document model is refactored
+            {isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={handleEdit}
+              >
+                Edit
+              </Button>
+            )} */}
 
             <Button
               variant="outline"
@@ -140,22 +191,14 @@ export function DocumentReply({
         {/* Expanded Content */}
         <div className={isCollapsed ? "hidden" : ""}>
           {/* Reply Content */}
-          {replyTree.content?.message && (
+          {replyTree.content?.message && renderedMessageData && (
             <div className="mt-3">
-              {renderedMessageData?.isMarkdown ? (
-                <div
-                  className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere prose-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: renderedMessageData.html!
-                  }}
-                />
-              ) : (
-                <div className="prose prose-neutral max-w-none dark:prose-invert prose-sm">
-                  <p className="whitespace-pre-wrap">
-                    {replyTree.content.message}
-                  </p>
-                </div>
-              )}
+              <div
+                className="prose prose-neutral max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-pre:bg-muted prose-pre:border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:overflow-x-auto prose-code:break-all [&_table]:overflow-x-auto [&_table]:max-w-full [&_*]:max-w-full [&_*]:overflow-wrap-anywhere prose-sm"
+                dangerouslySetInnerHTML={{
+                  __html: renderedMessageData.html
+                }}
+              />
             </div>
           )}
 
@@ -206,6 +249,7 @@ export function DocumentReply({
                   currentDocumentPostId={currentDocumentPostId}
                   depth={depth + 1}
                   rootPostTitle={rootPostTitle}
+                  owner={nestedReply.document.uploader_id}
                 />
               ))}
             </div>

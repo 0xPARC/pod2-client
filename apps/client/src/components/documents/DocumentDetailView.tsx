@@ -1,12 +1,12 @@
-import { AlertCircleIcon } from "lucide-react";
-import { useRef } from "react";
+import { DocumentVerificationResult } from "@/lib/documentApi";
+import { Route } from "@/routes/documents/document/$documentId";
+import { Await } from "@tanstack/react-router";
+import { useRef, useState } from "react";
 import { useDocumentActions } from "../../hooks/useDocumentActions";
-import { useDocumentData } from "../../hooks/useDocumentData";
 import { useDocumentSidebarState } from "../../hooks/useDocumentSidebarState";
 import { useFileDownload } from "../../hooks/useFileDownload";
 import { formatBlockQuotes, groupAdjacentBlocks } from "../../lib/blockUtils";
 import { useDocuments } from "../../lib/store";
-import { Card, CardContent } from "../ui/card";
 import { useSidebar } from "../ui/sidebar";
 import { DocumentContent } from "./DocumentContent";
 import { DocumentHeader } from "./DocumentHeader";
@@ -15,11 +15,10 @@ import { RepliesSection } from "./RepliesSection";
 import { TableOfContents } from "./TableOfContents";
 import { VerificationDisplay } from "./VerificationDisplay";
 
-interface DocumentDetailViewProps {
-  documentId: number;
-}
+export function DocumentDetailView() {
+  const { documentId } = Route.useParams();
+  const loaderData = Route.useLoaderData();
 
-export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
   // Get block selection from store
   const { selectedBlockIndices, selectedBlockTexts } = useDocuments();
 
@@ -27,37 +26,19 @@ export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { state: appSidebarState } = useSidebar();
 
-  // Custom hooks for data and state management
-  const {
-    currentDocument,
-    loading,
-    error,
-    verificationResult,
-    replyTree,
-    repliesLoading,
-    repliesError,
-    currentUsername,
-    upvoteCount,
-    setUpvoteCount,
-    setVerificationResult
-  } = useDocumentData(documentId);
+  const [verificationResult, setVerificationResult] =
+    useState<DocumentVerificationResult | null>(null);
 
   const {
     isVerifying,
     verificationError,
-    isUpvoting,
     isDeleting,
     handleVerifyDocument,
-    handleUpvote,
     handleDeleteDocument,
     handleReplyToDocument: handleReplyToDocumentBase,
     handleEditDocument,
     handleQuoteAndReply
-  } = useDocumentActions(
-    currentDocument,
-    setVerificationResult,
-    setUpvoteCount
-  );
+  } = useDocumentActions(loaderData.document, setVerificationResult);
 
   const { downloadingFiles, handleDownloadFile } = useFileDownload();
 
@@ -105,46 +86,10 @@ export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
       verificationResult.upvote_count_verified
   );
 
-  if (loading) {
-    return (
-      <div className="p-6 min-h-screen w-full">
-        <div className="w-full">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  Loading document...
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !currentDocument) {
-    return (
-      <div className="p-6 min-h-screen w-full">
-        <div className="w-full">
-          <Card className="border-destructive">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertCircleIcon className="h-5 w-5" />
-                <span>{error || "Document not found"}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex min-h-calc(100vh - var(--top-bar-height)) w-full">
       {/* Left Sidebar - Table of Contents (Fixed) - Only show for message documents */}
-      {currentDocument.content.message && (
+      {loaderData.document.content.message && (
         <div
           className={`hidden lg:flex flex-col border-r bg-background fixed h-[calc(100vh-var(--top-bar-height))] z-10 ${
             leftSidebarCollapsed ? "w-0 overflow-hidden" : "w-64"
@@ -171,7 +116,7 @@ export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
       <div
         ref={scrollContainerRef}
         className={`flex-1 min-w-0 p-6 ${
-          leftSidebarCollapsed || !currentDocument.content.message
+          leftSidebarCollapsed || !loaderData.document.content.message
             ? "lg:ml-0"
             : "lg:ml-64"
         } ${rightSidebarCollapsed ? "lg:mr-0" : "lg:mr-64"}`}
@@ -179,15 +124,12 @@ export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
         <div className="w-full max-w-4xl mx-auto">
           {/* Document Header */}
           <DocumentHeader
-            currentDocument={currentDocument}
-            upvoteCount={upvoteCount}
-            currentUsername={currentUsername}
-            isUpvoting={isUpvoting}
+            currentDocument={loaderData.document}
+            upvoteCount={loaderData.document.metadata.upvote_count}
             isVerifying={isVerifying}
             isDeleting={isDeleting}
             isVerified={isVerified}
             verificationResult={verificationResult}
-            onUpvote={handleUpvote}
             onReply={handleReplyToDocument}
             onVerify={handleVerifyDocument}
             onEdit={handleEditDocument}
@@ -200,25 +142,29 @@ export function DocumentDetailView({ documentId }: DocumentDetailViewProps) {
           {/* Document Content - Main Focus */}
           <div ref={contentRef}>
             <DocumentContent
-              document={currentDocument}
+              document={loaderData.document}
               downloadingFiles={downloadingFiles}
               onDownloadFile={handleDownloadFile}
               onQuoteText={handleQuoteAndReply}
             />
           </div>
 
-          {/* Replies Section */}
-          <RepliesSection
-            replyTree={replyTree}
-            repliesLoading={repliesLoading}
-            repliesError={repliesError}
-            documentId={documentId}
-            postId={currentDocument.metadata.post_id}
-            rootPostTitle={currentDocument.metadata.title}
-          />
+          <Await promise={loaderData.replyTree}>
+            {(replyTree) => (
+              // TODO Scroll to new reply if it exists
+              <RepliesSection
+                replyTree={replyTree}
+                repliesLoading={false}
+                repliesError={null}
+                documentId={Number(documentId)}
+                postId={loaderData.document.metadata.post_id}
+                rootPostTitle={loaderData.document.metadata.title}
+              />
+            )}
+          </Await>
 
           {/* Technical Details - Moved to Bottom */}
-          <DocumentMetadata document={currentDocument} />
+          <DocumentMetadata document={loaderData.document} />
         </div>
       </div>
 

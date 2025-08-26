@@ -1,5 +1,6 @@
 import { MainPod, SignedPod } from "@pod2/pod2js";
 import { invoke } from "@tauri-apps/api/core";
+import { Result } from "typescript-result";
 
 // =============================================================================
 // Document Server API Types (PodNet)
@@ -385,5 +386,52 @@ export async function getCurrentUsername(): Promise<string | null> {
   } catch (error) {
     console.error("Failed to get current username:", error);
     return null;
+  }
+}
+
+export class AlreadyUpvotedError extends Error {
+  readonly type = "AlreadyUpvotedError";
+}
+
+export class UpvoteFailedError extends Error {
+  readonly type = "UpvoteFailedError";
+}
+
+/**
+ * Upvote a document
+ * @param documentId - The document ID to upvote
+ * @returns Promise resolving to upvote result
+ */
+export async function upvoteDocument(
+  documentId: number
+): Promise<Result<number, UpvoteFailedError | AlreadyUpvotedError>> {
+  try {
+    const serverUrl = await getDocumentServerUrl();
+
+    const result = await invoke<{
+      success: boolean;
+      new_upvote_count: number | null;
+      error_message: string | null;
+      already_upvoted: boolean;
+    }>("upvote_document", {
+      documentId,
+      serverUrl
+    });
+    if (result.success && result.new_upvote_count !== null) {
+      return Result.ok(result.new_upvote_count);
+    } else if (result.already_upvoted) {
+      return Result.error(new AlreadyUpvotedError());
+    } else {
+      return Result.error(
+        new UpvoteFailedError(
+          result.error_message ?? "Failed to upvote document"
+        )
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      return Result.error(new UpvoteFailedError(error.message));
+    }
+    return Result.error(new UpvoteFailedError("An unknown error occurred"));
   }
 }

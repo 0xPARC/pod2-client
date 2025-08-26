@@ -22,7 +22,7 @@ export default defineConfig(async () => ({
   ],
 
   build: {
-    sourcemap: !!process.env.TAURI_ENV_DEBUG
+    sourcemap: true //!!process.env.TAURI_ENV_DEBUG
   },
 
   worker: {

@@ -1,4 +1,7 @@
+import { useUpvoteWithToast } from "@/hooks/useUpvote";
+import { Route } from "@/routes/documents/document/$documentId";
 import { CheckCircleIcon, EditIcon, ReplyIcon, TrashIcon } from "lucide-react";
+import { use } from "react";
 import { formatDate } from "../../lib/dateUtils";
 import { Document } from "../../lib/documentApi";
 import { useDocuments } from "../../lib/store";
@@ -9,13 +12,10 @@ import { Button } from "../ui/button";
 interface DocumentHeaderProps {
   currentDocument: Document;
   upvoteCount: number;
-  currentUsername: string | null;
-  isUpvoting: boolean;
   isVerifying: boolean;
   isDeleting: boolean;
   isVerified: boolean;
   verificationResult: any;
-  onUpvote: () => void;
   onReply: () => void;
   onVerify: () => void;
   onEdit: () => void;
@@ -25,18 +25,16 @@ interface DocumentHeaderProps {
 export function DocumentHeader({
   currentDocument,
   upvoteCount,
-  currentUsername,
-  isUpvoting,
   isVerifying,
   isDeleting,
   isVerified,
   verificationResult,
-  onUpvote,
   onReply,
   onVerify,
   onEdit,
   onDelete
 }: DocumentHeaderProps) {
+  const currentUsername = use(Route.useLoaderData().username);
   const isOwner =
     currentUsername && currentDocument.metadata.uploader_id === currentUsername;
 
@@ -44,16 +42,21 @@ export function DocumentHeader({
   const { selectedBlockIndices } = useDocuments();
   const quotesSelected = selectedBlockIndices.length > 0;
 
+  const { count, upvote, isPending } = useUpvoteWithToast(
+    currentDocument.metadata.id as number,
+    upvoteCount
+  );
+
   return (
     <div className="mb-6">
       <div className="flex items-start gap-4">
         {/* Upvote section */}
         <div className="flex flex-col items-center min-w-[80px] pt-2">
           <button
-            onClick={onUpvote}
-            disabled={isUpvoting}
+            onClick={upvote}
+            disabled={isPending}
             className={`text-3xl mb-2 transition-colors ${
-              isUpvoting
+              isPending
                 ? "text-muted-foreground cursor-not-allowed"
                 : "text-muted-foreground hover:text-orange-500 cursor-pointer"
             }`}
@@ -61,9 +64,7 @@ export function DocumentHeader({
           >
             ▲
           </button>
-          <div className="text-2xl font-bold text-orange-500 mb-1">
-            {upvoteCount}
-          </div>
+          <div className="text-2xl font-bold text-orange-500 mb-1">{count}</div>
           <div className="text-xs text-muted-foreground">upvotes</div>
         </div>
 

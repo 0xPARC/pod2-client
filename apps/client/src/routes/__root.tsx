@@ -1,6 +1,15 @@
 import { AppSidebar } from "@/components/core/AppSidebar";
-import { TopBarSlot } from "@/components/core/TopBarContext";
-import { createRootRoute, Outlet, useMatches } from "@tanstack/react-router";
+import { TopBar } from "@/components/core/TopBar";
+import { TopBarProvider, TopBarSlot } from "@/components/core/TopBarContext";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { createShortcut } from "@/lib/keyboard/types";
+import { useKeyboardShortcuts } from "@/lib/keyboard/useKeyboardShortcuts";
+import { RouterContext } from "@/lib/router";
+import {
+  createRootRouteWithContext,
+  Outlet,
+  useMatches
+} from "@tanstack/react-router";
 import React from "react";
 
 function GlobalBreadcrumbs() {
@@ -44,20 +53,44 @@ function GlobalBreadcrumbs() {
   }
 }
 
+// Component that handles global keyboard shortcuts within the sidebar context
+function GlobalKeyboardShortcuts() {
+  const { toggleSidebar } = useSidebar();
+
+  const globalShortcuts = [
+    createShortcut("b", () => toggleSidebar(), "Toggle Sidebar", {
+      cmd: true
+    })
+  ];
+
+  useKeyboardShortcuts(globalShortcuts, {
+    enabled: true,
+    context: "global"
+  });
+
+  return null;
+}
+
 const RootComponent = function Root() {
   return (
     <>
-      <TopBarSlot position="left">
-        <GlobalBreadcrumbs />
-      </TopBarSlot>
-      <AppSidebar />
-      <div className="pt-(--top-bar-height) w-full h-full overflow-scroll">
-        <Outlet />
-      </div>
+      <SidebarProvider className="h-screen">
+        <TopBarProvider>
+          <GlobalKeyboardShortcuts />
+          <TopBar />
+          <TopBarSlot position="left">
+            <GlobalBreadcrumbs />
+          </TopBarSlot>
+          <AppSidebar />
+          <div className="pt-(--top-bar-height) w-full h-full overflow-scroll">
+            <Outlet />
+          </div>
+        </TopBarProvider>
+      </SidebarProvider>
     </>
   );
 };
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent
 });
