@@ -94,6 +94,28 @@ And a numbered list:
     expect(result.blocks[3]).toContain("3. Third");
   });
 
+  it("should treat nested lists as a single top-level block", () => {
+    const content = `Intro paragraph.
+
+- Item 1
+  - Subitem 1.1
+  - Subitem 1.2
+- Item 2
+
+Outro paragraph.`;
+
+    const result = renderMarkdownWithBlocks(md, content);
+
+    expect(result.blocks).toHaveLength(3);
+    expect(result.blocks[0]).toBe("Intro paragraph.");
+    // Entire nested list should be one block
+    expect(result.blocks[1]).toContain("- Item 1");
+    expect(result.blocks[1]).toContain("- Subitem 1.1");
+    expect(result.blocks[1]).toContain("- Subitem 1.2");
+    expect(result.blocks[1]).toContain("- Item 2");
+    expect(result.blocks[2]).toBe("Outro paragraph.");
+  });
+
   it("should extract blockquotes correctly", () => {
     const content = `Normal text.
 
