@@ -185,7 +185,11 @@ export function DocumentsView() {
       type: "conjunction"
     });
 
-    return formatter.format(authors);
+    return formatter.format(
+      authors.sort((a, b) =>
+        a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase())
+      )
+    );
   };
 
   return (
