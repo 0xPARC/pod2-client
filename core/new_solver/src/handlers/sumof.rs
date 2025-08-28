@@ -173,7 +173,7 @@ impl OpHandler for SumOfFromEntriesHandler {
             // Two-of-three: determine which is unknown
             // Compute target depending on which position is unknown
             // Prefer binding wildcard value directly; if AK var, enumerate choices for root with computed value.
-            let mut mk_ent_bind = |wc_index: usize, val: i64, premises: Vec<(Statement, OpTag)>| {
+            let mk_ent_bind = |wc_index: usize, val: i64, premises: Vec<(Statement, OpTag)>| {
                 if premises.is_empty() {
                     PropagatorResult::Entailed {
                         bindings: vec![(wc_index, Value::from(val))],

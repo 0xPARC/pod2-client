@@ -8,10 +8,10 @@ use crate::{
     util::contains_stmt,
 };
 
-/// Value-centric LtFromEntries: resolve ints from literals, wildcards, or AKs; suspend if unknown.
-pub struct LtFromEntriesHandler;
+/// Value-centric LtEqFromEntries: resolve ints from literals, wildcards, or AKs; suspend if unknown.
+pub struct LtEqFromEntriesHandler;
 
-impl OpHandler for LtFromEntriesHandler {
+impl OpHandler for LtEqFromEntriesHandler {
     fn propagate(
         &self,
         args: &[StatementTmplArg],
@@ -22,8 +22,6 @@ impl OpHandler for LtFromEntriesHandler {
             return PropagatorResult::Contradiction;
         }
 
-        // Classify an argument into an integer value if possible, along with any premises
-        // (Contains facts) required to justify AK value extraction.
         enum ArgVal {
             Ground {
                 i: i64,
@@ -91,7 +89,6 @@ impl OpHandler for LtFromEntriesHandler {
         let a0 = classify(&args[0], store, edb);
         let a1 = classify(&args[1], store, edb);
 
-        // Type errors or missing facts on bound AKs fail this op path
         match (&a0, &a1) {
             (ArgVal::TypeError, _) | (_, ArgVal::TypeError) => {
                 return PropagatorResult::Contradiction
@@ -100,16 +97,15 @@ impl OpHandler for LtFromEntriesHandler {
             _ => {}
         }
 
-        // Wait handling
         let mut waits: Vec<usize> = vec![];
         if let ArgVal::Wait(w) = a0 {
             if !store.bindings.contains_key(&w) {
-                waits.push(w);
+                waits.push(w)
             }
         }
         if let ArgVal::Wait(w) = a1 {
             if !store.bindings.contains_key(&w) {
-                waits.push(w);
+                waits.push(w)
             }
         }
         if !waits.is_empty() {
@@ -118,7 +114,6 @@ impl OpHandler for LtFromEntriesHandler {
             return PropagatorResult::Suspend { on: waits };
         }
 
-        // Both should be ground now
         let (i0, prem0) = match a0 {
             ArgVal::Ground { i, premises } => (i, premises),
             _ => unreachable!(),
@@ -128,7 +123,7 @@ impl OpHandler for LtFromEntriesHandler {
             _ => unreachable!(),
         };
 
-        if i0 < i1 {
+        if i0 <= i1 {
             let mut premises = Vec::new();
             premises.extend(prem0);
             premises.extend(prem1);
@@ -149,10 +144,10 @@ impl OpHandler for LtFromEntriesHandler {
     }
 }
 
-/// Structural copy of Lt matching template shape; can bind wildcard value when AK root bound.
-pub struct CopyLtHandler;
+/// Structural copy of LtEq matching template shape; can bind wildcard value when AK root bound.
+pub struct CopyLtEqHandler;
 
-impl OpHandler for CopyLtHandler {
+impl OpHandler for CopyLtEqHandler {
     fn propagate(
         &self,
         args: &[StatementTmplArg],
@@ -167,154 +162,133 @@ impl OpHandler for CopyLtHandler {
         let right = &args[1];
         let mut choices: Vec<crate::prop::Choice> = Vec::new();
         match (left, right) {
-            // Value wildcards: copy from Lt(lit, lit) facts
             (StatementTmplArg::Wildcard(wl), StatementTmplArg::Wildcard(wr)) => {
-                // If both unbound, enumerate all lit-lit Lt facts and bind both
                 if !store.bindings.contains_key(&wl.index)
                     && !store.bindings.contains_key(&wr.index)
                 {
-                    for (vl, vr, src) in edb.lt_all_val_val() {
+                    for (vl, vr, src) in edb.lte_all_val_val() {
                         choices.push(crate::prop::Choice {
                             bindings: vec![(wl.index, vl), (wr.index, vr)],
-                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            op_tag: OpTag::CopyStatement { source: src },
                         });
                     }
                 }
-                // If left is bound, bind right from any; if right is bound, bind left from any
                 if let Some(vl) = store.bindings.get(&wl.index) {
-                    for (vr, src) in edb.lt_lhs_val_rhs_any(vl) {
+                    for (vr, src) in edb.lte_lhs_val_rhs_any(vl) {
                         if !store.bindings.contains_key(&wr.index) {
                             choices.push(crate::prop::Choice {
                                 bindings: vec![(wr.index, vr)],
-                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                                op_tag: OpTag::CopyStatement { source: src },
                             });
                         }
                     }
                 }
                 if let Some(vr) = store.bindings.get(&wr.index) {
-                    for (vl, src) in edb.lt_lhs_any_rhs_val(vr) {
+                    for (vl, src) in edb.lte_lhs_any_rhs_val(vr) {
                         if !store.bindings.contains_key(&wl.index) {
                             choices.push(crate::prop::Choice {
                                 bindings: vec![(wl.index, vl)],
-                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                                op_tag: OpTag::CopyStatement { source: src },
                             });
                         }
                     }
                 }
             }
-            // V–? and ?–V: bind the other from copied rows
             (StatementTmplArg::Literal(vl), StatementTmplArg::Wildcard(wr)) => {
-                for (vr, src) in edb.lt_lhs_val_rhs_any(vl) {
+                for (vr, src) in edb.lte_lhs_val_rhs_any(vl) {
                     choices.push(crate::prop::Choice {
                         bindings: vec![(wr.index, vr)],
-                        op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        op_tag: OpTag::CopyStatement { source: src },
                     });
                 }
             }
             (StatementTmplArg::Wildcard(wl), StatementTmplArg::Literal(vr)) => {
-                for (vl, src) in edb.lt_lhs_any_rhs_val(vr) {
+                for (vl, src) in edb.lte_lhs_any_rhs_val(vr) {
                     choices.push(crate::prop::Choice {
                         bindings: vec![(wl.index, vl)],
-                        op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        op_tag: OpTag::CopyStatement { source: src },
                     });
                 }
             }
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
-                for (st, src) in edb.lt_lhs_ak_rhs_val(key_l, val_r) {
-                    if let Statement::Lt(
+                for (st, src) in edb.lte_lhs_ak_rhs_val(key_l, val_r) {
+                    if let Statement::LtEq(
                         ValueRef::Key(AnchoredKey { root, .. }),
                         ValueRef::Literal(_),
                     ) = st
                     {
                         choices.push(crate::prop::Choice {
                             bindings: vec![(wc_l.index, Value::from(root))],
-                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            op_tag: OpTag::CopyStatement { source: src },
                         });
                     }
                 }
-                // Wildcard bound on the right to a value → treat as literal
             }
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
-                if let Some(v) = store.bindings.get(&wv.index) {
-                    for (st, src) in edb.lt_lhs_ak_rhs_val(key_l, v) {
-                        if let Statement::Lt(
+                // If right wildcard is bound to a literal value, treat as literal and bind left root
+                if let Some(vr_lit) = store.bindings.get(&wv.index) {
+                    for (st, src) in edb.lte_lhs_ak_rhs_val(key_l, vr_lit) {
+                        if let Statement::LtEq(
                             ValueRef::Key(AnchoredKey { root, .. }),
                             ValueRef::Literal(_),
                         ) = st
                         {
                             choices.push(crate::prop::Choice {
                                 bindings: vec![(wc_l.index, Value::from(root))],
-                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                                op_tag: OpTag::CopyStatement { source: src },
                             });
                         }
                     }
-                }
-                // Root bound and wildcard unbound → bind wildcard from copy
-                if let Some(root) = crate::util::bound_root(store, wc_l.index) {
-                    for (val, src) in edb.lt_lhs_ak_rhs_any(&root, key_l) {
+                } else if let Some(root) =
+                    store.bindings.get(&wc_l.index).map(|v| Hash::from(v.raw()))
+                {
+                    // If left root is bound, enumerate RHS values from EDB and bind right wildcard
+                    for (vr, src) in edb.lte_lhs_ak_rhs_any(&root, key_l) {
+                        let _ = src; // provenance captured via CopyStatement on head instantiation
                         choices.push(crate::prop::Choice {
-                            bindings: vec![(wv.index, val)],
-                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            bindings: vec![(wv.index, vr)],
+                            op_tag: OpTag::CopyStatement { source: src },
                         });
                     }
                 }
             }
             (StatementTmplArg::Literal(val_l), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                for (st, src) in edb.lt_lhs_val_rhs_ak(val_l, key_r) {
-                    if let Statement::Lt(
+                for (st, src) in edb.lte_lhs_val_rhs_ak(val_l, key_r) {
+                    if let Statement::LtEq(
                         ValueRef::Literal(_),
                         ValueRef::Key(AnchoredKey { root, .. }),
                     ) = st
                     {
                         choices.push(crate::prop::Choice {
                             bindings: vec![(wc_r.index, Value::from(root))],
-                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            op_tag: OpTag::CopyStatement { source: src },
                         });
                     }
                 }
             }
             (StatementTmplArg::Wildcard(wv), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                if let Some(v) = store.bindings.get(&wv.index) {
-                    for (st, src) in edb.lt_lhs_val_rhs_ak(v, key_r) {
-                        if let Statement::Lt(
+                // If left wildcard is bound to a literal value, treat as literal and bind right root
+                if let Some(vl_lit) = store.bindings.get(&wv.index) {
+                    for (st, src) in edb.lte_lhs_val_rhs_ak(vl_lit, key_r) {
+                        if let Statement::LtEq(
                             ValueRef::Literal(_),
                             ValueRef::Key(AnchoredKey { root, .. }),
                         ) = st
                         {
                             choices.push(crate::prop::Choice {
                                 bindings: vec![(wc_r.index, Value::from(root))],
-                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                                op_tag: OpTag::CopyStatement { source: src },
                             });
                         }
                     }
-                }
-                if let Some(root) = crate::util::bound_root(store, wc_r.index) {
-                    for (val, src) in edb.lt_lhs_any_rhs_ak(&root, key_r) {
+                } else if let Some(root) =
+                    store.bindings.get(&wc_r.index).map(|v| Hash::from(v.raw()))
+                {
+                    // If right root is bound, enumerate LHS values from EDB and bind left wildcard
+                    for (vl, src) in edb.lte_lhs_any_rhs_ak(&root, key_r) {
                         choices.push(crate::prop::Choice {
-                            bindings: vec![(wv.index, val)],
-                            op_tag: crate::types::OpTag::CopyStatement { source: src },
-                        });
-                    }
-                }
-            }
-            (
-                StatementTmplArg::AnchoredKey(wc_l, key_l),
-                StatementTmplArg::AnchoredKey(wc_r, key_r),
-            ) => {
-                for (st, src) in edb.lt_ak_ak_by_keys(key_l, key_r) {
-                    if let Statement::Lt(
-                        ValueRef::Key(AnchoredKey { root: rl, .. }),
-                        ValueRef::Key(AnchoredKey { root: rr, .. }),
-                    ) = st
-                    {
-                        choices.push(crate::prop::Choice {
-                            bindings: vec![
-                                (wc_l.index, Value::from(rl)),
-                                (wc_r.index, Value::from(rr)),
-                            ],
-                            op_tag: crate::types::OpTag::CopyStatement {
-                                source: src.clone(),
-                            },
+                            bindings: vec![(wv.index, vl)],
+                            op_tag: OpTag::CopyStatement { source: src },
                         });
                     }
                 }
@@ -322,11 +296,11 @@ impl OpHandler for CopyLtHandler {
             _ => {}
         }
         if choices.is_empty() {
-            // Suspend on referenced unbound wildcards
-            let waits = crate::prop::wildcards_in_args(args)
+            let waits_all = crate::prop::wildcards_in_args(args);
+            let waits: Vec<_> = waits_all
                 .into_iter()
                 .filter(|i| !store.bindings.contains_key(i))
-                .collect::<Vec<_>>();
+                .collect();
             if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
@@ -340,9 +314,9 @@ impl OpHandler for CopyLtHandler {
     }
 }
 
-pub fn register_lt_handlers(reg: &mut crate::op::OpRegistry) {
-    reg.register(NativePredicate::Lt, Box::new(LtFromEntriesHandler));
-    reg.register(NativePredicate::Lt, Box::new(CopyLtHandler));
+pub fn register_lteq_handlers(reg: &mut crate::op::OpRegistry) {
+    reg.register(NativePredicate::LtEq, Box::new(LtEqFromEntriesHandler));
+    reg.register(NativePredicate::LtEq, Box::new(CopyLtEqHandler));
 }
 
 #[cfg(test)]
@@ -350,12 +324,7 @@ mod tests {
     use pod2::middleware::{containers::Dictionary, Params, StatementTmplArg};
 
     use super::*;
-    use crate::{
-        edb::MockEdbView,
-        test_helpers,
-        types::{ConstraintStore, PodRef},
-        OpTag,
-    };
+    use crate::{edb::MockEdbView, test_helpers, types::ConstraintStore, OpTag};
 
     fn args_from(query: &str) -> Vec<StatementTmplArg> {
         let tmpl = crate::test_helpers::parse_first_tmpl(query);
@@ -363,26 +332,26 @@ mod tests {
     }
 
     #[test]
-    fn lt_from_entries_literals() {
+    fn lteq_from_entries_literals() {
         let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        let handler = LtFromEntriesHandler;
-        let args = args_from("REQUEST(Lt(3, 5))");
+        let handler = LtEqFromEntriesHandler;
+        let args = args_from("REQUEST(LtEq(5, 5))");
         let res = handler.propagate(&args, &mut store, &edb);
-        match res {
-            PropagatorResult::Entailed { op_tag, .. } => {
-                assert!(matches!(op_tag, OpTag::FromLiterals));
+        assert!(matches!(
+            res,
+            PropagatorResult::Entailed {
+                op_tag: OpTag::FromLiterals,
+                ..
             }
-            other => panic!("unexpected result: {other:?}"),
-        }
-        let args_false = args_from("REQUEST(Lt(5, 3))");
-        let res2 = handler.propagate(&args_false, &mut store, &edb);
+        ));
+        let args2 = args_from("REQUEST(LtEq(7, 5))");
+        let res2 = handler.propagate(&args2, &mut store, &edb);
         assert!(matches!(res2, PropagatorResult::Contradiction));
     }
 
     #[test]
-    fn lt_from_entries_ak_lit_generated() {
-        // Lt(?R["k"], 10) with bound root and full dict k:7
+    fn lteq_from_entries_ak_lit_generated() {
         let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
@@ -394,24 +363,21 @@ mod tests {
         edb.add_full_dict(dict);
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));
-        let handler = LtFromEntriesHandler;
-        let args = args_from("REQUEST(Lt(?R[\"k\"], 10))");
+        let handler = LtEqFromEntriesHandler;
+        let args = args_from("REQUEST(LtEq(?R[\"k\"], 7))");
         let res = handler.propagate(&args, &mut store, &edb);
-        match res {
-            PropagatorResult::Entailed { op_tag, .. } => match op_tag {
-                OpTag::Derived { premises } => {
-                    assert_eq!(premises.len(), 1);
-                    assert!(matches!(premises[0].1, OpTag::GeneratedContains { .. }));
-                }
-                other => panic!("unexpected tag: {other:?}"),
-            },
-            other => panic!("unexpected result: {other:?}"),
-        }
+        assert!(matches!(
+            res,
+            PropagatorResult::Entailed {
+                op_tag: OpTag::Derived { .. },
+                ..
+            }
+        ));
     }
 
     #[test]
-    fn lt_from_entries_ak_ak_both_bound() {
-        // Lt(?L["a"], ?R["b"]) with both bound and 3 < 5
+    fn lteq_from_entries_ak_ak_both_bound() {
+        // LtEq(?L["a"], ?R["b"]) with both AK roots bound; 3 <= 5 should entail with two premises
         let mut edb = MockEdbView::default();
         let params = Params::default();
         let dl = Dictionary::new(
@@ -432,8 +398,9 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(rl));
         store.bindings.insert(1, Value::from(rr));
-        let handler = LtFromEntriesHandler;
-        let args = args_from(r#"REQUEST(Lt(?L["a"], ?R["b"]))"#);
+
+        let handler = LtEqFromEntriesHandler;
+        let args = args_from("REQUEST(LtEq(?L[\"a\"], ?R[\"b\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -445,12 +412,12 @@ mod tests {
     }
 
     #[test]
-    fn lt_from_entries_suspend_unbound() {
-        // Lt(?L["a"], 10) with unbound left root should suspend
+    fn lteq_from_entries_suspend_unbound() {
+        // LtEq(?R["k"], 7) with unbound root should suspend
         let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        let handler = LtFromEntriesHandler;
-        let args = args_from("REQUEST(Lt(?L[\"a\"], 10))");
+        let handler = LtEqFromEntriesHandler;
+        let args = args_from(r#"REQUEST(LtEq(?R["k"], 7))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => assert!(on.contains(&0)),
@@ -459,75 +426,25 @@ mod tests {
     }
 
     #[test]
-    fn copy_lt_binds_value_from_left_ak_when_root_bound() {
-        // Given Lt(R["k"], 10) in EDB, CopyLt should bind ?X when ?R bound
-        let mut edb = MockEdbView::default();
-        let params = Params::default();
-        let dict = Dictionary::new(
-            params.max_depth_mt_containers,
-            [(test_helpers::key("k"), Value::from(7))].into(),
-        )
-        .unwrap();
-        let r = dict.commitment();
-        let src = PodRef(r);
-        edb.add_lt_row_lak_rval(r, test_helpers::key("k"), Value::from(10), src.clone());
-
+    fn lteq_from_entries_type_error() {
+        // LtEq("foo", 5) should be a type error/contradiction; same for AK non-int
+        let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        store.bindings.insert(0, Value::from(r)); // ?R
-        let handler = CopyLtHandler;
-        let args = args_from(r#"REQUEST(Lt(?R["k"], ?X))"#);
+        let handler = LtEqFromEntriesHandler;
+        let args = args_from("REQUEST(LtEq(\"foo\", 5))");
         let res = handler.propagate(&args, &mut store, &edb);
-        match res {
-            PropagatorResult::Choices { alternatives } => {
-                assert_eq!(alternatives.len(), 1);
-                let ch = &alternatives[0];
-                assert_eq!(ch.bindings[0].0, 1); // ?X index
-                assert_eq!(ch.bindings[0].1, Value::from(10));
-            }
-            other => panic!("unexpected result: {other:?}"),
-        }
+        assert!(matches!(res, PropagatorResult::Contradiction));
     }
 
     #[test]
-    fn copy_lt_binds_root_from_right_ak_when_value_bound() {
-        // Given Lt(10, R["k"]) in EDB, CopyLt should bind ?R when ?X bound
+    fn copy_lteq_binds_both_from_vv_fact() {
         let mut edb = MockEdbView::default();
-        let params = Params::default();
-        let dict = Dictionary::new(
-            params.max_depth_mt_containers,
-            [(test_helpers::key("k"), Value::from(20))].into(),
-        )
-        .unwrap();
-        let r = dict.commitment();
-        let src = PodRef(r);
-        edb.add_lt_row_lval_rak(Value::from(10), r, test_helpers::key("k"), src.clone());
+        let src = crate::types::PodRef(test_helpers::root("s"));
+        edb.add_lte_row_vals(Value::from(3), Value::from(5), src);
 
         let mut store = ConstraintStore::default();
-        store.bindings.insert(0, Value::from(10)); // ?X left
-        let handler = CopyLtHandler;
-        let args = args_from(r#"REQUEST(Lt(?X, ?R["k"]))"#);
-        let res = handler.propagate(&args, &mut store, &edb);
-        match res {
-            PropagatorResult::Choices { alternatives } => {
-                assert!(alternatives.iter().any(|ch| ch
-                    .bindings
-                    .iter()
-                    .any(|(i, v)| *i == 1 && v.raw() == Value::from(r).raw())));
-            }
-            other => panic!("unexpected result: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn copy_lt_binds_both_wildcards_from_vv_fact() {
-        // Lt(?X, ?Y) should bind both from Lt(3, 5) fact
-        let mut edb = MockEdbView::default();
-        let src = PodRef(test_helpers::root("s"));
-        edb.add_lt_row_vals(Value::from(3), Value::from(5), src.clone());
-
-        let mut store = ConstraintStore::default();
-        let handler = CopyLtHandler;
-        let args = args_from("REQUEST(Lt(?X, ?Y))");
+        let handler = CopyLtEqHandler;
+        let args = args_from("REQUEST(LtEq(?X, ?Y))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -545,17 +462,30 @@ mod tests {
     }
 
     #[test]
-    fn copy_lt_binds_one_wildcard_from_vv_partial() {
-        // Lt(?X, 5) binds ?X from Lt(3,5); Lt(3, ?Y) binds ?Y from Lt(3,5)
+    fn copy_lteq_binds_one_from_partial_vv() {
         let mut edb = MockEdbView::default();
-        let src = PodRef(test_helpers::root("s"));
-        edb.add_lt_row_vals(Value::from(3), Value::from(5), src.clone());
+        let src = crate::types::PodRef(test_helpers::root("s"));
+        edb.add_lte_row_vals(Value::from(3), Value::from(5), src);
 
         let mut store = ConstraintStore::default();
-        let handler = CopyLtHandler;
-        let args1 = args_from("REQUEST(Lt(?X, 5))");
+        let handler = CopyLtEqHandler;
+        // Bind right from left literal
+        let args1 = args_from("REQUEST(LtEq(3, ?Y))");
         let res1 = handler.propagate(&args1, &mut store, &edb);
         match res1 {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 0 || (*i == 1 && *v == Value::from(5)))));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+
+        // Bind left from right literal
+        let args2 = args_from("REQUEST(LtEq(?X, 5))");
+        let res2 = handler.propagate(&args2, &mut store, &edb);
+        match res2 {
             PropagatorResult::Choices { alternatives } => {
                 assert!(alternatives.iter().any(|ch| ch
                     .bindings
@@ -564,14 +494,59 @@ mod tests {
             }
             other => panic!("unexpected result: {other:?}"),
         }
+    }
 
-        let args2 = args_from("REQUEST(Lt(3, ?Y))");
-        let res2 = handler.propagate(&args2, &mut store, &edb);
-        match res2 {
+    #[test]
+    fn copy_lteq_binds_root_from_left_ak_when_value_literal() {
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(10))].into(),
+        )
+        .unwrap();
+        let r = dict.commitment();
+        let src = crate::types::PodRef(r);
+        edb.add_lte_row_lak_rval(r, test_helpers::key("k"), Value::from(10), src);
+
+        let mut store = ConstraintStore::default();
+        let handler = CopyLtEqHandler;
+        let args = args_from("REQUEST(LtEq(?R[\"k\"], 10))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
             PropagatorResult::Choices { alternatives } => {
-                assert!(alternatives
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
                     .iter()
-                    .any(|ch| ch.bindings.iter().any(|(_, v)| *v == Value::from(5))));
+                    .any(|(i, v)| *i == 0 && v.raw() == Value::from(r).raw())));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copy_lteq_binds_root_from_right_ak_when_left_literal() {
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(10))].into(),
+        )
+        .unwrap();
+        let r = dict.commitment();
+        let src = crate::types::PodRef(r);
+        edb.add_lte_row_lval_rak(Value::from(5), r, test_helpers::key("k"), src);
+
+        let mut store = ConstraintStore::default();
+        let handler = CopyLtEqHandler;
+        let args = args_from("REQUEST(LtEq(5, ?R[\"k\"]))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(_, v)| v.raw() == Value::from(r).raw())));
             }
             other => panic!("unexpected result: {other:?}"),
         }

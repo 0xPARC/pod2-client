@@ -94,6 +94,35 @@ pub trait EdbView: Send + Sync {
     fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
         Vec::new()
     }
+
+    // LtEq copy helpers (parallel to Lt)
+    fn lte_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lte_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_val_rhs_val(&self, _val_l: &Value, _val_r: &Value) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_val_rhs_any(&self, _val_l: &Value) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lte_lhs_any_rhs_val(&self, _val_r: &Value) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lte_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
+        Vec::new()
+    }
 }
 
 /// Trivial empty EDB for scaffolding.
@@ -107,6 +136,8 @@ pub struct MockEdbView {
     pub equal_rows: Vec<(Statement, PodRef)>,
     /// Lt rows available to copy.
     pub lt_rows: Vec<(Statement, PodRef)>,
+    /// LtEq rows available to copy.
+    pub lte_rows: Vec<(Statement, PodRef)>,
     /// Copied Contains facts: (root, key_hash) -> Vec<(value, PodRef)>
     pub contains_copied: HashMap<(Hash, Hash), Vec<(Value, PodRef)>>,
     /// Full dictionaries registered: root -> key_hash -> value
@@ -186,6 +217,36 @@ impl MockEdbView {
     pub fn add_lt_row_vals(&mut self, vl: Value, vr: Value, src: PodRef) {
         let st = Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr));
         self.lt_rows.push((st, src));
+    }
+    pub fn add_lte_row_lak_rval(
+        &mut self,
+        root: pod2::middleware::Hash,
+        key: Key,
+        val: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::LtEq(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.lte_rows.push((st, src));
+    }
+    pub fn add_lte_row_lval_rak(
+        &mut self,
+        val: Value,
+        root: pod2::middleware::Hash,
+        key: Key,
+        src: PodRef,
+    ) {
+        let st = Statement::LtEq(
+            ValueRef::Literal(val),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+        );
+        self.lte_rows.push((st, src));
+    }
+    pub fn add_lte_row_vals(&mut self, vl: Value, vr: Value, src: PodRef) {
+        let st = Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr));
+        self.lte_rows.push((st, src));
     }
 
     /// Register a SumOf row for copying.
@@ -457,6 +518,116 @@ impl EdbView for MockEdbView {
             .iter()
             .filter_map(|(st, src)| match st {
                 Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
+                    Some((vl.clone(), vr.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    // LtEq support
+    fn lte_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::LtEq(
+                    ValueRef::Key(AnchoredKey { key: k, .. }),
+                    ValueRef::Literal(v),
+                ) => k.hash() == key.hash() && v == val,
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lte_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::LtEq(
+                    ValueRef::Literal(v),
+                    ValueRef::Key(AnchoredKey { key: k, .. }),
+                ) => v == val && k.hash() == key.hash(),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lte_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::LtEq(
+                    ValueRef::Key(AnchoredKey { key: lk, .. }),
+                    ValueRef::Key(AnchoredKey { key: rk, .. }),
+                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lte_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::LtEq(
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                    ValueRef::Literal(v),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+    fn lte_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::LtEq(
+                    ValueRef::Literal(v),
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+    fn lte_lhs_val_rhs_val(&self, val_l: &Value, val_r: &Value) -> Vec<(Statement, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
+                    vl == val_l && vr == val_r
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lte_lhs_val_rhs_any(&self, val_l: &Value) -> Vec<(Value, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vl == val_l => {
+                    Some((vr.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    fn lte_lhs_any_rhs_val(&self, val_r: &Value) -> Vec<(Value, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vr == val_r => {
+                    Some((vl.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    fn lte_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
+        self.lte_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
                     Some((vl.clone(), vr.clone(), src.clone()))
                 }
                 _ => None,

@@ -101,10 +101,9 @@ pub fn register_rules_from_batch(reg: &mut RuleRegistry, batch: &Arc<CustomPredi
                     Predicate::Native(_) => {}
                     Predicate::Custom(other) => {
                         if other == &cpr {
-                            log::warn!("Rejecting self-recursive AND body statement in {:?}", cpr);
+                            log::warn!("Rejecting self-recursive AND body statement in {cpr:?}");
                             reg.push_warning(format!(
-                                "Rejecting self-recursive AND statement in {:?}",
-                                cpr
+                                "Rejecting self-recursive AND statement in {cpr:?}"
                             ));
                             ok = false;
                             break;
@@ -151,10 +150,9 @@ pub fn register_rules_from_batch(reg: &mut RuleRegistry, batch: &Arc<CustomPredi
                     }
                     Predicate::Custom(other) => {
                         if other == &cpr {
-                            log::warn!("Rejecting self-recursive OR branch in {:?}", cpr);
+                            log::warn!("Rejecting self-recursive OR branch in {cpr:?}");
                             reg.push_warning(format!(
-                                "Rejecting self-recursive OR branch in {:?}",
-                                cpr
+                                "Rejecting self-recursive OR branch in {cpr:?}"
                             ));
                             continue;
                         } else {

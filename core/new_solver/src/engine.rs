@@ -455,7 +455,7 @@ impl<'a> Engine<'a> {
         // Build new goals: body + remaining goals without the custom goal
         let mut ng = Vec::with_capacity(goals.len() - 1 + remapped_body.len());
         // Prefer to evaluate body first
-        ng.extend(remapped_body.into_iter());
+        ng.extend(remapped_body);
         for (i, g) in goals.iter().enumerate() {
             if i != goal_idx {
                 ng.push(g.clone());
@@ -535,6 +535,7 @@ mod tests {
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
         register_lt_handlers(&mut reg);
+        crate::handlers::lteq::register_lteq_handlers(&mut reg);
 
         // Build goals via parser: Equal(?R["k"], 1) and Lt(?R["x"], 10)
         let processed = parse(
@@ -830,6 +831,7 @@ mod tests {
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
         register_lt_handlers(&mut reg);
+        crate::register_lteq_handlers(&mut reg);
         register_sumof_handlers(&mut reg);
         register_contains_handlers(&mut reg);
         // Alternative path: define predicate and request in a single Podlang program
