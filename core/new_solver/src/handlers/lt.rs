@@ -326,6 +326,65 @@ mod tests {
             other => panic!("unexpected result: {other:?}"),
         }
     }
+
+    #[test]
+    fn copy_lt_binds_both_wildcards_from_vv_fact() {
+        // Lt(?X, ?Y) should bind both from Lt(3, 5) fact
+        let mut edb = MockEdbView::default();
+        let src = PodRef(test_helpers::root("s"));
+        edb.add_lt_row_vals(Value::from(3), Value::from(5), src.clone());
+
+        let mut store = ConstraintStore::default();
+        let handler = CopyLtHandler;
+        let args = args_from("REQUEST(Lt(?X, ?Y))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 0 && *v == Value::from(3))));
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 1 && *v == Value::from(5))));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copy_lt_binds_one_wildcard_from_vv_partial() {
+        // Lt(?X, 5) binds ?X from Lt(3,5); Lt(3, ?Y) binds ?Y from Lt(3,5)
+        let mut edb = MockEdbView::default();
+        let src = PodRef(test_helpers::root("s"));
+        edb.add_lt_row_vals(Value::from(3), Value::from(5), src.clone());
+
+        let mut store = ConstraintStore::default();
+        let handler = CopyLtHandler;
+        let args1 = args_from("REQUEST(Lt(?X, 5))");
+        let res1 = handler.propagate(&args1, &mut store, &edb);
+        match res1 {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 0 && *v == Value::from(3))));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+
+        let args2 = args_from("REQUEST(Lt(3, ?Y))");
+        let res2 = handler.propagate(&args2, &mut store, &edb);
+        match res2 {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives
+                    .iter()
+                    .any(|ch| ch.bindings.iter().any(|(_, v)| *v == Value::from(5))));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
 }
 
 /// Structural copy of Lt matching template shape; can bind wildcard value when AK root bound.
@@ -346,6 +405,58 @@ impl OpHandler for CopyLtHandler {
         let right = &args[1];
         let mut choices: Vec<crate::prop::Choice> = Vec::new();
         match (left, right) {
+            // Value wildcards: copy from Lt(lit, lit) facts
+            (StatementTmplArg::Wildcard(wl), StatementTmplArg::Wildcard(wr)) => {
+                // If both unbound, enumerate all lit-lit Lt facts and bind both
+                if !store.bindings.contains_key(&wl.index)
+                    && !store.bindings.contains_key(&wr.index)
+                {
+                    for (vl, vr, src) in edb.lt_all_val_val() {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wl.index, vl), (wr.index, vr)],
+                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        });
+                    }
+                }
+                // If left is bound, bind right from any; if right is bound, bind left from any
+                if let Some(vl) = store.bindings.get(&wl.index) {
+                    for (vr, src) in edb.lt_lhs_val_rhs_any(vl) {
+                        if !store.bindings.contains_key(&wr.index) {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wr.index, vr)],
+                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            });
+                        }
+                    }
+                }
+                if let Some(vr) = store.bindings.get(&wr.index) {
+                    for (vl, src) in edb.lt_lhs_any_rhs_val(vr) {
+                        if !store.bindings.contains_key(&wl.index) {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wl.index, vl)],
+                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            });
+                        }
+                    }
+                }
+            }
+            // V–? and ?–V: bind the other from copied rows
+            (StatementTmplArg::Literal(vl), StatementTmplArg::Wildcard(wr)) => {
+                for (vr, src) in edb.lt_lhs_val_rhs_any(vl) {
+                    choices.push(crate::prop::Choice {
+                        bindings: vec![(wr.index, vr)],
+                        op_tag: crate::types::OpTag::CopyStatement { source: src },
+                    });
+                }
+            }
+            (StatementTmplArg::Wildcard(wl), StatementTmplArg::Literal(vr)) => {
+                for (vl, src) in edb.lt_lhs_any_rhs_val(vr) {
+                    choices.push(crate::prop::Choice {
+                        bindings: vec![(wl.index, vl)],
+                        op_tag: crate::types::OpTag::CopyStatement { source: src },
+                    });
+                }
+            }
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
                 for (st, src) in edb.lt_lhs_ak_rhs_val(key_l, val_r) {
                     if let Statement::Lt(

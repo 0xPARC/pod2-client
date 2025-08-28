@@ -327,6 +327,41 @@ mod tests {
     }
 
     #[test]
+    fn equal_from_entries_ak_v_bound_to_full_dictionary_value_normalizes_root() {
+        // Bind the AK root wildcard to a full Dictionary value; handler should normalize to its commitment
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let root = dict.commitment();
+        edb.add_full_dict(dict.clone());
+
+        let mut store = ConstraintStore::default();
+        // Attempt to bind wildcard to the full dictionary value (normalize to commitment internally)
+        store.bindings.insert(0, Value::from(dict));
+
+        let handler = EqualFromEntriesHandler;
+        let args = args_from("REQUEST(Equal(?R[\"k\"], 1))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { op_tag, .. } => match op_tag {
+                OpTag::Derived { premises } => {
+                    assert_eq!(premises.len(), 1);
+                    match &premises[0].1 {
+                        OpTag::GeneratedContains { root: r, .. } => assert_eq!(*r, root),
+                        other => panic!("unexpected tag: {other:?}"),
+                    }
+                }
+                other => panic!("unexpected tag: {other:?}"),
+            },
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
     fn copy_equal_binds_wildcard_from_left_ak() {
         // CopyEqual should bind ?X when ?R is bound and Equal(R["k"], 1) exists to copy
         let mut edb = MockEdbView::default();

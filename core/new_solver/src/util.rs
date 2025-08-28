@@ -1,4 +1,9 @@
-use pod2::middleware::{Hash, Key, Statement, Value, ValueRef};
+use std::collections::HashMap;
+
+use pod2::middleware::{
+    AnchoredKey, Hash, Key, NativePredicate, Predicate, Statement, StatementTmpl, StatementTmplArg,
+    Value, ValueRef,
+};
 
 use crate::{
     edb::{ContainsSource, EdbView},
@@ -105,4 +110,70 @@ pub fn enumerate_other_root_choices(
     edb: &dyn EdbView,
 ) -> Vec<Choice> {
     enumerate_choices_for(other_key, bound_val, other_wc_index, edb)
+}
+
+/// Instantiate a concrete head `Statement` from a goal template under current bindings.
+/// Returns None if required wildcards are unbound.
+pub fn instantiate_goal(
+    tmpl: &StatementTmpl,
+    bindings: &HashMap<usize, Value>,
+) -> Option<Statement> {
+    fn arg_to_vr(arg: &StatementTmplArg, bindings: &HashMap<usize, Value>) -> Option<ValueRef> {
+        match arg {
+            StatementTmplArg::Literal(v) => Some(ValueRef::Literal(v.clone())),
+            StatementTmplArg::Wildcard(w) => {
+                bindings.get(&w.index).map(|v| ValueRef::Literal(v.clone()))
+            }
+            StatementTmplArg::AnchoredKey(w, key) => bindings.get(&w.index).map(|v| {
+                let root = Hash::from(v.raw());
+                ValueRef::Key(AnchoredKey::new(root, key.clone()))
+            }),
+            StatementTmplArg::None => None,
+        }
+    }
+
+    match tmpl.pred {
+        Predicate::Native(NativePredicate::Equal) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::Equal(a0, a1))
+        }
+        Predicate::Native(NativePredicate::Lt) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::Lt(a0, a1))
+        }
+        Predicate::Native(NativePredicate::LtEq) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::LtEq(a0, a1))
+        }
+        Predicate::Native(NativePredicate::Contains) => {
+            if tmpl.args.len() != 3 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            let a2 = arg_to_vr(&tmpl.args[2], bindings)?;
+            Some(Statement::Contains(a0, a1, a2))
+        }
+        Predicate::Native(NativePredicate::NotContains) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::NotContains(a0, a1))
+        }
+        _ => None,
+    }
 }

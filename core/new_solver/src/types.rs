@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use pod2::middleware::{
-    CustomPredicateRef, Hash as RootHash, Key, Statement, StatementTmplArg, Value,
-};
+use pod2::middleware::{CustomPredicateRef, Hash, Key, Statement, StatementTmplArg, Value};
 
 /// Unique identifier for a frame.
 pub type FrameId = usize;
@@ -26,7 +24,7 @@ pub struct SubgoalTable {
 #[derive(Clone, Debug, PartialEq)]
 pub enum OpTag {
     CopyStatement {
-        source: PodRef,
+        source: PodRef, // The PodRef of the source Pod we copied the statement from
     },
     FromLiterals,
     Derived {
@@ -39,15 +37,16 @@ pub enum OpTag {
     /// A Contains premise that is justified because the solver has a full dictionary
     /// and can generate the membership fact (proof attached later at compilation time).
     GeneratedContains {
-        root: RootHash,
+        root: Hash, // The Merkle root of the dictionary
         key: Key,
         value: Value,
     },
 }
 
-/// Provenance reference to a POD for CopyStatement; opaque at this layer.
+/// Provenance reference to a POD for CopyStatement.
+/// This is the Pod::statements_hash.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PodRef(pub RootHash);
+pub struct PodRef(pub Hash);
 
 /// Local constraint store per producer branch.
 #[derive(Clone, Debug, Default)]

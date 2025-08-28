@@ -53,6 +53,18 @@ pub trait EdbView: Send + Sync {
     fn lt_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
         Vec::new()
     }
+    fn lt_lhs_val_rhs_val(&self, _val_l: &Value, _val_r: &Value) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lt_lhs_val_rhs_any(&self, _val_l: &Value) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lt_lhs_any_rhs_val(&self, _val_r: &Value) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lt_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
+        Vec::new()
+    }
 
     fn value_of_ak(&self, _root: &Hash, _key: &Key) -> Option<Value> {
         None
@@ -65,6 +77,21 @@ pub trait EdbView: Send + Sync {
 
     /// Enumerate roots that can justify Contains(root,key,val) along with their provenance.
     fn enumerate_contains_sources(&self, _key: &Key, _val: &Value) -> Vec<(Hash, ContainsSource)> {
+        Vec::new()
+    }
+
+    /// CopyContains support: list copied values for (root,key).
+    fn contains_copied_values(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+
+    /// ContainsFromEntries support: get a value only if it comes from a full dictionary (generation).
+    fn contains_full_value(&self, _root: &Hash, _key: &Key) -> Option<Value> {
+        None
+    }
+
+    /// Enumerate SumOf rows for CopySumOf (MVP helper).
+    fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
         Vec::new()
     }
 }
@@ -84,6 +111,8 @@ pub struct MockEdbView {
     pub contains_copied: HashMap<(Hash, Hash), Vec<(Value, PodRef)>>,
     /// Full dictionaries registered: root -> key_hash -> value
     pub full_dicts: HashMap<Hash, HashMap<Hash, Value>>,
+    /// SumOf rows available to copy.
+    pub sum_rows: Vec<(Statement, PodRef)>,
 }
 
 fn key_hash(k: &Key) -> Hash {
@@ -153,6 +182,65 @@ impl MockEdbView {
             ValueRef::Key(AnchoredKey::new(root, key)),
         );
         self.lt_rows.push((st, src));
+    }
+    pub fn add_lt_row_vals(&mut self, vl: Value, vr: Value, src: PodRef) {
+        let st = Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr));
+        self.lt_rows.push((st, src));
+    }
+
+    /// Register a SumOf row for copying.
+    pub fn add_sum_row_vals(&mut self, a: Value, b: Value, c: Value, src: PodRef) {
+        let st = Statement::SumOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.sum_rows.push((st, src));
+    }
+    pub fn add_sum_row_ak_val_val(
+        &mut self,
+        root: Hash,
+        key: Key,
+        b: Value,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::SumOf(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.sum_rows.push((st, src));
+    }
+    pub fn add_sum_row_val_ak_val(
+        &mut self,
+        a: Value,
+        root: Hash,
+        key: Key,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::SumOf(
+            ValueRef::Literal(a),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(c),
+        );
+        self.sum_rows.push((st, src));
+    }
+    pub fn add_sum_row_val_val_ak(
+        &mut self,
+        a: Value,
+        b: Value,
+        root: Hash,
+        key: Key,
+        src: PodRef,
+    ) {
+        let st = Statement::SumOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+        );
+        self.sum_rows.push((st, src));
     }
 }
 
@@ -330,6 +418,52 @@ impl EdbView for MockEdbView {
             .collect()
     }
 
+    fn lt_lhs_val_rhs_val(&self, val_l: &Value, val_r: &Value) -> Vec<(Statement, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
+                    vl == val_l && vr == val_r
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lt_lhs_val_rhs_any(&self, val_l: &Value) -> Vec<(Value, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vl == val_l => {
+                    Some((vr.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    fn lt_lhs_any_rhs_val(&self, val_r: &Value) -> Vec<(Value, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vr == val_r => {
+                    Some((vl.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    fn lt_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
+                    Some((vl.clone(), vr.clone(), src.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     fn value_of_ak(&self, root: &Hash, key: &Key) -> Option<Value> {
         // Prefer Contains fact
         if let Some(v) = self.contains_value(root, key) {
@@ -387,6 +521,23 @@ impl EdbView for MockEdbView {
             }
         }
         out
+    }
+
+    fn contains_copied_values(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.contains_copied
+            .get(&(*root, key_hash(key)))
+            .cloned()
+            .unwrap_or_else(Vec::new)
+    }
+
+    fn contains_full_value(&self, root: &Hash, key: &Key) -> Option<Value> {
+        self.full_dicts
+            .get(root)
+            .and_then(|m| m.get(&key_hash(key)).cloned())
+    }
+
+    fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
+        self.sum_rows.clone()
     }
 }
 
