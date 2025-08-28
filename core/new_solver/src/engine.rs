@@ -452,14 +452,69 @@ impl<'a> Engine<'a> {
                 cont_store.bindings.insert(hw.index, v.clone());
             }
         }
-        // Build new goals: body + remaining goals without the custom goal
-        let mut ng = Vec::with_capacity(goals.len() - 1 + remapped_body.len());
-        // Prefer to evaluate body first
-        ng.extend(remapped_body);
+        // Build new goals: propagate allowed parent constraints, then body, then remaining goals
+        use pod2::middleware::NativePredicate;
+        // Head wildcard indices (outer frame) referenced by the call
+        let mut head_wcs: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for a in call_args.iter() {
+            match a {
+                StatementTmplArg::Wildcard(w) => {
+                    head_wcs.insert(w.index);
+                }
+                StatementTmplArg::AnchoredKey(w, _) => {
+                    head_wcs.insert(w.index);
+                }
+                _ => {}
+            }
+        }
+        // Collect indices of parent goals to propagate (monotonic natives over head vars)
+        let mut propagate_idxs: Vec<usize> = Vec::new();
         for (i, g) in goals.iter().enumerate() {
-            if i != goal_idx {
+            if i == goal_idx {
+                continue;
+            }
+            let pred_ok = matches!(
+                g.pred,
+                Predicate::Native(NativePredicate::Lt)
+                    | Predicate::Native(NativePredicate::LtEq)
+                    | Predicate::Native(NativePredicate::NotContains)
+            );
+            if !pred_ok {
+                continue;
+            }
+            // All wildcards must be within head set
+            let wcs = crate::prop::wildcards_in_args(&g.args);
+            if wcs.iter().all(|w| head_wcs.contains(w)) {
+                propagate_idxs.push(i);
+            }
+        }
+
+        let mut ng =
+            Vec::with_capacity(goals.len() - 1 + remapped_body.len() + propagate_idxs.len());
+        // Prepend propagated constraints (de-dup if already present in body)
+        let mut propagated_count = 0usize;
+        for i in propagate_idxs.iter().cloned() {
+            let g = goals[i].clone();
+            if remapped_body.contains(&g) {
+                continue;
+            }
+            propagated_count += 1;
+            ng.push(g);
+        }
+        // Then the body
+        ng.extend(remapped_body);
+        // Then remaining parent goals excluding the custom goal and any propagated ones
+        for (i, g) in goals.iter().enumerate() {
+            if i != goal_idx && !propagate_idxs.contains(&i) {
                 ng.push(g.clone());
             }
+        }
+        if propagated_count > 0 {
+            log::debug!(
+                "Propagated {} calling-context constraints into {:?}",
+                propagated_count,
+                cpr
+            );
         }
         // Push a pending custom deduction to materialize on success
         cont_store.pending_custom.push(PendingCustom {
@@ -507,8 +562,8 @@ mod tests {
     use crate::{
         edb::MockEdbView,
         handlers::{
-            register_contains_handlers, register_equal_handlers, register_lt_handlers,
-            register_sumof_handlers,
+            lteq::register_lteq_handlers, register_contains_handlers, register_equal_handlers,
+            register_lt_handlers, register_sumof_handlers,
         },
         op::OpRegistry,
         types::ConstraintStore,
@@ -603,6 +658,127 @@ mod tests {
             saw_equal && saw_lt,
             "expected Equal and Lt proof steps recorded"
         );
+    }
+
+    #[test]
+    fn engine_propagates_calling_context_constraints_into_subcall() {
+        // Parent has Lt(?A, 20); subcall binds ?A via Equal from entries
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        // Two dicts: one satisfies A=15 (<20), another violates A=25
+        let d_ok = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("x"), Value::from(15))].into(),
+        )
+        .unwrap();
+        let d_bad = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("x"), Value::from(25))].into(),
+        )
+        .unwrap();
+        let r_ok = d_ok.commitment();
+        let r_bad = d_bad.commitment();
+        edb.add_full_dict(d_ok);
+        edb.add_full_dict(d_bad);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
+        register_lteq_handlers(&mut reg);
+
+        // Define helper AND that ties A to R["x"], then call it under top-level Lt(?A,20)
+        // and Equal(?R["x"], 15) to ground the subcall.
+        let input = r#"
+            helper(A, R) = AND(
+                Equal(?R["x"], ?A)
+            )
+
+            REQUEST(
+                Lt(?A, 20)
+                Equal(?R["x"], 15)
+                helper(?A, ?R)
+            )
+        "#;
+        let processed = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        // Expect at least one answer with (A=15, R=r_ok) and no answer with R=r_bad
+        let has_ok = engine.answers.iter().any(|st| {
+            st.bindings.get(&0) == Some(&Value::from(15))
+                && st.bindings.get(&1).map(|v| v.raw()) == Some(Value::from(r_ok).raw())
+        });
+        assert!(has_ok, "expected an answer with A=15 and R=r_ok");
+        let has_bad = engine
+            .answers
+            .iter()
+            .any(|st| st.bindings.get(&1).map(|v| v.raw()) == Some(Value::from(r_bad).raw()));
+        assert!(!has_bad, "should not bind R to r_bad");
+    }
+
+    #[test]
+    fn engine_does_not_propagate_constraints_with_private_vars() {
+        // A parent constraint mentioning a non-head wildcard should not be propagated
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        let d = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("x"), Value::from(10))].into(),
+        )
+        .unwrap();
+        edb.add_full_dict(d);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
+
+        // The Lt(?Z, 5) constraint mentions ?Z which is not in helper's head → must not be propagated
+        let input = r#"
+            helper(A, R) = AND(
+                Equal(?R["x"], ?A)
+            )
+
+            REQUEST(
+                Lt(?Z, 5)
+                helper(?A, ?R)
+            )
+        "#;
+        let processed = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        // Register rules but don't enqueue request yet
+        crate::custom::register_rules_from_batch(&mut engine.rules, &processed.custom_batch);
+        // Build parent goals vector
+        let parent_goals = processed.request.templates().to_vec();
+        // Locate the predicate ref
+        let cpr = if let Predicate::Custom(ref c) = parent_goals[1].pred {
+            c.clone()
+        } else {
+            panic!("expected custom")
+        };
+        let rules = engine.rules.get(&cpr).to_vec();
+        assert!(!rules.is_empty());
+        // Expand the custom rule
+        let frame = engine
+            .expand_custom_rule(
+                0,
+                &parent_goals,
+                &ConstraintStore::default(),
+                1,
+                &cpr,
+                &rules[0],
+            )
+            .expect("frame");
+        // The first goal should be the body Equal, not the unrelated Lt(?Z,5)
+        if let Frame::Producer { goals, .. } = frame {
+            // The propagated list should not include Lt(?Z,5) since Z is not in helper head
+            use pod2::middleware::NativePredicate;
+            if let Predicate::Native(NativePredicate::Lt) = goals[0].pred {
+                panic!("unexpected propagation of private Lt");
+            }
+        } else {
+            panic!("unexpected frame kind");
+        }
     }
 
     // Suspend/park/wake integration tests will be added after broader wakeup wiring.
