@@ -1,3 +1,4 @@
+pub mod custom;
 pub mod edb;
 pub mod engine;
 pub mod handlers;
@@ -8,6 +9,7 @@ pub mod test_helpers;
 pub mod types;
 pub mod util;
 
+pub use custom::*;
 pub use edb::*;
 pub use engine::*;
 pub use handlers::*;

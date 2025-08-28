@@ -1,10 +1,11 @@
 use pod2::middleware::{Predicate, StatementTmpl, StatementTmplArg};
 
 use crate::{
+    custom::{remap_arg, remap_tmpl, CustomRule, RuleRegistry},
     edb::EdbView,
     op::OpRegistry,
     prop::{Choice, PropagatorResult},
-    types::{ConstraintStore, FrameId},
+    types::{ConstraintStore, FrameId, PendingCustom},
 };
 
 #[derive(Clone, Debug)]
@@ -148,6 +149,7 @@ pub struct Engine<'a> {
     pub edb: &'a dyn EdbView,
     pub sched: Scheduler,
     pub answers: Vec<crate::types::ConstraintStore>,
+    pub rules: RuleRegistry,
 }
 
 impl<'a> Engine<'a> {
@@ -157,7 +159,21 @@ impl<'a> Engine<'a> {
             edb,
             sched: Scheduler::default(),
             answers: Vec::new(),
+            rules: RuleRegistry::default(),
         }
+    }
+
+    /// Convenience: load a parsed Podlang program (custom predicates + request),
+    /// register its custom predicates as conjunctive rules, and enqueue the request goals.
+    pub fn load_processed(&mut self, processed: &pod2::lang::processor::PodlangOutput) {
+        crate::custom::register_rules_from_batch(&mut self.rules, &processed.custom_batch);
+        let goals = processed.request.templates().to_vec();
+        let id0 = self.sched.new_id();
+        self.sched.enqueue(Frame::Producer {
+            id: id0,
+            goals,
+            store: ConstraintStore::default(),
+        });
     }
 
     pub fn run(&mut self) {
@@ -166,7 +182,29 @@ impl<'a> Engine<'a> {
                 Frame::Producer { id, goals, store } => {
                     if goals.is_empty() {
                         // Record a completed answer (bindings and any accumulated premises)
-                        self.answers.push(store.clone());
+                        let mut final_store = store.clone();
+                        // Materialize any pending custom deductions as head proof steps
+                        if !final_store.pending_custom.is_empty() {
+                            let pendings = final_store.pending_custom.clone();
+                            for p in pendings.into_iter() {
+                                if let Some(head) = crate::util::instantiate_custom(
+                                    &p.rule_id,
+                                    &p.head_args,
+                                    &final_store.bindings,
+                                ) {
+                                    let premises = final_store.premises.clone();
+                                    final_store.premises.push((
+                                        head,
+                                        crate::types::OpTag::CustomDeduction {
+                                            rule_id: p.rule_id.clone(),
+                                            premises,
+                                        },
+                                    ));
+                                }
+                            }
+                            final_store.pending_custom.clear();
+                        }
+                        self.answers.push(final_store);
                         continue;
                     }
                     // Evaluate goals sequentially; branch on the first goal that yields choices.
@@ -177,11 +215,34 @@ impl<'a> Engine<'a> {
                     let mut any_stmt_for_park: Option<StatementTmpl> = None;
                     for (idx, g) in goals.iter().enumerate() {
                         let tmpl_args: Vec<StatementTmplArg> = g.args.clone();
+                        // Handle native vs custom
+                        let is_custom = matches!(g.pred, Predicate::Custom(_));
+                        if is_custom {
+                            // Expand simple conjunctive custom rules (non-recursive, single-head) into body goals
+                            if let Predicate::Custom(ref cpr) = g.pred {
+                                let rules = self.rules.get(cpr).to_vec();
+                                if !rules.is_empty() {
+                                    let mut produced_any = false;
+                                    for rule in rules.iter() {
+                                        if let Some(cont) = self
+                                            .expand_custom_rule(id, &goals, &store, idx, cpr, rule)
+                                        {
+                                            self.sched.enqueue(cont);
+                                            produced_any = true;
+                                        }
+                                    }
+                                    if produced_any {
+                                        chosen_goal_idx = Some(idx);
+                                        choices_for_goal = Vec::new();
+                                        break;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         let goal_pred = match g.pred {
                             Predicate::Native(p) => p,
-                            Predicate::Custom(_)
-                            | Predicate::BatchSelf(_)
-                            | Predicate::Intro(_) => continue,
+                            _ => unreachable!(),
                         };
                         let mut local_choices: Vec<Choice> = Vec::new();
                         let mut suspended_here = false;
@@ -333,6 +394,106 @@ impl<'a> Engine<'a> {
             }
         }
     }
+
+    /// Expand a custom rule into a continuation frame: bind head args against call args,
+    /// remap rule-local wildcards to the current frame index space, and push body goals.
+    fn expand_custom_rule(
+        &mut self,
+        frame_id: FrameId,
+        goals: &[StatementTmpl],
+        store: &ConstraintStore,
+        goal_idx: usize,
+        cpr: &pod2::middleware::CustomPredicateRef,
+        rule: &CustomRule,
+    ) -> Option<Frame> {
+        // For MVP, require rule head arity matches and head args are Wildcards.
+        if rule.head.len() != goals[goal_idx].args.len() {
+            return None;
+        }
+        // Build mapping from rule wildcard indices to outer frame wildcard indices.
+        use std::collections::HashMap;
+        let mut map: HashMap<usize, usize> = HashMap::new();
+        let mut next_idx = self.next_available_wildcard_index(goals, store) + 1;
+        let call_args = &goals[goal_idx].args;
+
+        // Seed mapping from head
+        for (h, call) in rule.head.iter().zip(call_args.iter()) {
+            match (h, call) {
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Wildcard(cw)) => {
+                    map.insert(hw.index, cw.index);
+                }
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::AnchoredKey(cw, _)) => {
+                    map.insert(hw.index, cw.index);
+                }
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(v)) => {
+                    // Allocate a fresh wildcard to hold this literal binding
+                    let target = next_idx;
+                    map.insert(hw.index, target);
+                    next_idx += 1;
+                    // We will apply this binding in the continuation store below
+                }
+                _ => {
+                    // For MVP, don't support non-wildcard heads
+                    return None;
+                }
+            }
+        }
+
+        // Remap head args and body
+        let remapped_head: Vec<StatementTmplArg> =
+            rule.head.iter().map(|a| remap_arg(a, &map)).collect();
+        let remapped_body: Vec<StatementTmpl> =
+            rule.body.iter().map(|t| remap_tmpl(t, &map)).collect();
+
+        // Build continuation store and apply literal bindings from call args
+        let mut cont_store = store.clone();
+        for (h, call) in remapped_head.iter().zip(call_args.iter()) {
+            if let (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(v)) = (h, call) {
+                cont_store.bindings.insert(hw.index, v.clone());
+            }
+        }
+        // Build new goals: body + remaining goals without the custom goal
+        let mut ng = Vec::with_capacity(goals.len() - 1 + remapped_body.len());
+        // Prefer to evaluate body first
+        ng.extend(remapped_body.into_iter());
+        for (i, g) in goals.iter().enumerate() {
+            if i != goal_idx {
+                ng.push(g.clone());
+            }
+        }
+        // Push a pending custom deduction to materialize on success
+        cont_store.pending_custom.push(PendingCustom {
+            rule_id: cpr.clone(),
+            head_args: remapped_head,
+        });
+
+        Some(Frame::Producer {
+            id: self.sched.new_id(),
+            goals: ng,
+            store: cont_store,
+        })
+    }
+
+    fn next_available_wildcard_index(
+        &self,
+        goals: &[StatementTmpl],
+        store: &ConstraintStore,
+    ) -> usize {
+        let mut max_idx = 0usize;
+        for g in goals.iter() {
+            for a in g.args.iter() {
+                match a {
+                    StatementTmplArg::Wildcard(w) => max_idx = max_idx.max(w.index),
+                    StatementTmplArg::AnchoredKey(w, _) => max_idx = max_idx.max(w.index),
+                    _ => {}
+                }
+            }
+        }
+        for k in store.bindings.keys() {
+            max_idx = max_idx.max(*k);
+        }
+        max_idx
+    }
 }
 
 #[cfg(test)]
@@ -345,7 +506,10 @@ mod tests {
     use super::*;
     use crate::{
         edb::MockEdbView,
-        handlers::{register_equal_handlers, register_lt_handlers},
+        handlers::{
+            register_contains_handlers, register_equal_handlers, register_lt_handlers,
+            register_sumof_handlers,
+        },
         op::OpRegistry,
         types::ConstraintStore,
     };
@@ -638,5 +802,242 @@ mod tests {
             saw_gen,
             "expected GeneratedContains premise to be preferred"
         );
+    }
+
+    #[test]
+    fn engine_custom_conjunctive_rule_end_to_end() {
+        use pod2::middleware::CustomPredicateRef;
+
+        let params = Params::default();
+        // EDB: R has some_key:20; C has other_key:20
+        let mut edb = MockEdbView::default();
+        let dict_r = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("some_key"), Value::from(20))].into(),
+        )
+        .unwrap();
+        let dict_c = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("other_key"), Value::from(20))].into(),
+        )
+        .unwrap();
+        let root_r = dict_r.commitment();
+        let root_c = dict_c.commitment();
+        edb.add_full_dict(dict_r);
+        edb.add_full_dict(dict_c);
+
+        // Registry with all needed native handlers
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
+        register_sumof_handlers(&mut reg);
+        register_contains_handlers(&mut reg);
+        // Alternative path: define predicate and request in a single Podlang program
+        let input = r#"
+            my_pred(A, R, C) = AND(
+                Lt(?A, 50)
+                Equal(?R["some_key"], ?A)
+                Equal(?C["other_key"], ?A)
+                SumOf(?R["some_key"], 19, 1)
+            )
+
+            REQUEST(
+                my_pred(?A, ?R, ?C)
+            )
+        "#;
+        let processed2 = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        // Load and enqueue via helper
+        engine.load_processed(&processed2);
+        let cpr = CustomPredicateRef::new(processed2.custom_batch.clone(), 0);
+        engine.run();
+
+        assert_eq!(engine.answers.len(), 1);
+        let ans = &engine.answers[0];
+        // Check bindings
+        assert_eq!(ans.bindings.get(&0), Some(&Value::from(20))); // A = 20
+        assert_eq!(
+            ans.bindings.get(&1).map(|v| v.raw()),
+            Some(Value::from(root_r).raw())
+        );
+        assert_eq!(
+            ans.bindings.get(&2).map(|v| v.raw()),
+            Some(Value::from(root_c).raw())
+        );
+
+        // Check that a CustomDeduction head was recorded
+        use pod2::middleware::Statement;
+        let mut saw_custom = false;
+        for (stmt, tag) in ans.premises.iter() {
+            if let Statement::Custom(pred, vals) = stmt {
+                if *pred == cpr {
+                    assert_eq!(vals.len(), 3);
+                    assert_eq!(vals[0], Value::from(20));
+                    assert_eq!(vals[1].raw(), Value::from(root_r).raw());
+                    assert_eq!(vals[2].raw(), Value::from(root_c).raw());
+                    if let crate::types::OpTag::CustomDeduction { .. } = tag {
+                        saw_custom = true;
+                    }
+                }
+            }
+        }
+        assert!(saw_custom, "expected CustomDeduction head in premises");
+    }
+
+    #[test]
+    fn engine_custom_or_rule_enumerates_roots() {
+        use pod2::middleware::CustomPredicateRef;
+
+        let params = Params::default();
+        // EDB: two roots with a:1 and a:2 respectively
+        let mut edb = MockEdbView::default();
+        let d1 = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("a"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let r1 = d1.commitment();
+        edb.add_full_dict(d1);
+        let d2 = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("a"), Value::from(2))].into(),
+        )
+        .unwrap();
+        let r2 = d2.commitment();
+        edb.add_full_dict(d2);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        // Define disjunctive predicate and request
+        let input = r#"
+            my_pred(R) = OR(
+                Equal(?R["a"], 1)
+                Equal(?R["a"], 2)
+            )
+
+            REQUEST(
+                my_pred(?R)
+            )
+        "#;
+        let processed = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
+        engine.run();
+
+        // Expect two answers binding ?R to r1 and r2
+        let roots: std::collections::HashSet<_> = engine
+            .answers
+            .iter()
+            .filter_map(|st| st.bindings.get(&0).cloned())
+            .map(|v| pod2::middleware::Hash::from(v.raw()))
+            .collect();
+        assert!(roots.contains(&r1) && roots.contains(&r2));
+
+        // Each answer should include a CustomDeduction head for my_pred
+        use pod2::middleware::Statement;
+        for st in engine.answers.iter() {
+            assert!(st.premises.iter().any(|(stmt, tag)| {
+                match stmt {
+                    Statement::Custom(pred, _vals) if *pred == cpr => {
+                        matches!(tag, crate::types::OpTag::CustomDeduction { .. })
+                    }
+                    _ => false,
+                }
+            }));
+        }
+    }
+
+    #[test]
+    fn engine_custom_or_with_custom_branch() {
+        // OR with a custom subcall branch (non-recursive) + native branch
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        let _ = env_logger::builder().is_test(true).try_init();
+        // Root has x:7
+        let d = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("x"), Value::from(7))].into(),
+        )
+        .unwrap();
+        let r = d.commitment();
+        edb.add_full_dict(d);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        // helper(R) = AND(Equal(?R["x"], 7))
+        // my_pred(R) = OR(helper(?R), Equal(?R["x"], 8))
+        let input = r#"
+            helper(R) = AND(
+                Equal(?R["x"], 7)
+            )
+
+            my_pred(R) = OR(
+                helper(?R)
+                Equal(?R["x"], 8)
+            )
+
+            REQUEST(
+                my_pred(?R)
+            )
+        "#;
+        let processed = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert_eq!(engine.answers.len(), 1);
+        let ans = &engine.answers[0];
+        assert_eq!(
+            ans.bindings.get(&0).map(|v| v.raw()),
+            Some(Value::from(r).raw())
+        );
+    }
+
+    #[test]
+    fn engine_custom_or_rejects_self_recursion() {
+        // Bad(R) = OR(Bad(?R), Equal(?R["y"], 1)) should reject the recursive branch and still solve via Equal
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        let d = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("y"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let r = d.commitment();
+        edb.add_full_dict(d);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        let input = r#"
+            Bad(R) = OR(
+                Bad(?R)
+                Equal(?R["y"], 1)
+            )
+
+            REQUEST(
+                Bad(?R)
+            )
+        "#;
+        let processed = parse(input, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert_eq!(engine.answers.len(), 1);
+        let ans = &engine.answers[0];
+        assert_eq!(
+            ans.bindings.get(&0).map(|v| v.raw()),
+            Some(Value::from(r).raw())
+        );
+        // Registry should record a recursion rejection warning
+        assert!(engine
+            .rules
+            .warnings
+            .iter()
+            .any(|w| w.contains("self-recursive OR branch")));
     }
 }

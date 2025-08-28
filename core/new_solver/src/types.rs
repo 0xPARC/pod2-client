@@ -56,4 +56,13 @@ pub struct ConstraintStore {
     pub premises: Vec<(Statement, OpTag)>,
     pub input_pods: HashSet<PodRef>,
     pub operation_count: usize,
+    /// Stack of pending custom deductions to materialize upon success.
+    pub pending_custom: Vec<PendingCustom>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCustom {
+    pub rule_id: CustomPredicateRef,
+    /// Head arguments expressed as template args using the remapped wildcards.
+    pub head_args: Vec<StatementTmplArg>,
 }

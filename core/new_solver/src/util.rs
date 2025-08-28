@@ -177,3 +177,25 @@ pub fn instantiate_goal(
         _ => None,
     }
 }
+
+/// Instantiate a custom statement from head args under current bindings.
+pub fn instantiate_custom(
+    pred: &pod2::middleware::CustomPredicateRef,
+    head_args: &[StatementTmplArg],
+    bindings: &HashMap<usize, Value>,
+) -> Option<Statement> {
+    fn arg_to_value(arg: &StatementTmplArg, bindings: &HashMap<usize, Value>) -> Option<Value> {
+        match arg {
+            StatementTmplArg::Literal(v) => Some(v.clone()),
+            StatementTmplArg::Wildcard(w) => bindings.get(&w.index).cloned(),
+            // For MVP, disallow AnchoredKey in custom head; require resolved root value in head
+            StatementTmplArg::AnchoredKey(_, _) => None,
+            StatementTmplArg::None => None,
+        }
+    }
+    let mut vals: Vec<Value> = Vec::with_capacity(head_args.len());
+    for a in head_args.iter() {
+        vals.push(arg_to_value(a, bindings)?);
+    }
+    Some(Statement::Custom(pred.clone(), vals))
+}
