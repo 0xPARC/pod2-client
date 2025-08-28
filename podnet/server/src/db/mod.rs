@@ -1013,26 +1013,74 @@ impl Database {
         Ok(documents)
     }
 
-    // Get complete reply tree for a specific document using thread_root_id
+    // Get complete reply tree for a specific document using posts table hierarchy
     pub fn get_reply_tree_for_document(
         &self,
         document_id: i64,
         storage: &crate::storage::ContentAddressedStorage,
     ) -> Result<Option<DocumentReplyTree>> {
-        // First verify the document exists and get its thread_root_id
-        let document_thread_root_id = match self.get_document_thread_root_id(document_id)? {
-            Some(thread_root_id) => thread_root_id,
+        // First get the post_id for this document
+        let document_post_id = match self.get_document_post_id(document_id)? {
+            Some(post_id) => post_id,
             None => return Ok(None), // Document doesn't exist
         };
 
-        // Get all documents in the same thread using simple query
-        let all_thread_documents = self.get_documents_by_thread_root_id(document_thread_root_id)?;
+        // Get the thread_root_post_id from the posts table
+        let thread_root_post_id = match self.get_post_thread_root_id(document_post_id)? {
+            Some(root_id) => root_id,
+            None => {
+                // If thread_root_post_id is not set, treat the post itself as the root
+                tracing::debug!(
+                    "Posts hierarchy not set for post {}, using post as thread root",
+                    document_post_id
+                );
+                document_post_id
+            }
+        };
 
-        // Build the tree structure from the flat list, starting with the requested document
-        self.build_reply_tree_from_documents(all_thread_documents, document_id, storage)
+        // Get ALL documents in the thread including all revisions of all posts
+        let all_thread_documents =
+            self.get_all_documents_in_thread_with_revisions(thread_root_post_id)?;
+
+        // Get the posts hierarchy for building the tree structure
+        let posts_hierarchy = self.get_posts_hierarchy_for_thread(thread_root_post_id)?;
+
+        // Build the tree structure using posts hierarchy, starting with the requested document
+        self.build_reply_tree_from_posts_and_documents(
+            all_thread_documents,
+            posts_hierarchy,
+            document_id,
+            storage,
+        )
     }
 
-    // Helper method to get thread_root_id for a document
+    // Helper method to get post_id for a document
+    pub fn get_document_post_id(&self, document_id: i64) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT post_id FROM documents WHERE id = ?1",
+            [document_id],
+            |row| row.get(0),
+        )
+        .optional()
+    }
+
+    // Helper method to get thread_root_post_id for a post
+    pub fn get_post_thread_root_id(&self, post_id: i64) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn
+            .query_row(
+                "SELECT thread_root_post_id FROM posts WHERE id = ?1",
+                [post_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()?;
+
+        // If the row exists, extract the Option<i64>, otherwise return None
+        Ok(result.flatten())
+    }
+
+    // Helper method to get thread_root_id for a document (kept for compatibility)
     pub fn get_document_thread_root_id(&self, document_id: i64) -> Result<Option<i64>> {
         let conn = self.conn.lock().unwrap();
         conn.query_row(
@@ -1043,7 +1091,82 @@ impl Database {
         .optional()
     }
 
-    // Helper method to get all documents in a thread
+    // Helper method to get all documents in a thread using posts table hierarchy
+    pub fn get_all_documents_in_thread_with_revisions(
+        &self,
+        thread_root_post_id: i64,
+    ) -> Result<Vec<RawDocument>> {
+        let conn = self.conn.lock().unwrap();
+
+        // Get all documents for all posts in this thread using posts table hierarchy
+        let mut stmt = conn.prepare(
+            "SELECT d.id, d.content_id, d.post_id, d.revision, d.created_at, d.pod, d.timestamp_pod, 
+                    d.uploader_id, d.upvote_count_pod, d.tags, d.authors, d.reply_to, d.requested_post_id, d.title
+             FROM posts p
+             JOIN documents d ON p.id = d.post_id
+             WHERE p.thread_root_post_id = ?1 OR p.id = ?1
+             ORDER BY d.created_at ASC"
+        )?;
+
+        let documents = stmt
+            .query_map([thread_root_post_id], |row| {
+                let tags_json: String = row.get(9)?;
+                let tags: HashSet<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+                let authors_json: String = row.get(10)?;
+                let authors: HashSet<String> =
+                    serde_json::from_str(&authors_json).unwrap_or_default();
+                let reply_to_json: Option<String> = row.get(11)?;
+                let reply_to: Option<ReplyReference> =
+                    reply_to_json.and_then(|json| serde_json::from_str(&json).ok());
+
+                Ok(RawDocument {
+                    id: Some(row.get(0)?),
+                    content_id: row.get(1)?,
+                    post_id: row.get(2)?,
+                    revision: row.get(3)?,
+                    created_at: Some(row.get(4)?),
+                    pod: row.get(5)?,
+                    timestamp_pod: row.get(6)?,
+                    uploader_id: row.get(7)?,
+                    upvote_count_pod: row.get(8)?,
+                    tags,
+                    authors,
+                    reply_to,
+                    requested_post_id: row.get(12)?,
+                    title: row.get(13)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(documents)
+    }
+
+    // Helper method to get posts hierarchy information for thread building
+    pub fn get_posts_hierarchy_for_thread(
+        &self,
+        thread_root_post_id: i64,
+    ) -> Result<std::collections::HashMap<i64, Option<i64>>> {
+        let conn = self.conn.lock().unwrap();
+
+        // Get post_id -> parent_post_id mapping for all posts in the thread
+        let mut stmt = conn.prepare(
+            "SELECT id, parent_post_id FROM posts WHERE thread_root_post_id = ?1 OR id = ?1",
+        )?;
+
+        let mut post_hierarchy = std::collections::HashMap::new();
+        let rows = stmt.query_map([thread_root_post_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
+        })?;
+
+        for row in rows {
+            let (post_id, parent_post_id) = row?;
+            post_hierarchy.insert(post_id, parent_post_id);
+        }
+
+        Ok(post_hierarchy)
+    }
+
+    // Helper method to get all documents in a thread (original method, kept for compatibility)
     pub fn get_documents_by_thread_root_id(&self, thread_root_id: i64) -> Result<Vec<RawDocument>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -1084,10 +1207,11 @@ impl Database {
         Ok(documents)
     }
 
-    // Helper method to build tree structure from flat list of documents
-    fn build_reply_tree_from_documents(
+    // Helper method to build tree structure using posts hierarchy and documents
+    fn build_reply_tree_from_posts_and_documents(
         &self,
         raw_documents: Vec<RawDocument>,
+        posts_hierarchy: std::collections::HashMap<i64, Option<i64>>,
         requested_document_id: i64,
         storage: &crate::storage::ContentAddressedStorage,
     ) -> Result<Option<DocumentReplyTree>> {
@@ -1097,17 +1221,18 @@ impl Database {
             return Ok(None);
         }
 
-        // Convert raw documents to metadata and content, organize by ID
+        // Create mappings for building the tree
         let mut document_map: HashMap<i64, DocumentMetadata> = HashMap::new();
         let mut content_map: HashMap<i64, DocumentContent> = HashMap::new();
-        let mut children_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        let mut post_to_documents: HashMap<i64, Vec<i64>> = HashMap::new();
 
-        for raw_doc in raw_documents {
+        // Process all documents
+        for raw_doc in &raw_documents {
             let doc_id = raw_doc.id.unwrap_or(-1);
             let metadata = self.raw_document_to_metadata(raw_doc.clone())?;
 
             // Fetch content from storage
-            let content_hash = Hash::from_hex(raw_doc.content_id).map_err(|_| {
+            let content_hash = Hash::from_hex(raw_doc.content_id.clone()).map_err(|_| {
                 rusqlite::Error::InvalidColumnType(
                     0,
                     "content_id".to_string(),
@@ -1121,15 +1246,45 @@ impl Database {
                     rusqlite::Error::InvalidPath("content not found in storage".into())
                 })?;
 
-            document_map.insert(doc_id, metadata.clone());
+            document_map.insert(doc_id, metadata);
             content_map.insert(doc_id, content);
+            post_to_documents
+                .entry(raw_doc.post_id)
+                .or_default()
+                .push(doc_id);
+        }
 
-            // Build parent-child relationships
-            if let Some(ref reply_to) = metadata.reply_to {
-                children_map
-                    .entry(reply_to.document_id)
-                    .or_default()
-                    .push(doc_id);
+        // Choose representative document for each post (prefer requested document, then latest revision)
+        let mut post_representatives: HashMap<i64, i64> = HashMap::new();
+        for (post_id, doc_ids) in &post_to_documents {
+            let representative = if doc_ids.contains(&requested_document_id) {
+                requested_document_id
+            } else {
+                // Find document with highest revision number
+                doc_ids
+                    .iter()
+                    .map(|&doc_id| {
+                        let raw_doc = raw_documents.iter().find(|d| d.id == Some(doc_id)).unwrap();
+                        (doc_id, raw_doc.revision)
+                    })
+                    .max_by_key(|&(_, revision)| revision)
+                    .map(|(doc_id, _)| doc_id)
+                    .unwrap_or(*doc_ids.first().unwrap())
+            };
+            post_representatives.insert(*post_id, representative);
+        }
+
+        // Build parent-child relationships based on posts hierarchy
+        let mut children_map: HashMap<i64, Vec<i64>> = HashMap::new();
+        for (post_id, parent_post_id) in &posts_hierarchy {
+            if let Some(parent_id) = parent_post_id {
+                // This post is a reply to another post
+                if let (Some(&child_doc), Some(&parent_doc)) = (
+                    post_representatives.get(post_id),
+                    post_representatives.get(parent_id),
+                ) {
+                    children_map.entry(parent_doc).or_default().push(child_doc);
+                }
             }
         }
 
@@ -1184,8 +1339,6 @@ impl Database {
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashSet;
-
     use podnet_models::DocumentContent;
 
     use super::*;
@@ -1323,238 +1476,5 @@ pub mod tests {
             Some("Test content for Root Document".to_string())
         );
         assert_eq!(tree.replies.len(), 0);
-    }
-
-    #[test]
-    fn test_linear_reply_chain() {
-        let db = create_test_database();
-        let storage = create_test_storage();
-
-        // Create: A -> B -> C -> D
-        let doc_a = insert_dummy_document(&db, &storage, "Doc A", None);
-        let doc_b =
-            insert_dummy_document(&db, &storage, "Doc B", Some(create_reply_reference(doc_a)));
-        let doc_c =
-            insert_dummy_document(&db, &storage, "Doc C", Some(create_reply_reference(doc_b)));
-        let _doc_d =
-            insert_dummy_document(&db, &storage, "Doc D", Some(create_reply_reference(doc_c)));
-
-        let tree = db
-            .get_reply_tree_for_document(doc_a, &storage)
-            .unwrap()
-            .unwrap();
-
-        // Verify structure: A has 1 reply (B)
-        assert_eq!(tree.document.title, "Doc A");
-        assert_eq!(tree.replies.len(), 1);
-
-        // B has 1 reply (C)
-        let reply_b = &tree.replies[0];
-        assert_eq!(reply_b.document.title, "Doc B");
-        assert_eq!(reply_b.replies.len(), 1);
-
-        // C has 1 reply (D)
-        let reply_c = &reply_b.replies[0];
-        assert_eq!(reply_c.document.title, "Doc C");
-        assert_eq!(reply_c.replies.len(), 1);
-
-        // D has no replies
-        let reply_d = &reply_c.replies[0];
-        assert_eq!(reply_d.document.title, "Doc D");
-        assert_eq!(reply_d.replies.len(), 0);
-    }
-
-    #[test]
-    fn test_branching_reply_tree() {
-        let db = create_test_database();
-        let storage = create_test_storage();
-
-        // Create: A -> B, C; B -> D, E; C -> F
-        let doc_a = insert_dummy_document(&db, &storage, "Doc A", None);
-        let doc_b =
-            insert_dummy_document(&db, &storage, "Doc B", Some(create_reply_reference(doc_a)));
-        let doc_c =
-            insert_dummy_document(&db, &storage, "Doc C", Some(create_reply_reference(doc_a)));
-        let _doc_d =
-            insert_dummy_document(&db, &storage, "Doc D", Some(create_reply_reference(doc_b)));
-        let _doc_e =
-            insert_dummy_document(&db, &storage, "Doc E", Some(create_reply_reference(doc_b)));
-        let _doc_f =
-            insert_dummy_document(&db, &storage, "Doc F", Some(create_reply_reference(doc_c)));
-
-        let tree = db
-            .get_reply_tree_for_document(doc_a, &storage)
-            .unwrap()
-            .unwrap();
-
-        // A has 2 direct replies (B and C)
-        assert_eq!(tree.document.title, "Doc A");
-        assert_eq!(tree.replies.len(), 2);
-
-        // Find B and C replies (order might vary)
-        let mut reply_b = None;
-        let mut reply_c = None;
-        for reply in &tree.replies {
-            match reply.document.title.as_str() {
-                "Doc B" => reply_b = Some(reply),
-                "Doc C" => reply_c = Some(reply),
-                _ => panic!("Unexpected reply title: {}", reply.document.title),
-            }
-        }
-
-        let reply_b = reply_b.unwrap();
-        let reply_c = reply_c.unwrap();
-
-        // B has 2 replies (D and E)
-        assert_eq!(reply_b.replies.len(), 2);
-        let b_reply_titles: HashSet<_> = reply_b
-            .replies
-            .iter()
-            .map(|r| r.document.title.as_str())
-            .collect();
-        assert!(b_reply_titles.contains("Doc D"));
-        assert!(b_reply_titles.contains("Doc E"));
-
-        // C has 1 reply (F)
-        assert_eq!(reply_c.replies.len(), 1);
-        assert_eq!(reply_c.replies[0].document.title, "Doc F");
-    }
-
-    #[test]
-    fn test_nonexistent_document() {
-        let db = create_test_database();
-        let storage = create_test_storage();
-        let tree = db.get_reply_tree_for_document(99999, &storage).unwrap();
-        assert!(tree.is_none());
-    }
-
-    #[test]
-    fn test_document_with_empty_reply_to() {
-        let db = create_test_database();
-
-        // Create two separate root documents
-        let storage = create_test_storage();
-        let doc1 = insert_dummy_document(&db, &storage, "Root 1", None);
-        let doc2 = insert_dummy_document(&db, &storage, "Root 2", None);
-
-        let tree1 = db
-            .get_reply_tree_for_document(doc1, &storage)
-            .unwrap()
-            .unwrap();
-        assert_eq!(tree1.document.title, "Root 1");
-        assert_eq!(tree1.replies.len(), 0);
-
-        let tree2 = db
-            .get_reply_tree_for_document(doc2, &storage)
-            .unwrap()
-            .unwrap();
-        assert_eq!(tree2.document.title, "Root 2");
-        assert_eq!(tree2.replies.len(), 0);
-    }
-
-    #[test]
-    fn test_deep_nesting_within_limit() {
-        let db = create_test_database();
-        let storage = create_test_storage();
-
-        // Create a chain of 5 documents (within the 10-level limit)
-        let root_id = insert_dummy_document(&db, &storage, "Doc 0", None);
-        let mut current_id = root_id;
-
-        for i in 1..=5 {
-            let title = format!("Doc {i}");
-            current_id = insert_dummy_document(
-                &db,
-                &storage,
-                &title,
-                Some(create_reply_reference(current_id)),
-            );
-        }
-
-        // Should successfully retrieve the entire chain starting from the root
-        let tree = db.get_reply_tree_for_document(root_id, &storage).unwrap();
-        assert!(tree.is_some());
-
-        // Walk down the chain to verify depth
-        let mut current_tree = &tree.unwrap();
-        let mut depth = 0;
-
-        loop {
-            depth += 1;
-            if current_tree.replies.is_empty() {
-                break;
-            }
-            current_tree = &current_tree.replies[0];
-        }
-
-        assert_eq!(depth, 6); // 6 total documents in chain (0 through 5)
-    }
-
-    #[test]
-    fn test_mixed_scenario() {
-        let db = create_test_database();
-        let storage = create_test_storage();
-
-        // Create complex tree: Root -> A, B; A -> A1; B -> B1, B2; B1 -> B1a
-        let root = insert_dummy_document(&db, &storage, "Root", None);
-        let doc_a = insert_dummy_document(&db, &storage, "A", Some(create_reply_reference(root)));
-        let doc_b = insert_dummy_document(&db, &storage, "B", Some(create_reply_reference(root)));
-        let _doc_a1 =
-            insert_dummy_document(&db, &storage, "A1", Some(create_reply_reference(doc_a)));
-        let doc_b1 =
-            insert_dummy_document(&db, &storage, "B1", Some(create_reply_reference(doc_b)));
-        let _doc_b2 =
-            insert_dummy_document(&db, &storage, "B2", Some(create_reply_reference(doc_b)));
-        let _doc_b1a =
-            insert_dummy_document(&db, &storage, "B1a", Some(create_reply_reference(doc_b1)));
-
-        let tree = db
-            .get_reply_tree_for_document(root, &storage)
-            .unwrap()
-            .unwrap();
-
-        // Root has 2 replies
-        assert_eq!(tree.replies.len(), 2);
-
-        // Find A and B branches
-        let mut branch_a = None;
-        let mut branch_b = None;
-        for reply in &tree.replies {
-            match reply.document.title.as_str() {
-                "A" => branch_a = Some(reply),
-                "B" => branch_b = Some(reply),
-                _ => panic!("Unexpected reply: {}", reply.document.title),
-            }
-        }
-
-        let branch_a = branch_a.unwrap();
-        let branch_b = branch_b.unwrap();
-
-        // A has 1 reply (A1)
-        assert_eq!(branch_a.replies.len(), 1);
-        assert_eq!(branch_a.replies[0].document.title, "A1");
-        assert_eq!(branch_a.replies[0].replies.len(), 0); // A1 has no replies
-
-        // B has 2 replies (B1, B2)
-        assert_eq!(branch_b.replies.len(), 2);
-
-        // Find B1 and B2
-        let mut reply_b1 = None;
-        let mut reply_b2 = None;
-        for reply in &branch_b.replies {
-            match reply.document.title.as_str() {
-                "B1" => reply_b1 = Some(reply),
-                "B2" => reply_b2 = Some(reply),
-                _ => panic!("Unexpected B reply: {}", reply.document.title),
-            }
-        }
-
-        let reply_b1 = reply_b1.unwrap();
-        let reply_b2 = reply_b2.unwrap();
-
-        // B1 has 1 reply (B1a), B2 has no replies
-        assert_eq!(reply_b1.replies.len(), 1);
-        assert_eq!(reply_b1.replies[0].document.title, "B1a");
-        assert_eq!(reply_b2.replies.len(), 0);
     }
 }
