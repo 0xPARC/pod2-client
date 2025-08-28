@@ -6,5 +6,7 @@ pub mod lteq;
 pub use lteq::register_lteq_handlers;
 pub mod contains;
 pub use contains::register_contains_handlers;
+pub mod not_contains;
+pub use not_contains::register_not_contains_handlers;
 pub mod sumof;
 pub use sumof::register_sumof_handlers;

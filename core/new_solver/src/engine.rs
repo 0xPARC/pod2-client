@@ -22,19 +22,22 @@ pub enum Frame {
 
 #[derive(Default)]
 pub struct Scheduler {
-    pub runnable: Vec<Frame>,
+    pub runnable: std::collections::VecDeque<Frame>,
     next_id: FrameId,
     // Suspension bookkeeping
-    waitlist: std::collections::HashMap<usize, std::collections::HashSet<FrameId>>,
+    waitlist: std::collections::BTreeMap<usize, std::collections::BTreeSet<FrameId>>,
     parked: std::collections::HashMap<FrameId, ParkedFrame>,
 }
 
 impl Scheduler {
     pub fn enqueue(&mut self, f: Frame) {
-        self.runnable.push(f);
+        self.runnable.push_back(f);
     }
-    pub fn dequeue(&mut self) -> Option<Frame> {
-        self.runnable.pop()
+    pub fn dequeue(&mut self, policy: SchedulePolicy) -> Option<Frame> {
+        match policy {
+            SchedulePolicy::DepthFirst => self.runnable.pop_back(),
+            SchedulePolicy::BreadthFirst => self.runnable.pop_front(),
+        }
     }
     pub fn new_id(&mut self) -> FrameId {
         let id = self.next_id;
@@ -66,7 +69,7 @@ impl Scheduler {
             self.enqueue(Frame::Producer { id, goals, store });
             return;
         }
-        // Index this parked frame under all waited wildcards
+        // Index this parked frame under all waited wildcards (ordered)
         for w in waiting_on.iter().cloned() {
             self.waitlist.entry(w).or_default().insert(id);
         }
@@ -89,7 +92,9 @@ impl Scheduler {
         let mut runnable = Vec::new();
         let mut woken: HashSet<FrameId> = HashSet::new();
         // For each binding, wake frames waiting on this wildcard
-        for (wid, val) in bindings.iter().cloned() {
+        let mut sorted_bindings = bindings.to_vec();
+        sorted_bindings.sort_by_key(|(w, _)| *w);
+        for (wid, val) in sorted_bindings.into_iter() {
             let ids: Vec<FrameId> = self
                 .waitlist
                 .get(&wid)
@@ -150,6 +155,7 @@ pub struct Engine<'a> {
     pub sched: Scheduler,
     pub answers: Vec<crate::types::ConstraintStore>,
     pub rules: RuleRegistry,
+    pub policy: SchedulePolicy,
 }
 
 impl<'a> Engine<'a> {
@@ -160,7 +166,18 @@ impl<'a> Engine<'a> {
             sched: Scheduler::default(),
             answers: Vec::new(),
             rules: RuleRegistry::default(),
+            policy: SchedulePolicy::DepthFirst,
         }
+    }
+
+    pub fn with_policy(
+        registry: &'a OpRegistry,
+        edb: &'a dyn EdbView,
+        policy: SchedulePolicy,
+    ) -> Self {
+        let mut e = Self::new(registry, edb);
+        e.policy = policy;
+        e
     }
 
     /// Convenience: load a parsed Podlang program (custom predicates + request),
@@ -177,7 +194,7 @@ impl<'a> Engine<'a> {
     }
 
     pub fn run(&mut self) {
-        while let Some(frame) = self.sched.dequeue() {
+        while let Some(frame) = self.sched.dequeue(self.policy) {
             match frame {
                 Frame::Producer { id, goals, store } => {
                     if goals.is_empty() {
@@ -297,23 +314,27 @@ impl<'a> Engine<'a> {
                             continue;
                         }
                     }
-                    // De-dup choices by bindings; prefer GeneratedContains over Copy
+                    // De-dup choices by bindings; prefer GeneratedContains over Copy (deterministic order)
                     if !choices_for_goal.is_empty() {
-                        use std::collections::HashMap;
+                        use std::collections::BTreeMap;
 
                         use crate::types::OpTag;
-                        let mut best: HashMap<
-                            Vec<(usize, pod2::middleware::Value)>,
-                            (i32, Choice),
-                        > = HashMap::new();
+                        // Stable map keyed by a canonical string of bindings
+                        let mut best: BTreeMap<String, (i32, Choice)> = BTreeMap::new();
                         for ch in choices_for_goal.into_iter() {
+                            let mut b = ch.bindings.clone();
+                            b.sort_by_key(|(i, _)| *i);
                             let key = {
-                                let mut b = ch.bindings.clone();
-                                b.sort_by_key(|(i, _)| *i);
-                                b
+                                let mut s = String::new();
+                                for (i, v) in b.iter() {
+                                    use hex::ToHex;
+                                    s.push_str(&format!("{}:", i));
+                                    let raw = v.raw();
+                                    s.push_str(&format!("{}|", raw.encode_hex::<String>()));
+                                }
+                                s
                             };
                             let score = match &ch.op_tag {
-                                // Prefer any outcome that carries a GeneratedContains premise
                                 OpTag::Derived { premises } => {
                                     if premises.iter().any(|(_, tag)| {
                                         matches!(tag, OpTag::GeneratedContains { .. })
@@ -339,8 +360,8 @@ impl<'a> Engine<'a> {
                                 }
                             }
                         }
-                        // Use the best choices
-                        for (_k, (_s, ch)) in best.into_iter() {
+                        // Use the best choices in a stable order
+                        for (_key, (_score, ch)) in best.into_iter() {
                             let mut cont_store = store.clone();
                             for (w, v) in ch.bindings.iter().cloned() {
                                 cont_store.bindings.insert(w, v);
@@ -551,6 +572,12 @@ impl<'a> Engine<'a> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SchedulePolicy {
+    DepthFirst,
+    BreadthFirst,
+}
+
 #[cfg(test)]
 mod tests {
     use pod2::{
@@ -657,6 +684,136 @@ mod tests {
         assert!(
             saw_equal && saw_lt,
             "expected Equal and Lt proof steps recorded"
+        );
+    }
+
+    #[test]
+    fn scheduler_policy_depth_first_vs_breadth_first() {
+        // Build two trivial frames with prepopulated bindings and no goals; check answer order
+        let edb = MockEdbView::default();
+        let reg = OpRegistry::default();
+
+        // Depth-first (default): last enqueued should be answered first
+        let mut eng_dfs = Engine::new(&reg, &edb);
+        let mut s1 = ConstraintStore::default();
+        s1.bindings.insert(0, Value::from(10));
+        let mut s2 = ConstraintStore::default();
+        s2.bindings.insert(0, Value::from(20));
+        let id_a = eng_dfs.sched.new_id();
+        eng_dfs.sched.enqueue(Frame::Producer {
+            id: id_a,
+            goals: vec![],
+            store: s1,
+        });
+        let id_b = eng_dfs.sched.new_id();
+        eng_dfs.sched.enqueue(Frame::Producer {
+            id: id_b,
+            goals: vec![],
+            store: s2,
+        });
+        eng_dfs.run();
+        assert_eq!(eng_dfs.answers.len(), 2);
+        // First answer should be from s2 (20)
+        assert_eq!(eng_dfs.answers[0].bindings.get(&0), Some(&Value::from(20)));
+        assert_eq!(eng_dfs.answers[1].bindings.get(&0), Some(&Value::from(10)));
+
+        // Breadth-first: first enqueued should be answered first
+        let mut eng_bfs = Engine::with_policy(&reg, &edb, SchedulePolicy::BreadthFirst);
+        let mut t1 = ConstraintStore::default();
+        t1.bindings.insert(0, Value::from(1));
+        let mut t2 = ConstraintStore::default();
+        t2.bindings.insert(0, Value::from(2));
+        let id_c = eng_bfs.sched.new_id();
+        eng_bfs.sched.enqueue(Frame::Producer {
+            id: id_c,
+            goals: vec![],
+            store: t1,
+        });
+        let id_d = eng_bfs.sched.new_id();
+        eng_bfs.sched.enqueue(Frame::Producer {
+            id: id_d,
+            goals: vec![],
+            store: t2,
+        });
+        eng_bfs.run();
+        assert_eq!(eng_bfs.answers.len(), 2);
+        assert_eq!(eng_bfs.answers[0].bindings.get(&0), Some(&Value::from(1)));
+        assert_eq!(eng_bfs.answers[1].bindings.get(&0), Some(&Value::from(2)));
+    }
+
+    #[test]
+    fn determinism_golden_many_choices() {
+        // Build 5 roots each with k:1; query Equal(?R["k"], 1). Ordering should be stable across runs.
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        let mut roots = Vec::new();
+        for i in 0..5 {
+            let key = Key::from("k");
+            let dict = Dictionary::new(
+                params.max_depth_mt_containers,
+                [(key.clone(), Value::from(1))].into(),
+            )
+            .unwrap();
+            let r = dict.commitment();
+            edb.add_full_dict(dict);
+            roots.push(r);
+        }
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        let processed = parse(
+            r#"REQUEST(
+                Equal(?R["k"], 1)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let goals = processed.request.templates().to_vec();
+
+        // First run
+        let mut engine1 = Engine::new(&reg, &edb);
+        let id1 = engine1.sched.new_id();
+        engine1.sched.enqueue(Frame::Producer {
+            id: id1,
+            goals: goals.clone(),
+            store: ConstraintStore::default(),
+        });
+        engine1.run();
+        let seq1: Vec<_> = engine1
+            .answers
+            .iter()
+            .filter_map(|st| st.bindings.get(&0).cloned())
+            .map(|v| pod2::middleware::Hash::from(v.raw()))
+            .collect();
+
+        // Second run
+        let mut engine2 = Engine::new(&reg, &edb);
+        let id2 = engine2.sched.new_id();
+        engine2.sched.enqueue(Frame::Producer {
+            id: id2,
+            goals,
+            store: ConstraintStore::default(),
+        });
+        engine2.run();
+        let seq2: Vec<_> = engine2
+            .answers
+            .iter()
+            .filter_map(|st| st.bindings.get(&0).cloned())
+            .map(|v| pod2::middleware::Hash::from(v.raw()))
+            .collect();
+
+        assert_eq!(
+            seq1, seq2,
+            "Answer order should be deterministic across runs"
+        );
+        // And the sequence should be sorted by root (as per EDB stable ordering and choice ordering)
+        let mut sorted = seq1.clone();
+        sorted.sort();
+        assert_eq!(
+            seq1, sorted,
+            "Expected answers ordered by increasing root hash"
         );
     }
 
@@ -1008,6 +1165,7 @@ mod tests {
         register_equal_handlers(&mut reg);
         register_lt_handlers(&mut reg);
         crate::register_lteq_handlers(&mut reg);
+        crate::register_not_contains_handlers(&mut reg);
         register_sumof_handlers(&mut reg);
         register_contains_handlers(&mut reg);
         // Alternative path: define predicate and request in a single Podlang program

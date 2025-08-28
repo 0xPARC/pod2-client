@@ -123,6 +123,18 @@ pub trait EdbView: Send + Sync {
     fn lte_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
         Vec::new()
     }
+
+    // NotContains helpers
+    fn not_contains_copy_root_key(&self, _root: &Hash, _key: &Key) -> Option<PodRef> {
+        None
+    }
+    fn not_contains_roots_for_key(&self, _key: &Key) -> Vec<(Hash, PodRef)> {
+        Vec::new()
+    }
+    /// If we know the full dictionary for `root`, return Some(true) if key absent, Some(false) if present, None if unknown.
+    fn full_dict_absence(&self, _root: &Hash, _key: &Key) -> Option<bool> {
+        None
+    }
 }
 
 /// Trivial empty EDB for scaffolding.
@@ -144,6 +156,8 @@ pub struct MockEdbView {
     pub full_dicts: HashMap<Hash, HashMap<Hash, Value>>,
     /// SumOf rows available to copy.
     pub sum_rows: Vec<(Statement, PodRef)>,
+    /// NotContains copied rows: Statement::NotContains(root,key)
+    pub not_contains_rows: Vec<(Statement, PodRef)>,
 }
 
 fn key_hash(k: &Key) -> Hash {
@@ -163,6 +177,13 @@ impl MockEdbView {
             ValueRef::Literal(val),
         );
         self.equal_rows.push((st, src));
+    }
+    pub fn add_not_contains_row(&mut self, root: Hash, key: Key, src: PodRef) {
+        let st = Statement::NotContains(
+            ValueRef::Literal(Value::from(root)),
+            ValueRef::Literal(Value::from(key.name())),
+        );
+        self.not_contains_rows.push((st, src));
     }
     /// Register a copied Contains fact from a pod source.
     pub fn add_copied_contains(&mut self, root: Hash, key: Key, val: Value, src: PodRef) {
@@ -359,7 +380,9 @@ impl EdbView for MockEdbView {
                 }
             }
         }
-        roots.into_iter().collect()
+        let mut v: Vec<Hash> = roots.into_iter().collect();
+        v.sort();
+        v
     }
 
     fn equal_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
@@ -691,6 +714,17 @@ impl EdbView for MockEdbView {
                 }
             }
         }
+        out.sort_by(|(r1, s1), (r2, s2)| {
+            r1.cmp(r2).then_with(|| match (s1, s2) {
+                (ContainsSource::GeneratedFromFullDict { .. }, ContainsSource::Copied { .. }) => {
+                    std::cmp::Ordering::Less
+                }
+                (ContainsSource::Copied { .. }, ContainsSource::GeneratedFromFullDict { .. }) => {
+                    std::cmp::Ordering::Greater
+                }
+                _ => std::cmp::Ordering::Equal,
+            })
+        });
         out
     }
 
@@ -709,6 +743,43 @@ impl EdbView for MockEdbView {
 
     fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
         self.sum_rows.clone()
+    }
+
+    // NotContains
+    fn not_contains_copy_root_key(&self, root: &Hash, key: &Key) -> Option<PodRef> {
+        self.not_contains_rows
+            .iter()
+            .find_map(|(st, src)| match st {
+                Statement::NotContains(ValueRef::Literal(r), ValueRef::Literal(k)) => {
+                    if Hash::from(r.raw()) == *root && k == &Value::from(key.name()) {
+                        Some(src.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+    }
+    fn not_contains_roots_for_key(&self, key: &Key) -> Vec<(Hash, PodRef)> {
+        self.not_contains_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::NotContains(ValueRef::Literal(r), ValueRef::Literal(k)) => {
+                    if k == &Value::from(key.name()) {
+                        Some((Hash::from(r.raw()), src.clone()))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    fn full_dict_absence(&self, root: &Hash, key: &Key) -> Option<bool> {
+        match self.full_dicts.get(root) {
+            Some(map) => Some(!map.contains_key(&key_hash(key))),
+            None => None,
+        }
     }
 }
 
