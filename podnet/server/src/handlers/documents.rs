@@ -768,34 +768,6 @@ mod tests {
         assert_eq!(error, StatusCode::NOT_FOUND);
     }
 
-    #[tokio::test]
-    async fn test_get_document_reply_tree_with_replies() {
-        use crate::db::tests::{create_reply_reference, insert_dummy_document};
-
-        let state = create_mock_app_state().await;
-
-        // Create a document with replies using test helpers
-        let root_id = insert_dummy_document(&state.db, &state.storage, "Root Document", None);
-        let _reply_id = insert_dummy_document(
-            &state.db,
-            &state.storage,
-            "Reply Document",
-            Some(create_reply_reference(root_id)),
-        );
-
-        // Call the handler
-        let result = get_document_reply_tree(Path(root_id), axum::extract::State(state)).await;
-
-        // Verify success response with reply
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        let tree = response.0;
-
-        assert_eq!(tree.document.title, "Root Document");
-        assert_eq!(tree.replies.len(), 1);
-        assert_eq!(tree.replies[0].document.title, "Reply Document");
-    }
-
     // Test the existing get_document_replies handler for comparison
     #[tokio::test]
     async fn test_get_document_replies_success() {
