@@ -1,0 +1,398 @@
+use std::collections::{HashMap, HashSet};
+
+use pod2::middleware::{
+    containers::Dictionary, AnchoredKey, Hash, Key, Statement, Value, ValueRef,
+};
+
+use crate::types::PodRef;
+
+/// Minimal read-only EDB interface for OpHandlers in MVP.
+pub trait EdbView: Send + Sync {
+    fn match_equal_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+
+    fn contains_value(&self, _root: &pod2::middleware::Hash, _key: &Key) -> Option<Value> {
+        None
+    }
+
+    fn roots_with_key_value(&self, _key: &Key, _val: &Value) -> Vec<pod2::middleware::Hash> {
+        Vec::new()
+    }
+
+    fn equal_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    /// CopyEqual support: find Equal(AK(root,key), value) rows regardless of value.
+    fn equal_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+
+    fn equal_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+
+    /// CopyEqual support: find Equal(value, AK(root,key)) rows regardless of value.
+    fn equal_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+
+    // Lt copy helpers
+    fn lt_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lt_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lt_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+    fn lt_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+    fn lt_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
+        Vec::new()
+    }
+
+    fn value_of_ak(&self, _root: &Hash, _key: &Key) -> Option<Value> {
+        None
+    }
+
+    /// Returns the provenance for a Contains(root,key,value) fact if known.
+    fn contains_source(&self, _root: &Hash, _key: &Key, _val: &Value) -> Option<ContainsSource> {
+        None
+    }
+
+    /// Enumerate roots that can justify Contains(root,key,val) along with their provenance.
+    fn enumerate_contains_sources(&self, _key: &Key, _val: &Value) -> Vec<(Hash, ContainsSource)> {
+        Vec::new()
+    }
+}
+
+/// Trivial empty EDB for scaffolding.
+pub struct EmptyEdb;
+impl EdbView for EmptyEdb {}
+
+/// A simple in-memory EDB mock with fixtures for Equal and Contains.
+#[derive(Default)]
+pub struct MockEdbView {
+    /// Equal(AK(root,key), value) rows available to copy.
+    pub equal_rows: Vec<(Statement, PodRef)>,
+    /// Lt rows available to copy.
+    pub lt_rows: Vec<(Statement, PodRef)>,
+    /// Copied Contains facts: (root, key_hash) -> Vec<(value, PodRef)>
+    pub contains_copied: HashMap<(Hash, Hash), Vec<(Value, PodRef)>>,
+    /// Full dictionaries registered: root -> key_hash -> value
+    pub full_dicts: HashMap<Hash, HashMap<Hash, Value>>,
+}
+
+fn key_hash(k: &Key) -> Hash {
+    k.hash()
+}
+
+impl MockEdbView {
+    pub fn add_equal_row(
+        &mut self,
+        root: pod2::middleware::Hash,
+        key: Key,
+        val: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::Equal(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.equal_rows.push((st, src));
+    }
+    /// Register a copied Contains fact from a pod source.
+    pub fn add_copied_contains(&mut self, root: Hash, key: Key, val: Value, src: PodRef) {
+        self.contains_copied
+            .entry((root, key_hash(&key)))
+            .or_default()
+            .push((val, src));
+    }
+    /// Register a full dictionary entry allowing generation of Contains facts.
+    pub fn add_full_kv(&mut self, root: Hash, key: Key, val: Value) {
+        self.full_dicts
+            .entry(root)
+            .or_default()
+            .insert(key_hash(&key), val);
+    }
+
+    /// Register an entire full dictionary (all keys available for GeneratedContains).
+    pub fn add_full_dict(&mut self, dict: Dictionary) {
+        let root = dict.commitment();
+        let entry = self.full_dicts.entry(root).or_default();
+        for (k, v) in dict.kvs().iter() {
+            entry.insert(k.hash(), v.clone());
+        }
+    }
+
+    pub fn add_lt_row_lak_rval(
+        &mut self,
+        root: pod2::middleware::Hash,
+        key: Key,
+        val: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::Lt(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.lt_rows.push((st, src));
+    }
+    pub fn add_lt_row_lval_rak(
+        &mut self,
+        val: Value,
+        root: pod2::middleware::Hash,
+        key: Key,
+        src: PodRef,
+    ) {
+        let st = Statement::Lt(
+            ValueRef::Literal(val),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+        );
+        self.lt_rows.push((st, src));
+    }
+}
+
+impl EdbView for MockEdbView {
+    fn match_equal_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
+        self.equal_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Equal(
+                    ValueRef::Key(AnchoredKey { key: k, .. }),
+                    ValueRef::Literal(v),
+                ) => k.hash() == key.hash() && v == val,
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn contains_value(&self, root: &Hash, key: &Key) -> Option<Value> {
+        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
+            if let Some((v, _)) = vs.first() {
+                return Some(v.clone());
+            }
+        }
+        self.full_dicts
+            .get(root)
+            .and_then(|m| m.get(&key_hash(key)).cloned())
+    }
+
+    fn roots_with_key_value(&self, key: &Key, val: &Value) -> Vec<Hash> {
+        let mut roots: HashSet<Hash> = HashSet::new();
+        // From Contains facts
+        for ((root, k), vs) in self.contains_copied.iter() {
+            if *k == key_hash(key) && vs.iter().any(|(v, _)| v == val) {
+                roots.insert(*root);
+            }
+        }
+        // From Equal rows
+        for (st, _src) in self.equal_rows.iter() {
+            if let Statement::Equal(
+                ValueRef::Key(AnchoredKey { root, key: k }),
+                ValueRef::Literal(v),
+            ) = st
+            {
+                if k.hash() == key.hash() && v == val {
+                    roots.insert(*root);
+                }
+            }
+        }
+        // From full dicts
+        for (root, kvs) in self.full_dicts.iter() {
+            if let Some(v) = kvs.get(&key_hash(key)) {
+                if v == val {
+                    roots.insert(*root);
+                }
+            }
+        }
+        roots.into_iter().collect()
+    }
+
+    fn equal_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
+        self.equal_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Equal(
+                    ValueRef::Literal(v),
+                    ValueRef::Key(AnchoredKey { key: k, .. }),
+                ) => v == val && k.hash() == key.hash(),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn equal_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.equal_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Equal(
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                    ValueRef::Literal(v),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn equal_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
+        self.equal_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Equal(
+                    ValueRef::Key(AnchoredKey { key: lk, .. }),
+                    ValueRef::Key(AnchoredKey { key: rk, .. }),
+                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn equal_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.equal_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Equal(
+                    ValueRef::Literal(v),
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    // Lt support
+    fn lt_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Lt(ValueRef::Key(AnchoredKey { key: k, .. }), ValueRef::Literal(v)) => {
+                    k.hash() == key.hash() && v == val
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lt_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Lt(ValueRef::Literal(v), ValueRef::Key(AnchoredKey { key: k, .. })) => {
+                    v == val && k.hash() == key.hash()
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lt_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter(|(st, _)| match st {
+                Statement::Lt(
+                    ValueRef::Key(AnchoredKey { key: lk, .. }),
+                    ValueRef::Key(AnchoredKey { key: rk, .. }),
+                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn lt_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Lt(
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                    ValueRef::Literal(v),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+    fn lt_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.lt_rows
+            .iter()
+            .filter_map(|(st, src)| match st {
+                Statement::Lt(
+                    ValueRef::Literal(v),
+                    ValueRef::Key(AnchoredKey { root: r, key: k }),
+                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn value_of_ak(&self, root: &Hash, key: &Key) -> Option<Value> {
+        // Prefer Contains fact
+        if let Some(v) = self.contains_value(root, key) {
+            return Some(v);
+        }
+        // Fall back to Equal rows
+        for (st, _src) in self.equal_rows.iter() {
+            if let Statement::Equal(
+                ValueRef::Key(AnchoredKey { root: r, key: k }),
+                ValueRef::Literal(v),
+            ) = st
+            {
+                if r == root && k.hash() == key.hash() {
+                    return Some(v.clone());
+                }
+            }
+        }
+        None
+    }
+
+    fn contains_source(&self, root: &Hash, key: &Key, val: &Value) -> Option<ContainsSource> {
+        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
+            for (v, pod) in vs.iter() {
+                if v == val {
+                    return Some(ContainsSource::Copied { pod: pod.clone() });
+                }
+            }
+        }
+        if let Some(kvs) = self.full_dicts.get(root) {
+            if let Some(v) = kvs.get(&key_hash(key)) {
+                if v == val {
+                    return Some(ContainsSource::GeneratedFromFullDict { root: *root });
+                }
+            }
+        }
+        None
+    }
+
+    fn enumerate_contains_sources(&self, key: &Key, val: &Value) -> Vec<(Hash, ContainsSource)> {
+        let mut out = Vec::new();
+        for ((root, k), vs) in self.contains_copied.iter() {
+            if *k == key_hash(key) {
+                for (v, pod) in vs.iter() {
+                    if v == val {
+                        out.push((*root, ContainsSource::Copied { pod: pod.clone() }));
+                    }
+                }
+            }
+        }
+        for (root, kvs) in self.full_dicts.iter() {
+            if let Some(v) = kvs.get(&key_hash(key)) {
+                if v == val {
+                    out.push((*root, ContainsSource::GeneratedFromFullDict { root: *root }));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Provenance of a Contains(root,key,value) fact.
+#[derive(Clone, Debug)]
+pub enum ContainsSource {
+    Copied { pod: PodRef },
+    GeneratedFromFullDict { root: Hash },
+}

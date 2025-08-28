@@ -1,0 +1,468 @@
+use pod2::middleware::{Hash, NativePredicate, Statement, StatementTmplArg, Value};
+
+use crate::{
+    edb::EdbView,
+    op::OpHandler,
+    prop::PropagatorResult,
+    types::{ConstraintStore, OpTag},
+    util::contains_stmt,
+};
+
+/// Value-centric LtFromEntries: resolve ints from literals, wildcards, or AKs; suspend if unknown.
+pub struct LtFromEntriesHandler;
+
+impl OpHandler for LtFromEntriesHandler {
+    fn propagate(
+        &self,
+        args: &[StatementTmplArg],
+        store: &mut ConstraintStore,
+        edb: &dyn EdbView,
+    ) -> PropagatorResult {
+        if args.len() != 2 {
+            return PropagatorResult::Contradiction;
+        }
+
+        // Classify an argument into an integer value if possible, along with any premises
+        // (Contains facts) required to justify AK value extraction.
+        enum ArgVal {
+            Ground {
+                i: i64,
+                premises: Vec<(Statement, OpTag)>,
+            },
+            Wait(usize),
+            TypeError,
+            NoFact,
+        }
+
+        fn int_from_value(v: &Value) -> Result<i64, ()> {
+            i64::try_from(v.typed()).map_err(|_| ())
+        }
+
+        fn classify(a: &StatementTmplArg, store: &ConstraintStore, edb: &dyn EdbView) -> ArgVal {
+            match a {
+                StatementTmplArg::Literal(v) => match int_from_value(v) {
+                    Ok(i) => ArgVal::Ground {
+                        i,
+                        premises: vec![],
+                    },
+                    Err(_) => ArgVal::TypeError,
+                },
+                StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
+                    Some(v) => match int_from_value(v) {
+                        Ok(i) => ArgVal::Ground {
+                            i,
+                            premises: vec![],
+                        },
+                        Err(_) => ArgVal::TypeError,
+                    },
+                    None => ArgVal::Wait(w.index),
+                },
+                StatementTmplArg::AnchoredKey(w, key) => match store.bindings.get(&w.index) {
+                    Some(bound_root_val) => {
+                        let root: Hash = Hash::from(bound_root_val.raw());
+                        if let Some(val) = edb.contains_value(&root, key) {
+                            if let Ok(i) = int_from_value(&val) {
+                                let tag = crate::util::tag_from_source(
+                                    key,
+                                    &val,
+                                    match edb.contains_source(&root, key, &val) {
+                                        Some(src) => src,
+                                        None => return ArgVal::NoFact,
+                                    },
+                                );
+                                let c = contains_stmt(root, key, val);
+                                ArgVal::Ground {
+                                    i,
+                                    premises: vec![(c, tag)],
+                                }
+                            } else {
+                                ArgVal::TypeError
+                            }
+                        } else {
+                            ArgVal::NoFact
+                        }
+                    }
+                    None => ArgVal::Wait(w.index),
+                },
+                _ => ArgVal::TypeError,
+            }
+        }
+
+        let a0 = classify(&args[0], store, edb);
+        let a1 = classify(&args[1], store, edb);
+
+        // Type errors or missing facts on bound AKs fail this op path
+        match (&a0, &a1) {
+            (ArgVal::TypeError, _) | (_, ArgVal::TypeError) => {
+                return PropagatorResult::Contradiction
+            }
+            (ArgVal::NoFact, _) | (_, ArgVal::NoFact) => return PropagatorResult::Contradiction,
+            _ => {}
+        }
+
+        // Wait handling
+        let mut waits: Vec<usize> = vec![];
+        if let ArgVal::Wait(w) = a0 {
+            if !store.bindings.contains_key(&w) {
+                waits.push(w);
+            }
+        }
+        if let ArgVal::Wait(w) = a1 {
+            if !store.bindings.contains_key(&w) {
+                waits.push(w);
+            }
+        }
+        if !waits.is_empty() {
+            waits.sort();
+            waits.dedup();
+            return PropagatorResult::Suspend { on: waits };
+        }
+
+        // Both should be ground now
+        let (i0, prem0) = match a0 {
+            ArgVal::Ground { i, premises } => (i, premises),
+            _ => unreachable!(),
+        };
+        let (i1, prem1) = match a1 {
+            ArgVal::Ground { i, premises } => (i, premises),
+            _ => unreachable!(),
+        };
+
+        if i0 < i1 {
+            let mut premises = Vec::new();
+            premises.extend(prem0);
+            premises.extend(prem1);
+            if premises.is_empty() {
+                PropagatorResult::Entailed {
+                    bindings: vec![],
+                    op_tag: OpTag::FromLiterals,
+                }
+            } else {
+                PropagatorResult::Entailed {
+                    bindings: vec![],
+                    op_tag: OpTag::Derived { premises },
+                }
+            }
+        } else {
+            PropagatorResult::Contradiction
+        }
+    }
+}
+
+pub fn register_lt_handlers(reg: &mut crate::op::OpRegistry) {
+    reg.register(NativePredicate::Lt, Box::new(LtFromEntriesHandler));
+    reg.register(NativePredicate::Lt, Box::new(CopyLtHandler));
+}
+
+#[cfg(test)]
+mod tests {
+    use pod2::middleware::{containers::Dictionary, Params, StatementTmplArg};
+
+    use super::*;
+    use crate::{
+        edb::MockEdbView,
+        test_helpers,
+        types::{ConstraintStore, PodRef},
+        OpTag,
+    };
+
+    fn args_from(query: &str) -> Vec<StatementTmplArg> {
+        let tmpl = crate::test_helpers::parse_first_tmpl(query);
+        tmpl.args().to_vec()
+    }
+
+    #[test]
+    fn lt_from_entries_literals() {
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = LtFromEntriesHandler;
+        let args = args_from("REQUEST(Lt(3, 5))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { op_tag, .. } => {
+                assert!(matches!(op_tag, OpTag::FromLiterals));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+        let args_false = args_from("REQUEST(Lt(5, 3))");
+        let res2 = handler.propagate(&args_false, &mut store, &edb);
+        assert!(matches!(res2, PropagatorResult::Contradiction));
+    }
+
+    #[test]
+    fn lt_from_entries_ak_lit_generated() {
+        // Lt(?R["k"], 10) with bound root and full dict k:7
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(7))].into(),
+        )
+        .unwrap();
+        let root = dict.commitment();
+        edb.add_full_dict(dict);
+        let mut store = ConstraintStore::default();
+        store.bindings.insert(0, Value::from(root));
+        let handler = LtFromEntriesHandler;
+        let args = args_from("REQUEST(Lt(?R[\"k\"], 10))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { op_tag, .. } => match op_tag {
+                OpTag::Derived { premises } => {
+                    assert_eq!(premises.len(), 1);
+                    assert!(matches!(premises[0].1, OpTag::GeneratedContains { .. }));
+                }
+                other => panic!("unexpected tag: {other:?}"),
+            },
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lt_from_entries_ak_ak_both_bound() {
+        // Lt(?L["a"], ?R["b"]) with both bound and 3 < 5
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dl = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("a"), Value::from(3))].into(),
+        )
+        .unwrap();
+        let dr = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("b"), Value::from(5))].into(),
+        )
+        .unwrap();
+        let rl = dl.commitment();
+        let rr = dr.commitment();
+        edb.add_full_dict(dl);
+        edb.add_full_dict(dr);
+
+        let mut store = ConstraintStore::default();
+        store.bindings.insert(0, Value::from(rl));
+        store.bindings.insert(1, Value::from(rr));
+        let handler = LtFromEntriesHandler;
+        let args = args_from(r#"REQUEST(Lt(?L["a"], ?R["b"]))"#);
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { op_tag, .. } => match op_tag {
+                OpTag::Derived { premises } => assert_eq!(premises.len(), 2),
+                other => panic!("unexpected tag: {other:?}"),
+            },
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lt_from_entries_suspend_unbound() {
+        // Lt(?L["a"], 10) with unbound left root should suspend
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = LtFromEntriesHandler;
+        let args = args_from("REQUEST(Lt(?L[\"a\"], 10))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Suspend { on } => assert!(on.contains(&0)),
+            other => panic!("expected Suspend, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copy_lt_binds_value_from_left_ak_when_root_bound() {
+        // Given Lt(R["k"], 10) in EDB, CopyLt should bind ?X when ?R bound
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(7))].into(),
+        )
+        .unwrap();
+        let r = dict.commitment();
+        let src = PodRef(r);
+        edb.add_lt_row_lak_rval(r, test_helpers::key("k"), Value::from(10), src.clone());
+
+        let mut store = ConstraintStore::default();
+        store.bindings.insert(0, Value::from(r)); // ?R
+        let handler = CopyLtHandler;
+        let args = args_from(r#"REQUEST(Lt(?R["k"], ?X))"#);
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Choices { alternatives } => {
+                assert_eq!(alternatives.len(), 1);
+                let ch = &alternatives[0];
+                assert_eq!(ch.bindings[0].0, 1); // ?X index
+                assert_eq!(ch.bindings[0].1, Value::from(10));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copy_lt_binds_root_from_right_ak_when_value_bound() {
+        // Given Lt(10, R["k"]) in EDB, CopyLt should bind ?R when ?X bound
+        let mut edb = MockEdbView::default();
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(test_helpers::key("k"), Value::from(20))].into(),
+        )
+        .unwrap();
+        let r = dict.commitment();
+        let src = PodRef(r);
+        edb.add_lt_row_lval_rak(Value::from(10), r, test_helpers::key("k"), src.clone());
+
+        let mut store = ConstraintStore::default();
+        store.bindings.insert(0, Value::from(10)); // ?X left
+        let handler = CopyLtHandler;
+        let args = args_from(r#"REQUEST(Lt(?X, ?R["k"]))"#);
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 1 && v.raw() == Value::from(r).raw())));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+}
+
+/// Structural copy of Lt matching template shape; can bind wildcard value when AK root bound.
+pub struct CopyLtHandler;
+
+impl OpHandler for CopyLtHandler {
+    fn propagate(
+        &self,
+        args: &[StatementTmplArg],
+        store: &mut ConstraintStore,
+        edb: &dyn EdbView,
+    ) -> PropagatorResult {
+        if args.len() != 2 {
+            return PropagatorResult::Contradiction;
+        }
+        use pod2::middleware::{AnchoredKey, ValueRef};
+        let left = &args[0];
+        let right = &args[1];
+        let mut choices: Vec<crate::prop::Choice> = Vec::new();
+        match (left, right) {
+            (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
+                for (st, src) in edb.lt_lhs_ak_rhs_val(key_l, val_r) {
+                    if let Statement::Lt(
+                        ValueRef::Key(AnchoredKey { root, .. }),
+                        ValueRef::Literal(_),
+                    ) = st
+                    {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wc_l.index, Value::from(root))],
+                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        });
+                    }
+                }
+                // Wildcard bound on the right to a value → treat as literal
+            }
+            (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
+                if let Some(v) = store.bindings.get(&wv.index) {
+                    for (st, src) in edb.lt_lhs_ak_rhs_val(key_l, v) {
+                        if let Statement::Lt(
+                            ValueRef::Key(AnchoredKey { root, .. }),
+                            ValueRef::Literal(_),
+                        ) = st
+                        {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wc_l.index, Value::from(root))],
+                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            });
+                        }
+                    }
+                }
+                // Root bound and wildcard unbound → bind wildcard from copy
+                if let Some(root) = crate::util::bound_root(store, wc_l.index) {
+                    for (val, src) in edb.lt_lhs_ak_rhs_any(&root, key_l) {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wv.index, val)],
+                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        });
+                    }
+                }
+            }
+            (StatementTmplArg::Literal(val_l), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
+                for (st, src) in edb.lt_lhs_val_rhs_ak(val_l, key_r) {
+                    if let Statement::Lt(
+                        ValueRef::Literal(_),
+                        ValueRef::Key(AnchoredKey { root, .. }),
+                    ) = st
+                    {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wc_r.index, Value::from(root))],
+                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        });
+                    }
+                }
+            }
+            (StatementTmplArg::Wildcard(wv), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
+                if let Some(v) = store.bindings.get(&wv.index) {
+                    for (st, src) in edb.lt_lhs_val_rhs_ak(v, key_r) {
+                        if let Statement::Lt(
+                            ValueRef::Literal(_),
+                            ValueRef::Key(AnchoredKey { root, .. }),
+                        ) = st
+                        {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wc_r.index, Value::from(root))],
+                                op_tag: crate::types::OpTag::CopyStatement { source: src },
+                            });
+                        }
+                    }
+                }
+                if let Some(root) = crate::util::bound_root(store, wc_r.index) {
+                    for (val, src) in edb.lt_lhs_any_rhs_ak(&root, key_r) {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wv.index, val)],
+                            op_tag: crate::types::OpTag::CopyStatement { source: src },
+                        });
+                    }
+                }
+            }
+            (
+                StatementTmplArg::AnchoredKey(wc_l, key_l),
+                StatementTmplArg::AnchoredKey(wc_r, key_r),
+            ) => {
+                for (st, src) in edb.lt_ak_ak_by_keys(key_l, key_r) {
+                    if let Statement::Lt(
+                        ValueRef::Key(AnchoredKey { root: rl, .. }),
+                        ValueRef::Key(AnchoredKey { root: rr, .. }),
+                    ) = st
+                    {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![
+                                (wc_l.index, Value::from(rl)),
+                                (wc_r.index, Value::from(rr)),
+                            ],
+                            op_tag: crate::types::OpTag::CopyStatement {
+                                source: src.clone(),
+                            },
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+        if choices.is_empty() {
+            // Suspend on referenced unbound wildcards
+            let waits = crate::prop::wildcards_in_args(args)
+                .into_iter()
+                .filter(|i| !store.bindings.contains_key(i))
+                .collect::<Vec<_>>();
+            if waits.is_empty() {
+                PropagatorResult::Contradiction
+            } else {
+                PropagatorResult::Suspend { on: waits }
+            }
+        } else {
+            PropagatorResult::Choices {
+                alternatives: choices,
+            }
+        }
+    }
+}

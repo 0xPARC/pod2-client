@@ -9,12 +9,13 @@ members = [
     "podnet/cli", 
     "podnet/identity-strawman", 
     "pod2-client/db", 
+    "core/new_solver",
     "apps/client/src-tauri",
     "packages/pod2-node"
 , "podnet/identity-github"]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", rev = "bde35369d32a727e7d2964ce401158f1df248cb8", default-features = false,  features = [  "backend_plonky2", "zk", "examples", "disk_cache" ] }
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "0e2f7b756ed35150ed84064c1acf9a0ed54d03ba", default-features = false,  features = [  "backend_plonky2", "zk", "examples", "disk_cache" ] }
 pod2_solver = { path = "core/solver" }
 podnet-models = { path = "core/models" }
 pod-utils = { path = "core/utils" }

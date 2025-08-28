@@ -1,0 +1,20 @@
+[package]
+name = "pod2_new_solver"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pod2_new_solver"
+path = "src/lib.rs"
+
+[dependencies]
+pod2 = { workspace = true }
+thiserror = { workspace = true }
+petgraph = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+itertools = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+pod2 = { workspace = true, features = ["examples"] }
