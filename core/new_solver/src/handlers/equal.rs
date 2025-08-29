@@ -1,16 +1,17 @@
-use pod2::middleware::{
-    AnchoredKey, NativePredicate, Statement, StatementTmplArg, Value, ValueRef,
-};
+#[cfg(test)]
+use pod2::middleware::{AnchoredKey, Statement, ValueRef};
+use pod2::middleware::{NativePredicate, StatementTmplArg, Value};
 use tracing::trace;
 
 use crate::{
-    edb::EdbView,
+    edb::{ArgSel, BinaryPred, EdbView},
     op::OpHandler,
     prop::{Choice, PropagatorResult},
     types::{ConstraintStore, OpTag},
     util::{
-        bound_root, contains_stmt, entailed_if_both_bound_equal, entailed_if_bound_matches,
-        enumerate_choices_for, enumerate_other_root_choices, tag_from_source,
+        binary_view, bound_root, contains_stmt, entailed_if_both_bound_equal,
+        entailed_if_bound_matches, enumerate_choices_for, enumerate_other_root_choices,
+        tag_from_source,
     },
 };
 
@@ -34,49 +35,71 @@ impl OpHandler for CopyEqualHandler {
             // CopyEqual binds value from Equal(AK, v) when root bound
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
                 if let Some(root) = bound_root(_store, wc_l.index) {
-                    for (val, src) in edb.equal_lhs_ak_rhs_any(&root, key_l) {
-                        choices.push(Choice {
-                            bindings: vec![(wv.index, val)],
-                            op_tag: OpTag::CopyStatement { source: src },
-                        });
+                    for view in binary_view(
+                        edb,
+                        BinaryPred::Equal,
+                        ArgSel::AkExact {
+                            root: &root,
+                            key: key_l,
+                        },
+                        ArgSel::Val,
+                    ) {
+                        if let Some(val) = view.right.as_literal() {
+                            choices.push(Choice {
+                                bindings: vec![(wv.index, val.clone())],
+                                op_tag: OpTag::CopyStatement { source: view.src },
+                            });
+                        }
                     }
                 }
             }
             // CopyEqual binds value from Equal(v, AK) when root bound
             (StatementTmplArg::Wildcard(wv), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
                 if let Some(root) = bound_root(_store, wc_r.index) {
-                    for (val, src) in edb.equal_lhs_any_rhs_ak(&root, key_r) {
-                        choices.push(Choice {
-                            bindings: vec![(wv.index, val)],
-                            op_tag: OpTag::CopyStatement { source: src },
-                        });
+                    for view in binary_view(
+                        edb,
+                        BinaryPred::Equal,
+                        ArgSel::Val,
+                        ArgSel::AkExact {
+                            root: &root,
+                            key: key_r,
+                        },
+                    ) {
+                        if let Some(val) = view.left.as_literal() {
+                            choices.push(Choice {
+                                bindings: vec![(wv.index, val.clone())],
+                                op_tag: OpTag::CopyStatement { source: view.src },
+                            });
+                        }
                     }
                 }
             }
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
-                for (st, src) in edb.match_equal_lhs_ak_rhs_val(key_l, val_r) {
-                    if let Statement::Equal(
-                        ValueRef::Key(AnchoredKey { root, .. }),
-                        ValueRef::Literal(_),
-                    ) = st
-                    {
+                for v in binary_view(
+                    edb,
+                    BinaryPred::Equal,
+                    ArgSel::AkByKey(key_l),
+                    ArgSel::Literal(val_r),
+                ) {
+                    if let Some((root, _)) = v.left.as_ak() {
                         choices.push(Choice {
-                            bindings: vec![(wc_l.index, Value::from(root))],
-                            op_tag: OpTag::CopyStatement { source: src },
+                            bindings: vec![(wc_l.index, Value::from(*root))],
+                            op_tag: OpTag::CopyStatement { source: v.src },
                         });
                     }
                 }
             }
             (StatementTmplArg::Literal(val_l), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                for (st, src) in edb.equal_lhs_val_rhs_ak(val_l, key_r) {
-                    if let Statement::Equal(
-                        ValueRef::Literal(_),
-                        ValueRef::Key(AnchoredKey { root, .. }),
-                    ) = st
-                    {
+                for v in binary_view(
+                    edb,
+                    BinaryPred::Equal,
+                    ArgSel::Literal(val_l),
+                    ArgSel::AkByKey(key_r),
+                ) {
+                    if let Some((root, _)) = v.right.as_ak() {
                         choices.push(Choice {
-                            bindings: vec![(wc_r.index, Value::from(root))],
-                            op_tag: OpTag::CopyStatement { source: src },
+                            bindings: vec![(wc_r.index, Value::from(*root))],
+                            op_tag: OpTag::CopyStatement { source: v.src },
                         });
                     }
                 }
@@ -85,20 +108,19 @@ impl OpHandler for CopyEqualHandler {
                 StatementTmplArg::AnchoredKey(wc_l, key_l),
                 StatementTmplArg::AnchoredKey(wc_r, key_r),
             ) => {
-                for (st, src) in edb.equal_ak_ak_by_keys(key_l, key_r) {
-                    if let Statement::Equal(
-                        ValueRef::Key(AnchoredKey { root: rl, .. }),
-                        ValueRef::Key(AnchoredKey { root: rr, .. }),
-                    ) = st
-                    {
+                for v in binary_view(
+                    edb,
+                    BinaryPred::Equal,
+                    ArgSel::AkByKey(key_l),
+                    ArgSel::AkByKey(key_r),
+                ) {
+                    if let (Some((rl, _)), Some((rr, _))) = (v.left.as_ak(), v.right.as_ak()) {
                         choices.push(Choice {
                             bindings: vec![
-                                (wc_l.index, Value::from(rl)),
-                                (wc_r.index, Value::from(rr)),
+                                (wc_l.index, Value::from(*rl)),
+                                (wc_r.index, Value::from(*rr)),
                             ],
-                            op_tag: OpTag::CopyStatement {
-                                source: src.clone(),
-                            },
+                            op_tag: OpTag::CopyStatement { source: v.src },
                         });
                     }
                 }

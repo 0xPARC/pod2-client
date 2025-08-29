@@ -808,6 +808,27 @@ impl<'a> Engine<'a> {
         }
         max_idx
     }
+
+    fn maybe_complete_table(&mut self, pat: &CallPattern) {
+        // If there are no runnable or parked frames producing for this pattern, mark complete and prune waiters
+        let has_runnable = self
+            .sched
+            .runnable
+            .iter()
+            .any(|f| matches!(f, Frame { table_for: Some(p), .. } if p == pat));
+        let has_parked = self
+            .sched
+            .parked
+            .values()
+            .any(|pf| matches!(pf, ParkedFrame { table_for: Some(p), .. } if p == pat));
+        if !has_runnable && !has_parked {
+            if let Some(t) = self.tables.get_mut(pat) {
+                t.is_complete = true;
+                t.waiters.clear();
+                debug!(?pat, "table marked complete and waiters pruned");
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1018,29 +1039,6 @@ impl Table {
             waiters: Vec::new(),
             is_complete: false,
             delivered_this_epoch: 0,
-        }
-    }
-}
-
-impl<'a> Engine<'a> {
-    fn maybe_complete_table(&mut self, pat: &CallPattern) {
-        // If there are no runnable or parked frames producing for this pattern, mark complete and prune waiters
-        let has_runnable = self
-            .sched
-            .runnable
-            .iter()
-            .any(|f| matches!(f, Frame { table_for: Some(p), .. } if p == pat));
-        let has_parked = self
-            .sched
-            .parked
-            .values()
-            .any(|pf| matches!(pf, ParkedFrame { table_for: Some(p), .. } if p == pat));
-        if !has_runnable && !has_parked {
-            if let Some(t) = self.tables.get_mut(pat) {
-                t.is_complete = true;
-                t.waiters.clear();
-                debug!(?pat, "table marked complete and waiters pruned");
-            }
         }
     }
 }
@@ -1947,6 +1945,162 @@ mod tests {
             ans.bindings.get(&0).map(|v| v.raw()),
             Some(Value::from(r).raw())
         );
+    }
+
+    #[test]
+    fn engine_with_immutable_edb_equal_from_entries() {
+        // Build an immutable EDB with a full dictionary containing k:1 and prove Equal(?R["k"], 1)
+        use crate::edb::ImmutableEdbBuilder;
+
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("k"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let root = dict.commitment();
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        let processed = parse(
+            r#"REQUEST(
+                Equal(?R["k"], 1)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert!(!engine.answers.is_empty());
+        let st = &engine.answers[0];
+        assert_eq!(
+            st.bindings.get(&0).map(|v| v.raw()),
+            Some(Value::from(root).raw())
+        );
+    }
+
+    #[test]
+    fn engine_with_immutable_edb_equal_from_signed_dict() {
+        // Build an immutable EDB with a signed dictionary containing k:1 and prove Equal(?R["k"], 1)
+        use crate::edb::ImmutableEdbBuilder;
+
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("k"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let root = dict.commitment();
+        let edb = ImmutableEdbBuilder::new().add_signed_dict(dict).build();
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        let processed = parse(
+            r#"REQUEST(
+                Equal(?R["k"], 1)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert!(!engine.answers.is_empty());
+        let st = &engine.answers[0];
+        assert_eq!(
+            st.bindings.get(&0).map(|v| v.raw()),
+            Some(Value::from(root).raw())
+        );
+    }
+
+    #[test]
+    fn end_to_end_from_mainpod_statements_generates_copy_provenance() {
+        // Build ImmutableEdb from a synthetic MainPod: Contains(R,"k")=10 and Lt(R["x"], 5)
+        use pod2::middleware::{AnchoredKey, Statement as Stmt, ValueRef};
+
+        use crate::{edb::ImmutableEdbBuilder, types::PodRef};
+
+        let params = Params::default();
+        // Create a root by making a small dict and taking its commitment (for convenience)
+        let d = Dictionary::new(
+            params.max_depth_mt_containers,
+            [
+                (Key::from("k"), Value::from(10)),
+                (Key::from("x"), Value::from(5)),
+            ]
+            .into(),
+        )
+        .unwrap();
+        let root = d.commitment();
+        // Construct explicit statements as if from a MainPod
+        let contains_stmt = Stmt::Contains(
+            ValueRef::Literal(Value::from(root)),
+            ValueRef::Literal(Value::from("k")),
+            ValueRef::Literal(Value::from(10)),
+        );
+        let lt_stmt = Stmt::Lt(
+            ValueRef::Key(AnchoredKey::new(root, Key::from("x"))),
+            ValueRef::Literal(Value::from(5)),
+        );
+        let pod_ref = PodRef(root);
+        let edb = ImmutableEdbBuilder::new()
+            .add_main_pod(pod_ref.clone(), &[contains_stmt, lt_stmt])
+            .build();
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
+
+        // Request Equal from entries and Lt from copied row
+        let processed = parse(
+            r#"REQUEST(
+                Equal(?R["k"], 10)
+                Lt(?R["x"], 5)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert!(!engine.answers.is_empty());
+        let ans = &engine.answers[0];
+        // R should bind to root
+        assert_eq!(
+            ans.bindings.get(&0).map(|v| v.raw()),
+            Some(Value::from(root).raw())
+        );
+
+        // Premises should include CopyStatement provenance from the MainPod for at least one step
+        let mut saw_copy = false;
+        for (_stmt, tag) in ans.premises.iter() {
+            match tag {
+                crate::types::OpTag::CopyStatement { source } => {
+                    if *source == pod_ref {
+                        saw_copy = true;
+                    }
+                }
+                crate::types::OpTag::Derived { premises } => {
+                    if premises.iter().any(|(_, t)| {
+                        matches!(t, crate::types::OpTag::CopyStatement { source } if *source == pod_ref)
+                    }) {
+                        saw_copy = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_copy, "expected CopyStatement provenance from MainPod");
     }
 
     #[test]

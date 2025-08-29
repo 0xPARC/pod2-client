@@ -1,14 +1,12 @@
-use pod2::middleware::{
-    AnchoredKey, Hash, Key, NativePredicate, Statement, StatementTmplArg, Value, ValueRef,
-};
+use pod2::middleware::{Hash, Key, NativePredicate, Statement, StatementTmplArg, Value};
 use tracing::trace;
 
 use crate::{
-    edb::EdbView,
+    edb::{ArgSel, EdbView, TernaryPred},
     op::OpHandler,
     prop::{Choice, PropagatorResult},
     types::{ConstraintStore, OpTag},
-    util::{contains_stmt, enumerate_choices_for, tag_from_source},
+    util::{bound_root, contains_stmt, enumerate_choices_for, tag_from_source, ternary_view},
 };
 
 /// Helper: classify an argument into a numeric int if possible, with premises when using AKs.
@@ -313,29 +311,6 @@ impl OpHandler for SumOfFromEntriesHandler {
 /// Copy SumOf rows matching two-of-three syntactically, binding the third when wildcard or AK root wildcard.
 pub struct CopySumOfHandler;
 
-fn arg_matches_tmpl(vr: &ValueRef, tmpl: &StatementTmplArg, store: &ConstraintStore) -> bool {
-    match (vr, tmpl) {
-        (ValueRef::Literal(vs), StatementTmplArg::Literal(vt)) => vs == vt,
-        (ValueRef::Literal(vs), StatementTmplArg::Wildcard(w)) => store
-            .bindings
-            .get(&w.index)
-            .map(|bv| bv == vs)
-            .unwrap_or(false),
-        (
-            ValueRef::Key(AnchoredKey { root: rs, key: ks }),
-            StatementTmplArg::AnchoredKey(w, kt),
-        ) => {
-            kt.hash() == ks.hash()
-                && store
-                    .bindings
-                    .get(&w.index)
-                    .map(|bv| Hash::from(bv.raw()) == *rs)
-                    .unwrap_or(true)
-        }
-        _ => false,
-    }
-}
-
 impl OpHandler for CopySumOfHandler {
     fn propagate(
         &self,
@@ -347,137 +322,125 @@ impl OpHandler for CopySumOfHandler {
             return PropagatorResult::Contradiction;
         }
         let mut choices: Vec<Choice> = Vec::new();
-        for (st, src) in edb.sumof_rows().into_iter() {
-            if let Statement::SumOf(a, b, c) = st {
-                // Try each position as the "third" to bind
-                // Case 1: match a,b; handle c
-                if arg_matches_tmpl(&a, &args[0], store) && arg_matches_tmpl(&b, &args[1], store) {
-                    match (&c, &args[2]) {
-                        (ValueRef::Literal(v), StatementTmplArg::Wildcard(w)) => {
-                            choices.push(Choice {
-                                bindings: vec![(w.index, v.clone())],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            });
-                        }
-                        (ValueRef::Literal(vc), StatementTmplArg::Literal(vt)) if vc == vt => {
-                            choices.push(Choice {
-                                bindings: vec![],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            });
-                        }
-                        (
-                            ValueRef::Key(AnchoredKey { root, key }),
-                            StatementTmplArg::AnchoredKey(w, kt),
-                        ) if kt.hash() == key.hash() => {
-                            // Bind root if unbound
-                            if !store.bindings.contains_key(&w.index) {
-                                choices.push(Choice {
-                                    bindings: vec![(w.index, Value::from(*root))],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            } else {
-                                choices.push(Choice {
-                                    bindings: vec![],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            }
-                        }
-                        _ => {}
+        // Build selectors from template args and current bindings; keep owned roots alive
+        let mut a_root_tmp: Option<Hash> = None; // keep owned until after ternary_view call
+        let mut b_root_tmp: Option<Hash> = None; // keep owned until after ternary_view call
+        let mut c_root_tmp: Option<Hash> = None; // keep owned until after ternary_view call
+        let s_a = match &args[0] {
+            StatementTmplArg::Literal(v) => ArgSel::Literal(v),
+            StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
+                Some(v) => ArgSel::Literal(v),
+                None => ArgSel::Val,
+            },
+            StatementTmplArg::AnchoredKey(w, key) => match bound_root(store, w.index) {
+                Some(root) => {
+                    a_root_tmp = Some(root);
+                    ArgSel::AkExact {
+                        root: a_root_tmp.as_ref().unwrap(),
+                        key,
                     }
                 }
-                // Case 2: match a,c; handle b
-                if arg_matches_tmpl(&a, &args[0], store) && arg_matches_tmpl(&c, &args[2], store) {
-                    match (&b, &args[1]) {
-                        (ValueRef::Literal(v), StatementTmplArg::Wildcard(w)) => {
-                            choices.push(Choice {
-                                bindings: vec![(w.index, v.clone())],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            })
-                        }
-                        (ValueRef::Literal(vb), StatementTmplArg::Literal(vt)) if vb == vt => {
-                            choices.push(Choice {
-                                bindings: vec![],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            })
-                        }
-                        (
-                            ValueRef::Key(AnchoredKey { root, key }),
-                            StatementTmplArg::AnchoredKey(w, kt),
-                        ) if kt.hash() == key.hash() => {
-                            if !store.bindings.contains_key(&w.index) {
-                                choices.push(Choice {
-                                    bindings: vec![(w.index, Value::from(*root))],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            } else {
-                                choices.push(Choice {
-                                    bindings: vec![],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            }
-                        }
-                        _ => {}
+                None => ArgSel::AkByKey(key),
+            },
+            StatementTmplArg::None => ArgSel::Val,
+        };
+        let s_b = match &args[1] {
+            StatementTmplArg::Literal(v) => ArgSel::Literal(v),
+            StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
+                Some(v) => ArgSel::Literal(v),
+                None => ArgSel::Val,
+            },
+            StatementTmplArg::AnchoredKey(w, key) => match bound_root(store, w.index) {
+                Some(root) => {
+                    b_root_tmp = Some(root);
+                    ArgSel::AkExact {
+                        root: b_root_tmp.as_ref().unwrap(),
+                        key,
                     }
                 }
-                // Case 3: match b,c; handle a
-                if arg_matches_tmpl(&b, &args[1], store) && arg_matches_tmpl(&c, &args[2], store) {
-                    match (&a, &args[0]) {
-                        (ValueRef::Literal(v), StatementTmplArg::Wildcard(w)) => {
-                            choices.push(Choice {
-                                bindings: vec![(w.index, v.clone())],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            })
-                        }
-                        (ValueRef::Literal(va), StatementTmplArg::Literal(vt)) if va == vt => {
-                            choices.push(Choice {
-                                bindings: vec![],
-                                op_tag: OpTag::CopyStatement {
-                                    source: src.clone(),
-                                },
-                            })
-                        }
-                        (
-                            ValueRef::Key(AnchoredKey { root, key }),
-                            StatementTmplArg::AnchoredKey(w, kt),
-                        ) if kt.hash() == key.hash() => {
-                            if !store.bindings.contains_key(&w.index) {
-                                choices.push(Choice {
-                                    bindings: vec![(w.index, Value::from(*root))],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            } else {
-                                choices.push(Choice {
-                                    bindings: vec![],
-                                    op_tag: OpTag::CopyStatement {
-                                        source: src.clone(),
-                                    },
-                                });
-                            }
-                        }
-                        _ => {}
+                None => ArgSel::AkByKey(key),
+            },
+            StatementTmplArg::None => ArgSel::Val,
+        };
+        let s_c = match &args[2] {
+            StatementTmplArg::Literal(v) => ArgSel::Literal(v),
+            StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
+                Some(v) => ArgSel::Literal(v),
+                None => ArgSel::Val,
+            },
+            StatementTmplArg::AnchoredKey(w, key) => match bound_root(store, w.index) {
+                Some(root) => {
+                    c_root_tmp = Some(root);
+                    ArgSel::AkExact {
+                        root: c_root_tmp.as_ref().unwrap(),
+                        key,
                     }
                 }
+                None => ArgSel::AkByKey(key),
+            },
+            StatementTmplArg::None => ArgSel::Val,
+        };
+
+        for row in ternary_view(edb, TernaryPred::SumOf, s_a, s_b, s_c).into_iter() {
+            let mut binds: Vec<(usize, Value)> = Vec::new();
+            // Position A
+            match &args[0] {
+                StatementTmplArg::Wildcard(w) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some(v) = row.a.as_literal() {
+                            binds.push((w.index, v.clone()));
+                        }
+                    }
+                }
+                StatementTmplArg::AnchoredKey(w, _key) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some((root, _)) = row.a.as_ak() {
+                            binds.push((w.index, Value::from(*root)));
+                        }
+                    }
+                }
+                _ => {}
             }
+            // Position B
+            match &args[1] {
+                StatementTmplArg::Wildcard(w) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some(v) = row.b.as_literal() {
+                            binds.push((w.index, v.clone()));
+                        }
+                    }
+                }
+                StatementTmplArg::AnchoredKey(w, _key) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some((root, _)) = row.b.as_ak() {
+                            binds.push((w.index, Value::from(*root)));
+                        }
+                    }
+                }
+                _ => {}
+            }
+            // Position C
+            match &args[2] {
+                StatementTmplArg::Wildcard(w) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some(v) = row.c.as_literal() {
+                            binds.push((w.index, v.clone()));
+                        }
+                    }
+                }
+                StatementTmplArg::AnchoredKey(w, _key) => {
+                    if !store.bindings.contains_key(&w.index) {
+                        if let Some((root, _)) = row.c.as_ak() {
+                            binds.push((w.index, Value::from(*root)));
+                        }
+                    }
+                }
+                _ => {}
+            }
+            choices.push(Choice {
+                bindings: binds,
+                op_tag: OpTag::CopyStatement { source: row.src },
+            });
         }
         if choices.is_empty() {
             // Suspend when only one argument is concretely matched? Fallback to suspend on wildcards referenced

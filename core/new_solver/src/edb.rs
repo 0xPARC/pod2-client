@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use pod2::middleware::{
     containers::Dictionary, AnchoredKey, Hash, Key, Statement, Value, ValueRef,
@@ -6,67 +6,58 @@ use pod2::middleware::{
 
 use crate::types::PodRef;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BinaryPred {
+    Equal,
+    Lt,
+    LtEq,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TernaryPred {
+    SumOf,
+    Contains,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ArgSel<'a> {
+    /// Match a literal value exactly
+    Literal(&'a pod2::middleware::Value),
+    /// Match any literal value
+    Val,
+    /// Match an anchored key by its key only (any root)
+    AkByKey(&'a pod2::middleware::Key),
+    /// Match an anchored key by exact root and key
+    AkExact {
+        root: &'a pod2::middleware::Hash,
+        key: &'a pod2::middleware::Key,
+    },
+}
+
 /// Minimal read-only EDB interface for OpHandlers in MVP.
 pub trait EdbView: Send + Sync {
-    fn match_equal_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
+    /// Generic binary predicate query. Implementors should override this; all exact wrappers delegate here.
+    fn query_binary(
+        &self,
+        _pred: BinaryPred,
+        _lhs: ArgSel,
+        _rhs: ArgSel,
+    ) -> Vec<(Statement, PodRef)> {
+        Vec::new()
+    }
+
+    /// Generic ternary predicate query. Implementors can override as needed.
+    fn query_ternary(
+        &self,
+        _pred: TernaryPred,
+        _a: ArgSel,
+        _b: ArgSel,
+        _c: ArgSel,
+    ) -> Vec<(Statement, PodRef)> {
         Vec::new()
     }
 
     fn contains_value(&self, _root: &pod2::middleware::Hash, _key: &Key) -> Option<Value> {
-        None
-    }
-
-    fn roots_with_key_value(&self, _key: &Key, _val: &Value) -> Vec<pod2::middleware::Hash> {
-        Vec::new()
-    }
-
-    fn equal_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    /// CopyEqual support: find Equal(AK(root,key), value) rows regardless of value.
-    fn equal_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-
-    fn equal_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-
-    /// CopyEqual support: find Equal(value, AK(root,key)) rows regardless of value.
-    fn equal_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-
-    // Lt copy helpers
-    fn lt_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lt_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_val_rhs_val(&self, _val_l: &Value, _val_r: &Value) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_val_rhs_any(&self, _val_l: &Value) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lt_lhs_any_rhs_val(&self, _val_r: &Value) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lt_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
-        Vec::new()
-    }
-
-    fn value_of_ak(&self, _root: &Hash, _key: &Key) -> Option<Value> {
         None
     }
 
@@ -92,35 +83,6 @@ pub trait EdbView: Send + Sync {
 
     /// Enumerate SumOf rows for CopySumOf (MVP helper).
     fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-
-    // LtEq copy helpers (parallel to Lt)
-    fn lte_lhs_ak_rhs_val(&self, _key: &Key, _val: &Value) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_val_rhs_ak(&self, _val: &Value, _key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lte_ak_ak_by_keys(&self, _left_key: &Key, _right_key: &Key) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_ak_rhs_any(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_any_rhs_ak(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_val_rhs_val(&self, _val_l: &Value, _val_r: &Value) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_val_rhs_any(&self, _val_l: &Value) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lte_lhs_any_rhs_val(&self, _val_r: &Value) -> Vec<(Value, PodRef)> {
-        Vec::new()
-    }
-    fn lte_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
         Vec::new()
     }
 
@@ -324,17 +286,60 @@ impl MockEdbView {
         );
         self.sum_rows.push((st, src));
     }
+
+    fn matches_arg<'a>(vr: &pod2::middleware::ValueRef, sel: &ArgSel<'a>) -> bool {
+        use pod2::middleware::{AnchoredKey, ValueRef};
+        match sel {
+            ArgSel::Literal(v) => matches!(vr, ValueRef::Literal(v0) if v0 == *v),
+            ArgSel::Val => matches!(vr, ValueRef::Literal(_)),
+            ArgSel::AkByKey(key) => {
+                matches!(vr, ValueRef::Key(AnchoredKey { key: k, .. }) if k.hash() == key.hash())
+            }
+            ArgSel::AkExact { root, key } => {
+                matches!(vr, ValueRef::Key(AnchoredKey { root: r, key: k }) if r == *root && k.hash() == key.hash())
+            }
+        }
+    }
 }
 
 impl EdbView for MockEdbView {
-    fn match_equal_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
-        self.equal_rows
-            .iter()
+    fn query_binary(&self, pred: BinaryPred, lhs: ArgSel, rhs: ArgSel) -> Vec<(Statement, PodRef)> {
+        use pod2::middleware::Statement::*;
+        let rows: &Vec<(Statement, PodRef)> = match pred {
+            BinaryPred::Equal => &self.equal_rows,
+            BinaryPred::Lt => &self.lt_rows,
+            BinaryPred::LtEq => &self.lte_rows,
+        };
+        rows.iter()
             .filter(|(st, _)| match st {
-                Statement::Equal(
-                    ValueRef::Key(AnchoredKey { key: k, .. }),
-                    ValueRef::Literal(v),
-                ) => k.hash() == key.hash() && v == val,
+                Equal(l, r) | Lt(l, r) | LtEq(l, r) => {
+                    Self::matches_arg(l, &lhs) && Self::matches_arg(r, &rhs)
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn query_ternary(
+        &self,
+        pred: TernaryPred,
+        a: ArgSel,
+        b: ArgSel,
+        c: ArgSel,
+    ) -> Vec<(Statement, PodRef)> {
+        use pod2::middleware::Statement::*;
+        let rows: &Vec<(Statement, PodRef)> = match pred {
+            TernaryPred::SumOf => &self.sum_rows,
+            // Contains is indexed separately in MockEdbView; return empty here.
+            TernaryPred::Contains => return Vec::new(),
+        };
+        rows.iter()
+            .filter(|(st, _)| match st {
+                SumOf(la, lb, lc) => {
+                    Self::matches_arg(la, &a)
+                        && Self::matches_arg(lb, &b)
+                        && Self::matches_arg(lc, &c)
+                }
                 _ => false,
             })
             .cloned()
@@ -350,332 +355,6 @@ impl EdbView for MockEdbView {
         self.full_dicts
             .get(root)
             .and_then(|m| m.get(&key_hash(key)).cloned())
-    }
-
-    fn roots_with_key_value(&self, key: &Key, val: &Value) -> Vec<Hash> {
-        let mut roots: HashSet<Hash> = HashSet::new();
-        // From Contains facts
-        for ((root, k), vs) in self.contains_copied.iter() {
-            if *k == key_hash(key) && vs.iter().any(|(v, _)| v == val) {
-                roots.insert(*root);
-            }
-        }
-        // From Equal rows
-        for (st, _src) in self.equal_rows.iter() {
-            if let Statement::Equal(
-                ValueRef::Key(AnchoredKey { root, key: k }),
-                ValueRef::Literal(v),
-            ) = st
-            {
-                if k.hash() == key.hash() && v == val {
-                    roots.insert(*root);
-                }
-            }
-        }
-        // From full dicts
-        for (root, kvs) in self.full_dicts.iter() {
-            if let Some(v) = kvs.get(&key_hash(key)) {
-                if v == val {
-                    roots.insert(*root);
-                }
-            }
-        }
-        let mut v: Vec<Hash> = roots.into_iter().collect();
-        v.sort();
-        v
-    }
-
-    fn equal_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
-        self.equal_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Equal(
-                    ValueRef::Literal(v),
-                    ValueRef::Key(AnchoredKey { key: k, .. }),
-                ) => v == val && k.hash() == key.hash(),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-
-    fn equal_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.equal_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Equal(
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                    ValueRef::Literal(v),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn equal_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
-        self.equal_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Equal(
-                    ValueRef::Key(AnchoredKey { key: lk, .. }),
-                    ValueRef::Key(AnchoredKey { key: rk, .. }),
-                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-
-    fn equal_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.equal_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Equal(
-                    ValueRef::Literal(v),
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-
-    // Lt support
-    fn lt_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Lt(ValueRef::Key(AnchoredKey { key: k, .. }), ValueRef::Literal(v)) => {
-                    k.hash() == key.hash() && v == val
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lt_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Lt(ValueRef::Literal(v), ValueRef::Key(AnchoredKey { key: k, .. })) => {
-                    v == val && k.hash() == key.hash()
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lt_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Lt(
-                    ValueRef::Key(AnchoredKey { key: lk, .. }),
-                    ValueRef::Key(AnchoredKey { key: rk, .. }),
-                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lt_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Lt(
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                    ValueRef::Literal(v),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-    fn lt_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Lt(
-                    ValueRef::Literal(v),
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn lt_lhs_val_rhs_val(&self, val_l: &Value, val_r: &Value) -> Vec<(Statement, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
-                    vl == val_l && vr == val_r
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lt_lhs_val_rhs_any(&self, val_l: &Value) -> Vec<(Value, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vl == val_l => {
-                    Some((vr.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-    fn lt_lhs_any_rhs_val(&self, val_r: &Value) -> Vec<(Value, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vr == val_r => {
-                    Some((vl.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-    fn lt_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
-        self.lt_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::Lt(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
-                    Some((vl.clone(), vr.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-
-    // LtEq support
-    fn lte_lhs_ak_rhs_val(&self, key: &Key, val: &Value) -> Vec<(Statement, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::LtEq(
-                    ValueRef::Key(AnchoredKey { key: k, .. }),
-                    ValueRef::Literal(v),
-                ) => k.hash() == key.hash() && v == val,
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lte_lhs_val_rhs_ak(&self, val: &Value, key: &Key) -> Vec<(Statement, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::LtEq(
-                    ValueRef::Literal(v),
-                    ValueRef::Key(AnchoredKey { key: k, .. }),
-                ) => v == val && k.hash() == key.hash(),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lte_ak_ak_by_keys(&self, left_key: &Key, right_key: &Key) -> Vec<(Statement, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::LtEq(
-                    ValueRef::Key(AnchoredKey { key: lk, .. }),
-                    ValueRef::Key(AnchoredKey { key: rk, .. }),
-                ) => lk.hash() == left_key.hash() && rk.hash() == right_key.hash(),
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lte_lhs_ak_rhs_any(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::LtEq(
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                    ValueRef::Literal(v),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-    fn lte_lhs_any_rhs_ak(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::LtEq(
-                    ValueRef::Literal(v),
-                    ValueRef::Key(AnchoredKey { root: r, key: k }),
-                ) if r == root && k.hash() == key.hash() => Some((v.clone(), src.clone())),
-                _ => None,
-            })
-            .collect()
-    }
-    fn lte_lhs_val_rhs_val(&self, val_l: &Value, val_r: &Value) -> Vec<(Statement, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter(|(st, _)| match st {
-                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
-                    vl == val_l && vr == val_r
-                }
-                _ => false,
-            })
-            .cloned()
-            .collect()
-    }
-    fn lte_lhs_val_rhs_any(&self, val_l: &Value) -> Vec<(Value, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vl == val_l => {
-                    Some((vr.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-    fn lte_lhs_any_rhs_val(&self, val_r: &Value) -> Vec<(Value, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) if vr == val_r => {
-                    Some((vl.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-    fn lte_all_val_val(&self) -> Vec<(Value, Value, PodRef)> {
-        self.lte_rows
-            .iter()
-            .filter_map(|(st, src)| match st {
-                Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr)) => {
-                    Some((vl.clone(), vr.clone(), src.clone()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn value_of_ak(&self, root: &Hash, key: &Key) -> Option<Value> {
-        // Prefer Contains fact
-        if let Some(v) = self.contains_value(root, key) {
-            return Some(v);
-        }
-        // Fall back to Equal rows
-        for (st, _src) in self.equal_rows.iter() {
-            if let Statement::Equal(
-                ValueRef::Key(AnchoredKey { root: r, key: k }),
-                ValueRef::Literal(v),
-            ) = st
-            {
-                if r == root && k.hash() == key.hash() {
-                    return Some(v.clone());
-                }
-            }
-        }
-        None
     }
 
     fn contains_source(&self, root: &Hash, key: &Key, val: &Value) -> Option<ContainsSource> {
@@ -787,4 +466,337 @@ impl EdbView for MockEdbView {
 pub enum ContainsSource {
     Copied { pod: PodRef },
     GeneratedFromFullDict { root: Hash },
+}
+
+/// Immutable, deterministically ordered EDB built from pods and/or signed dictionaries.
+#[derive(Default, Clone)]
+pub struct ImmutableEdb {
+    // CopyEqual rows
+    equal_rows: Vec<(Statement, PodRef)>,
+    // Lt and LtEq copied rows
+    lt_rows: Vec<(Statement, PodRef)>,
+    lte_rows: Vec<(Statement, PodRef)>,
+    // Copied Contains facts: (root, key_hash) -> Vec<(value, PodRef)>
+    contains_copied: std::collections::BTreeMap<(Hash, Hash), Vec<(Value, PodRef)>>,
+    // Full dictionaries registered: root -> key_hash -> value
+    full_dicts: std::collections::BTreeMap<Hash, std::collections::BTreeMap<Hash, Value>>,
+    // Optional copied rows for other predicates (kept for parity/extension)
+    not_contains_rows: Vec<(Statement, PodRef)>,
+    sum_rows: Vec<(Statement, PodRef)>,
+}
+
+pub struct ImmutableEdbBuilder {
+    inner: ImmutableEdb,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for ImmutableEdbBuilder {
+    fn default() -> Self {
+        Self {
+            inner: ImmutableEdb::default(),
+        }
+    }
+}
+
+impl ImmutableEdbBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_copied_equal(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
+        let st = Statement::Equal(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.inner.equal_rows.push((st, src));
+        self
+    }
+
+    pub fn add_copied_contains(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
+        self.inner
+            .contains_copied
+            .entry((root, key_hash(&key)))
+            .or_default()
+            .push((val, src));
+        self
+    }
+
+    pub fn add_full_kv(mut self, root: Hash, key: Key, val: Value) -> Self {
+        self.inner
+            .full_dicts
+            .entry(root)
+            .or_default()
+            .insert(key_hash(&key), val);
+        self
+    }
+
+    pub fn add_full_dict(mut self, dict: Dictionary) -> Self {
+        let root = dict.commitment();
+        let entry = self.inner.full_dicts.entry(root).or_default();
+        for (k, v) in dict.kvs().iter() {
+            entry.insert(k.hash(), v.clone());
+        }
+        self
+    }
+
+    /// Register a full dictionary that is externally signed. For the EDB, a root is a root;
+    /// signing is enforced by separate SignedBy statements. This indexes the dictionary identically
+    /// to `add_full_dict` so handlers can generate Contains/Equal-from-entries.
+    pub fn add_signed_dict(self, dict: Dictionary) -> Self {
+        // Same behavior as add_full_dict; kept for semantic clarity at call sites.
+        self.add_full_dict(dict)
+    }
+
+    pub fn add_not_contains(mut self, root: Hash, key: Key, src: PodRef) -> Self {
+        let st = Statement::NotContains(
+            ValueRef::Literal(Value::from(root)),
+            ValueRef::Literal(Value::from(key.name())),
+        );
+        self.inner.not_contains_rows.push((st, src));
+        self
+    }
+
+    pub fn add_sum_row_vals(mut self, a: Value, b: Value, c: Value, src: PodRef) -> Self {
+        let st = Statement::SumOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.inner.sum_rows.push((st, src));
+        self
+    }
+
+    pub fn add_lt_row_lak_rval(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
+        let st = Statement::Lt(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.inner.lt_rows.push((st, src));
+        self
+    }
+    pub fn add_lte_row_lak_rval(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
+        let st = Statement::LtEq(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(val),
+        );
+        self.inner.lte_rows.push((st, src));
+        self
+    }
+
+    pub fn build(mut self) -> ImmutableEdb {
+        // Canonicalize ordering where applicable
+        self.inner
+            .equal_rows
+            .sort_by(|(a, _), (b, _)| format!("{a:?}").cmp(&format!("{b:?}")));
+        self.inner
+    }
+
+    /// Ingest a set of ground statements from a MainPod (identified by PodRef).
+    /// This is a lightweight normalization step that populates Equal/Contains/full-dict indices.
+    pub fn add_main_pod(mut self, pod: PodRef, statements: &[Statement]) -> Self {
+        use pod2::middleware::{Statement as Stmt, TypedValue};
+        for st in statements.iter() {
+            match st {
+                // Equal rows (copyable)
+                Stmt::Equal(ValueRef::Key(_), ValueRef::Key(_))
+                | Stmt::Equal(ValueRef::Key(_), ValueRef::Literal(_))
+                | Stmt::Equal(ValueRef::Literal(_), ValueRef::Key(_)) => {
+                    self.inner.equal_rows.push((st.clone(), pod.clone()));
+                }
+                // Contains rows (copied): Contains(root_hash, key_string, value)
+                Stmt::Contains(
+                    ValueRef::Literal(r),
+                    ValueRef::Literal(k),
+                    ValueRef::Literal(v),
+                ) => {
+                    let root = Hash::from(r.raw());
+                    if let TypedValue::String(ks) = k.typed() {
+                        let key = Key::from(ks.clone());
+                        self.inner
+                            .contains_copied
+                            .entry((root, key.hash()))
+                            .or_default()
+                            .push((v.clone(), pod.clone()));
+                    }
+                }
+                // NotContains (copied)
+                Stmt::NotContains(ValueRef::Literal(_), ValueRef::Literal(_)) => {
+                    self.inner.not_contains_rows.push((st.clone(), pod.clone()));
+                }
+                // SumOf (copied)
+                Stmt::SumOf(_, _, _) => {
+                    self.inner.sum_rows.push((st.clone(), pod.clone()));
+                }
+                // Lt/LtEq copied rows
+                Stmt::Lt(_, _) => {
+                    self.inner.lt_rows.push((st.clone(), pod.clone()));
+                }
+                Stmt::LtEq(_, _) => {
+                    self.inner.lte_rows.push((st.clone(), pod.clone()));
+                }
+                _ => {}
+            }
+        }
+        self
+    }
+}
+
+impl EdbView for ImmutableEdb {
+    fn query_binary(&self, pred: BinaryPred, lhs: ArgSel, rhs: ArgSel) -> Vec<(Statement, PodRef)> {
+        use pod2::middleware::Statement::*;
+        let rows: &Vec<(Statement, PodRef)> = match pred {
+            BinaryPred::Equal => &self.equal_rows,
+            BinaryPred::Lt => &self.lt_rows,
+            BinaryPred::LtEq => &self.lte_rows,
+        };
+        fn matches<'a>(vr: &pod2::middleware::ValueRef, sel: &ArgSel<'a>) -> bool {
+            use pod2::middleware::{AnchoredKey, ValueRef};
+            match sel {
+                ArgSel::Literal(v) => matches!(vr, ValueRef::Literal(v0) if v0 == *v),
+                ArgSel::Val => matches!(vr, ValueRef::Literal(_)),
+                ArgSel::AkByKey(key) => {
+                    matches!(vr, ValueRef::Key(AnchoredKey { key: k, .. }) if k.hash() == key.hash())
+                }
+                ArgSel::AkExact { root, key } => {
+                    matches!(vr, ValueRef::Key(AnchoredKey { root: r, key: k }) if r == *root && k.hash() == key.hash())
+                }
+            }
+        }
+        rows.iter()
+            .filter(|(st, _)| match st {
+                Equal(l, r) | Lt(l, r) | LtEq(l, r) => matches(l, &lhs) && matches(r, &rhs),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+    fn query_ternary(
+        &self,
+        pred: TernaryPred,
+        a: ArgSel,
+        b: ArgSel,
+        c: ArgSel,
+    ) -> Vec<(Statement, PodRef)> {
+        use pod2::middleware::Statement::*;
+        let rows: &Vec<(Statement, PodRef)> = match pred {
+            TernaryPred::SumOf => &self.sum_rows,
+            // Contains rows are materialized via contains_* helpers; skip here.
+            TernaryPred::Contains => return Vec::new(),
+        };
+        fn matches<'a>(vr: &pod2::middleware::ValueRef, sel: &ArgSel<'a>) -> bool {
+            use pod2::middleware::{AnchoredKey, ValueRef};
+            match sel {
+                ArgSel::Literal(v) => matches!(vr, ValueRef::Literal(v0) if v0 == *v),
+                ArgSel::Val => matches!(vr, ValueRef::Literal(_)),
+                ArgSel::AkByKey(key) => {
+                    matches!(vr, ValueRef::Key(AnchoredKey { key: k, .. }) if k.hash() == key.hash())
+                }
+                ArgSel::AkExact { root, key } => {
+                    matches!(vr, ValueRef::Key(AnchoredKey { root: r, key: k }) if r == *root && k.hash() == key.hash())
+                }
+            }
+        }
+        rows.iter()
+            .filter(|(st, _)| match st {
+                SumOf(la, lb, lc) => matches(la, &a) && matches(lb, &b) && matches(lc, &c),
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn contains_value(&self, root: &Hash, key: &Key) -> Option<Value> {
+        // Prefer copied contains if present
+        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
+            if let Some((v, _)) = vs.first() {
+                return Some(v.clone());
+            }
+        }
+        self.full_dicts
+            .get(root)
+            .and_then(|m| m.get(&key_hash(key)).cloned())
+    }
+
+    fn contains_source(&self, root: &Hash, key: &Key, val: &Value) -> Option<ContainsSource> {
+        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
+            for (v, pod) in vs.iter() {
+                if v == val {
+                    return Some(ContainsSource::Copied { pod: pod.clone() });
+                }
+            }
+        }
+        if let Some(kvs) = self.full_dicts.get(root) {
+            if let Some(v) = kvs.get(&key_hash(key)) {
+                if v == val {
+                    return Some(ContainsSource::GeneratedFromFullDict { root: *root });
+                }
+            }
+        }
+        None
+    }
+
+    fn enumerate_contains_sources(&self, key: &Key, val: &Value) -> Vec<(Hash, ContainsSource)> {
+        let mut out = Vec::new();
+        for ((root, k), vs) in self.contains_copied.iter() {
+            if *k == key_hash(key) {
+                for (v, pod) in vs.iter() {
+                    if v == val {
+                        out.push((*root, ContainsSource::Copied { pod: pod.clone() }));
+                    }
+                }
+            }
+        }
+        for (root, kvs) in self.full_dicts.iter() {
+            if let Some(v) = kvs.get(&key_hash(key)) {
+                if v == val {
+                    out.push((*root, ContainsSource::GeneratedFromFullDict { root: *root }));
+                }
+            }
+        }
+        // Prefer copied over generated when both present for the same root
+        out.sort_by(|(r1, s1), (r2, s2)| {
+            r1.cmp(r2).then_with(|| match (s1, s2) {
+                (ContainsSource::GeneratedFromFullDict { .. }, ContainsSource::Copied { .. }) => {
+                    std::cmp::Ordering::Less
+                }
+                (ContainsSource::Copied { .. }, ContainsSource::GeneratedFromFullDict { .. }) => {
+                    std::cmp::Ordering::Greater
+                }
+                _ => std::cmp::Ordering::Equal,
+            })
+        });
+        out
+    }
+
+    fn contains_copied_values(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
+        self.contains_copied
+            .get(&(*root, key_hash(key)))
+            .cloned()
+            .unwrap_or_else(Vec::new)
+    }
+
+    fn contains_full_value(&self, root: &Hash, key: &Key) -> Option<Value> {
+        self.full_dicts
+            .get(root)
+            .and_then(|m| m.get(&key_hash(key)).cloned())
+    }
+
+    fn sumof_rows(&self) -> Vec<(Statement, PodRef)> {
+        self.sum_rows.clone()
+    }
+
+    fn not_contains_copy_root_key(&self, root: &Hash, key: &Key) -> Option<PodRef> {
+        self.not_contains_rows
+            .iter()
+            .find_map(|(st, src)| match st {
+                Statement::NotContains(ValueRef::Literal(r), ValueRef::Literal(k)) => {
+                    if Hash::from(r.raw()) == *root && k == &Value::from(key.name()) {
+                        Some(src.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+    }
 }

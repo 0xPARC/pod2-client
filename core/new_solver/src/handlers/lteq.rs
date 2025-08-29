@@ -1,11 +1,11 @@
 use pod2::middleware::{Hash, NativePredicate, Statement, StatementTmplArg, Value};
 
 use crate::{
-    edb::EdbView,
+    edb::{ArgSel, BinaryPred, EdbView},
     op::OpHandler,
     prop::PropagatorResult,
     types::{ConstraintStore, OpTag},
-    util::contains_stmt,
+    util::{binary_view, contains_stmt},
 };
 
 /// Value-centric LtEqFromEntries: resolve ints from literals, wildcards, or AKs; suspend if unknown.
@@ -157,7 +157,7 @@ impl OpHandler for CopyLtEqHandler {
         if args.len() != 2 {
             return PropagatorResult::Contradiction;
         }
-        use pod2::middleware::{AnchoredKey, ValueRef};
+        // copy path uses binary_view; no direct Statement matching
         let left = &args[0];
         let right = &args[1];
         let mut choices: Vec<crate::prop::Choice> = Vec::new();
@@ -166,60 +166,74 @@ impl OpHandler for CopyLtEqHandler {
                 if !store.bindings.contains_key(&wl.index)
                     && !store.bindings.contains_key(&wr.index)
                 {
-                    for (vl, vr, src) in edb.lte_all_val_val() {
-                        choices.push(crate::prop::Choice {
-                            bindings: vec![(wl.index, vl), (wr.index, vr)],
-                            op_tag: OpTag::CopyStatement { source: src },
-                        });
-                    }
-                }
-                if let Some(vl) = store.bindings.get(&wl.index) {
-                    for (vr, src) in edb.lte_lhs_val_rhs_any(vl) {
-                        if !store.bindings.contains_key(&wr.index) {
+                    for row in binary_view(edb, BinaryPred::LtEq, ArgSel::Val, ArgSel::Val) {
+                        if let (Some(l), Some(r)) = (row.left.as_literal(), row.right.as_literal())
+                        {
                             choices.push(crate::prop::Choice {
-                                bindings: vec![(wr.index, vr)],
-                                op_tag: OpTag::CopyStatement { source: src },
+                                bindings: vec![(wl.index, l.clone()), (wr.index, r.clone())],
+                                op_tag: OpTag::CopyStatement { source: row.src },
                             });
                         }
                     }
                 }
+                if let Some(vl) = store.bindings.get(&wl.index) {
+                    for row in binary_view(edb, BinaryPred::LtEq, ArgSel::Literal(vl), ArgSel::Val)
+                    {
+                        if let Some(r) = row.right.as_literal() {
+                            if !store.bindings.contains_key(&wr.index) {
+                                choices.push(crate::prop::Choice {
+                                    bindings: vec![(wr.index, r.clone())],
+                                    op_tag: OpTag::CopyStatement { source: row.src },
+                                });
+                            }
+                        }
+                    }
+                }
                 if let Some(vr) = store.bindings.get(&wr.index) {
-                    for (vl, src) in edb.lte_lhs_any_rhs_val(vr) {
-                        if !store.bindings.contains_key(&wl.index) {
-                            choices.push(crate::prop::Choice {
-                                bindings: vec![(wl.index, vl)],
-                                op_tag: OpTag::CopyStatement { source: src },
-                            });
+                    for row in binary_view(edb, BinaryPred::LtEq, ArgSel::Val, ArgSel::Literal(vr))
+                    {
+                        if let Some(l) = row.left.as_literal() {
+                            if !store.bindings.contains_key(&wl.index) {
+                                choices.push(crate::prop::Choice {
+                                    bindings: vec![(wl.index, l.clone())],
+                                    op_tag: OpTag::CopyStatement { source: row.src },
+                                });
+                            }
                         }
                     }
                 }
             }
             (StatementTmplArg::Literal(vl), StatementTmplArg::Wildcard(wr)) => {
-                for (vr, src) in edb.lte_lhs_val_rhs_any(vl) {
-                    choices.push(crate::prop::Choice {
-                        bindings: vec![(wr.index, vr)],
-                        op_tag: OpTag::CopyStatement { source: src },
-                    });
+                for row in binary_view(edb, BinaryPred::LtEq, ArgSel::Literal(vl), ArgSel::Val) {
+                    if let Some(vr) = row.right.as_literal() {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wr.index, vr.clone())],
+                            op_tag: OpTag::CopyStatement { source: row.src },
+                        });
+                    }
                 }
             }
             (StatementTmplArg::Wildcard(wl), StatementTmplArg::Literal(vr)) => {
-                for (vl, src) in edb.lte_lhs_any_rhs_val(vr) {
-                    choices.push(crate::prop::Choice {
-                        bindings: vec![(wl.index, vl)],
-                        op_tag: OpTag::CopyStatement { source: src },
-                    });
+                for row in binary_view(edb, BinaryPred::LtEq, ArgSel::Val, ArgSel::Literal(vr)) {
+                    if let Some(vl) = row.left.as_literal() {
+                        choices.push(crate::prop::Choice {
+                            bindings: vec![(wl.index, vl.clone())],
+                            op_tag: OpTag::CopyStatement { source: row.src },
+                        });
+                    }
                 }
             }
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
-                for (st, src) in edb.lte_lhs_ak_rhs_val(key_l, val_r) {
-                    if let Statement::LtEq(
-                        ValueRef::Key(AnchoredKey { root, .. }),
-                        ValueRef::Literal(_),
-                    ) = st
-                    {
+                for v in binary_view(
+                    edb,
+                    BinaryPred::LtEq,
+                    ArgSel::AkByKey(key_l),
+                    ArgSel::Literal(val_r),
+                ) {
+                    if let Some((root, _)) = v.left.as_ak() {
                         choices.push(crate::prop::Choice {
-                            bindings: vec![(wc_l.index, Value::from(root))],
-                            op_tag: OpTag::CopyStatement { source: src },
+                            bindings: vec![(wc_l.index, Value::from(*root))],
+                            op_tag: OpTag::CopyStatement { source: v.src },
                         });
                     }
                 }
@@ -227,41 +241,52 @@ impl OpHandler for CopyLtEqHandler {
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
                 // If right wildcard is bound to a literal value, treat as literal and bind left root
                 if let Some(vr_lit) = store.bindings.get(&wv.index) {
-                    for (st, src) in edb.lte_lhs_ak_rhs_val(key_l, vr_lit) {
-                        if let Statement::LtEq(
-                            ValueRef::Key(AnchoredKey { root, .. }),
-                            ValueRef::Literal(_),
-                        ) = st
-                        {
+                    for v in binary_view(
+                        edb,
+                        BinaryPred::LtEq,
+                        ArgSel::AkByKey(key_l),
+                        ArgSel::Literal(vr_lit),
+                    ) {
+                        if let Some((root, _)) = v.left.as_ak() {
                             choices.push(crate::prop::Choice {
-                                bindings: vec![(wc_l.index, Value::from(root))],
-                                op_tag: OpTag::CopyStatement { source: src },
+                                bindings: vec![(wc_l.index, Value::from(*root))],
+                                op_tag: OpTag::CopyStatement { source: v.src },
                             });
                         }
                     }
                 } else if let Some(root) =
                     store.bindings.get(&wc_l.index).map(|v| Hash::from(v.raw()))
                 {
-                    // If left root is bound, enumerate RHS values from EDB and bind right wildcard
-                    for (vr, src) in edb.lte_lhs_ak_rhs_any(&root, key_l) {
-                        let _ = src; // provenance captured via CopyStatement on head instantiation
-                        choices.push(crate::prop::Choice {
-                            bindings: vec![(wv.index, vr)],
-                            op_tag: OpTag::CopyStatement { source: src },
-                        });
+                    // If left root is bound, enumerate RHS values and bind right wildcard
+                    for row in binary_view(
+                        edb,
+                        BinaryPred::LtEq,
+                        ArgSel::AkExact {
+                            root: &root,
+                            key: key_l,
+                        },
+                        ArgSel::Val,
+                    ) {
+                        if let Some(vr) = row.right.as_literal() {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wv.index, vr.clone())],
+                                op_tag: OpTag::CopyStatement { source: row.src },
+                            });
+                        }
                     }
                 }
             }
             (StatementTmplArg::Literal(val_l), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                for (st, src) in edb.lte_lhs_val_rhs_ak(val_l, key_r) {
-                    if let Statement::LtEq(
-                        ValueRef::Literal(_),
-                        ValueRef::Key(AnchoredKey { root, .. }),
-                    ) = st
-                    {
+                for v in binary_view(
+                    edb,
+                    BinaryPred::LtEq,
+                    ArgSel::Literal(val_l),
+                    ArgSel::AkByKey(key_r),
+                ) {
+                    if let Some((root, _)) = v.right.as_ak() {
                         choices.push(crate::prop::Choice {
-                            bindings: vec![(wc_r.index, Value::from(root))],
-                            op_tag: OpTag::CopyStatement { source: src },
+                            bindings: vec![(wc_r.index, Value::from(*root))],
+                            op_tag: OpTag::CopyStatement { source: v.src },
                         });
                     }
                 }
@@ -269,27 +294,38 @@ impl OpHandler for CopyLtEqHandler {
             (StatementTmplArg::Wildcard(wv), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
                 // If left wildcard is bound to a literal value, treat as literal and bind right root
                 if let Some(vl_lit) = store.bindings.get(&wv.index) {
-                    for (st, src) in edb.lte_lhs_val_rhs_ak(vl_lit, key_r) {
-                        if let Statement::LtEq(
-                            ValueRef::Literal(_),
-                            ValueRef::Key(AnchoredKey { root, .. }),
-                        ) = st
-                        {
+                    for v in binary_view(
+                        edb,
+                        BinaryPred::LtEq,
+                        ArgSel::Literal(vl_lit),
+                        ArgSel::AkByKey(key_r),
+                    ) {
+                        if let Some((root, _)) = v.right.as_ak() {
                             choices.push(crate::prop::Choice {
-                                bindings: vec![(wc_r.index, Value::from(root))],
-                                op_tag: OpTag::CopyStatement { source: src },
+                                bindings: vec![(wc_r.index, Value::from(*root))],
+                                op_tag: OpTag::CopyStatement { source: v.src },
                             });
                         }
                     }
                 } else if let Some(root) =
                     store.bindings.get(&wc_r.index).map(|v| Hash::from(v.raw()))
                 {
-                    // If right root is bound, enumerate LHS values from EDB and bind left wildcard
-                    for (vl, src) in edb.lte_lhs_any_rhs_ak(&root, key_r) {
-                        choices.push(crate::prop::Choice {
-                            bindings: vec![(wv.index, vl)],
-                            op_tag: OpTag::CopyStatement { source: src },
-                        });
+                    // If right root is bound, enumerate LHS values and bind left wildcard
+                    for row in binary_view(
+                        edb,
+                        BinaryPred::LtEq,
+                        ArgSel::Val,
+                        ArgSel::AkExact {
+                            root: &root,
+                            key: key_r,
+                        },
+                    ) {
+                        if let Some(vl) = row.left.as_literal() {
+                            choices.push(crate::prop::Choice {
+                                bindings: vec![(wv.index, vl.clone())],
+                                op_tag: OpTag::CopyStatement { source: row.src },
+                            });
+                        }
                     }
                 }
             }
