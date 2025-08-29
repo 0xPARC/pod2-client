@@ -10,3 +10,5 @@ pub mod not_contains;
 pub use not_contains::register_not_contains_handlers;
 pub mod sumof;
 pub use sumof::register_sumof_handlers;
+pub mod signed_by;
+pub use signed_by::register_signed_by_handlers;

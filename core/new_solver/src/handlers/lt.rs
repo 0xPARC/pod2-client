@@ -1,4 +1,5 @@
 use pod2::middleware::{Hash, NativePredicate, Statement, StatementTmplArg, Value};
+use tracing::trace;
 
 use crate::{
     edb::{ArgSel, BinaryPred, EdbView},
@@ -21,6 +22,7 @@ impl OpHandler for LtFromEntriesHandler {
         if args.len() != 2 {
             return PropagatorResult::Contradiction;
         }
+        trace!(args = ?args, "Lt: start");
 
         // Classify an argument into an integer value if possible, along with any premises
         // (Contains facts) required to justify AK value extraction.
@@ -90,6 +92,22 @@ impl OpHandler for LtFromEntriesHandler {
 
         let a0 = classify(&args[0], store, edb);
         let a1 = classify(&args[1], store, edb);
+        // Lightweight classification summary for tracing
+        let mut kind0 = "";
+        let mut kind1 = "";
+        match &a0 {
+            ArgVal::Ground { i, .. } => kind0 = Box::leak(format!("ground({i})").into_boxed_str()),
+            ArgVal::Wait(w) => kind0 = Box::leak(format!("wait({w})").into_boxed_str()),
+            ArgVal::TypeError => kind0 = "type_error",
+            ArgVal::NoFact => kind0 = "no_fact",
+        }
+        match &a1 {
+            ArgVal::Ground { i, .. } => kind1 = Box::leak(format!("ground({i})").into_boxed_str()),
+            ArgVal::Wait(w) => kind1 = Box::leak(format!("wait({w})").into_boxed_str()),
+            ArgVal::TypeError => kind1 = "type_error",
+            ArgVal::NoFact => kind1 = "no_fact",
+        }
+        trace!(left = kind0, right = kind1, "Lt: classified");
 
         // Type errors or missing facts on bound AKs fail this op path
         match (&a0, &a1) {
@@ -113,6 +131,7 @@ impl OpHandler for LtFromEntriesHandler {
             }
         }
         if !waits.is_empty() {
+            trace!(?waits, "Lt: suspending");
             waits.sort();
             waits.dedup();
             return PropagatorResult::Suspend { on: waits };
@@ -133,17 +152,20 @@ impl OpHandler for LtFromEntriesHandler {
             premises.extend(prem0);
             premises.extend(prem1);
             if premises.is_empty() {
+                trace!(i0, i1, "Lt: entailed from literals");
                 PropagatorResult::Entailed {
                     bindings: vec![],
                     op_tag: OpTag::FromLiterals,
                 }
             } else {
+                trace!(i0, i1, prem = premises.len(), "Lt: entailed with premises");
                 PropagatorResult::Entailed {
                     bindings: vec![],
                     op_tag: OpTag::Derived { premises },
                 }
             }
         } else {
+            trace!(i0, i1, "Lt: contradiction (not less)");
             PropagatorResult::Contradiction
         }
     }

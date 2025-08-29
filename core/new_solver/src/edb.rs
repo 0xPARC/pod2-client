@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use pod2::middleware::{
-    containers::Dictionary, AnchoredKey, Hash, Key, Statement, Value, ValueRef,
+use pod2::{
+    frontend::SignedDict,
+    middleware::{containers::Dictionary, AnchoredKey, Hash, Key, Statement, Value, ValueRef},
 };
 
 use crate::types::PodRef;
@@ -11,6 +12,7 @@ pub enum BinaryPred {
     Equal,
     Lt,
     LtEq,
+    SignedBy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,6 +88,16 @@ pub trait EdbView: Send + Sync {
         Vec::new()
     }
 
+    /// Lookup a SignedDict by its root commitment, if tracked by the EDB.
+    fn signed_dict(&self, _root: &Hash) -> Option<SignedDict> {
+        None
+    }
+
+    /// Enumerate all SignedDicts tracked by the EDB (used for generation/enumeration).
+    fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
+        Vec::new()
+    }
+
     // NotContains helpers
     fn not_contains_copy_root_key(&self, _root: &Hash, _key: &Key) -> Option<PodRef> {
         None
@@ -118,8 +130,12 @@ pub struct MockEdbView {
     pub full_dicts: HashMap<Hash, HashMap<Hash, Value>>,
     /// SumOf rows available to copy.
     pub sum_rows: Vec<(Statement, PodRef)>,
+    /// SignedBy rows available to copy.
+    pub signed_by_rows: Vec<(Statement, PodRef)>,
     /// NotContains copied rows: Statement::NotContains(root,key)
     pub not_contains_rows: Vec<(Statement, PodRef)>,
+    /// Signed dictionaries indexed by their root commitment
+    pub signed_dicts: HashMap<Hash, SignedDict>,
 }
 
 fn key_hash(k: &Key) -> Hash {
@@ -287,6 +303,13 @@ impl MockEdbView {
         self.sum_rows.push((st, src));
     }
 
+    /// Register a SignedDict; also index its full dictionary for GeneratedContains.
+    pub fn add_signed_dict(&mut self, signed: SignedDict) {
+        let root = signed.dict.commitment();
+        self.signed_dicts.insert(root, signed.clone());
+        self.add_full_dict(signed.dict);
+    }
+
     fn matches_arg<'a>(vr: &pod2::middleware::ValueRef, sel: &ArgSel<'a>) -> bool {
         use pod2::middleware::{AnchoredKey, ValueRef};
         match sel {
@@ -309,6 +332,7 @@ impl EdbView for MockEdbView {
             BinaryPred::Equal => &self.equal_rows,
             BinaryPred::Lt => &self.lt_rows,
             BinaryPred::LtEq => &self.lte_rows,
+            BinaryPred::SignedBy => &self.signed_by_rows,
         };
         rows.iter()
             .filter(|(st, _)| match st {
@@ -424,6 +448,14 @@ impl EdbView for MockEdbView {
         self.sum_rows.clone()
     }
 
+    fn signed_dict(&self, root: &Hash) -> Option<SignedDict> {
+        self.signed_dicts.get(root).cloned()
+    }
+
+    fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
+        self.signed_dicts.values().cloned().collect()
+    }
+
     // NotContains
     fn not_contains_copy_root_key(&self, root: &Hash, key: &Key) -> Option<PodRef> {
         self.not_contains_rows
@@ -483,6 +515,8 @@ pub struct ImmutableEdb {
     // Optional copied rows for other predicates (kept for parity/extension)
     not_contains_rows: Vec<(Statement, PodRef)>,
     sum_rows: Vec<(Statement, PodRef)>,
+    signed_by_rows: Vec<(Statement, PodRef)>,
+    signed_dicts: std::collections::BTreeMap<Hash, SignedDict>,
 }
 
 pub struct ImmutableEdbBuilder {
@@ -501,24 +535,6 @@ impl Default for ImmutableEdbBuilder {
 impl ImmutableEdbBuilder {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn add_copied_equal(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
-        let st = Statement::Equal(
-            ValueRef::Key(AnchoredKey::new(root, key)),
-            ValueRef::Literal(val),
-        );
-        self.inner.equal_rows.push((st, src));
-        self
-    }
-
-    pub fn add_copied_contains(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
-        self.inner
-            .contains_copied
-            .entry((root, key_hash(&key)))
-            .or_default()
-            .push((val, src));
-        self
     }
 
     pub fn add_full_kv(mut self, root: Hash, key: Key, val: Value) -> Self {
@@ -542,44 +558,11 @@ impl ImmutableEdbBuilder {
     /// Register a full dictionary that is externally signed. For the EDB, a root is a root;
     /// signing is enforced by separate SignedBy statements. This indexes the dictionary identically
     /// to `add_full_dict` so handlers can generate Contains/Equal-from-entries.
-    pub fn add_signed_dict(self, dict: Dictionary) -> Self {
-        // Same behavior as add_full_dict; kept for semantic clarity at call sites.
-        self.add_full_dict(dict)
-    }
-
-    pub fn add_not_contains(mut self, root: Hash, key: Key, src: PodRef) -> Self {
-        let st = Statement::NotContains(
-            ValueRef::Literal(Value::from(root)),
-            ValueRef::Literal(Value::from(key.name())),
-        );
-        self.inner.not_contains_rows.push((st, src));
-        self
-    }
-
-    pub fn add_sum_row_vals(mut self, a: Value, b: Value, c: Value, src: PodRef) -> Self {
-        let st = Statement::SumOf(
-            ValueRef::Literal(a),
-            ValueRef::Literal(b),
-            ValueRef::Literal(c),
-        );
-        self.inner.sum_rows.push((st, src));
-        self
-    }
-
-    pub fn add_lt_row_lak_rval(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
-        let st = Statement::Lt(
-            ValueRef::Key(AnchoredKey::new(root, key)),
-            ValueRef::Literal(val),
-        );
-        self.inner.lt_rows.push((st, src));
-        self
-    }
-    pub fn add_lte_row_lak_rval(mut self, root: Hash, key: Key, val: Value, src: PodRef) -> Self {
-        let st = Statement::LtEq(
-            ValueRef::Key(AnchoredKey::new(root, key)),
-            ValueRef::Literal(val),
-        );
-        self.inner.lte_rows.push((st, src));
+    pub fn add_signed_dict(mut self, signed_dict: SignedDict) -> Self {
+        let root = signed_dict.dict.commitment();
+        self.inner.signed_dicts.insert(root, signed_dict.clone());
+        // Also index full dictionary so entries are available to handlers
+        self = self.add_full_dict(signed_dict.dict);
         self
     }
 
@@ -634,7 +617,18 @@ impl ImmutableEdbBuilder {
                 Stmt::LtEq(_, _) => {
                     self.inner.lte_rows.push((st.clone(), pod.clone()));
                 }
+                Stmt::SignedBy(_, _) => {
+                    self.inner.signed_by_rows.push((st.clone(), pod.clone()));
+                }
                 _ => {}
+            }
+
+            for arg in st.args() {
+                if let pod2::middleware::StatementArg::Literal(v) = arg {
+                    if let TypedValue::Dictionary(dict) = v.typed() {
+                        self = self.add_full_dict(dict.clone());
+                    }
+                }
             }
         }
         self
@@ -648,6 +642,7 @@ impl EdbView for ImmutableEdb {
             BinaryPred::Equal => &self.equal_rows,
             BinaryPred::Lt => &self.lt_rows,
             BinaryPred::LtEq => &self.lte_rows,
+            BinaryPred::SignedBy => &self.signed_by_rows,
         };
         fn matches<'a>(vr: &pod2::middleware::ValueRef, sel: &ArgSel<'a>) -> bool {
             use pod2::middleware::{AnchoredKey, ValueRef};
@@ -798,5 +793,13 @@ impl EdbView for ImmutableEdb {
                 }
                 _ => None,
             })
+    }
+
+    fn signed_dict(&self, root: &Hash) -> Option<SignedDict> {
+        self.signed_dicts.get(root).cloned()
+    }
+
+    fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
+        self.signed_dicts.values().cloned().collect()
     }
 }

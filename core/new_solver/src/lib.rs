@@ -1,4 +1,5 @@
 pub mod custom;
+pub mod debug;
 pub mod edb;
 pub mod engine;
 pub mod handlers;

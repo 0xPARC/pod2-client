@@ -238,7 +238,10 @@ pub fn normalize_binary(
 ) -> Vec<BinaryRowView> {
     rows.into_iter()
         .filter_map(|(st, src)| match st {
-            Statement::Equal(l, r) | Statement::Lt(l, r) | Statement::LtEq(l, r) => {
+            Statement::Equal(l, r)
+            | Statement::Lt(l, r)
+            | Statement::LtEq(l, r)
+            | Statement::SignedBy(l, r) => {
                 let to_view = |v: ValueRef| match v {
                     ValueRef::Literal(v) => Some(ArgView::Literal(v)),
                     ValueRef::Key(AnchoredKey { root, key }) => Some(ArgView::Ak { root, key }),

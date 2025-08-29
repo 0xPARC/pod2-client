@@ -1,4 +1,4 @@
-use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg};
+use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg, Value};
 
 use crate::{
     edb::EdbView,
@@ -120,6 +120,44 @@ impl OpHandler for ContainsFromEntriesHandler {
             return PropagatorResult::Contradiction;
         }
         let (a_root, a_key, a_val) = (&args[0], &args[1], &args[2]);
+        // Enumeration: if root is an unbound wildcard and key/value are known, enumerate candidate roots.
+        if let StatementTmplArg::Wildcard(wr) = a_root {
+            if !store.bindings.contains_key(&wr.index) {
+                let key_opt = key_from_arg(a_key, store);
+                let val_opt: Option<Value> = match a_val {
+                    StatementTmplArg::Literal(v) => Some(v.clone()),
+                    StatementTmplArg::Wildcard(wv) => store.bindings.get(&wv.index).cloned(),
+                    _ => None,
+                };
+                if let (Some(key), Some(val)) = (key_opt, val_opt) {
+                    let mut alts = Vec::new();
+                    for (root, src) in edb.enumerate_contains_sources(&key, &val) {
+                        let op_tag = match src {
+                            crate::edb::ContainsSource::GeneratedFromFullDict { .. } => {
+                                OpTag::GeneratedContains {
+                                    root,
+                                    key: key.clone(),
+                                    value: val.clone(),
+                                }
+                            }
+                            crate::edb::ContainsSource::Copied { pod } => {
+                                OpTag::CopyStatement { source: pod }
+                            }
+                        };
+                        alts.push(crate::prop::Choice {
+                            bindings: vec![(wr.index, Value::from(root))],
+                            op_tag,
+                        });
+                    }
+                    tracing::trace!(?key, ?val, candidates = alts.len(), "Contains enum roots");
+                    return if alts.is_empty() {
+                        PropagatorResult::Contradiction
+                    } else {
+                        PropagatorResult::Choices { alternatives: alts }
+                    };
+                }
+            }
+        }
         // Need root and key to proceed
         let root = match root_from_arg(a_root, store) {
             Some(r) => r,

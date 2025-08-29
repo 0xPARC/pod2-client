@@ -178,6 +178,36 @@ impl OpHandler for EqualFromEntriesHandler {
                     return PropagatorResult::Contradiction;
                 }
             }
+            // Both wildcards: if both bound, check; if one bound, bind the other
+            (StatementTmplArg::Wildcard(wl), StatementTmplArg::Wildcard(wr)) => {
+                let lb = store.bindings.get(&wl.index).cloned();
+                let rb = store.bindings.get(&wr.index).cloned();
+                match (lb, rb) {
+                    (Some(lv), Some(rv)) => {
+                        if lv == rv {
+                            return PropagatorResult::Entailed {
+                                bindings: vec![],
+                                op_tag: OpTag::FromLiterals,
+                            };
+                        } else {
+                            return PropagatorResult::Contradiction;
+                        }
+                    }
+                    (Some(lv), None) => {
+                        return PropagatorResult::Entailed {
+                            bindings: vec![(wr.index, lv)],
+                            op_tag: OpTag::FromLiterals,
+                        };
+                    }
+                    (None, Some(rv)) => {
+                        return PropagatorResult::Entailed {
+                            bindings: vec![(wl.index, rv)],
+                            op_tag: OpTag::FromLiterals,
+                        };
+                    }
+                    (None, None) => {}
+                }
+            }
             (StatementTmplArg::Wildcard(wv), StatementTmplArg::Literal(vr)) => {
                 if let Some(bv) = store.bindings.get(&wv.index) {
                     if bv == vr {
@@ -188,6 +218,12 @@ impl OpHandler for EqualFromEntriesHandler {
                     } else {
                         return PropagatorResult::Contradiction;
                     }
+                } else {
+                    // Bind unbound wildcard to the literal
+                    return PropagatorResult::Entailed {
+                        bindings: vec![(wv.index, vr.clone())],
+                        op_tag: OpTag::FromLiterals,
+                    };
                 }
             }
             (StatementTmplArg::Literal(vl), StatementTmplArg::Wildcard(wv)) => {
@@ -200,6 +236,12 @@ impl OpHandler for EqualFromEntriesHandler {
                     } else {
                         return PropagatorResult::Contradiction;
                     }
+                } else {
+                    // Bind unbound wildcard to the literal
+                    return PropagatorResult::Entailed {
+                        bindings: vec![(wv.index, vl.clone())],
+                        op_tag: OpTag::FromLiterals,
+                    };
                 }
             }
             // AK–Wildcard(value)

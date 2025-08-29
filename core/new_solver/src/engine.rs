@@ -170,6 +170,8 @@ pub struct Engine<'a> {
     pub iteration_cap_hit: bool,
     frames_since_epoch: u64,
     tables: std::collections::BTreeMap<CallPattern, Table>,
+    // Branch-and-bound: best (lowest) operation count observed for any exported answer
+    best_ops_so_far: Option<usize>,
 }
 
 impl<'a> Engine<'a> {
@@ -186,6 +188,7 @@ impl<'a> Engine<'a> {
             iteration_cap_hit: false,
             frames_since_epoch: 0,
             tables: std::collections::BTreeMap::new(),
+            best_ops_so_far: None,
         }
     }
 
@@ -280,36 +283,72 @@ impl<'a> Engine<'a> {
             let mut frame_steps: u32 = 0;
             if goals.is_empty() {
                 // Record a completed answer (bindings and any accumulated premises)
+                let t_final_start = std::time::Instant::now();
                 let mut final_store = store.clone();
                 // Materialize any pending custom deductions as head proof steps
                 if !final_store.pending_custom.is_empty() {
-                    let pendings = final_store.pending_custom.clone();
+                    let t_mat_start = std::time::Instant::now();
+                    let pendings = std::mem::take(&mut final_store.pending_custom);
                     for p in pendings.into_iter() {
                         if let Some(head) = crate::util::instantiate_custom(
                             &p.rule_id,
                             &p.head_args,
                             &final_store.bindings,
                         ) {
-                            let premises = final_store.premises.clone();
                             final_store.premises.push((
                                 head,
                                 crate::types::OpTag::CustomDeduction {
                                     rule_id: p.rule_id.clone(),
-                                    premises,
+                                    premises: Vec::new(),
                                 },
                             ));
                         }
                     }
-                    final_store.pending_custom.clear();
+                    let dt = t_mat_start.elapsed();
+                    if dt.as_millis() > 50 {
+                        trace!(
+                            frame_id = id,
+                            ms = dt.as_millis(),
+                            "finalize: materialize pending custom heads"
+                        );
+                    }
                 }
                 // Publish any custom heads to tables before recording the answer
+                let t_pub_start = std::time::Instant::now();
                 self.publish_custom_answers(&final_store);
+                let dt_pub = t_pub_start.elapsed();
+                if dt_pub.as_millis() > 50 {
+                    trace!(
+                        frame_id = id,
+                        ms = dt_pub.as_millis(),
+                        "finalize: publish_custom_answers"
+                    );
+                }
                 if export {
                     debug!("exporting completed answer");
                     self.answers.push(final_store);
+                    // Update best bound on operations for branch-and-bound
+                    let ops = self
+                        .answers
+                        .last()
+                        .map(|st| st.operation_count)
+                        .unwrap_or(0);
+                    self.best_ops_so_far = Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+                    // Early exit mode: return immediately after the first exported answer
+                    if self.config.early_exit_on_first_answer {
+                        break;
+                    }
                 }
                 if let Some(pat) = table_for.clone() {
                     self.maybe_complete_table(&pat);
+                }
+                let dt_total = t_final_start.elapsed();
+                if dt_total.as_millis() > 100 {
+                    trace!(
+                        frame_id = id,
+                        ms = dt_total.as_millis(),
+                        "finalize: total finalize time"
+                    );
                 }
                 continue;
             }
@@ -344,7 +383,21 @@ impl<'a> Engine<'a> {
                 if is_custom {
                     if let Predicate::Custom(ref cpr) = g.pred {
                         let call_args = &goals[idx].args;
-                        let pattern = CallPattern::from_call(cpr.clone(), call_args);
+                        // Instantiate call args with current store bindings so tables and waiters see ground literals
+                        let inst_call_args: Vec<StatementTmplArg> = call_args
+                            .iter()
+                            .cloned()
+                            .map(|a| match a {
+                                StatementTmplArg::Wildcard(w) => store
+                                    .bindings
+                                    .get(&w.index)
+                                    .cloned()
+                                    .map(StatementTmplArg::Literal)
+                                    .unwrap_or(StatementTmplArg::Wildcard(w)),
+                                other => other,
+                            })
+                            .collect();
+                        let pattern = CallPattern::from_call(cpr.clone(), &inst_call_args);
                         let is_new = !self.tables.contains_key(&pattern);
                         // Ensure a table exists for this pattern
                         let _ = self
@@ -352,7 +405,7 @@ impl<'a> Engine<'a> {
                             .entry(pattern.clone())
                             .or_insert_with(Table::new);
                         if is_new {
-                            debug!(predicate = ?cpr, "creating new table and spawning producers");
+                            debug!(predicate = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), "creating new table and spawning producers");
                             // Spawn producers for each rule: child frames evaluate only the rule body + propagated constraints
                             let rules = self.rules.get(cpr).to_vec();
                             if rules.is_empty() {
@@ -374,7 +427,8 @@ impl<'a> Engine<'a> {
                         }
                         // Register waiter for the caller and stream any existing table answers, respecting per-table fanout cap
                         trace!(?pattern, "registering waiter for custom call");
-                        let waiter = Waiter::from_call(cpr.clone(), idx, &goals, &store, call_args);
+                        let waiter =
+                            Waiter::from_call(cpr.clone(), idx, &goals, &store, &inst_call_args);
                         // Compute deliveries without holding a mutable borrow to self
                         let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
                         let mut to_deliver: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> =
@@ -427,7 +481,12 @@ impl<'a> Engine<'a> {
                                     );
                                 }
                             } else {
-                                t.waiters.push(waiter);
+                                let is_dup = t.waiters.iter().any(|w| w.same_signature(&waiter));
+                                if is_dup {
+                                    trace!(?pattern, "duplicate waiter ignored");
+                                } else {
+                                    t.waiters.push(waiter);
+                                }
                             }
                         }
                         // We handled this goal by tabling; drop this frame (continuations enqueued)
@@ -441,6 +500,7 @@ impl<'a> Engine<'a> {
                     Predicate::Native(p) => p,
                     _ => unreachable!(),
                 };
+                trace!(pred = ?goal_pred, args = ?tmpl_args, "processing native goal");
                 let mut local_choices: Vec<Choice> = Vec::new();
                 let mut suspended_here = false;
                 for h in self.registry.get(goal_pred) {
@@ -465,6 +525,7 @@ impl<'a> Engine<'a> {
                         PropagatorResult::Contradiction => {}
                     }
                 }
+                trace!(pred = ?goal_pred, choices = local_choices.len(), waits = ?union_waits, "native goal outcome");
                 if !local_choices.is_empty() {
                     chosen_goal_idx = Some(idx);
                     choices_for_goal = local_choices;
@@ -564,7 +625,48 @@ impl<'a> Engine<'a> {
                         if let Some(head) =
                             crate::util::instantiate_goal(head_tmpl, &cont_store.bindings)
                         {
-                            cont_store.premises.push((head, ch.op_tag.clone()));
+                            // Record proof step and update optimization counters
+                            let tag = ch.op_tag.clone();
+                            cont_store.premises.push((head, tag.clone()));
+                            // Count one operation for this step
+                            cont_store.operation_count =
+                                cont_store.operation_count.saturating_add(1);
+                            // Track input pods when copying
+                            if let crate::types::OpTag::CopyStatement { source } = tag {
+                                cont_store.input_pods.insert(source);
+                            }
+                        }
+                    }
+                    // Branch-and-bound pruning by POD budget using ops/inputs limits
+                    if self.config.branch_and_bound_on_ops {
+                        if let Some(best_ops) = self.best_ops_so_far {
+                            // Realized unique ops and inputs
+                            let realized_ops = cont_store.premises.len();
+                            let realized_inputs = cont_store.input_pods.len();
+                            // Admissible lower bounds for remaining work
+                            let remaining_native = ng
+                                .iter()
+                                .filter(|t| matches!(t.pred, Predicate::Native(_)))
+                                .count();
+                            let remaining_custom = ng
+                                .iter()
+                                .filter(|t| matches!(t.pred, Predicate::Custom(_)))
+                                .count();
+                            let lb_ops = remaining_native + remaining_custom;
+                            // Compute pods lower bound using configured limits
+                            let ops_per_pod = self.config.ops_per_pod.max(1);
+                            let inputs_per_pod = self.config.inputs_per_pod.max(1);
+                            let pods_lb_ops =
+                                ((realized_ops + lb_ops) + ops_per_pod - 1) / ops_per_pod;
+                            let pods_lb_inputs =
+                                ((realized_inputs) + inputs_per_pod - 1) / inputs_per_pod;
+                            // Translate best_ops into a pods bound using ops_per_pod (conservative)
+                            let best_pods = (best_ops + ops_per_pod - 1) / ops_per_pod;
+                            let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
+                            if pods_lb > best_pods {
+                                // Prune this continuation
+                                continue;
+                            }
                         }
                     }
                     let cont = Frame {
@@ -664,9 +766,18 @@ impl<'a> Engine<'a> {
             rule.body.iter().map(|t| remap_tmpl(t, &map)).collect();
 
         let mut cont_store = store.clone();
+        // Pre-bind remapped head wildcards from caller args that are literals or bound wildcards
         for (h, call) in remapped_head.iter().zip(call_args.iter()) {
-            if let (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(v)) = (h, call) {
-                cont_store.bindings.insert(hw.index, v.clone());
+            match (h, call) {
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(v)) => {
+                    cont_store.bindings.insert(hw.index, v.clone());
+                }
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Wildcard(cw)) => {
+                    if let Some(v) = store.bindings.get(&cw.index) {
+                        cont_store.bindings.insert(hw.index, v.clone());
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -702,13 +813,29 @@ impl<'a> Engine<'a> {
                 ng.push(g.clone());
             }
         }
-        ng.extend(remapped_body);
+        // Reorder body: native first, then non-self custom, then self-recursive custom
+        let mut natives: Vec<StatementTmpl> = Vec::new();
+        let mut custom_other: Vec<StatementTmpl> = Vec::new();
+        let mut custom_self: Vec<StatementTmpl> = Vec::new();
+        for t in remapped_body.into_iter() {
+            match t.pred {
+                Predicate::Native(_) => natives.push(t),
+                Predicate::Custom(ref r) if *r == *cpr => custom_self.push(t),
+                Predicate::Custom(_) => custom_other.push(t),
+                _ => custom_other.push(t),
+            }
+        }
+        let mut ordered_body: Vec<StatementTmpl> = Vec::new();
+        ordered_body.extend(natives);
+        ordered_body.extend(custom_other);
+        ordered_body.extend(custom_self);
+        ng.extend(ordered_body.clone());
 
         cont_store.pending_custom.push(PendingCustom {
             rule_id: cpr.clone(),
             head_args: remapped_head,
         });
-
+        trace!(pred = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), goals = ?ng, "spawned producer goals");
         Some(Frame {
             id: self.sched.new_id(),
             goals: ng,
@@ -719,13 +846,17 @@ impl<'a> Engine<'a> {
     }
 
     fn publish_custom_answers(&mut self, final_store: &crate::types::ConstraintStore) {
+        let t_start = std::time::Instant::now();
+        let mut heads_scanned = 0usize;
+        let mut answers_inserted = 0usize;
+        let mut deliveries = 0usize;
         // Scan premises for any CustomDeduction heads and publish them
         for (stmt, tag) in final_store.premises.iter() {
             if let (Statement::Custom(pred, vals), crate::types::OpTag::CustomDeduction { .. }) =
                 (stmt, tag)
             {
+                heads_scanned += 1;
                 let key_vec: Vec<RawOrdValue> = vals.iter().cloned().map(RawOrdValue).collect();
-                trace!(predicate = ?pred, tuple = key_vec.len(), "publishing custom head to tables");
                 // Publish into all tables matching this predicate whose literal pattern matches the tuple
                 let target_patterns: Vec<CallPattern> = self
                     .tables
@@ -773,6 +904,7 @@ impl<'a> Engine<'a> {
                                 entry.delivered_this_epoch =
                                     entry.delivered_this_epoch.saturating_add(inc);
                             }
+                            answers_inserted += 1;
                         }
                     }
                     if exceeded {
@@ -782,9 +914,20 @@ impl<'a> Engine<'a> {
                         trace!(?pat, "delivering answer to waiter");
                         let cont = w.continuation_frame(self, &key_vec, tag.clone());
                         self.sched.enqueue(cont);
+                        deliveries += 1;
                     }
                 }
             }
+        }
+        let dt = t_start.elapsed();
+        if dt.as_millis() > 50 {
+            trace!(
+                ms = dt.as_millis(),
+                heads_scanned,
+                answers_inserted,
+                deliveries,
+                "publish_custom_answers: timing"
+            );
         }
     }
 
@@ -843,6 +986,11 @@ pub struct EngineConfig {
     pub per_table_fanout_cap: Option<u32>,
     pub per_frame_step_cap: Option<u32>,
     pub per_table_epoch_frames: Option<u64>,
+    pub early_exit_on_first_answer: bool,
+    pub branch_and_bound_on_ops: bool,
+    // POD packing limits
+    pub ops_per_pod: usize,
+    pub inputs_per_pod: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -870,6 +1018,27 @@ impl EngineConfigBuilder {
     }
     pub fn per_table_epoch_frames(mut self, frames: u64) -> Self {
         self.cfg.per_table_epoch_frames = Some(frames);
+        self
+    }
+    pub fn early_exit_on_first_answer(mut self, enabled: bool) -> Self {
+        self.cfg.early_exit_on_first_answer = enabled;
+        self
+    }
+    pub fn branch_and_bound_on_ops(mut self, enabled: bool) -> Self {
+        self.cfg.branch_and_bound_on_ops = enabled;
+        self
+    }
+    pub fn ops_per_pod(mut self, ops: usize) -> Self {
+        self.cfg.ops_per_pod = ops;
+        self
+    }
+    pub fn inputs_per_pod(mut self, inputs: usize) -> Self {
+        self.cfg.inputs_per_pod = inputs;
+        self
+    }
+    pub fn from_params(mut self, params: &pod2::middleware::Params) -> Self {
+        self.cfg.ops_per_pod = params.max_statements;
+        self.cfg.inputs_per_pod = params.max_input_pods;
         self
     }
     pub fn build(self) -> EngineConfig {
@@ -937,6 +1106,13 @@ impl Waiter {
         true
     }
 
+    fn same_signature(&self, other: &Waiter) -> bool {
+        self.pred == other.pred
+            && self.goal_idx == other.goal_idx
+            && self.bind_targets == other.bind_targets
+            && self.literal_filters == other.literal_filters
+    }
+
     fn continuation_frame(
         &self,
         engine: &mut Engine,
@@ -974,11 +1150,11 @@ impl Waiter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CallPattern {
-    pred: pod2::middleware::CustomPredicateRef,
+    pub(crate) pred: pod2::middleware::CustomPredicateRef,
     // For each head position, Some(literal) or None (variable/AK)
-    literals: Vec<Option<RawOrdValue>>,
+    pub(crate) literals: Vec<Option<RawOrdValue>>,
 }
 
 impl CallPattern {
@@ -1046,8 +1222,9 @@ impl Table {
 #[cfg(test)]
 mod tests {
     use pod2::{
+        examples::MOCK_VD_SET,
         lang::parse,
-        middleware::{containers::Dictionary, Key, Params, Value},
+        middleware::{containers::Dictionary, Key, Params, Signer, Value},
     };
     use tracing_subscriber::{fmt, EnvFilter};
 
@@ -1059,6 +1236,7 @@ mod tests {
             register_lt_handlers, register_sumof_handlers,
         },
         op::OpRegistry,
+        register_signed_by_handlers,
         types::ConstraintStore,
     };
 
@@ -1996,7 +2174,7 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        let edb = ImmutableEdbBuilder::new().add_signed_dict(dict).build();
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2193,6 +2371,7 @@ mod tests {
         let edb = MockEdbView::default();
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
         register_sumof_handlers(&mut reg);
 
         let program = r#"
@@ -2201,6 +2380,7 @@ mod tests {
             )
 
             step(N, private: M) = AND(
+                Lt(0, ?N)
                 dec(?N, ?M)
                 nat_down(?M)
             )
@@ -2283,5 +2463,109 @@ mod tests {
             !engine.answers.is_empty(),
             "expected at least one answer proving even(4)"
         );
+    }
+
+    #[test]
+    fn engine_ethdos_end_to_end() -> Result<(), String> {
+        let _ = fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .try_init();
+
+        use hex::ToHex;
+        use pod2::{
+            backends::plonky2::{mock::mainpod::MockProver, signer::Signer},
+            examples::{attest_eth_friend, custom::eth_dos_batch, EthDosHelper, MOCK_VD_SET},
+            middleware::SecretKey,
+        };
+
+        let params = Params {
+            max_input_pods_public_statements: 8,
+            max_statements: 24,
+            max_public_statements: 8,
+            ..Default::default()
+        };
+        let vd_set = &*MOCK_VD_SET;
+
+        let alice = Signer(SecretKey(1u32.into()));
+        let bob = Signer(SecretKey(2u32.into()));
+        let charlie = Signer(SecretKey(3u32.into()));
+        let david = Signer(SecretKey(4u32.into()));
+
+        let helper =
+            EthDosHelper::new(&params, vd_set, alice.public_key()).map_err(|e| e.to_string())?;
+
+        let prover = MockProver {};
+
+        let alice_attestation = attest_eth_friend(&params, &alice, bob.public_key());
+        let bob_attestation = attest_eth_friend(&params, &bob, charlie.public_key());
+
+        let batch = eth_dos_batch(&params).unwrap();
+        /*
+        eth_dos_batch:
+            eth_friend(src, dst, private: attestation) = AND(
+                SignedBy(?attestation, ?src)
+                Contains(?attestation, "attestation", ?dst)
+            )
+
+            eth_dos_base(src, dst, distance) = AND(
+                Equal(?src, ?dst)
+                Equal(?distance, 0)
+            )
+
+            eth_dos_ind(src, dst, distance, private: shorter_distance, intermed) = AND(
+                eth_dos(?src, ?intermed, ?shorter_distance)
+                SumOf(?distance, ?shorter_distance, 1)
+                eth_friend(?intermed, ?dst)
+            )
+
+            eth_dos(src, dst, distance) = OR(
+                eth_dos_base(?src, ?dst, ?distance)
+                eth_dos_ind(?src, ?dst, ?distance)
+            )
+        */
+        let req1 = format!(
+            r#"
+      use _, _, _, eth_dos from 0x{}
+
+      REQUEST(
+          eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+      )
+      "#,
+            batch.id().encode_hex::<String>(),
+            alice.public_key(),
+            bob.public_key()
+        );
+
+        let processed =
+            parse(&req1, &params, std::slice::from_ref(&batch)).map_err(|e| e.to_string())?;
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
+        register_sumof_handlers(&mut reg);
+        register_signed_by_handlers(&mut reg);
+        register_contains_handlers(&mut reg);
+
+        let edb_builder = crate::edb::ImmutableEdbBuilder::new();
+        let edb = edb_builder
+            .add_signed_dict(alice_attestation)
+            .add_signed_dict(bob_attestation)
+            .build();
+
+        let mut engine = Engine::with_config(
+            &reg,
+            &edb,
+            EngineConfigBuilder::new()
+                .from_params(&params)
+                .branch_and_bound_on_ops(true)
+                .build(),
+        );
+        crate::custom::register_rules_from_batch(&mut engine.rules, &batch);
+        engine.load_processed(&processed);
+        engine.run();
+
+        assert!(!engine.answers.is_empty());
+
+        Ok(())
     }
 }
