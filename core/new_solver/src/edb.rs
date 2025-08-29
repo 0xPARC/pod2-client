@@ -776,10 +776,9 @@ impl EdbView for MockEdbView {
             .collect()
     }
     fn full_dict_absence(&self, root: &Hash, key: &Key) -> Option<bool> {
-        match self.full_dicts.get(root) {
-            Some(map) => Some(!map.contains_key(&key_hash(key))),
-            None => None,
-        }
+        self.full_dicts
+            .get(root)
+            .map(|map| !map.contains_key(&key_hash(key)))
     }
 }
 

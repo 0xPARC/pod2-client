@@ -1,6 +1,7 @@
 use pod2::middleware::{
     AnchoredKey, Hash, Key, NativePredicate, Statement, StatementTmplArg, Value, ValueRef,
 };
+use tracing::trace;
 
 use crate::{
     edb::EdbView,
@@ -92,17 +93,21 @@ impl OpHandler for SumOfFromEntriesHandler {
         if args.len() != 3 {
             return PropagatorResult::Contradiction;
         }
+        trace!("SumOf: start args_len=3");
         let a = classify_num(&args[0], store, edb);
         let b = classify_num(&args[1], store, edb);
         let c = classify_num(&args[2], store, edb);
+        trace!("SumOf: classified A=? B=? C=?");
 
         // Type errors or missing facts on bound AKs fail this op path
         match (&a, &b, &c) {
             (NumArg::TypeError, _, _) | (_, NumArg::TypeError, _) | (_, _, NumArg::TypeError) => {
-                return PropagatorResult::Contradiction
+                trace!("SumOf: type error -> contradiction");
+                return PropagatorResult::Contradiction;
             }
             (NumArg::NoFact, _, _) | (_, NumArg::NoFact, _) | (_, _, NumArg::NoFact) => {
-                return PropagatorResult::Contradiction
+                trace!("SumOf: no fact for bound AK -> contradiction");
+                return PropagatorResult::Contradiction;
             }
             _ => {}
         }
@@ -123,9 +128,11 @@ impl OpHandler for SumOfFromEntriesHandler {
                 _ => {}
             }
         }
+        trace!(grounds = grounds.len(), waits = ?waits, akvars = ?akvars, "SumOf: classified counts");
         if grounds.len() < 2 {
             waits.sort();
             waits.dedup();
+            trace!(?waits, "SumOf: suspending (insufficient grounds)");
             return if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
@@ -151,6 +158,7 @@ impl OpHandler for SumOfFromEntriesHandler {
                 unreachable!()
             };
             if a0.0 == b0.0 + c0.0 {
+                trace!(a = a0.0, b = b0.0, c = c0.0, "SumOf: all ground entailed");
                 let mut premises = Vec::new();
                 premises.extend(a0.1);
                 premises.extend(b0.1);
@@ -167,6 +175,12 @@ impl OpHandler for SumOfFromEntriesHandler {
                     }
                 }
             } else {
+                trace!(
+                    a = a0.0,
+                    b = b0.0,
+                    c = c0.0,
+                    "SumOf: all ground mismatch -> contradiction"
+                );
                 PropagatorResult::Contradiction
             }
         } else {
@@ -201,6 +215,7 @@ impl OpHandler for SumOfFromEntriesHandler {
                 ) => {
                     // Unknown is C: target = A - B
                     let target = ai - bi;
+                    trace!(a = ai, b = bi, target, "SumOf: solving C = A - B");
                     match x {
                         NumArg::Wait(w) => mk_ent_bind(*w, target, {
                             let mut p = pa.clone();
@@ -234,6 +249,7 @@ impl OpHandler for SumOfFromEntriesHandler {
                 ) => {
                     // Unknown is B: target = A - C
                     let target = ai - ci;
+                    trace!(a = ai, c = ci, target, "SumOf: solving B = A - C");
                     match x {
                         NumArg::Wait(w) => mk_ent_bind(*w, target, {
                             let mut p = pa.clone();
@@ -267,6 +283,7 @@ impl OpHandler for SumOfFromEntriesHandler {
                 ) => {
                     // Unknown is A: target = B + C
                     let target = bi + ci;
+                    trace!(b = bi, c = ci, target, "SumOf: solving A = B + C");
                     match x {
                         NumArg::Wait(w) => mk_ent_bind(*w, target, {
                             let mut p = pb.clone();

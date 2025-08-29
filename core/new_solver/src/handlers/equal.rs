@@ -1,6 +1,7 @@
 use pod2::middleware::{
     AnchoredKey, NativePredicate, Statement, StatementTmplArg, Value, ValueRef,
 };
+use tracing::trace;
 
 use crate::{
     edb::EdbView,
@@ -139,10 +140,46 @@ impl OpHandler for EqualFromEntriesHandler {
         if args.len() != 2 {
             return PropagatorResult::Contradiction;
         }
+        trace!("EqualFromEntries: start");
         let left = &args[0];
         let right = &args[1];
         let mut choices: Vec<Choice> = Vec::new();
         match (left, right) {
+            // Pure value equality from literals/bound wildcards
+            (StatementTmplArg::Literal(vl), StatementTmplArg::Literal(vr)) => {
+                if vl == vr {
+                    return PropagatorResult::Entailed {
+                        bindings: vec![],
+                        op_tag: OpTag::FromLiterals,
+                    };
+                } else {
+                    return PropagatorResult::Contradiction;
+                }
+            }
+            (StatementTmplArg::Wildcard(wv), StatementTmplArg::Literal(vr)) => {
+                if let Some(bv) = store.bindings.get(&wv.index) {
+                    if bv == vr {
+                        return PropagatorResult::Entailed {
+                            bindings: vec![],
+                            op_tag: OpTag::FromLiterals,
+                        };
+                    } else {
+                        return PropagatorResult::Contradiction;
+                    }
+                }
+            }
+            (StatementTmplArg::Literal(vl), StatementTmplArg::Wildcard(wv)) => {
+                if let Some(bv) = store.bindings.get(&wv.index) {
+                    if bv == vl {
+                        return PropagatorResult::Entailed {
+                            bindings: vec![],
+                            op_tag: OpTag::FromLiterals,
+                        };
+                    } else {
+                        return PropagatorResult::Contradiction;
+                    }
+                }
+            }
             // AK–Wildcard(value)
             (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
                 if let Some(bound_val) = store.bindings.get(&wv.index) {
@@ -257,11 +294,14 @@ impl OpHandler for EqualFromEntriesHandler {
                 .filter(|i| !store.bindings.contains_key(i))
                 .collect();
             if waits.is_empty() {
+                trace!("EqualFromEntries: contradiction (no choices, no waits)");
                 PropagatorResult::Contradiction
             } else {
+                trace!(?waits, "EqualFromEntries: suspend on");
                 PropagatorResult::Suspend { on: waits }
             }
         } else {
+            trace!(alts = choices.len(), "EqualFromEntries: choices produced");
             PropagatorResult::Choices {
                 alternatives: choices,
             }

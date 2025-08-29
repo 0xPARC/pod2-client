@@ -55,7 +55,7 @@ impl OpHandler for CopyNotContainsHandler {
                 }
                 PropagatorResult::Contradiction
             }
-            (StatementTmplArg::Wildcard(wr), StatementTmplArg::Wildcard(_wk)) => {
+            (StatementTmplArg::Wildcard(_wr), StatementTmplArg::Wildcard(_wk)) => {
                 // Avoid enumerating keys; cannot bind safely
                 let waits = crate::prop::wildcards_in_args(args)
                     .into_iter()

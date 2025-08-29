@@ -66,3 +66,24 @@ pub struct PendingCustom {
     /// Head arguments expressed as template args using the remapped wildcards.
     pub head_args: Vec<StatementTmplArg>,
 }
+
+/// A wrapper for `Value` that orders by its raw bytes commitment for use in BTree* maps.
+#[derive(Clone, Debug)]
+pub struct RawOrdValue(pub Value);
+
+impl std::cmp::PartialEq for RawOrdValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.raw() == other.0.raw()
+    }
+}
+impl std::cmp::Eq for RawOrdValue {}
+impl std::cmp::PartialOrd for RawOrdValue {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl std::cmp::Ord for RawOrdValue {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.raw().cmp(&other.0.raw())
+    }
+}
