@@ -165,6 +165,10 @@ pub struct Engine<'a> {
     pub answers: Vec<crate::types::ConstraintStore>,
     pub rules: RuleRegistry,
     pub policy: SchedulePolicy,
+    pub config: EngineConfig,
+    steps_executed: u64,
+    pub iteration_cap_hit: bool,
+    frames_since_epoch: u64,
     tables: std::collections::BTreeMap<CallPattern, Table>,
 }
 
@@ -177,6 +181,10 @@ impl<'a> Engine<'a> {
             answers: Vec::new(),
             rules: RuleRegistry::default(),
             policy: SchedulePolicy::DepthFirst,
+            config: EngineConfig::default(),
+            steps_executed: 0,
+            iteration_cap_hit: false,
+            frames_since_epoch: 0,
             tables: std::collections::BTreeMap::new(),
         }
     }
@@ -189,6 +197,36 @@ impl<'a> Engine<'a> {
         let mut e = Self::new(registry, edb);
         e.policy = policy;
         e
+    }
+
+    /// Construct an engine with an explicit configuration.
+    pub fn with_config(
+        registry: &'a OpRegistry,
+        edb: &'a dyn EdbView,
+        config: EngineConfig,
+    ) -> Self {
+        let mut e = Self::new(registry, edb);
+        e.config = config;
+        e
+    }
+
+    /// Update the schedule policy (DFS/BFS).
+    pub fn set_schedule(&mut self, policy: SchedulePolicy) {
+        self.policy = policy;
+    }
+
+    /// Convenience setters for caps.
+    pub fn set_iteration_cap(&mut self, cap: Option<u64>) {
+        self.config.iteration_cap = cap;
+    }
+    pub fn set_per_table_fanout_cap(&mut self, cap: Option<u32>) {
+        self.config.per_table_fanout_cap = cap;
+    }
+    pub fn set_per_frame_step_cap(&mut self, cap: Option<u32>) {
+        self.config.per_frame_step_cap = cap;
+    }
+    pub fn set_per_table_epoch_frames(&mut self, frames: Option<u64>) {
+        self.config.per_table_epoch_frames = frames;
     }
 
     /// Convenience: load a parsed Podlang program (custom predicates + request),
@@ -208,6 +246,29 @@ impl<'a> Engine<'a> {
 
     pub fn run(&mut self) {
         while let Some(frame) = self.sched.dequeue(self.policy) {
+            // Global iteration cap
+            if let Some(cap) = self.config.iteration_cap {
+                if self.steps_executed >= cap {
+                    self.iteration_cap_hit = true;
+                    debug!(
+                        steps = self.steps_executed,
+                        cap, "iteration cap hit; aborting run"
+                    );
+                    break;
+                }
+            }
+            self.steps_executed = self.steps_executed.saturating_add(1);
+            // Epoch reset for per-table fanout caps
+            if let Some(epoch) = self.config.per_table_epoch_frames {
+                self.frames_since_epoch = self.frames_since_epoch.saturating_add(1);
+                if self.frames_since_epoch >= epoch {
+                    for t in self.tables.values_mut() {
+                        t.delivered_this_epoch = 0;
+                    }
+                    trace!(epoch, "reset per-table fanout epoch counters");
+                    self.frames_since_epoch = 0;
+                }
+            }
             let Frame {
                 id,
                 goals,
@@ -216,6 +277,7 @@ impl<'a> Engine<'a> {
                 table_for,
             } = frame;
             trace!(frame_id = id, goals = goals.len(), export, "dequeued frame");
+            let mut frame_steps: u32 = 0;
             if goals.is_empty() {
                 // Record a completed answer (bindings and any accumulated premises)
                 let mut final_store = store.clone();
@@ -258,6 +320,24 @@ impl<'a> Engine<'a> {
                 std::collections::HashSet::new();
             let mut any_stmt_for_park: Option<StatementTmpl> = None;
             for (idx, g) in goals.iter().enumerate() {
+                // Count this step and yield if exceeding per-frame cap
+                frame_steps = frame_steps.saturating_add(1);
+                if let Some(cap) = self.config.per_frame_step_cap {
+                    if frame_steps > cap {
+                        debug!(
+                            frame_id = id,
+                            cap, "per-frame step cap reached; yielding frame"
+                        );
+                        self.sched.enqueue(Frame {
+                            id,
+                            goals: goals.clone(),
+                            store: store.clone(),
+                            export,
+                            table_for: table_for.clone(),
+                        });
+                        break;
+                    }
+                }
                 let tmpl_args: Vec<StatementTmplArg> = g.args.clone();
                 // Handle native vs custom
                 let is_custom = matches!(g.pred, Predicate::Custom(_));
@@ -292,26 +372,52 @@ impl<'a> Engine<'a> {
                                 }
                             }
                         }
-                        // Register waiter for the caller and stream any existing table answers
+                        // Register waiter for the caller and stream any existing table answers, respecting per-table fanout cap
                         trace!(?pattern, "registering waiter for custom call");
                         let waiter = Waiter::from_call(cpr.clone(), idx, &goals, &store, call_args);
+                        // Compute deliveries without holding a mutable borrow to self
+                        let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
+                        let mut to_deliver: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> =
+                            Vec::new();
                         let mut delivered_any = false;
-                        if let Some(tbl) = self.tables.get(&pattern) {
-                            let existing: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> = tbl
+                        if let Some(t) = self.tables.get(&pattern) {
+                            let existing: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> = t
                                 .answers
                                 .iter()
                                 .map(|(k, v)| (k.clone(), v.clone()))
                                 .collect();
+                            let mut budget_left = cap.saturating_sub(t.delivered_this_epoch);
                             for (tuple, tag) in existing.into_iter() {
+                                if budget_left == 0 {
+                                    break;
+                                }
                                 if waiter.matches(&tuple) {
-                                    trace!("stream existing table answer to caller");
-                                    let cont = waiter.continuation_frame(self, &tuple, tag.clone());
-                                    self.sched.enqueue(cont);
+                                    to_deliver.push((tuple, tag));
+                                    budget_left -= 1;
                                     delivered_any = true;
                                 }
                             }
                         }
+                        // Enqueue continuations
+                        for (tuple, tag) in to_deliver.iter() {
+                            trace!("stream existing table answer to caller");
+                            let cont = waiter.continuation_frame(self, tuple, tag.clone());
+                            self.sched.enqueue(cont);
+                        }
+                        // Update table state and store waiter if needed
                         if let Some(t) = self.tables.get_mut(&pattern) {
+                            // increment by the number we actually delivered
+                            let inc = to_deliver.len() as u32;
+                            if inc > 0 {
+                                let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
+                                if t.delivered_this_epoch >= cap {
+                                    debug!(
+                                        ?pattern,
+                                        cap, "per-table fanout cap reached during waiter streaming"
+                                    );
+                                }
+                                t.delivered_this_epoch = t.delivered_this_epoch.saturating_add(inc);
+                            }
                             if t.is_complete {
                                 trace!(?pattern, "table complete; not storing waiter");
                                 if !delivered_any {
@@ -628,19 +734,54 @@ impl<'a> Engine<'a> {
                     .cloned()
                     .collect();
                 for pat in target_patterns.into_iter() {
+                    // Compute deliveries without holding mutable borrow during enqueue
+                    let mut to_deliver: Vec<Waiter> = Vec::new();
+                    let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
+                    let mut exceeded = false;
+                    if let Some(entry) = self.tables.get(&pat) {
+                        if !entry.answers.contains_key(&key_vec) {
+                            // We'll insert and deliver afterwards
+                        } else {
+                            continue;
+                        }
+                    }
+                    if let Some(entry) = self.tables.get(&pat) {
+                        let budget_left = cap.saturating_sub(entry.delivered_this_epoch);
+                        if budget_left == 0 {
+                            exceeded = true;
+                        } else {
+                            let mut remaining = budget_left;
+                            for w in entry.waiters.iter().cloned() {
+                                if remaining == 0 {
+                                    break;
+                                }
+                                if w.matches(&key_vec) {
+                                    to_deliver.push(w);
+                                    remaining -= 1;
+                                }
+                            }
+                            exceeded = remaining == 0 && cap != u32::MAX;
+                        }
+                    }
+                    // Now mutate: insert answer and update delivered count; enqueue outside of borrow
                     if let Some(entry) = self.tables.get_mut(&pat) {
                         if !entry.answers.contains_key(&key_vec) {
                             entry.answers.insert(key_vec.clone(), tag.clone());
                             debug!(?pat, "inserted new table answer");
-                            let waiters = entry.waiters.clone();
-                            for w in waiters.into_iter() {
-                                if w.matches(&key_vec) {
-                                    trace!(?pat, "delivering answer to waiter");
-                                    let cont = w.continuation_frame(self, &key_vec, tag.clone());
-                                    self.sched.enqueue(cont);
-                                }
+                            let inc = to_deliver.len() as u32;
+                            if inc > 0 {
+                                entry.delivered_this_epoch =
+                                    entry.delivered_this_epoch.saturating_add(inc);
                             }
                         }
+                    }
+                    if exceeded {
+                        debug!(?pat, cap, "per-table fanout cap reached during publish");
+                    }
+                    for w in to_deliver.into_iter() {
+                        trace!(?pat, "delivering answer to waiter");
+                        let cont = w.continuation_frame(self, &key_vec, tag.clone());
+                        self.sched.enqueue(cont);
                     }
                 }
             }
@@ -673,6 +814,46 @@ impl<'a> Engine<'a> {
 pub enum SchedulePolicy {
     DepthFirst,
     BreadthFirst,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct EngineConfig {
+    pub iteration_cap: Option<u64>,
+    pub per_table_fanout_cap: Option<u32>,
+    pub per_frame_step_cap: Option<u32>,
+    pub per_table_epoch_frames: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct EngineConfigBuilder {
+    cfg: EngineConfig,
+}
+
+impl EngineConfigBuilder {
+    pub fn new() -> Self {
+        Self {
+            cfg: EngineConfig::default(),
+        }
+    }
+    pub fn iteration_cap(mut self, cap: u64) -> Self {
+        self.cfg.iteration_cap = Some(cap);
+        self
+    }
+    pub fn per_table_fanout_cap(mut self, cap: u32) -> Self {
+        self.cfg.per_table_fanout_cap = Some(cap);
+        self
+    }
+    pub fn per_frame_step_cap(mut self, cap: u32) -> Self {
+        self.cfg.per_frame_step_cap = Some(cap);
+        self
+    }
+    pub fn per_table_epoch_frames(mut self, frames: u64) -> Self {
+        self.cfg.per_table_epoch_frames = Some(frames);
+        self
+    }
+    pub fn build(self) -> EngineConfig {
+        self.cfg
+    }
 }
 
 #[derive(Clone)]
@@ -827,6 +1008,7 @@ struct Table {
     answers: std::collections::BTreeMap<Vec<RawOrdValue>, crate::types::OpTag>,
     waiters: Vec<Waiter>,
     is_complete: bool,
+    delivered_this_epoch: u32,
 }
 
 impl Table {
@@ -835,6 +1017,7 @@ impl Table {
             answers: std::collections::BTreeMap::new(),
             waiters: Vec::new(),
             is_complete: false,
+            delivered_this_epoch: 0,
         }
     }
 }
@@ -974,6 +1157,130 @@ mod tests {
         assert!(
             saw_equal && saw_lt,
             "expected Equal and Lt proof steps recorded"
+        );
+    }
+
+    #[test]
+    fn engine_iteration_cap_aborts_run() {
+        // Simple request that would normally produce at least one answer
+        let params = Params::default();
+        let dict = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("k"), Value::from(1))].into(),
+        )
+        .unwrap();
+        let mut edb = MockEdbView::default();
+        edb.add_full_dict(dict);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        let processed = parse(
+            r#"REQUEST(
+                Equal(?R["k"], 1)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        // Set a very small iteration cap to force early abort
+        engine.config.iteration_cap = Some(0);
+        engine.run();
+        assert!(engine.iteration_cap_hit, "expected iteration cap to be hit");
+        // May or may not have answers depending on timing; just assert no panic and flag set
+    }
+
+    #[test]
+    fn engine_fair_delivery_interleaves_with_independent_goal() {
+        // Many roots for k:1 to create a large table of answers, and a separate small goal Equal(?S["x"],3).
+        let params = Params::default();
+        let mut edb = MockEdbView::default();
+        // Add 20 distinct roots with k:1 (make roots unique by adding a varying filler key)
+        for i in 0..20 {
+            let d = Dictionary::new(
+                params.max_depth_mt_containers,
+                [
+                    (Key::from("k"), Value::from(1)),
+                    (Key::from("__i"), Value::from(i)),
+                ]
+                .into(),
+            )
+            .unwrap();
+            edb.add_full_dict(d);
+        }
+        // Add independent root S with x:3
+        let d_s = Dictionary::new(
+            params.max_depth_mt_containers,
+            [(Key::from("x"), Value::from(3))].into(),
+        )
+        .unwrap();
+        let root_s = d_s.commitment();
+        edb.add_full_dict(d_s);
+
+        let mut reg = OpRegistry::default();
+        register_equal_handlers(&mut reg);
+
+        // Custom predicate enumerates all roots with k:1 via entries
+        let program = r#"
+            make_r(R) = AND(
+                Equal(?R["k"], 1)
+            )
+
+            REQUEST(
+                make_r(?R)
+            )
+        "#;
+        let processed = parse(program, &Params::default(), &[]).expect("parse ok");
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        // Also enqueue an independent goal Equal(?S["x"], 3)
+        let processed2 = parse(
+            r#"REQUEST(
+                Equal(?S["x"], 3)
+            )"#,
+            &Params::default(),
+            &[],
+        )
+        .expect("parse ok");
+        let goals2 = processed2.request.templates().to_vec();
+        let id2 = engine.sched.new_id();
+        engine.sched.enqueue(Frame {
+            id: id2,
+            goals: goals2,
+            store: ConstraintStore::default(),
+            export: true,
+            table_for: None,
+        });
+
+        // Configure caps to allow only 1 table delivery per epoch and reset every frame
+        engine.policy = SchedulePolicy::BreadthFirst;
+        engine.config.per_table_fanout_cap = Some(1);
+        engine.config.per_table_epoch_frames = Some(1);
+        engine.config.per_frame_step_cap = Some(1);
+
+        engine.run();
+
+        // Verify that the independent goal completed: look for Equal(AK(root_s, "x"), 3) in premises
+        use pod2::middleware::{AnchoredKey, Statement, ValueRef};
+        let mut saw_equal_s = false;
+        for st in engine.answers.iter() {
+            for (stmt, _) in st.premises.iter() {
+                if let Statement::Equal(
+                    ValueRef::Key(AnchoredKey { root, key }),
+                    ValueRef::Literal(v),
+                ) = stmt
+                {
+                    if *root == root_s && key.name() == "x" && *v == Value::from(3) {
+                        saw_equal_s = true;
+                    }
+                }
+            }
+        }
+        assert!(
+            saw_equal_s,
+            "independent Equal(?S[\"x\"],3) should complete under fanout caps"
         );
     }
 
