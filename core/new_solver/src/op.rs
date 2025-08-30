@@ -14,9 +14,22 @@ pub trait OpHandler: Send + Sync {
     ) -> PropagatorResult;
 }
 
-#[derive(Default)]
 pub struct OpRegistry {
     table: HashMap<NativePredicate, Vec<Box<dyn OpHandler>>>,
+}
+
+impl Default for OpRegistry {
+    fn default() -> Self {
+        let mut reg = OpRegistry {
+            table: HashMap::new(),
+        };
+        crate::handlers::register_equal_handlers(&mut reg);
+        crate::handlers::register_lt_handlers(&mut reg);
+        crate::handlers::register_sumof_handlers(&mut reg);
+        crate::handlers::register_signed_by_handlers(&mut reg);
+        crate::handlers::register_contains_handlers(&mut reg);
+        reg
+    }
 }
 
 impl OpRegistry {

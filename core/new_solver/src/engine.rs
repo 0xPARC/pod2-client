@@ -1,4 +1,7 @@
+use std::time::{Duration, Instant};
+
 use pod2::middleware::{Predicate, Statement, StatementTmpl, StatementTmplArg, Value};
+use thiserror::Error;
 use tracing::{debug, trace};
 
 use crate::{
@@ -17,6 +20,18 @@ pub struct Frame {
     pub store: ConstraintStore,
     pub export: bool,
     pub table_for: Option<CallPattern>,
+}
+
+#[derive(Debug, Error, Clone)]
+pub enum EngineError {
+    #[error("No OpHandlers registered for native predicate {predicate:?}. Did you forget to register its handlers?")]
+    MissingHandlers {
+        predicate: pod2::middleware::NativePredicate,
+    },
+    #[error("Iteration cap hit after {steps} steps")]
+    IterationCap { steps: u64 },
+    #[error("Wall-clock timeout after {elapsed_ms} ms")]
+    Timeout { elapsed_ms: u128 },
 }
 
 #[derive(Default)]
@@ -172,6 +187,8 @@ pub struct Engine<'a> {
     tables: std::collections::BTreeMap<CallPattern, Table>,
     // Branch-and-bound: best (lowest) operation count observed for any exported answer
     best_ops_so_far: Option<usize>,
+    /// Last fatal error encountered during run.
+    pub last_error: Option<EngineError>,
 }
 
 impl<'a> Engine<'a> {
@@ -189,6 +206,7 @@ impl<'a> Engine<'a> {
             frames_since_epoch: 0,
             tables: std::collections::BTreeMap::new(),
             best_ops_so_far: None,
+            last_error: None,
         }
     }
 
@@ -247,7 +265,8 @@ impl<'a> Engine<'a> {
         });
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), EngineError> {
+        let start = Instant::now();
         while let Some(frame) = self.sched.dequeue(self.policy) {
             // Global iteration cap
             if let Some(cap) = self.config.iteration_cap {
@@ -257,7 +276,16 @@ impl<'a> Engine<'a> {
                         steps = self.steps_executed,
                         cap, "iteration cap hit; aborting run"
                     );
-                    break;
+                    return Err(EngineError::IterationCap {
+                        steps: self.steps_executed,
+                    });
+                }
+            }
+            if let Some(timeout) = self.config.wall_clock_timeout {
+                if start.elapsed() >= timeout {
+                    let ms = start.elapsed().as_millis();
+                    debug!(ms, "wall-clock timeout; aborting run");
+                    return Err(EngineError::Timeout { elapsed_ms: ms });
                 }
             }
             self.steps_executed = self.steps_executed.saturating_add(1);
@@ -315,7 +343,7 @@ impl<'a> Engine<'a> {
                 }
                 // Publish any custom heads to tables before recording the answer
                 let t_pub_start = std::time::Instant::now();
-                self.publish_custom_answers(&final_store);
+                let early = self.publish_custom_answers(&final_store);
                 let dt_pub = t_pub_start.elapsed();
                 if dt_pub.as_millis() > 50 {
                     trace!(
@@ -323,6 +351,9 @@ impl<'a> Engine<'a> {
                         ms = dt_pub.as_millis(),
                         "finalize: publish_custom_answers"
                     );
+                }
+                if early {
+                    return Ok(());
                 }
                 if export {
                     debug!("exporting completed answer");
@@ -503,7 +534,17 @@ impl<'a> Engine<'a> {
                 trace!(pred = ?goal_pred, args = ?tmpl_args, "processing native goal");
                 let mut local_choices: Vec<Choice> = Vec::new();
                 let mut suspended_here = false;
-                for h in self.registry.get(goal_pred) {
+                let handlers = self.registry.get(goal_pred);
+                if handlers.is_empty() {
+                    debug!(
+                        ?goal_pred,
+                        "no handlers registered for native predicate; aborting run"
+                    );
+                    return Err(EngineError::MissingHandlers {
+                        predicate: goal_pred,
+                    });
+                }
+                for h in handlers {
                     match h.propagate(&tmpl_args, &mut store.clone(), self.edb) {
                         PropagatorResult::Entailed { bindings, op_tag } => {
                             local_choices.push(Choice { bindings, op_tag })
@@ -656,12 +697,10 @@ impl<'a> Engine<'a> {
                             // Compute pods lower bound using configured limits
                             let ops_per_pod = self.config.ops_per_pod.max(1);
                             let inputs_per_pod = self.config.inputs_per_pod.max(1);
-                            let pods_lb_ops =
-                                ((realized_ops + lb_ops) + ops_per_pod - 1) / ops_per_pod;
-                            let pods_lb_inputs =
-                                ((realized_inputs) + inputs_per_pod - 1) / inputs_per_pod;
+                            let pods_lb_ops = (realized_ops + lb_ops).div_ceil(ops_per_pod);
+                            let pods_lb_inputs = (realized_inputs).div_ceil(inputs_per_pod);
                             // Translate best_ops into a pods bound using ops_per_pod (conservative)
-                            let best_pods = (best_ops + ops_per_pod - 1) / ops_per_pod;
+                            let best_pods = best_ops.div_ceil(ops_per_pod);
                             let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
                             if pods_lb > best_pods {
                                 // Prune this continuation
@@ -701,6 +740,7 @@ impl<'a> Engine<'a> {
                 self.sched.enqueue(cont);
             }
         }
+        Ok(())
     }
 
     // (previous inline expansion path removed; tabling path below is the canonical variant)
@@ -845,11 +885,12 @@ impl<'a> Engine<'a> {
         })
     }
 
-    fn publish_custom_answers(&mut self, final_store: &crate::types::ConstraintStore) {
+    fn publish_custom_answers(&mut self, final_store: &crate::types::ConstraintStore) -> bool {
         let t_start = std::time::Instant::now();
         let mut heads_scanned = 0usize;
         let mut answers_inserted = 0usize;
         let mut deliveries = 0usize;
+        let mut early_exit_triggered = false;
         // Scan premises for any CustomDeduction heads and publish them
         for (stmt, tag) in final_store.premises.iter() {
             if let (Statement::Custom(pred, vals), crate::types::OpTag::CustomDeduction { .. }) =
@@ -913,10 +954,35 @@ impl<'a> Engine<'a> {
                     for w in to_deliver.into_iter() {
                         trace!(?pat, "delivering answer to waiter");
                         let cont = w.continuation_frame(self, &key_vec, tag.clone());
-                        self.sched.enqueue(cont);
-                        deliveries += 1;
+                        // Early-exit: if this continuation is an exported, already-satisfied frame
+                        if self.config.early_exit_on_first_answer
+                            && cont.export
+                            && cont.goals.is_empty()
+                        {
+                            // Directly record the answer and exit without further scheduling
+                            self.answers.push(cont.store.clone());
+                            // Update best bound on operations for branch-and-bound
+                            let ops = self
+                                .answers
+                                .last()
+                                .map(|st| st.operation_count)
+                                .unwrap_or(0);
+                            self.best_ops_so_far =
+                                Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+                            early_exit_triggered = true;
+                            break;
+                        } else {
+                            self.sched.enqueue(cont);
+                            deliveries += 1;
+                        }
+                    }
+                    if early_exit_triggered {
+                        break;
                     }
                 }
+            }
+            if early_exit_triggered {
+                break;
             }
         }
         let dt = t_start.elapsed();
@@ -929,6 +995,7 @@ impl<'a> Engine<'a> {
                 "publish_custom_answers: timing"
             );
         }
+        early_exit_triggered
     }
 
     fn next_available_wildcard_index(
@@ -991,6 +1058,7 @@ pub struct EngineConfig {
     // POD packing limits
     pub ops_per_pod: usize,
     pub inputs_per_pod: usize,
+    pub wall_clock_timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1039,6 +1107,26 @@ impl EngineConfigBuilder {
     pub fn from_params(mut self, params: &pod2::middleware::Params) -> Self {
         self.cfg.ops_per_pod = params.max_statements;
         self.cfg.inputs_per_pod = params.max_input_pods;
+        self
+    }
+    pub fn wall_clock_timeout(mut self, timeout: Duration) -> Self {
+        self.cfg.wall_clock_timeout = Some(timeout);
+        self
+    }
+    pub fn wall_clock_timeout_ms(mut self, timeout_ms: u64) -> Self {
+        self.cfg.wall_clock_timeout = Some(Duration::from_millis(timeout_ms));
+        self
+    }
+    /// Apply recommended, bounded defaults and wire limits from Params.
+    /// These are conservative, non-tight caps to prevent runaway work in no-solution cases.
+    pub fn recommended(mut self, params: &pod2::middleware::Params) -> Self {
+        // Wire POD packing limits
+        self = self.from_params(params);
+        // Bounded execution defaults
+        self.cfg.iteration_cap = Some(100_000);
+        self.cfg.per_table_fanout_cap = Some(1024);
+        self.cfg.per_table_epoch_frames = Some(1_000);
+        self.cfg.per_frame_step_cap = Some(1_000);
         self
     }
     pub fn build(self) -> EngineConfig {
@@ -1222,7 +1310,6 @@ impl Table {
 #[cfg(test)]
 mod tests {
     use pod2::{
-        examples::MOCK_VD_SET,
         lang::parse,
         middleware::{containers::Dictionary, Key, Params, Signer, Value},
     };
@@ -1236,7 +1323,6 @@ mod tests {
             register_lt_handlers, register_sumof_handlers,
         },
         op::OpRegistry,
-        register_signed_by_handlers,
         types::ConstraintStore,
     };
 
@@ -1287,7 +1373,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         // At least one answer should bind wildcard 0 to the correct root
@@ -1363,7 +1449,7 @@ mod tests {
         engine.load_processed(&processed);
         // Set a very small iteration cap to force early abort
         engine.config.iteration_cap = Some(0);
-        engine.run();
+        engine.run().expect_err("iteration cap to be hit");
         assert!(engine.iteration_cap_hit, "expected iteration cap to be hit");
         // May or may not have answers depending on timing; just assert no panic and flag set
     }
@@ -1436,7 +1522,7 @@ mod tests {
         engine.config.per_table_epoch_frames = Some(1);
         engine.config.per_frame_step_cap = Some(1);
 
-        engine.run();
+        engine.run().expect("run ok");
 
         // Verify that the independent goal completed: look for Equal(AK(root_s, "x"), 3) in premises
         use pod2::middleware::{AnchoredKey, Statement, ValueRef};
@@ -1491,7 +1577,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        eng_dfs.run();
+        eng_dfs.run().expect("run ok");
         assert_eq!(eng_dfs.answers.len(), 2);
         // First answer should be from s2 (20)
         assert_eq!(eng_dfs.answers[0].bindings.get(&0), Some(&Value::from(20)));
@@ -1519,7 +1605,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        eng_bfs.run();
+        eng_bfs.run().expect("run ok");
         assert_eq!(eng_bfs.answers.len(), 2);
         assert_eq!(eng_bfs.answers[0].bindings.get(&0), Some(&Value::from(1)));
         assert_eq!(eng_bfs.answers[1].bindings.get(&0), Some(&Value::from(2)));
@@ -1569,7 +1655,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine1.run();
+        engine1.run().expect("run ok");
         let seq1: Vec<_> = engine1
             .answers
             .iter()
@@ -1587,7 +1673,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine2.run();
+        engine2.run().expect("run ok");
         let seq2: Vec<_> = engine2
             .answers
             .iter()
@@ -1650,7 +1736,7 @@ mod tests {
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         // Expect at least one answer with (A=15, R=r_ok) and no answer with R=r_bad
         let has_ok = engine.answers.iter().any(|st| {
@@ -1768,7 +1854,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine.run();
+        engine.run().expect("run ok");
 
         // Should have reached an answer without leaving parked frames
         assert!(engine.sched.parked.is_empty(), "frame should not be parked");
@@ -1842,7 +1928,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(engine.answers.is_empty(), "should not produce an answer");
         assert_eq!(
@@ -1896,7 +1982,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let st = &engine.answers[0];
@@ -1979,7 +2065,7 @@ mod tests {
         // Load and enqueue via helper
         engine.load_processed(&processed2);
         let cpr = CustomPredicateRef::new(processed2.custom_batch.clone(), 0);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let ans = &engine.answers[0];
@@ -2053,7 +2139,7 @@ mod tests {
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
         let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
-        engine.run();
+        engine.run().expect("run ok");
 
         // Expect two answers binding ?R to r1 and r2
         let roots: std::collections::HashSet<_> = engine
@@ -2115,7 +2201,7 @@ mod tests {
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let ans = &engine.answers[0];
@@ -2152,7 +2238,7 @@ mod tests {
         .expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let st = &engine.answers[0];
@@ -2189,7 +2275,7 @@ mod tests {
         .expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let st = &engine.answers[0];
@@ -2249,7 +2335,7 @@ mod tests {
         .expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let ans = &engine.answers[0];
@@ -2310,7 +2396,7 @@ mod tests {
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
         let ans = &engine.answers[0];
@@ -2347,7 +2433,7 @@ mod tests {
         let mut engine = Engine::new(&reg, &edb);
         // Register rules (self-recursive AND is rejected → no rules for 'bad') and enqueue request
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         // Expect no answers
         assert!(engine.answers.is_empty());
@@ -2397,7 +2483,7 @@ mod tests {
         let processed = parse(program, &Params::default(), &[]).expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         // Expect at least one answer and that a CustomDeduction head nat_down(3) appears in premises
         assert!(!engine.answers.is_empty());
@@ -2455,9 +2541,15 @@ mod tests {
             )
         "#;
         let processed = parse(program, &Params::default(), &[]).expect("parse ok");
-        let mut engine = Engine::new(&reg, &edb);
+        let mut engine = Engine::with_config(
+            &reg,
+            &edb,
+            EngineConfigBuilder::new()
+                .early_exit_on_first_answer(true)
+                .build(),
+        );
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(
             !engine.answers.is_empty(),
@@ -2539,12 +2631,7 @@ mod tests {
         let processed =
             parse(&req1, &params, std::slice::from_ref(&batch)).map_err(|e| e.to_string())?;
 
-        let mut reg = OpRegistry::default();
-        register_equal_handlers(&mut reg);
-        register_lt_handlers(&mut reg);
-        register_sumof_handlers(&mut reg);
-        register_signed_by_handlers(&mut reg);
-        register_contains_handlers(&mut reg);
+        let reg = OpRegistry::default();
 
         let edb_builder = crate::edb::ImmutableEdbBuilder::new();
         let edb = edb_builder
@@ -2562,7 +2649,7 @@ mod tests {
         );
         crate::custom::register_rules_from_batch(&mut engine.rules, &batch);
         engine.load_processed(&processed);
-        engine.run();
+        engine.run().expect("run ok");
 
         assert!(!engine.answers.is_empty());
 
