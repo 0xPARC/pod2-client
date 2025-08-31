@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use hex::ToHex;
 use pod2::middleware::{
     AnchoredKey, Hash, Key, NativePredicate, Predicate, Statement, StatementTmpl, StatementTmplArg,
     Value, ValueRef,
@@ -8,7 +9,7 @@ use pod2::middleware::{
 use crate::{
     edb::{BinaryPred, ContainsSource, EdbView, TernaryPred},
     prop::Choice,
-    types::{ConstraintStore, OpTag},
+    types::{ConstraintStore, OpTag, PodRef},
 };
 
 /// If the wildcard at `wc_index` is bound to a root-like value, return its commitment hash.
@@ -110,6 +111,57 @@ pub fn enumerate_other_root_choices(
     edb: &dyn EdbView,
 ) -> Vec<Choice> {
     enumerate_choices_for(other_key, bound_val, other_wc_index, edb)
+}
+
+/// Compute unique operation and input counts by traversing the proof DAG in `store.premises`.
+/// - ops: number of unique concrete `Statement`s across all premises (including nested `Derived`/`CustomDeduction`).
+/// - inputs: number of unique `PodRef` sources from `CopyStatement` op-tags (including nested).
+pub fn proof_cost(store: &ConstraintStore) -> (usize, usize) {
+    use std::collections::{HashSet, VecDeque};
+    // Canonicalize a Statement into a stable string key using predicate and arg raw commitments
+    fn stmt_key(st: &Statement) -> String {
+        let mut s = String::new();
+        s.push_str(&format!("{:?}|", st.predicate()));
+        for arg in st.args().into_iter() {
+            match arg {
+                pod2::middleware::StatementArg::Literal(v) => {
+                    s.push_str(&v.raw().encode_hex::<String>());
+                    s.push('|');
+                }
+                pod2::middleware::StatementArg::Key(ak) => {
+                    s.push_str(&ak.root.encode_hex::<String>());
+                    s.push(':');
+                    s.push_str(ak.key.name());
+                    s.push('|');
+                }
+                pod2::middleware::StatementArg::None => {
+                    s.push_str("none|");
+                }
+            }
+        }
+        s
+    }
+
+    let mut seen_stmts: std::collections::BTreeSet<String> = Default::default();
+    let mut seen_inputs: HashSet<PodRef> = HashSet::new();
+
+    // Worklist over op-tags to traverse nested premises
+    let mut q: VecDeque<(Statement, OpTag)> = store.premises.clone().into();
+    while let Some((st, tag)) = q.pop_front() {
+        seen_stmts.insert(stmt_key(&st));
+        match tag {
+            OpTag::CopyStatement { source } => {
+                seen_inputs.insert(source);
+            }
+            OpTag::Derived { premises } | OpTag::CustomDeduction { premises, .. } => {
+                for p in premises.into_iter() {
+                    q.push_back(p);
+                }
+            }
+            OpTag::GeneratedContains { .. } | OpTag::FromLiterals => {}
+        }
+    }
+    (seen_stmts.len(), seen_inputs.len())
 }
 
 /// Instantiate a concrete head `Statement` from a goal template under current bindings.

@@ -56,6 +56,9 @@ pub struct ConstraintStore {
     pub premises: Vec<(Statement, OpTag)>,
     pub input_pods: HashSet<PodRef>,
     pub operation_count: usize,
+    /// Accumulated lower bound on operations for pending subcalls (structural),
+    /// carried along recursive descent to enable early pruning before realization.
+    pub accumulated_lb_ops: usize,
     /// Stack of pending custom deductions to materialize upon success.
     pub pending_custom: Vec<PendingCustom>,
 }
@@ -65,6 +68,9 @@ pub struct PendingCustom {
     pub rule_id: CustomPredicateRef,
     /// Head arguments expressed as template args using the remapped wildcards.
     pub head_args: Vec<StatementTmplArg>,
+    /// Number of premises present in the store when this pending head was registered.
+    /// Premises added after this point are considered the body premises for this head.
+    pub base_premises_len: usize,
 }
 
 /// A wrapper for `Value` that orders by its raw bytes commitment for use in BTree* maps.

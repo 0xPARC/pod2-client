@@ -10,6 +10,10 @@ pub struct CustomRule {
     pub pred: CustomPredicateRef,
     pub head: Vec<StatementTmplArg>,
     pub body: Vec<StatementTmpl>,
+    /// Minimal native steps in the body (each native literal contributes at least 1).
+    pub min_native_cost: usize,
+    /// Number of custom subcalls in the body (each contributes at least 1 downstream step).
+    pub min_subcall_count: usize,
 }
 
 #[derive(Default)]
@@ -127,10 +131,23 @@ pub fn register_rules_from_batch(reg: &mut RuleRegistry, batch: &Arc<CustomPredi
                 }
             }
             if ok {
+                let mut min_native_cost = 0usize;
+                let mut min_subcall_count = 0usize;
+                for t in resolved.iter() {
+                    match t.pred() {
+                        Predicate::Native(_) => min_native_cost = min_native_cost.saturating_add(1),
+                        Predicate::Custom(_) => {
+                            min_subcall_count = min_subcall_count.saturating_add(1)
+                        }
+                        _ => {}
+                    }
+                }
                 reg.register(CustomRule {
                     pred: cpr,
                     head,
                     body: resolved,
+                    min_native_cost,
+                    min_subcall_count,
                 });
             }
         } else {
@@ -146,6 +163,8 @@ pub fn register_rules_from_batch(reg: &mut RuleRegistry, batch: &Arc<CustomPredi
                             pred: cpr.clone(),
                             head: head.clone(),
                             body: vec![st.clone()],
+                            min_native_cost: 1,
+                            min_subcall_count: 0,
                         });
                     }
                     Predicate::Custom(other) => {
@@ -161,6 +180,8 @@ pub fn register_rules_from_batch(reg: &mut RuleRegistry, batch: &Arc<CustomPredi
                                 pred: cpr.clone(),
                                 head: head.clone(),
                                 body: vec![st.clone()],
+                                min_native_cost: 0,
+                                min_subcall_count: 1,
                             });
                         }
                     }

@@ -701,7 +701,6 @@ impl EdbView for ImmutableEdb {
     }
 
     fn contains_value(&self, root: &Hash, key: &Key) -> Option<Value> {
-        // Prefer copied contains if present
         if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
             if let Some((v, _)) = vs.first() {
                 return Some(v.clone());
@@ -713,17 +712,17 @@ impl EdbView for ImmutableEdb {
     }
 
     fn contains_source(&self, root: &Hash, key: &Key, val: &Value) -> Option<ContainsSource> {
-        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
-            for (v, pod) in vs.iter() {
-                if v == val {
-                    return Some(ContainsSource::Copied { pod: pod.clone() });
-                }
-            }
-        }
         if let Some(kvs) = self.full_dicts.get(root) {
             if let Some(v) = kvs.get(&key_hash(key)) {
                 if v == val {
                     return Some(ContainsSource::GeneratedFromFullDict { root: *root });
+                }
+            }
+        }
+        if let Some(vs) = self.contains_copied.get(&(*root, key_hash(key))) {
+            for (v, pod) in vs.iter() {
+                if v == val {
+                    return Some(ContainsSource::Copied { pod: pod.clone() });
                 }
             }
         }
@@ -748,14 +747,13 @@ impl EdbView for ImmutableEdb {
                 }
             }
         }
-        // Prefer copied over generated when both present for the same root
         out.sort_by(|(r1, s1), (r2, s2)| {
             r1.cmp(r2).then_with(|| match (s1, s2) {
                 (ContainsSource::GeneratedFromFullDict { .. }, ContainsSource::Copied { .. }) => {
-                    std::cmp::Ordering::Less
+                    std::cmp::Ordering::Greater
                 }
                 (ContainsSource::Copied { .. }, ContainsSource::GeneratedFromFullDict { .. }) => {
-                    std::cmp::Ordering::Greater
+                    std::cmp::Ordering::Less
                 }
                 _ => std::cmp::Ordering::Equal,
             })

@@ -187,6 +187,8 @@ pub struct Engine<'a> {
     tables: std::collections::BTreeMap<CallPattern, Table>,
     // Branch-and-bound: best (lowest) operation count observed for any exported answer
     best_ops_so_far: Option<usize>,
+    // Branch-and-bound: best (lowest) unique input pods observed for any exported answer
+    best_inputs_so_far: Option<usize>,
     /// Last fatal error encountered during run.
     pub last_error: Option<EngineError>,
 }
@@ -206,6 +208,7 @@ impl<'a> Engine<'a> {
             frames_since_epoch: 0,
             tables: std::collections::BTreeMap::new(),
             best_ops_so_far: None,
+            best_inputs_so_far: None,
             last_error: None,
         }
     }
@@ -316,18 +319,21 @@ impl<'a> Engine<'a> {
                 // Materialize any pending custom deductions as head proof steps
                 if !final_store.pending_custom.is_empty() {
                     let t_mat_start = std::time::Instant::now();
-                    let pendings = std::mem::take(&mut final_store.pending_custom);
-                    for p in pendings.into_iter() {
+                    let mut pendings = std::mem::take(&mut final_store.pending_custom);
+                    // Process innermost first to compress bodies into heads iteratively
+                    while let Some(p) = pendings.pop() {
                         if let Some(head) = crate::util::instantiate_custom(
                             &p.rule_id,
                             &p.head_args,
                             &final_store.bindings,
                         ) {
+                            // Take the body premises added after this pending head was registered
+                            let body = final_store.premises.split_off(p.base_premises_len);
                             final_store.premises.push((
                                 head,
                                 crate::types::OpTag::CustomDeduction {
                                     rule_id: p.rule_id.clone(),
-                                    premises: Vec::new(),
+                                    premises: body,
                                 },
                             ));
                         }
@@ -356,15 +362,20 @@ impl<'a> Engine<'a> {
                     return Ok(());
                 }
                 if export {
+                    // Recompute accurate operation count for pruning/metrics from full proof DAG
+                    let (ops, inputs) = crate::util::proof_cost(&final_store);
+                    final_store.operation_count = ops;
                     debug!("exporting completed answer");
                     self.answers.push(final_store);
                     // Update best bound on operations for branch-and-bound
-                    let ops = self
+                    let (ops, inputs) = self
                         .answers
                         .last()
-                        .map(|st| st.operation_count)
-                        .unwrap_or(0);
+                        .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
+                        .unwrap_or((0, 0));
                     self.best_ops_so_far = Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+                    self.best_inputs_so_far =
+                        Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
                     // Early exit mode: return immediately after the first exported answer
                     if self.config.early_exit_on_first_answer {
                         break;
@@ -429,6 +440,75 @@ impl<'a> Engine<'a> {
                             })
                             .collect();
                         let pattern = CallPattern::from_call(cpr.clone(), &inst_call_args);
+                        // Branch-and-bound pruning at custom call sites: drop branch if LB exceeds best
+                        if self.config.branch_and_bound_on_ops {
+                            if let (Some(best_ops), Some(best_inputs)) =
+                                (self.best_ops_so_far, self.best_inputs_so_far)
+                            {
+                                let (realized_ops, realized_inputs) =
+                                    crate::util::proof_cost(&store);
+                                // Structural LB: minimal body cost across rules (native steps + subcalls)
+                                let rules = self.rules.get(cpr);
+                                let mut min_body_cost = 1usize; // fallback if rules list empty
+                                if !rules.is_empty() {
+                                    min_body_cost = rules
+                                        .iter()
+                                        .map(|r| r.min_native_cost + r.min_subcall_count)
+                                        .min()
+                                        .unwrap_or(1);
+                                }
+                                // Remaining goals lower bound: current custom call (1) + others after it
+                                let remaining_native = goals
+                                    .iter()
+                                    .skip(idx + 1)
+                                    .filter(|t| matches!(t.pred, Predicate::Native(_)))
+                                    .count();
+                                let remaining_custom = goals
+                                    .iter()
+                                    .skip(idx + 1)
+                                    .filter(|t| matches!(t.pred, Predicate::Custom(_)))
+                                    .count();
+                                let lb_ops = realized_ops
+                                    + store.accumulated_lb_ops
+                                    + min_body_cost
+                                    + remaining_native
+                                    + remaining_custom;
+                                let ops_per_pod = self.config.ops_per_pod.max(1);
+                                let inputs_per_pod = self.config.inputs_per_pod.max(1);
+                                let pods_lb_ops = lb_ops.div_ceil(ops_per_pod);
+                                let pods_lb_inputs = (realized_inputs).div_ceil(inputs_per_pod);
+                                let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
+                                let best_pods = std::cmp::max(
+                                    best_ops.div_ceil(ops_per_pod),
+                                    best_inputs.div_ceil(inputs_per_pod),
+                                );
+                                trace!(
+                                    ?pattern,
+                                    realized_ops,
+                                    realized_inputs,
+                                    accumulated_lb = store.accumulated_lb_ops,
+                                    min_body_cost,
+                                    remaining_native,
+                                    remaining_custom,
+                                    pods_lb,
+                                    best_pods,
+                                    "branch-and-bound: custom call LB"
+                                );
+                                if pods_lb > best_pods {
+                                    debug!(
+                                        ?pattern,
+                                        lb_ops,
+                                        best_ops,
+                                        "pruning custom call: LB exceeds best bound"
+                                    );
+                                    // Treat as no-choice branch; drop this frame
+                                    chosen_goal_idx = Some(idx);
+                                    choices_for_goal = Vec::new();
+                                    break;
+                                }
+                            }
+                        }
+
                         let is_new = !self.tables.contains_key(&pattern);
                         // Ensure a table exists for this pattern
                         let _ = self
@@ -680,10 +760,12 @@ impl<'a> Engine<'a> {
                     }
                     // Branch-and-bound pruning by POD budget using ops/inputs limits
                     if self.config.branch_and_bound_on_ops {
-                        if let Some(best_ops) = self.best_ops_so_far {
-                            // Realized unique ops and inputs
-                            let realized_ops = cont_store.premises.len();
-                            let realized_inputs = cont_store.input_pods.len();
+                        if let (Some(best_ops), Some(best_inputs)) =
+                            (self.best_ops_so_far, self.best_inputs_so_far)
+                        {
+                            // Realized unique ops and inputs (accurate, via DAG traversal)
+                            let (realized_ops, realized_inputs) =
+                                crate::util::proof_cost(&cont_store);
                             // Admissible lower bounds for remaining work
                             let remaining_native = ng
                                 .iter()
@@ -693,15 +775,18 @@ impl<'a> Engine<'a> {
                                 .iter()
                                 .filter(|t| matches!(t.pred, Predicate::Custom(_)))
                                 .count();
-                            let lb_ops = remaining_native + remaining_custom;
+                            let lb_ops = realized_ops + remaining_native + remaining_custom;
                             // Compute pods lower bound using configured limits
                             let ops_per_pod = self.config.ops_per_pod.max(1);
                             let inputs_per_pod = self.config.inputs_per_pod.max(1);
-                            let pods_lb_ops = (realized_ops + lb_ops).div_ceil(ops_per_pod);
+                            let pods_lb_ops = (lb_ops).div_ceil(ops_per_pod);
                             let pods_lb_inputs = (realized_inputs).div_ceil(inputs_per_pod);
-                            // Translate best_ops into a pods bound using ops_per_pod (conservative)
-                            let best_pods = best_ops.div_ceil(ops_per_pod);
                             let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
+                            // Best bound in pods
+                            let best_pods = std::cmp::max(
+                                best_ops.div_ceil(ops_per_pod),
+                                best_inputs.div_ceil(inputs_per_pod),
+                            );
                             if pods_lb > best_pods {
                                 // Prune this continuation
                                 continue;
@@ -806,6 +891,10 @@ impl<'a> Engine<'a> {
             rule.body.iter().map(|t| remap_tmpl(t, &map)).collect();
 
         let mut cont_store = store.clone();
+        // Accumulate structural lower bound for this rule's body
+        cont_store.accumulated_lb_ops = cont_store
+            .accumulated_lb_ops
+            .saturating_add(rule.min_native_cost + rule.min_subcall_count);
         // Pre-bind remapped head wildcards from caller args that are literals or bound wildcards
         for (h, call) in remapped_head.iter().zip(call_args.iter()) {
             match (h, call) {
@@ -874,6 +963,7 @@ impl<'a> Engine<'a> {
         cont_store.pending_custom.push(PendingCustom {
             rule_id: cpr.clone(),
             head_args: remapped_head,
+            base_premises_len: cont_store.premises.len(),
         });
         trace!(pred = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), goals = ?ng, "spawned producer goals");
         Some(Frame {
@@ -960,15 +1050,21 @@ impl<'a> Engine<'a> {
                             && cont.goals.is_empty()
                         {
                             // Directly record the answer and exit without further scheduling
-                            self.answers.push(cont.store.clone());
-                            // Update best bound on operations for branch-and-bound
-                            let ops = self
+                            let mut store = cont.store.clone();
+                            // Recompute accurate proof costs before exporting
+                            let (ops, inputs) = crate::util::proof_cost(&store);
+                            store.operation_count = ops;
+                            self.answers.push(store);
+                            // Update best bounds (ops and inputs) for branch-and-bound
+                            let (ops, inputs) = self
                                 .answers
                                 .last()
-                                .map(|st| st.operation_count)
-                                .unwrap_or(0);
+                                .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
+                                .unwrap_or((0, 0));
                             self.best_ops_so_far =
                                 Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+                            self.best_inputs_so_far =
+                                Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
                             early_exit_triggered = true;
                             break;
                         } else {
@@ -1166,8 +1262,8 @@ impl Waiter {
                     bind_targets.push(None);
                     literal_filters.push(Some(v.clone()));
                 }
-                // Heads should not contain AnchoredKeys or None for MVP; treat as non-bindable
-                _ => {
+                // Custom statements cannot have anchored keys as arguments
+                StatementTmplArg::AnchoredKey(_, _) | StatementTmplArg::None => {
                     bind_targets.push(None);
                     literal_filters.push(None);
                 }
@@ -2481,7 +2577,10 @@ mod tests {
             )
         "#;
         let processed = parse(program, &Params::default(), &[]).expect("parse ok");
-        let mut engine = Engine::new(&reg, &edb);
+        let config = EngineConfigBuilder::new()
+            .recommended(&Params::default())
+            .build();
+        let mut engine = Engine::with_config(&reg, &edb, config);
         engine.load_processed(&processed);
         engine.run().expect("run ok");
 
