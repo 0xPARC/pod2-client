@@ -188,15 +188,9 @@ fn map_to_operation(
 
     match head.predicate() {
         Predicate::Custom(cpr) => match tag {
-            OpTag::CustomDeduction {
-                premises: ordered_body,
-                ..
-            } => {
-                // Use the engine-provided ordered body directly (with None placeholders for OR)
-                let mut args: Vec<Statement> = Vec::with_capacity(ordered_body.len());
-                for (st, _t) in ordered_body.iter() {
-                    args.push(normalize_stmt_for_op_arg(st.clone(), edb)?);
-                }
+            OpTag::CustomDeduction { .. } => {
+                // Order and normalize premises to match the predicate's template order
+                let args = order_custom_premises(&cpr, head, premises, edb)?;
                 Ok(Some(Operation::custom(cpr.clone(), args)))
             }
             _ => Ok(None),
@@ -235,7 +229,7 @@ fn map_to_operation(
                     }
                 }
                 Contains => {
-                    // If this was generated from a full dict, emit ContainsFromEntries using the dict value; else copy
+                    // If this was generated from a full dict, emit ContainsFromEntries using the dict value
                     if let OpTag::GeneratedContains { root, .. } = tag {
                         if let Some(dict) = edb.full_dict(root) {
                             if let Statement::Contains(_r, k, v) = head.clone() {
@@ -284,16 +278,14 @@ fn map_to_operation(
                     Ok(Some(Operation::copy(head.clone())))
                 }
                 SignedBy => {
-                    if let Statement::SignedBy(v_msg, _v_pk) = head.clone() {
-                        if let ValueRef::Literal(msg) = v_msg {
-                            let root = Hash::from(msg.raw());
-                            if let Some(sd) = edb.signed_dict(&root) {
-                                return Ok(Some(Operation::dict_signed_by(&sd)));
-                            } else {
-                                return Err(
-                                    "missing SignedDict for SignedBy; cannot replay".to_string()
-                                );
-                            }
+                    if let Statement::SignedBy(ValueRef::Literal(msg), _v_pk) = head.clone() {
+                        let root = Hash::from(msg.raw());
+                        if let Some(sd) = edb.signed_dict(&root) {
+                            return Ok(Some(Operation::dict_signed_by(&sd)));
+                        } else {
+                            return Err(
+                                "missing SignedDict for SignedBy; cannot replay".to_string()
+                            );
                         }
                     }
                     Err("SignedBy expects literal message root".to_string())
@@ -325,8 +317,6 @@ fn find_contains_for_ak(
     }
     None
 }
-
-// removed: replaced by EdbView::full_dict
 
 fn op_arg_from_vr(
     vr: ValueRef,
@@ -401,7 +391,7 @@ fn order_custom_premises(
     for tmpl in templates.iter() {
         // Find a premise that matches this template's predicate and any literal constraints
         let matched = premises.iter().find(|s| match (tmpl.pred(), (*s).clone()) {
-            (Predicate::Native(np), Stmt::Contains(_, a1, _)) if matches!(np, NP::Contains) => {
+            (Predicate::Native(NP::Contains), Stmt::Contains(_, a1, _)) => {
                 // If template's second arg is a literal string, enforce it
                 match tmpl.args()[1] {
                     STA::Literal(ref v) => match (a1.clone(), String::try_from(v.typed()).ok()) {
@@ -418,7 +408,7 @@ fn order_custom_premises(
                 }
                 // Additionally, require that subcall arguments align with the outer head where applicable
                 if let Statement::Custom(parent_cpr, parent_args) = head_stmt.clone() {
-                    if parent_cpr.batch == cpr.batch && parent_cpr.index == cpr.index {
+                    if parent_cpr.batch == cpr.batch {
                         // For OR parent eth_dos: BatchSelf(1) and (2) share the same arg order as the parent
                         // Only accept this candidate if its concrete args equal the parent's args
                         return *sub_args == parent_args;
@@ -463,7 +453,7 @@ fn order_custom_premises(
 }
 
 fn describe_stmt(s: &Statement) -> String {
-    use pod2::middleware::{Statement as St, ValueRef as VR};
+    use pod2::middleware::Statement as St;
     match s {
         St::Contains(a0, a1, a2) => format!(
             "Contains({}, {}, {})",
@@ -489,9 +479,7 @@ fn describe_stmt(s: &Statement) -> String {
 fn describe_vr(vr: &pod2::middleware::ValueRef) -> String {
     use pod2::middleware::ValueRef as VR;
     match vr {
-        VR::Literal(v) => format!("{}", v),
+        VR::Literal(v) => format!("{v}"),
         VR::Key(ak) => format!("{}[\"{}\"]", ak.root, ak.key.name()),
     }
 }
-
-// (unit tests moved to integration tests)

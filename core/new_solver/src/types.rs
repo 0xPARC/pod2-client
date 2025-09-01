@@ -71,10 +71,6 @@ pub struct PendingCustom {
     /// Number of premises present in the store when this pending head was registered.
     /// Premises added after this point are considered the body premises for this head.
     pub base_premises_len: usize,
-    /// Remapped body templates for this custom rule expansion, ordered as per template.
-    pub templates: Vec<pod2::middleware::StatementTmpl>,
-    /// Ordered body slots aligned to `templates`; None means not yet satisfied (or OR-branch not taken).
-    pub slots: Vec<Option<(Statement, super::OpTag)>>,
 }
 
 /// A wrapper for `Value` that orders by its raw bytes commitment for use in BTree* maps.

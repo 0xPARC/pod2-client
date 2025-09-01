@@ -269,6 +269,98 @@ impl ProofDagWithOps {
         out.push_str("}\n");
         out
     }
+
+    /// Render a simple indented tree view as text, starting from top-level statements.
+    /// Top-level statements are those that are not used as premises of any operation
+    /// (i.e., they have no outgoing edges statement -> op). For each statement, its
+    /// producing operation is printed indented by 2 spaces beneath it, and the
+    /// operation's input statements are printed 2 spaces further, recursively.
+    pub fn to_tree_text(&self) -> String {
+        // Build quick lookup maps for traversal
+        let mut stmt_to_ops: BTreeMap<&String, Vec<&String>> = BTreeMap::new(); // premise stmt -> [op]
+        let mut op_to_stmts: BTreeMap<&String, Vec<&String>> = BTreeMap::new(); // op -> [premise stmt]
+
+        for (from, to) in self.edges.iter() {
+            match (
+                self.stmt_nodes.get(from),
+                self.op_nodes.get(from),
+                self.stmt_nodes.get(to),
+                self.op_nodes.get(to),
+            ) {
+                // premise statement -> operation
+                (Some(_), None, None, Some(_)) => {
+                    stmt_to_ops.entry(from).or_default().push(to);
+                    op_to_stmts.entry(to).or_default().push(from);
+                }
+                // operation -> head statement
+                (None, Some(_), Some(_), None) => {}
+                _ => {}
+            }
+        }
+
+        // Identify top-level statements: those with no outgoing edge stmt -> op
+        let mut top_level_stmt_keys: Vec<&String> = self
+            .stmt_nodes
+            .keys()
+            .filter(|k| !stmt_to_ops.contains_key(*k))
+            .collect();
+        top_level_stmt_keys.sort();
+
+        // Helper to append indentation
+        fn indent(out: &mut String, spaces: usize) {
+            for _ in 0..spaces {
+                out.push(' ');
+            }
+        }
+
+        // Recursive printer: statement -> its producer op -> its premise statements ...
+        fn write_stmt(
+            dag: &ProofDagWithOps,
+            stmt_key: &String,
+            op_to_stmts: &BTreeMap<&String, Vec<&String>>,
+            indent_spaces: usize,
+            out: &mut String,
+        ) {
+            if let Some(st) = dag.stmt_nodes.get(stmt_key) {
+                indent(out, indent_spaces);
+                out.push_str(&format!("{st}\n"));
+                // For each op that produces this statement (edge op -> stmt)
+                // Find ops by scanning inverse mapping of op_to_head_stmt (avoid recomputing: derive from edges again)
+                // Simpler: scan dag.edges for (op -> this stmt)
+                let mut producing_ops: Vec<&String> = dag
+                    .edges
+                    .iter()
+                    .filter_map(|(from, to)| {
+                        if to == stmt_key && dag.op_nodes.contains_key(from) {
+                            Some(from)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                producing_ops.sort();
+                for op_key in producing_ops.into_iter() {
+                    if let Some(tag) = dag.op_nodes.get(op_key) {
+                        indent(out, indent_spaces + 2);
+                        out.push_str(&format!("{}\n", short_op_label(tag)));
+                        // Premise statements for this op
+                        let mut inputs: Vec<&String> =
+                            op_to_stmts.get(op_key).cloned().unwrap_or_default();
+                        inputs.sort();
+                        for prem_key in inputs.into_iter() {
+                            write_stmt(dag, prem_key, op_to_stmts, indent_spaces + 4, out);
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut out = String::new();
+        for sk in top_level_stmt_keys.into_iter() {
+            write_stmt(self, sk, &op_to_stmts, 0, &mut out);
+        }
+        out
+    }
 }
 
 fn short_op_key(tag: &OpTag) -> String {
