@@ -213,6 +213,49 @@ impl<'a> Engine<'a> {
         }
     }
 
+    fn record_into_current_custom_scope(
+        head: &Statement,
+        tag: &crate::types::OpTag,
+        pending: &mut PendingCustom,
+    ) {
+        use pod2::middleware::{
+            NativePredicate as NP, Predicate, Statement as St, StatementTmplArg as STA,
+            ValueRef as VR,
+        };
+        // Find an index for this head among templates where slot is empty
+        for (idx, tmpl) in pending.templates.iter().enumerate() {
+            if pending.slots[idx].is_some() {
+                continue;
+            }
+            let ok = match (tmpl.pred(), head) {
+                (Predicate::Native(NP::Equal), St::Equal(_, _)) => true,
+                (Predicate::Native(NP::Lt), St::Lt(_, _)) => true,
+                (Predicate::Native(NP::LtEq), St::LtEq(_, _)) => true,
+                (Predicate::Native(NP::SumOf), St::SumOf(_, _, _)) => true,
+                (Predicate::Native(NP::Contains), St::Contains(_a0, a1, _a2)) => {
+                    match tmpl.args()[1] {
+                        STA::Literal(ref v) => match (a1.clone(), String::try_from(v.typed()).ok())
+                        {
+                            (VR::Literal(kv_lit), Some(kstr)) => kv_lit == Value::from(kstr),
+                            _ => true,
+                        },
+                        _ => true,
+                    }
+                }
+                (Predicate::Native(NP::SignedBy), St::SignedBy(_, _)) => true,
+                (Predicate::BatchSelf(i), St::Custom(cpr, _args)) => {
+                    cpr.batch == pending.rule_id.batch && cpr.index == *i
+                }
+                (Predicate::Custom(exp_cpr), St::Custom(cpr, _)) => cpr == exp_cpr,
+                _ => false,
+            };
+            if ok {
+                pending.slots[idx] = Some((head.clone(), tag.clone()));
+                break;
+            }
+        }
+    }
+
     pub fn with_policy(
         registry: &'a OpRegistry,
         edb: &'a dyn EdbView,
@@ -327,13 +370,22 @@ impl<'a> Engine<'a> {
                             &p.head_args,
                             &final_store.bindings,
                         ) {
-                            // Take the body premises added after this pending head was registered
-                            let body = final_store.premises.split_off(p.base_premises_len);
+                            // Build ordered body directly from template-aligned slots
+                            let ordered: Vec<(Statement, crate::types::OpTag)> = p
+                                .slots
+                                .iter()
+                                .map(|slot| {
+                                    slot.clone().unwrap_or((
+                                        Statement::None,
+                                        crate::types::OpTag::FromLiterals,
+                                    ))
+                                })
+                                .collect();
                             final_store.premises.push((
                                 head,
                                 crate::types::OpTag::CustomDeduction {
                                     rule_id: p.rule_id.clone(),
-                                    premises: body,
+                                    premises: ordered,
                                 },
                             ));
                         }
@@ -401,24 +453,6 @@ impl<'a> Engine<'a> {
                 std::collections::HashSet::new();
             let mut any_stmt_for_park: Option<StatementTmpl> = None;
             for (idx, g) in goals.iter().enumerate() {
-                // Count this step and yield if exceeding per-frame cap
-                frame_steps = frame_steps.saturating_add(1);
-                if let Some(cap) = self.config.per_frame_step_cap {
-                    if frame_steps > cap {
-                        debug!(
-                            frame_id = id,
-                            cap, "per-frame step cap reached; yielding frame"
-                        );
-                        self.sched.enqueue(Frame {
-                            id,
-                            goals: goals.clone(),
-                            store: store.clone(),
-                            export,
-                            table_for: table_for.clone(),
-                        });
-                        break;
-                    }
-                }
                 let tmpl_args: Vec<StatementTmplArg> = g.args.clone();
                 // Handle native vs custom
                 let is_custom = matches!(g.pred, Predicate::Custom(_));
@@ -654,6 +688,29 @@ impl<'a> Engine<'a> {
                 } else {
                     let _ = suspended_here;
                 }
+
+                // After processing this goal, consider yielding due to per-frame step cap
+                frame_steps = frame_steps.saturating_add(1);
+                if let Some(cap) = self.config.per_frame_step_cap {
+                    // Only yield early if we've made some progress this pass (either tabled a custom call
+                    // or accumulated waits that will cause parking). Otherwise, continue scanning goals
+                    // so frames with no progress can drop/park deterministically.
+                    if frame_steps >= cap && (chosen_goal_idx.is_some() || !union_waits.is_empty())
+                    {
+                        debug!(
+                            frame_id = id,
+                            cap, "per-frame step cap reached; yielding frame"
+                        );
+                        self.sched.enqueue(Frame {
+                            id,
+                            goals: goals.clone(),
+                            store: store.clone(),
+                            export,
+                            table_for: table_for.clone(),
+                        });
+                        break;
+                    }
+                }
             }
             if choices_for_goal.is_empty() {
                 // No immediate choices; if any suspensions, park frame on their union
@@ -748,7 +805,11 @@ impl<'a> Engine<'a> {
                         {
                             // Record proof step and update optimization counters
                             let tag = ch.op_tag.clone();
-                            cont_store.premises.push((head, tag.clone()));
+                            cont_store.premises.push((head.clone(), tag.clone()));
+                            // Also record into the current custom scope slots if present
+                            if let Some(last) = cont_store.pending_custom.last_mut() {
+                                Engine::record_into_current_custom_scope(&head, &tag, last);
+                            }
                             // Count one operation for this step
                             cont_store.operation_count =
                                 cont_store.operation_count.saturating_add(1);
@@ -964,6 +1025,8 @@ impl<'a> Engine<'a> {
             rule_id: cpr.clone(),
             head_args: remapped_head,
             base_premises_len: cont_store.premises.len(),
+            templates: ordered_body.clone(),
+            slots: vec![None; ordered_body.len()],
         });
         trace!(pred = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), goals = ?ng, "spawned producer goals");
         Some(Frame {
@@ -1407,7 +1470,7 @@ impl Table {
 mod tests {
     use pod2::{
         lang::parse,
-        middleware::{containers::Dictionary, Key, Params, Signer, Value},
+        middleware::{containers::Dictionary, Key, Params, Signer, Value, DEFAULT_VD_SET},
     };
     use tracing_subscriber::{fmt, EnvFilter};
 
@@ -1420,6 +1483,7 @@ mod tests {
         },
         op::OpRegistry,
         types::ConstraintStore,
+        ProofDag, ProofDagWithOps,
     };
 
     #[test]
@@ -2750,8 +2814,16 @@ mod tests {
         engine.load_processed(&processed);
         engine.run().expect("run ok");
 
-        assert!(!engine.answers.is_empty());
-
+        crate::build_pod_from_answer_top_level_public(
+            &engine.answers[0],
+            &params,
+            vd_set,
+            |b: &pod2::frontend::MainPodBuilder| {
+                b.prove(&MockProver {}).map_err(|e| format!("{e}"))
+            },
+            &std::collections::HashMap::new(),
+            &edb,
+        )?;
         Ok(())
     }
 }

@@ -93,6 +93,11 @@ pub trait EdbView: Send + Sync {
         None
     }
 
+    /// Lookup a full Dictionary by its root commitment, if tracked by the EDB.
+    fn full_dict(&self, _root: &Hash) -> Option<Dictionary> {
+        None
+    }
+
     /// Enumerate all SignedDicts tracked by the EDB (used for generation/enumeration).
     fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
         Vec::new()
@@ -128,6 +133,8 @@ pub struct MockEdbView {
     pub contains_copied: HashMap<(Hash, Hash), Vec<(Value, PodRef)>>,
     /// Full dictionaries registered: root -> key_hash -> value
     pub full_dicts: HashMap<Hash, HashMap<Hash, Value>>,
+    /// Original full dictionary objects by root (used for replay)
+    pub full_dict_objs: HashMap<Hash, Dictionary>,
     /// SumOf rows available to copy.
     pub sum_rows: Vec<(Statement, PodRef)>,
     /// SignedBy rows available to copy.
@@ -181,6 +188,7 @@ impl MockEdbView {
     /// Register an entire full dictionary (all keys available for GeneratedContains).
     pub fn add_full_dict(&mut self, dict: Dictionary) {
         let root = dict.commitment();
+        self.full_dict_objs.insert(root, dict.clone());
         let entry = self.full_dicts.entry(root).or_default();
         for (k, v) in dict.kvs().iter() {
             entry.insert(k.hash(), v.clone());
@@ -452,6 +460,10 @@ impl EdbView for MockEdbView {
         self.signed_dicts.get(root).cloned()
     }
 
+    fn full_dict(&self, root: &Hash) -> Option<Dictionary> {
+        self.full_dict_objs.get(root).cloned()
+    }
+
     fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
         self.signed_dicts.values().cloned().collect()
     }
@@ -512,6 +524,8 @@ pub struct ImmutableEdb {
     contains_copied: std::collections::BTreeMap<(Hash, Hash), Vec<(Value, PodRef)>>,
     // Full dictionaries registered: root -> key_hash -> value
     full_dicts: std::collections::BTreeMap<Hash, std::collections::BTreeMap<Hash, Value>>,
+    // Original full dictionary objects by root (used for replay)
+    full_dict_objs: std::collections::BTreeMap<Hash, Dictionary>,
     // Optional copied rows for other predicates (kept for parity/extension)
     not_contains_rows: Vec<(Statement, PodRef)>,
     sum_rows: Vec<(Statement, PodRef)>,
@@ -548,6 +562,7 @@ impl ImmutableEdbBuilder {
 
     pub fn add_full_dict(mut self, dict: Dictionary) -> Self {
         let root = dict.commitment();
+        self.inner.full_dict_objs.insert(root, dict.clone());
         let entry = self.inner.full_dicts.entry(root).or_default();
         for (k, v) in dict.kvs().iter() {
             entry.insert(k.hash(), v.clone());
@@ -795,6 +810,10 @@ impl EdbView for ImmutableEdb {
 
     fn signed_dict(&self, root: &Hash) -> Option<SignedDict> {
         self.signed_dicts.get(root).cloned()
+    }
+
+    fn full_dict(&self, root: &Hash) -> Option<Dictionary> {
+        self.full_dict_objs.get(root).cloned()
     }
 
     fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {

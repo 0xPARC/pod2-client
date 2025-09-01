@@ -226,6 +226,23 @@ pub fn instantiate_goal(
             let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
             Some(Statement::NotContains(a0, a1))
         }
+        Predicate::Native(NativePredicate::SignedBy) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::SignedBy(a0, a1))
+        }
+        Predicate::Native(NativePredicate::SumOf) => {
+            if tmpl.args.len() != 3 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            let a2 = arg_to_vr(&tmpl.args[2], bindings)?;
+            Some(Statement::SumOf(a0, a1, a2))
+        }
         _ => None,
     }
 }
