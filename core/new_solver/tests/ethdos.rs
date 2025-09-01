@@ -2,7 +2,10 @@ use pod2::{
     lang::parse,
     middleware::{Params, Signer},
 };
-use pod2_new_solver::{custom, edb, proof_dag, Engine, EngineConfigBuilder, OpRegistry};
+use pod2_new_solver::{
+    build_pod_from_answer_top_level_public, custom, edb, proof_dag, Engine, EngineConfigBuilder,
+    OpRegistry,
+};
 use tracing_subscriber::EnvFilter;
 
 #[test]
@@ -105,5 +108,15 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     let tree = dag.to_tree_text();
     println!("{tree}");
 
+    let pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &params,
+        vd_set,
+        |b| b.prove(&prover).map_err(|e| e.to_string()),
+        &std::collections::HashMap::new(),
+        &edb,
+    )
+    .unwrap();
+    println!("{pod}");
     Ok(())
 }

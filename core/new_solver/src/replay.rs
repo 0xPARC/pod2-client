@@ -66,9 +66,99 @@ where
         builder.add_pod(pod.clone());
     }
 
-    // Emit operations for each op node (stable order)
-    for (op_key, tag) in dag.op_nodes.iter() {
-        let head_key = match heads_for_op.get(op_key) {
+    // Build op dependency graph: producer_op -> consumer_op if consumer uses a statement produced by producer
+    let mut stmt_producers: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (from, to) in dag.edges.iter() {
+        if is_op_key(from) && is_stmt_key(to) {
+            stmt_producers
+                .entry(to.clone())
+                .or_default()
+                .push(from.clone());
+        }
+    }
+    // adjacency over ops
+    let mut adj: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let all_ops: Vec<String> = dag.op_nodes.keys().cloned().collect();
+    for op_key in all_ops.iter() {
+        let mut outs: Vec<String> = Vec::new();
+        if let Some(prem_keys) = premises_for_op.get(op_key) {
+            for pk in prem_keys.iter() {
+                if let Some(prods) = stmt_producers.get(pk) {
+                    for prod in prods.iter() {
+                        if prod != op_key {
+                            outs.push(op_key.clone()); // placeholder, will fill below
+                        }
+                    }
+                }
+            }
+        }
+        let _ = outs; // suppress unused (we build adj below)
+    }
+    // Build edges: for each consumer op, add edges from each producer of its premise statements
+    for (consumer, prem_keys) in premises_for_op.iter() {
+        for pk in prem_keys.iter() {
+            if let Some(prods) = stmt_producers.get(pk) {
+                for prod in prods.iter() {
+                    if prod != consumer {
+                        adj.entry(prod.clone()).or_default().push(consumer.clone());
+                    }
+                }
+            }
+        }
+    }
+    for v in adj.values_mut() {
+        v.sort();
+        v.dedup();
+    }
+    // Kahn topo sort over op keys
+    let mut indeg: BTreeMap<String, usize> = BTreeMap::new();
+    for k in dag.op_nodes.keys() {
+        indeg.insert(k.clone(), 0);
+    }
+    for (_from, tos) in adj.iter() {
+        for to in tos.iter() {
+            if let Some(d) = indeg.get_mut(to) {
+                *d = d.saturating_add(1);
+            }
+        }
+    }
+    let mut queue: std::collections::VecDeque<String> = indeg
+        .iter()
+        .filter_map(|(k, &d)| if d == 0 { Some(k.clone()) } else { None })
+        .collect();
+    let mut topo_ops: Vec<String> = Vec::new();
+    while let Some(k) = queue.pop_front() {
+        topo_ops.push(k.clone());
+        if let Some(nei) = adj.get(&k) {
+            for to in nei.iter() {
+                if let Some(d) = indeg.get_mut(to) {
+                    *d = d.saturating_sub(1);
+                    if *d == 0 {
+                        queue.push_back(to.clone());
+                    }
+                }
+            }
+        }
+    }
+    if topo_ops.len() < dag.op_nodes.len() {
+        // Fallback: append any remaining ops in stable key order
+        let mut remaining: Vec<String> = dag
+            .op_nodes
+            .keys()
+            .filter(|k| !topo_ops.contains(*k))
+            .cloned()
+            .collect();
+        remaining.sort();
+        topo_ops.extend(remaining);
+    }
+
+    // Emit operations following topological order
+    for op_key in topo_ops.into_iter() {
+        let tag = match dag.op_nodes.get(&op_key) {
+            Some(t) => t,
+            None => continue,
+        };
+        let head_key = match heads_for_op.get(&op_key) {
             Some(k) => k,
             None => continue,
         };
@@ -77,7 +167,7 @@ where
             .get(head_key)
             .ok_or_else(|| "broken DAG: missing head statement".to_string())?;
         let premise_stmts: Vec<&Statement> = premises_for_op
-            .get(op_key)
+            .get(&op_key)
             .cloned()
             .unwrap_or_default()
             .into_iter()
@@ -88,6 +178,7 @@ where
         if let Some(op) = map_to_operation(tag, head_stmt, &premise_stmts, edb)? {
             let public = public_selector(head_stmt);
             // Insert operation; frontend validates
+            println!("op: {op}");
             if public {
                 let _ = builder.pub_op(op).map_err(|e| e.to_string())?;
             } else {
@@ -380,6 +471,11 @@ fn order_custom_premises(
         StatementTmplArg as STA, ValueRef as VR,
     };
     let templates: Vec<StatementTmpl> = cpr.predicate().statements().to_vec();
+    let args_len: usize = cpr.predicate().args_len();
+    let head_vals: Option<Vec<Value>> = match head_stmt.clone() {
+        Statement::Custom(_, vals) => Some(vals),
+        _ => None,
+    };
     let mut out: Vec<Statement> = Vec::with_capacity(templates.len());
     // Build a human-friendly inventory of available premises for debugging
     let inventory = premises
@@ -389,43 +485,103 @@ fn order_custom_premises(
         .collect::<Vec<_>>()
         .join("\n");
     for tmpl in templates.iter() {
-        // Find a premise that matches this template's predicate and any literal constraints
-        let matched = premises.iter().find(|s| match (tmpl.pred(), (*s).clone()) {
-            (Predicate::Native(NP::Contains), Stmt::Contains(_, a1, _)) => {
-                // If template's second arg is a literal string, enforce it
-                match tmpl.args()[1] {
-                    STA::Literal(ref v) => match (a1.clone(), String::try_from(v.typed()).ok()) {
-                        (VR::Literal(kv_lit), Some(kstr)) => kv_lit == Value::from(kstr),
-                        _ => true,
-                    },
-                    _ => true,
+        // Helper: compare template arg against candidate ValueRef using head bindings/literals
+        let arg_matches = |targ: &STA, carg: &VR| -> bool {
+            match targ {
+                STA::Literal(vlit) => match carg {
+                    VR::Literal(v) => v.raw() == vlit.raw(),
+                    _ => false,
+                },
+                STA::Wildcard(w) => {
+                    if w.index < args_len {
+                        if let Some(hv) = head_vals.as_ref().and_then(|hv| hv.get(w.index)) {
+                            match carg {
+                                VR::Literal(v) => v.raw() == hv.raw(),
+                                _ => false,
+                            }
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
                 }
+                STA::AnchoredKey(w, key) => match carg {
+                    VR::Key(ak) => {
+                        if ak.key.name() != key.name() {
+                            return false;
+                        }
+                        if w.index < args_len {
+                            if let Some(hv) = head_vals.as_ref().and_then(|hv| hv.get(w.index)) {
+                                return ak.root == pod2::middleware::Hash::from(hv.raw());
+                            }
+                        }
+                        true
+                    }
+                    _ => false,
+                },
+                STA::None => true,
+            }
+        };
+
+        // Find a premise that matches this template's predicate and constraints
+        let matched = premises.iter().find(|s| match (tmpl.pred(), (*s).clone()) {
+            (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0)
+                    && arg_matches(&args[1], &a1)
+                    && arg_matches(&args[2], &a2)
             }
             (Predicate::BatchSelf(i), Stmt::Custom(sub_cpr, sub_args)) => {
-                // Match subcall within the same batch by index
                 if !(sub_cpr.batch == cpr.batch && sub_cpr.index == *i) {
                     return false;
                 }
-                // Additionally, require that subcall arguments align with the outer head where applicable
-                if let Statement::Custom(parent_cpr, parent_args) = head_stmt.clone() {
-                    if parent_cpr.batch == cpr.batch {
-                        // For OR parent eth_dos: BatchSelf(1) and (2) share the same arg order as the parent
-                        // Only accept this candidate if its concrete args equal the parent's args
-                        return *sub_args == parent_args;
+                // Enforce head-projected args where template uses head wildcards
+                let targs = tmpl.args();
+                for (pos, targ) in targs.iter().enumerate() {
+                    if let STA::Wildcard(w) = targ {
+                        if w.index < args_len {
+                            if let Some(hv) = head_vals.as_ref().and_then(|hv| hv.get(w.index)) {
+                                if let Some(v) = sub_args.get(pos) {
+                                    if v.raw() != hv.raw() {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 true
             }
-            (Predicate::Custom(exp_cpr), Stmt::Custom(sub_cpr, _)) => {
-                // Direct custom predicate reference; match exactly
-                *sub_cpr == *exp_cpr
+            (Predicate::Custom(exp_cpr), Stmt::Custom(sub_cpr, _)) => *sub_cpr == *exp_cpr,
+            (Predicate::Native(NP::SignedBy), Stmt::SignedBy(a0, a1)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
             }
-            (Predicate::Native(NP::SignedBy), Stmt::SignedBy(_, _)) => true,
-            (Predicate::Native(NP::Equal), Stmt::Equal(_, _)) => true,
-            (Predicate::Native(NP::Lt), Stmt::Lt(_, _)) => true,
-            (Predicate::Native(NP::LtEq), Stmt::LtEq(_, _)) => true,
-            (Predicate::Native(NP::SumOf), Stmt::SumOf(_, _, _)) => true,
-            (Predicate::Native(NP::Contains), Stmt::Contains(_, _, _)) => true,
+            (Predicate::Native(NP::Equal), Stmt::Equal(a0, a1)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+            }
+            (Predicate::Native(NP::Lt), Stmt::Lt(a0, a1)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+            }
+            (Predicate::Native(NP::LtEq), Stmt::LtEq(a0, a1)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+            }
+            (Predicate::Native(NP::SumOf), Stmt::SumOf(a0, a1, a2)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0)
+                    && arg_matches(&args[1], &a1)
+                    && arg_matches(&args[2], &a2)
+            }
+            (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
+                let args = tmpl.args();
+                arg_matches(&args[0], &a0)
+                    && arg_matches(&args[1], &a1)
+                    && arg_matches(&args[2], &a2)
+            }
             _ => false,
         });
         if let Some(sref) = matched {
