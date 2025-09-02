@@ -9,11 +9,11 @@ use crate::{
     types::{ConstraintStore, OpTag},
 };
 
-/// ProductOf from literals/entries: supports all-ground validation and two-of-three binding/enumeration.
-/// Semantics: a = b * c
-pub struct ProductOfFromEntriesHandler;
+/// MaxOf from literals/entries: supports all-ground validation and two-of-three binding/enumeration.
+/// Semantics: a = max(b, c)
+pub struct MaxOfFromEntriesHandler;
 
-impl OpHandler for ProductOfFromEntriesHandler {
+impl OpHandler for MaxOfFromEntriesHandler {
     fn propagate(
         &self,
         args: &[StatementTmplArg],
@@ -23,20 +23,20 @@ impl OpHandler for ProductOfFromEntriesHandler {
         if args.len() != 3 {
             return PropagatorResult::Contradiction;
         }
-        trace!("ProductOf: start args_len=3");
+        trace!("MaxOf: start args_len=3");
         let a = classify_num(&args[0], store, edb);
         let b = classify_num(&args[1], store, edb);
         let c = classify_num(&args[2], store, edb);
-        trace!("ProductOf: classified A=? B=? C=?");
+        trace!("MaxOf: classified A=? B=? C=?");
 
         // Type errors or missing facts on bound AKs fail this op path
         match (&a, &b, &c) {
             (NumArg::TypeError, _, _) | (_, NumArg::TypeError, _) | (_, _, NumArg::TypeError) => {
-                trace!("ProductOf: type error -> contradiction");
+                trace!("MaxOf: type error -> contradiction");
                 return PropagatorResult::Contradiction;
             }
             (NumArg::NoFact, _, _) | (_, NumArg::NoFact, _) | (_, _, NumArg::NoFact) => {
-                trace!("ProductOf: no fact for bound AK -> contradiction");
+                trace!("MaxOf: no fact for bound AK -> contradiction");
                 return PropagatorResult::Contradiction;
             }
             _ => {}
@@ -58,10 +58,11 @@ impl OpHandler for ProductOfFromEntriesHandler {
                 _ => {}
             }
         }
+        trace!(grounds = grounds.len(), waits = ?waits, akvars = ?akvars, "MaxOf: classified counts");
         if grounds.len() < 2 {
             waits.sort();
             waits.dedup();
-            trace!(?waits, "ProductOf: suspending (insufficient grounds)");
+            trace!(?waits, "MaxOf: suspending (insufficient grounds)");
             return if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
@@ -69,7 +70,7 @@ impl OpHandler for ProductOfFromEntriesHandler {
             };
         }
 
-        // All ground: validate A == B * C
+        // All ground: validate A == max(B, C)
         if grounds.len() == 3 {
             let a0 = if let NumArg::Ground { i, premises } = a {
                 (i, premises)
@@ -86,12 +87,14 @@ impl OpHandler for ProductOfFromEntriesHandler {
             } else {
                 unreachable!()
             };
-            if a0.0 == b0.0 * c0.0 {
+            let max_bc = std::cmp::max(b0.0, c0.0);
+            if a0.0 == max_bc {
                 trace!(
                     a = a0.0,
                     b = b0.0,
                     c = c0.0,
-                    "ProductOf: all ground entailed"
+                    max_bc,
+                    "MaxOf: all ground entailed"
                 );
                 let mut premises = Vec::new();
                 premises.extend(a0.1);
@@ -113,7 +116,8 @@ impl OpHandler for ProductOfFromEntriesHandler {
                     a = a0.0,
                     b = b0.0,
                     c = c0.0,
-                    "ProductOf: all ground mismatch -> contradiction"
+                    max_bc,
+                    "MaxOf: all ground mismatch -> contradiction"
                 );
                 PropagatorResult::Contradiction
             }
@@ -133,90 +137,9 @@ impl OpHandler for ProductOfFromEntriesHandler {
                         }
                     }
                 };
+
             match (&a, &b, &c) {
-                // Unknown is C: C = A / B with integer arithmetic. Only allow exact division.
-                (
-                    NumArg::Ground {
-                        i: ai,
-                        premises: pa,
-                    },
-                    NumArg::Ground {
-                        i: bi,
-                        premises: pb,
-                    },
-                    x,
-                ) => {
-                    if *bi == 0 || ai.rem_euclid(*bi) != 0 {
-                        return PropagatorResult::Contradiction;
-                    }
-                    let target = ai / bi;
-                    trace!(a = ai, b = bi, target, "ProductOf: solving C = A / B");
-                    match x {
-                        NumArg::Wait(w) => mk_ent_bind(*w, target, {
-                            let mut p = pa.clone();
-                            p.extend(pb.clone());
-                            p
-                        }),
-                        NumArg::AkVar { wc_index, key } => {
-                            let choices = crate::util::enumerate_choices_for(
-                                key,
-                                &Value::from(target),
-                                *wc_index,
-                                edb,
-                            );
-                            if choices.is_empty() {
-                                PropagatorResult::Contradiction
-                            } else {
-                                PropagatorResult::Choices {
-                                    alternatives: choices,
-                                }
-                            }
-                        }
-                        _ => PropagatorResult::Contradiction,
-                    }
-                }
-                // Unknown is B: B = A / C
-                (
-                    NumArg::Ground {
-                        i: ai,
-                        premises: pa,
-                    },
-                    x,
-                    NumArg::Ground {
-                        i: ci,
-                        premises: pc,
-                    },
-                ) => {
-                    if *ci == 0 || ai.rem_euclid(*ci) != 0 {
-                        return PropagatorResult::Contradiction;
-                    }
-                    let target = ai / ci;
-                    trace!(a = ai, c = ci, target, "ProductOf: solving B = A / C");
-                    match x {
-                        NumArg::Wait(w) => mk_ent_bind(*w, target, {
-                            let mut p = pa.clone();
-                            p.extend(pc.clone());
-                            p
-                        }),
-                        NumArg::AkVar { wc_index, key } => {
-                            let choices = crate::util::enumerate_choices_for(
-                                key,
-                                &Value::from(target),
-                                *wc_index,
-                                edb,
-                            );
-                            if choices.is_empty() {
-                                PropagatorResult::Contradiction
-                            } else {
-                                PropagatorResult::Choices {
-                                    alternatives: choices,
-                                }
-                            }
-                        }
-                        _ => PropagatorResult::Contradiction,
-                    }
-                }
-                // Unknown is A: A = B * C
+                // Unknown is A: A = max(B, C)
                 (
                     x,
                     NumArg::Ground {
@@ -228,12 +151,112 @@ impl OpHandler for ProductOfFromEntriesHandler {
                         premises: pc,
                     },
                 ) => {
-                    let target = bi * ci;
-                    trace!(b = bi, c = ci, target, "ProductOf: solving A = B * C");
+                    let target = std::cmp::max(*bi, *ci);
+                    trace!(b = bi, c = ci, target, "MaxOf: solving A = max(B, C)");
                     match x {
                         NumArg::Wait(w) => mk_ent_bind(*w, target, {
                             let mut p = pb.clone();
                             p.extend(pc.clone());
+                            p
+                        }),
+                        NumArg::AkVar { wc_index, key } => {
+                            let choices = crate::util::enumerate_choices_for(
+                                key,
+                                &Value::from(target),
+                                *wc_index,
+                                edb,
+                            );
+                            if choices.is_empty() {
+                                PropagatorResult::Contradiction
+                            } else {
+                                PropagatorResult::Choices {
+                                    alternatives: choices,
+                                }
+                            }
+                        }
+                        _ => PropagatorResult::Contradiction,
+                    }
+                }
+                // Unknown is B: B can be A (if A >= C) or any value <= A
+                // For simplicity, we only allow B = A when A >= C, else contradiction
+                (
+                    NumArg::Ground {
+                        i: ai,
+                        premises: pa,
+                    },
+                    x,
+                    NumArg::Ground {
+                        i: ci,
+                        premises: pc,
+                    },
+                ) => {
+                    if *ai < *ci {
+                        // If A < C, then max(B, C) = C, but we need A = max(B, C), contradiction
+                        trace!(
+                            a = ai,
+                            c = ci,
+                            "MaxOf: A < C, cannot solve for B -> contradiction"
+                        );
+                        return PropagatorResult::Contradiction;
+                    }
+                    // A >= C, so B can be A (then max(A, C) = A) or any value <= A such that max(B, C) = A
+                    // For deterministic behavior, we choose B = A
+                    let target = *ai;
+                    trace!(a = ai, c = ci, target, "MaxOf: solving B = A (A >= C)");
+                    match x {
+                        NumArg::Wait(w) => mk_ent_bind(*w, target, {
+                            let mut p = pa.clone();
+                            p.extend(pc.clone());
+                            p
+                        }),
+                        NumArg::AkVar { wc_index, key } => {
+                            let choices = crate::util::enumerate_choices_for(
+                                key,
+                                &Value::from(target),
+                                *wc_index,
+                                edb,
+                            );
+                            if choices.is_empty() {
+                                PropagatorResult::Contradiction
+                            } else {
+                                PropagatorResult::Choices {
+                                    alternatives: choices,
+                                }
+                            }
+                        }
+                        _ => PropagatorResult::Contradiction,
+                    }
+                }
+                // Unknown is C: C can be A (if A >= B) or any value <= A
+                // For simplicity, we only allow C = A when A >= B, else contradiction
+                (
+                    NumArg::Ground {
+                        i: ai,
+                        premises: pa,
+                    },
+                    NumArg::Ground {
+                        i: bi,
+                        premises: pb,
+                    },
+                    x,
+                ) => {
+                    if *ai < *bi {
+                        // If A < B, then max(B, C) = B, but we need A = max(B, C), contradiction
+                        trace!(
+                            a = ai,
+                            b = bi,
+                            "MaxOf: A < B, cannot solve for C -> contradiction"
+                        );
+                        return PropagatorResult::Contradiction;
+                    }
+                    // A >= B, so C can be A (then max(B, A) = A) or any value <= A such that max(B, C) = A
+                    // For deterministic behavior, we choose C = A
+                    let target = *ai;
+                    trace!(a = ai, b = bi, target, "MaxOf: solving C = A (A >= B)");
+                    match x {
+                        NumArg::Wait(w) => mk_ent_bind(*w, target, {
+                            let mut p = pa.clone();
+                            p.extend(pb.clone());
                             p
                         }),
                         NumArg::AkVar { wc_index, key } => {
@@ -260,18 +283,10 @@ impl OpHandler for ProductOfFromEntriesHandler {
     }
 }
 
-pub fn register_productof_handlers(reg: &mut crate::op::OpRegistry) {
-    reg.register(
-        NativePredicate::ProductOf,
-        Box::new(ProductOfFromEntriesHandler),
-    );
-    reg.register(NativePredicate::ProductOf, Box::new(CopyProductOfHandler));
-}
+/// CopyMaxOf: copy rows from EDB: matches any two-of-three and binds the third.
+pub struct CopyMaxOfHandler;
 
-/// CopyProductOf: copy rows from EDB: matches any two-of-three and binds the third.
-pub struct CopyProductOfHandler;
-
-impl OpHandler for CopyProductOfHandler {
+impl OpHandler for CopyMaxOfHandler {
     fn propagate(
         &self,
         args: &[StatementTmplArg],
@@ -283,7 +298,7 @@ impl OpHandler for CopyProductOfHandler {
         }
         let rows = crate::util::ternary_view(
             edb,
-            crate::edb::TernaryPred::ProductOf,
+            crate::edb::TernaryPred::MaxOf,
             crate::edb::ArgSel::Val,
             crate::edb::ArgSel::Val,
             crate::edb::ArgSel::Val,
@@ -368,6 +383,11 @@ impl OpHandler for CopyProductOfHandler {
     }
 }
 
+pub fn register_maxof_handlers(reg: &mut crate::op::OpRegistry) {
+    reg.register(NativePredicate::MaxOf, Box::new(MaxOfFromEntriesHandler));
+    reg.register(NativePredicate::MaxOf, Box::new(CopyMaxOfHandler));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,26 +399,26 @@ mod tests {
     }
 
     #[test]
-    fn productof_two_of_three_binds_wildcard() {
+    fn maxof_two_of_three_binds_wildcard() {
         let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        let handler = ProductOfFromEntriesHandler;
-        let args = args_from("REQUEST(ProductOf(?X, 3, 4))");
+        let handler = MaxOfFromEntriesHandler;
+        let args = args_from("REQUEST(MaxOf(?X, 3, 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
-                assert_eq!(bindings, vec![(0, Value::from(12))]);
+                assert_eq!(bindings, vec![(0, Value::from(7))]);
             }
             other => panic!("unexpected: {other:?}"),
         }
     }
 
     #[test]
-    fn productof_all_ground_validates() {
+    fn maxof_all_ground_validates() {
         let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        let handler = ProductOfFromEntriesHandler;
-        let args = args_from("REQUEST(ProductOf(12, 3, 4))");
+        let handler = MaxOfFromEntriesHandler;
+        let args = args_from("REQUEST(MaxOf(7, 3, 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { .. } => {}
@@ -407,15 +427,97 @@ mod tests {
     }
 
     #[test]
-    fn productof_division_requires_exact() {
+    fn maxof_all_ground_mismatch_contradicts() {
         let edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
-        let handler = ProductOfFromEntriesHandler;
-        let args = args_from("REQUEST(ProductOf(7, 3, ?Z))");
+        let handler = MaxOfFromEntriesHandler;
+        let args = args_from("REQUEST(MaxOf(5, 3, 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Contradiction => {}
-            _ => panic!("expected contradiction for non-exact division case"),
+            other => panic!("expected contradiction, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maxof_solves_b_when_a_ge_c() {
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = MaxOfFromEntriesHandler;
+        // MaxOf(7, ?B, 3): max(B, 3) = 7, so B = 7
+        let args = args_from("REQUEST(MaxOf(7, ?B, 3))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { bindings, .. } => {
+                assert_eq!(bindings, vec![(0, Value::from(7))]);
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maxof_solves_c_when_a_ge_b() {
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = MaxOfFromEntriesHandler;
+        // MaxOf(7, 3, ?C): max(3, C) = 7, so C = 7
+        let args = args_from("REQUEST(MaxOf(7, 3, ?C))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Entailed { bindings, .. } => {
+                assert_eq!(bindings, vec![(0, Value::from(7))]);
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maxof_contradicts_when_a_lt_c_solving_for_b() {
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = MaxOfFromEntriesHandler;
+        // MaxOf(3, ?B, 7): max(B, 7) = 3, impossible since max must be >= 7
+        let args = args_from("REQUEST(MaxOf(3, ?B, 7))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Contradiction => {}
+            other => panic!("expected contradiction, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maxof_contradicts_when_a_lt_b_solving_for_c() {
+        let edb = MockEdbView::default();
+        let mut store = ConstraintStore::default();
+        let handler = MaxOfFromEntriesHandler;
+        // MaxOf(3, 7, ?C): max(7, C) = 3, impossible since max must be >= 7
+        let args = args_from("REQUEST(MaxOf(3, 7, ?C))");
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Contradiction => {}
+            other => panic!("expected contradiction, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn copy_maxof_matches_and_binds() {
+        let mut edb = MockEdbView::default();
+        let src = crate::types::PodRef(test_helpers::root("s"));
+        edb.add_max_row_vals(Value::from(7), Value::from(3), Value::from(7), src);
+        let mut store = ConstraintStore::default();
+        let handler = CopyMaxOfHandler;
+        // Match first two, bind third
+        let args = args_from("REQUEST(MaxOf(7, 3, ?Z))");
+
+        let res = handler.propagate(&args, &mut store, &edb);
+        match res {
+            PropagatorResult::Choices { alternatives } => {
+                assert!(alternatives.iter().any(|ch| ch
+                    .bindings
+                    .iter()
+                    .any(|(i, v)| *i == 0 && *v == Value::from(7))));
+            }
+            other => panic!("unexpected: {other:?}"),
         }
     }
 }

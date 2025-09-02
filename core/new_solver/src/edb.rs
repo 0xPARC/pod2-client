@@ -22,6 +22,8 @@ pub enum BinaryPred {
 pub enum TernaryPred {
     SumOf,
     ProductOf,
+    MaxOf,
+    HashOf,
     Contains,
 }
 
@@ -171,6 +173,10 @@ pub struct MockEdbView {
     pub sum_rows: Vec<(Statement, PodRef)>,
     /// ProductOf rows available to copy.
     pub product_rows: Vec<(Statement, PodRef)>,
+    /// MaxOf rows available to copy.
+    pub max_rows: Vec<(Statement, PodRef)>,
+    /// HashOf rows available to copy.
+    pub hash_rows: Vec<(Statement, PodRef)>,
     /// SignedBy rows available to copy.
     pub signed_by_rows: Vec<(Statement, PodRef)>,
     /// NotContains copied rows: Statement::NotContains(root,key)
@@ -287,6 +293,15 @@ impl MockEdbView {
         );
         self.lte_rows.push((st, src));
     }
+
+    pub fn add_hash_row(&mut self, a: Value, b: Value, c: Value, src: PodRef) {
+        let st = Statement::HashOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.hash_rows.push((st, src));
+    }
     pub fn add_lte_row_vals(&mut self, vl: Value, vr: Value, src: PodRef) {
         let st = Statement::LtEq(ValueRef::Literal(vl), ValueRef::Literal(vr));
         self.lte_rows.push((st, src));
@@ -402,6 +417,61 @@ impl MockEdbView {
         self.product_rows.push((st, src));
     }
 
+    /// Register a MaxOf row for copying.
+    pub fn add_max_row_vals(&mut self, a: Value, b: Value, c: Value, src: PodRef) {
+        let st = Statement::MaxOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.max_rows.push((st, src));
+    }
+    pub fn add_max_row_ak_val_val(
+        &mut self,
+        root: Hash,
+        key: Key,
+        b: Value,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::MaxOf(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.max_rows.push((st, src));
+    }
+    pub fn add_max_row_val_ak_val(
+        &mut self,
+        a: Value,
+        root: Hash,
+        key: Key,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::MaxOf(
+            ValueRef::Literal(a),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(c),
+        );
+        self.max_rows.push((st, src));
+    }
+    pub fn add_max_row_val_val_ak(
+        &mut self,
+        a: Value,
+        b: Value,
+        root: Hash,
+        key: Key,
+        src: PodRef,
+    ) {
+        let st = Statement::MaxOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+        );
+        self.max_rows.push((st, src));
+    }
+
     /// Register a ground custom head tuple with provenance.
     pub fn add_custom_row(&mut self, pred: CustomPredicateRef, args: Vec<Value>, src: PodRef) {
         self.custom_rows
@@ -488,12 +558,17 @@ impl EdbView for MockEdbView {
         let rows: &Vec<(Statement, PodRef)> = match pred {
             TernaryPred::SumOf => &self.sum_rows,
             TernaryPred::ProductOf => &self.product_rows,
+            TernaryPred::MaxOf => &self.max_rows,
+            TernaryPred::HashOf => &self.hash_rows,
             // Contains rows are materialized via contains_* helpers; skip here.
             TernaryPred::Contains => return Vec::new(),
         };
         rows.iter()
             .filter(|(st, _)| match st {
-                SumOf(la, lb, lc) | ProductOf(la, lb, lc) => {
+                SumOf(la, lb, lc)
+                | ProductOf(la, lb, lc)
+                | MaxOf(la, lb, lc)
+                | HashOf(la, lb, lc) => {
                     Self::matches_arg(la, &a)
                         && Self::matches_arg(lb, &b)
                         && Self::matches_arg(lc, &c)
@@ -656,6 +731,8 @@ pub struct ImmutableEdb {
     not_contains_rows: Vec<(Statement, PodRef)>,
     sum_rows: Vec<(Statement, PodRef)>,
     product_rows: Vec<(Statement, PodRef)>,
+    max_rows: Vec<(Statement, PodRef)>,
+    hash_rows: Vec<(Statement, PodRef)>,
     signed_by_rows: Vec<(Statement, PodRef)>,
     signed_dicts: std::collections::BTreeMap<Hash, SignedDict>,
     // Custom statement rows: predicate key (batch id + index) -> list of (args, PodRef)
@@ -779,6 +856,14 @@ impl ImmutableEdbBuilder {
                 Stmt::ProductOf(_, _, _) => {
                     self.inner.product_rows.push((st.clone(), pod_ref.clone()));
                 }
+                // MaxOf (copied)
+                Stmt::MaxOf(_, _, _) => {
+                    self.inner.max_rows.push((st.clone(), pod_ref.clone()));
+                }
+                // HashOf (copied)
+                Stmt::HashOf(_, _, _) => {
+                    self.inner.hash_rows.push((st.clone(), pod_ref.clone()));
+                }
                 // Lt/LtEq copied rows
                 Stmt::Lt(_, _) => {
                     self.inner.lt_rows.push((st.clone(), pod_ref.clone()));
@@ -881,6 +966,8 @@ impl EdbView for ImmutableEdb {
         let rows: &Vec<(Statement, PodRef)> = match pred {
             TernaryPred::SumOf => &self.sum_rows,
             TernaryPred::ProductOf => &self.product_rows,
+            TernaryPred::MaxOf => &self.max_rows,
+            TernaryPred::HashOf => &self.hash_rows,
             // Contains rows are materialized via contains_* helpers; skip here.
             TernaryPred::Contains => return Vec::new(),
         };
@@ -899,9 +986,10 @@ impl EdbView for ImmutableEdb {
         }
         rows.iter()
             .filter(|(st, _)| match st {
-                SumOf(la, lb, lc) | ProductOf(la, lb, lc) => {
-                    matches(la, &a) && matches(lb, &b) && matches(lc, &c)
-                }
+                SumOf(la, lb, lc)
+                | ProductOf(la, lb, lc)
+                | MaxOf(la, lb, lc)
+                | HashOf(la, lb, lc) => matches(&la, &a) && matches(&lb, &b) && matches(&lc, &c),
                 _ => false,
             })
             .cloned()

@@ -252,6 +252,15 @@ pub fn instantiate_goal(
             let a2 = arg_to_vr(&tmpl.args[2], bindings)?;
             Some(Statement::ProductOf(a0, a1, a2))
         }
+        Predicate::Native(NativePredicate::HashOf) => {
+            if tmpl.args.len() != 3 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            let a2 = arg_to_vr(&tmpl.args[2], bindings)?;
+            Some(Statement::HashOf(a0, a1, a2))
+        }
         _ => None,
     }
 }
@@ -365,7 +374,10 @@ pub fn normalize_ternary(
 ) -> Vec<TernaryRowView> {
     rows.into_iter()
         .filter_map(|(st, src)| match st {
-            Statement::SumOf(a, b, c) => {
+            Statement::SumOf(a, b, c)
+            | Statement::ProductOf(a, b, c)
+            | Statement::MaxOf(a, b, c)
+            | Statement::HashOf(a, b, c) => {
                 let to_view = |v: ValueRef| match v {
                     ValueRef::Literal(v) => Some(ArgView::Literal(v)),
                     ValueRef::Key(AnchoredKey { root, key }) => Some(ArgView::Ak { root, key }),

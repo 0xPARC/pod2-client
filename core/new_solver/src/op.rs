@@ -30,6 +30,8 @@ impl Default for OpRegistry {
         crate::handlers::register_contains_handlers(&mut reg);
         crate::handlers::register_not_contains_handlers(&mut reg);
         crate::handlers::register_productof_handlers(&mut reg);
+        crate::handlers::register_maxof_handlers(&mut reg);
+        crate::handlers::register_hashof_handlers(&mut reg);
         reg
     }
 }
