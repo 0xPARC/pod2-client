@@ -43,6 +43,12 @@ pub struct Scheduler {
     parked: std::collections::HashMap<FrameId, ParkedFrame>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum FinalizeAction {
+    Continue,
+    EarlyExit,
+}
+
 impl Scheduler {
     pub fn enqueue(&mut self, f: Frame) {
         self.runnable.push_back(f);
@@ -271,38 +277,11 @@ impl<'a> Engine<'a> {
     pub fn run(&mut self) -> Result<(), EngineError> {
         let start = Instant::now();
         while let Some(frame) = self.sched.dequeue(self.policy) {
-            // Global iteration cap
-            if let Some(cap) = self.config.iteration_cap {
-                if self.steps_executed >= cap {
-                    self.iteration_cap_hit = true;
-                    debug!(
-                        steps = self.steps_executed,
-                        cap, "iteration cap hit; aborting run"
-                    );
-                    return Err(EngineError::IterationCap {
-                        steps: self.steps_executed,
-                    });
-                }
-            }
-            if let Some(timeout) = self.config.wall_clock_timeout {
-                if start.elapsed() >= timeout {
-                    let ms = start.elapsed().as_millis();
-                    debug!(ms, "wall-clock timeout; aborting run");
-                    return Err(EngineError::Timeout { elapsed_ms: ms });
-                }
-            }
+            // Bounds: iteration and wall-clock
+            self.check_iteration_and_timeout(start)?;
             self.steps_executed = self.steps_executed.saturating_add(1);
             // Epoch reset for per-table fanout caps
-            if let Some(epoch) = self.config.per_table_epoch_frames {
-                self.frames_since_epoch = self.frames_since_epoch.saturating_add(1);
-                if self.frames_since_epoch >= epoch {
-                    for t in self.tables.values_mut() {
-                        t.delivered_this_epoch = 0;
-                    }
-                    trace!(epoch, "reset per-table fanout epoch counters");
-                    self.frames_since_epoch = 0;
-                }
-            }
+            self.maybe_reset_epoch_counters();
             let Frame {
                 id,
                 goals,
@@ -313,86 +292,10 @@ impl<'a> Engine<'a> {
             trace!(frame_id = id, goals = goals.len(), export, "dequeued frame");
             let mut frame_steps: u32 = 0;
             if goals.is_empty() {
-                // Record a completed answer (bindings and any accumulated premises)
-                let t_final_start = std::time::Instant::now();
-                let mut final_store = store.clone();
-                // Materialize any pending custom deductions as head proof steps
-                if !final_store.pending_custom.is_empty() {
-                    let t_mat_start = std::time::Instant::now();
-                    let mut pendings = std::mem::take(&mut final_store.pending_custom);
-                    // Process innermost first to compress bodies into heads iteratively
-                    while let Some(p) = pendings.pop() {
-                        if let Some(head) = crate::util::instantiate_custom(
-                            &p.rule_id,
-                            &p.head_args,
-                            &final_store.bindings,
-                        ) {
-                            // Take the body premises added after this pending head was registered
-                            let body = final_store.premises.split_off(p.base_premises_len);
-                            final_store.premises.push((
-                                head,
-                                crate::types::OpTag::CustomDeduction {
-                                    rule_id: p.rule_id.clone(),
-                                    premises: body,
-                                },
-                            ));
-                        }
-                    }
-                    let dt = t_mat_start.elapsed();
-                    if dt.as_millis() > 50 {
-                        trace!(
-                            frame_id = id,
-                            ms = dt.as_millis(),
-                            "finalize: materialize pending custom heads"
-                        );
-                    }
+                match self.finalize_frame(id, store, export, table_for)? {
+                    FinalizeAction::Continue => continue,
+                    FinalizeAction::EarlyExit => return Ok(()),
                 }
-                // Publish any custom heads to tables before recording the answer
-                let t_pub_start = std::time::Instant::now();
-                let early = self.publish_custom_answers(&final_store);
-                let dt_pub = t_pub_start.elapsed();
-                if dt_pub.as_millis() > 50 {
-                    trace!(
-                        frame_id = id,
-                        ms = dt_pub.as_millis(),
-                        "finalize: publish_custom_answers"
-                    );
-                }
-                if early {
-                    return Ok(());
-                }
-                if export {
-                    // Recompute accurate operation count for pruning/metrics from full proof DAG
-                    let (ops, inputs) = crate::util::proof_cost(&final_store);
-                    final_store.operation_count = ops;
-                    debug!("exporting completed answer");
-                    self.answers.push(final_store);
-                    // Update best bound on operations for branch-and-bound
-                    let (ops, inputs) = self
-                        .answers
-                        .last()
-                        .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
-                        .unwrap_or((0, 0));
-                    self.best_ops_so_far = Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
-                    self.best_inputs_so_far =
-                        Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
-                    // Early exit mode: return immediately after the first exported answer
-                    if self.config.early_exit_on_first_answer {
-                        break;
-                    }
-                }
-                if let Some(pat) = table_for.clone() {
-                    self.maybe_complete_table(&pat);
-                }
-                let dt_total = t_final_start.elapsed();
-                if dt_total.as_millis() > 100 {
-                    trace!(
-                        frame_id = id,
-                        ms = dt_total.as_millis(),
-                        "finalize: total finalize time"
-                    );
-                }
-                continue;
             }
             // Evaluate goals sequentially; branch on the first goal that yields choices.
             let mut chosen_goal_idx: Option<usize> = None;
@@ -403,256 +306,37 @@ impl<'a> Engine<'a> {
             for (idx, g) in goals.iter().enumerate() {
                 // Count this step and yield if exceeding per-frame cap
                 frame_steps = frame_steps.saturating_add(1);
-                if let Some(cap) = self.config.per_frame_step_cap {
-                    if frame_steps > cap {
-                        debug!(
-                            frame_id = id,
-                            cap, "per-frame step cap reached; yielding frame"
-                        );
-                        self.sched.enqueue(Frame {
-                            id,
-                            goals: goals.clone(),
-                            store: store.clone(),
-                            export,
-                            table_for: table_for.clone(),
-                        });
-                        break;
-                    }
-                }
-                let tmpl_args: Vec<StatementTmplArg> = g.args.clone();
-                // Handle native vs custom
-                let is_custom = matches!(g.pred, Predicate::Custom(_));
-                if is_custom {
-                    if let Predicate::Custom(ref cpr) = g.pred {
-                        let call_args = &goals[idx].args;
-                        // Instantiate call args with current store bindings so tables and waiters see ground literals
-                        let inst_call_args: Vec<StatementTmplArg> = call_args
-                            .iter()
-                            .cloned()
-                            .map(|a| match a {
-                                StatementTmplArg::Wildcard(w) => store
-                                    .bindings
-                                    .get(&w.index)
-                                    .cloned()
-                                    .map(StatementTmplArg::Literal)
-                                    .unwrap_or(StatementTmplArg::Wildcard(w)),
-                                other => other,
-                            })
-                            .collect();
-                        let pattern = CallPattern::from_call(cpr.clone(), &inst_call_args);
-                        // Branch-and-bound pruning at custom call sites: drop branch if LB exceeds best
-                        if self.config.branch_and_bound_on_ops {
-                            if let (Some(best_ops), Some(best_inputs)) =
-                                (self.best_ops_so_far, self.best_inputs_so_far)
-                            {
-                                let (realized_ops, realized_inputs) =
-                                    crate::util::proof_cost(&store);
-                                // Structural LB: minimal body cost across rules (native steps + subcalls)
-                                let rules = self.rules.get(cpr);
-                                let mut min_body_cost = 1usize; // fallback if rules list empty
-                                if !rules.is_empty() {
-                                    min_body_cost = rules
-                                        .iter()
-                                        .map(|r| r.min_native_cost + r.min_subcall_count)
-                                        .min()
-                                        .unwrap_or(1);
-                                }
-                                // Remaining goals lower bound: current custom call (1) + others after it
-                                let remaining_native = goals
-                                    .iter()
-                                    .skip(idx + 1)
-                                    .filter(|t| matches!(t.pred, Predicate::Native(_)))
-                                    .count();
-                                let remaining_custom = goals
-                                    .iter()
-                                    .skip(idx + 1)
-                                    .filter(|t| matches!(t.pred, Predicate::Custom(_)))
-                                    .count();
-                                let lb_ops = realized_ops
-                                    + store.accumulated_lb_ops
-                                    + min_body_cost
-                                    + remaining_native
-                                    + remaining_custom;
-                                let ops_per_pod = self.config.ops_per_pod.max(1);
-                                let inputs_per_pod = self.config.inputs_per_pod.max(1);
-                                let pods_lb_ops = lb_ops.div_ceil(ops_per_pod);
-                                let pods_lb_inputs = (realized_inputs).div_ceil(inputs_per_pod);
-                                let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
-                                let best_pods = std::cmp::max(
-                                    best_ops.div_ceil(ops_per_pod),
-                                    best_inputs.div_ceil(inputs_per_pod),
-                                );
-                                trace!(
-                                    ?pattern,
-                                    realized_ops,
-                                    realized_inputs,
-                                    accumulated_lb = store.accumulated_lb_ops,
-                                    min_body_cost,
-                                    remaining_native,
-                                    remaining_custom,
-                                    pods_lb,
-                                    best_pods,
-                                    "branch-and-bound: custom call LB"
-                                );
-                                if pods_lb > best_pods {
-                                    debug!(
-                                        ?pattern,
-                                        lb_ops,
-                                        best_ops,
-                                        "pruning custom call: LB exceeds best bound"
-                                    );
-                                    // Treat as no-choice branch; drop this frame
-                                    chosen_goal_idx = Some(idx);
-                                    choices_for_goal = Vec::new();
-                                    break;
-                                }
-                            }
-                        }
-
-                        let is_new = !self.tables.contains_key(&pattern);
-                        // Ensure a table exists for this pattern
-                        let _ = self
-                            .tables
-                            .entry(pattern.clone())
-                            .or_insert_with(Table::new);
-                        if is_new {
-                            debug!(predicate = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), "creating new table and spawning producers");
-                            // Spawn producers for each rule: child frames evaluate only the rule body + propagated constraints
-                            let rules = self.rules.get(cpr).to_vec();
-                            if rules.is_empty() {
-                                if let Some(t) = self.tables.get_mut(&pattern) {
-                                    t.is_complete = true;
-                                }
-                                trace!(?pattern, "no rules for predicate; table marked complete");
-                            } else {
-                                for rule in rules.iter() {
-                                    if let Some(mut prod) = self.expand_custom_rule_to_producer(
-                                        &goals, &store, idx, cpr, rule,
-                                    ) {
-                                        trace!("enqueuing rule-body producer");
-                                        prod.table_for = Some(pattern.clone());
-                                        self.sched.enqueue(prod);
-                                    }
-                                }
-                            }
-                        }
-                        // Register waiter for the caller and stream any existing table answers, respecting per-table fanout cap
-                        trace!(?pattern, "registering waiter for custom call");
-                        let waiter =
-                            Waiter::from_call(cpr.clone(), idx, &goals, &store, &inst_call_args);
-                        // Compute deliveries without holding a mutable borrow to self
-                        let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
-                        let mut to_deliver: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> =
-                            Vec::new();
-                        let mut delivered_any = false;
-                        if let Some(t) = self.tables.get(&pattern) {
-                            let existing: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> = t
-                                .answers
-                                .iter()
-                                .map(|(k, v)| (k.clone(), v.clone()))
-                                .collect();
-                            let mut budget_left = cap.saturating_sub(t.delivered_this_epoch);
-                            for (tuple, tag) in existing.into_iter() {
-                                if budget_left == 0 {
-                                    break;
-                                }
-                                if waiter.matches(&tuple) {
-                                    to_deliver.push((tuple, tag));
-                                    budget_left -= 1;
-                                    delivered_any = true;
-                                }
-                            }
-                        }
-                        // Enqueue continuations
-                        for (tuple, tag) in to_deliver.iter() {
-                            trace!("stream existing table answer to caller");
-                            let cont = waiter.continuation_frame(self, tuple, tag.clone());
-                            self.sched.enqueue(cont);
-                        }
-                        // Update table state and store waiter if needed
-                        if let Some(t) = self.tables.get_mut(&pattern) {
-                            // increment by the number we actually delivered
-                            let inc = to_deliver.len() as u32;
-                            if inc > 0 {
-                                let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
-                                if t.delivered_this_epoch >= cap {
-                                    debug!(
-                                        ?pattern,
-                                        cap, "per-table fanout cap reached during waiter streaming"
-                                    );
-                                }
-                                t.delivered_this_epoch = t.delivered_this_epoch.saturating_add(inc);
-                            }
-                            if t.is_complete {
-                                trace!(?pattern, "table complete; not storing waiter");
-                                if !delivered_any {
-                                    debug!(
-                                        ?pattern,
-                                        "dropping caller: complete table yielded no matches"
-                                    );
-                                }
-                            } else {
-                                let is_dup = t.waiters.iter().any(|w| w.same_signature(&waiter));
-                                if is_dup {
-                                    trace!(?pattern, "duplicate waiter ignored");
-                                } else {
-                                    t.waiters.push(waiter);
-                                }
-                            }
-                        }
-                        // We handled this goal by tabling; drop this frame (continuations enqueued)
-                        chosen_goal_idx = Some(idx);
-                        choices_for_goal = Vec::new();
-                        break;
-                    }
-                    continue;
-                }
-                let goal_pred = match g.pred {
-                    Predicate::Native(p) => p,
-                    _ => unreachable!(),
-                };
-                trace!(pred = ?goal_pred, args = ?tmpl_args, "processing native goal");
-                let mut local_choices: Vec<Choice> = Vec::new();
-                let mut suspended_here = false;
-                let handlers = self.registry.get(goal_pred);
-                if handlers.is_empty() {
-                    debug!(
-                        ?goal_pred,
-                        "no handlers registered for native predicate; aborting run"
-                    );
-                    return Err(EngineError::MissingHandlers {
-                        predicate: goal_pred,
+                if self.should_yield_frame(frame_steps) {
+                    self.sched.enqueue(Frame {
+                        id,
+                        goals: goals.clone(),
+                        store: store.clone(),
+                        export,
+                        table_for: table_for.clone(),
                     });
-                }
-                for h in handlers {
-                    match h.propagate(&tmpl_args, &mut store.clone(), self.edb) {
-                        PropagatorResult::Entailed { bindings, op_tag } => {
-                            local_choices.push(Choice { bindings, op_tag })
-                        }
-                        PropagatorResult::Choices { mut alternatives } => {
-                            local_choices.append(&mut alternatives)
-                        }
-                        PropagatorResult::Suspend { on } => {
-                            suspended_here = true;
-                            if any_stmt_for_park.is_none() {
-                                any_stmt_for_park = Some(g.clone());
-                            }
-                            for w in on {
-                                if !store.bindings.contains_key(&w) {
-                                    union_waits.insert(w);
-                                }
-                            }
-                        }
-                        PropagatorResult::Contradiction => {}
-                    }
-                }
-                trace!(pred = ?goal_pred, choices = local_choices.len(), waits = ?union_waits, "native goal outcome");
-                if !local_choices.is_empty() {
-                    chosen_goal_idx = Some(idx);
-                    choices_for_goal = local_choices;
                     break;
-                } else {
-                    let _ = suspended_here;
+                }
+                if matches!(g.pred, Predicate::Custom(_))
+                    && self.handle_custom_goal(idx, &goals, &store)
+                {
+                    chosen_goal_idx = Some(idx);
+                    choices_for_goal = Vec::new();
+                    break;
+                }
+                if let Predicate::Native(p) = g.pred {
+                    let choices = self.handle_native_goal(
+                        p,
+                        &g.args,
+                        g,
+                        &store,
+                        &mut union_waits,
+                        &mut any_stmt_for_park,
+                    )?;
+                    if !choices.is_empty() {
+                        chosen_goal_idx = Some(idx);
+                        choices_for_goal = choices;
+                        break;
+                    }
                 }
             }
             if choices_for_goal.is_empty() {
@@ -679,153 +363,150 @@ impl<'a> Engine<'a> {
                     continue;
                 }
             }
-            // De-dup choices by bindings; prefer GeneratedContains over Copy (deterministic order)
-            if !choices_for_goal.is_empty() {
-                use std::collections::BTreeMap;
-
-                use crate::types::OpTag;
-                // Stable map keyed by a canonical string of bindings
-                let mut best: BTreeMap<String, (i32, Choice)> = BTreeMap::new();
-                for ch in choices_for_goal.into_iter() {
-                    let mut b = ch.bindings.clone();
-                    b.sort_by_key(|(i, _)| *i);
-                    let key = {
-                        let mut s = String::new();
-                        for (i, v) in b.iter() {
-                            use hex::ToHex;
-                            s.push_str(&format!("{i}:"));
-                            let raw = v.raw();
-                            s.push_str(&format!("{}|", raw.encode_hex::<String>()));
-                        }
-                        s
-                    };
-                    let score = match &ch.op_tag {
-                        OpTag::Derived { premises } => {
-                            if premises
-                                .iter()
-                                .any(|(_, tag)| matches!(tag, OpTag::GeneratedContains { .. }))
-                            {
-                                3
-                            } else if premises
-                                .iter()
-                                .any(|(_, tag)| matches!(tag, OpTag::CopyStatement { .. }))
-                            {
-                                2
-                            } else {
-                                1
-                            }
-                        }
-                        OpTag::GeneratedContains { .. } => 3,
-                        OpTag::CopyStatement { .. } => 2,
-                        _ => 1,
-                    };
-                    match best.get_mut(&key) {
-                        Some((best_score, _)) if *best_score >= score => {}
-                        _ => {
-                            best.insert(key, (score, ch));
-                        }
-                    }
-                }
-                // Use the best choices in a stable order
-                for (_key, (_score, ch)) in best.into_iter() {
-                    let mut cont_store = store.clone();
-                    for (w, v) in ch.bindings.iter().cloned() {
-                        cont_store.bindings.insert(w, v);
-                    }
-                    // Wake any parked frames that were waiting on these bindings
-                    for woke in self.sched.wake_with_bindings(&ch.bindings) {
-                        self.sched.enqueue(woke);
-                    }
-                    let mut ng = goals.clone();
-                    if let Some(i) = chosen_goal_idx {
-                        ng.remove(i);
-                    }
-                    // Record head proof step for this goal in the continuation store
-                    if let Some(i) = chosen_goal_idx {
-                        let head_tmpl = &goals[i];
-                        if let Some(head) =
-                            crate::util::instantiate_goal(head_tmpl, &cont_store.bindings)
-                        {
-                            // Record proof step and update optimization counters
-                            let tag = ch.op_tag.clone();
-                            cont_store.premises.push((head, tag.clone()));
-                            // Count one operation for this step
-                            cont_store.operation_count =
-                                cont_store.operation_count.saturating_add(1);
-                            // Track input pods when copying
-                            if let crate::types::OpTag::CopyStatement { source } = tag {
-                                cont_store.input_pods.insert(source);
-                            }
-                        }
-                    }
-                    // Branch-and-bound pruning by POD budget using ops/inputs limits
-                    if self.config.branch_and_bound_on_ops {
-                        if let (Some(best_ops), Some(best_inputs)) =
-                            (self.best_ops_so_far, self.best_inputs_so_far)
-                        {
-                            // Realized unique ops and inputs (accurate, via DAG traversal)
-                            let (realized_ops, realized_inputs) =
-                                crate::util::proof_cost(&cont_store);
-                            // Admissible lower bounds for remaining work
-                            let remaining_native = ng
-                                .iter()
-                                .filter(|t| matches!(t.pred, Predicate::Native(_)))
-                                .count();
-                            let remaining_custom = ng
-                                .iter()
-                                .filter(|t| matches!(t.pred, Predicate::Custom(_)))
-                                .count();
-                            let lb_ops = realized_ops + remaining_native + remaining_custom;
-                            // Compute pods lower bound using configured limits
-                            let ops_per_pod = self.config.ops_per_pod.max(1);
-                            let inputs_per_pod = self.config.inputs_per_pod.max(1);
-                            let pods_lb_ops = (lb_ops).div_ceil(ops_per_pod);
-                            let pods_lb_inputs = (realized_inputs).div_ceil(inputs_per_pod);
-                            let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
-                            // Best bound in pods
-                            let best_pods = std::cmp::max(
-                                best_ops.div_ceil(ops_per_pod),
-                                best_inputs.div_ceil(inputs_per_pod),
-                            );
-                            if pods_lb > best_pods {
-                                // Prune this continuation
-                                continue;
-                            }
-                        }
-                    }
-                    let cont = Frame {
-                        id: self.sched.new_id(),
-                        goals: ng,
-                        store: cont_store,
+            // De-dup choices, prefer GeneratedContains, instantiate steps, and enqueue continuations
+            if let Some(i) = chosen_goal_idx {
+                if !choices_for_goal.is_empty() {
+                    let best = self.dedup_and_score_choices(choices_for_goal);
+                    self.enqueue_continuations_for_choices(
+                        best,
+                        i,
+                        &goals,
+                        &store,
                         export,
-                        table_for: table_for.clone(),
-                    };
-                    self.sched.enqueue(cont);
+                        table_for.clone(),
+                    );
+                    continue;
                 }
-                continue;
-            }
-            // No choices produced; nothing to enqueue for this goal.
-            for ch in std::iter::empty::<Choice>() {
-                let mut cont_store = store.clone();
-                for (w, v) in ch.bindings.iter().cloned() {
-                    cont_store.bindings.insert(w, v);
-                }
-                // For MVP we do not instantiate/append premises yet; wire later.
-                let mut ng = goals.clone();
-                if let Some(i) = chosen_goal_idx {
-                    ng.remove(i);
-                }
-                let cont = Frame {
-                    id,
-                    goals: ng,
-                    store: cont_store,
-                    export,
-                    table_for: table_for.clone(),
-                };
-                self.sched.enqueue(cont);
             }
         }
         Ok(())
+    }
+
+    #[inline]
+    fn check_iteration_and_timeout(&mut self, start: Instant) -> Result<(), EngineError> {
+        if let Some(cap) = self.config.iteration_cap {
+            if self.steps_executed >= cap {
+                self.iteration_cap_hit = true;
+                debug!(
+                    steps = self.steps_executed,
+                    cap, "iteration cap hit; aborting run"
+                );
+                return Err(EngineError::IterationCap {
+                    steps: self.steps_executed,
+                });
+            }
+        }
+        if let Some(timeout) = self.config.wall_clock_timeout {
+            if start.elapsed() >= timeout {
+                let ms = start.elapsed().as_millis();
+                debug!(ms, "wall-clock timeout; aborting run");
+                return Err(EngineError::Timeout { elapsed_ms: ms });
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn maybe_reset_epoch_counters(&mut self) {
+        if let Some(epoch) = self.config.per_table_epoch_frames {
+            self.frames_since_epoch = self.frames_since_epoch.saturating_add(1);
+            if self.frames_since_epoch >= epoch {
+                for t in self.tables.values_mut() {
+                    t.delivered_this_epoch = 0;
+                }
+                trace!(epoch, "reset per-table fanout epoch counters");
+                self.frames_since_epoch = 0;
+            }
+        }
+    }
+
+    #[inline]
+    fn should_yield_frame(&self, frame_steps: u32) -> bool {
+        if let Some(cap) = self.config.per_frame_step_cap {
+            if frame_steps > cap {
+                debug!(cap, "per-frame step cap reached; yielding frame");
+                return true;
+            }
+        }
+        false
+    }
+
+    fn finalize_frame(
+        &mut self,
+        id: FrameId,
+        mut store: ConstraintStore,
+        export: bool,
+        table_for: Option<CallPattern>,
+    ) -> Result<FinalizeAction, EngineError> {
+        // Record a completed answer (bindings and any accumulated premises)
+        let t_final_start = std::time::Instant::now();
+        // Materialize any pending custom deductions as head proof steps
+        if !store.pending_custom.is_empty() {
+            let t_mat_start = std::time::Instant::now();
+            let mut pendings = std::mem::take(&mut store.pending_custom);
+            // Process innermost first to compress bodies into heads iteratively
+            while let Some(p) = pendings.pop() {
+                if let Some(head) =
+                    crate::util::instantiate_custom(&p.rule_id, &p.head_args, &store.bindings)
+                {
+                    // Take the body premises added after this pending head was registered
+                    let body = store.premises.split_off(p.base_premises_len);
+                    store.premises.push((
+                        head,
+                        crate::types::OpTag::CustomDeduction {
+                            rule_id: p.rule_id.clone(),
+                            premises: body,
+                        },
+                    ));
+                }
+            }
+            log_if_slow(
+                "finalize: materialize pending custom heads",
+                t_mat_start,
+                50,
+            );
+        }
+        // Publish any custom heads to tables before recording the answer
+        let t_pub_start = std::time::Instant::now();
+        let early = self.publish_custom_answers(&store);
+        log_if_slow("finalize: publish_custom_answers", t_pub_start, 50);
+        if early {
+            return Ok(FinalizeAction::EarlyExit);
+        }
+        if export {
+            // Recompute accurate operation count for pruning/metrics from full proof DAG
+            let (ops, _inputs) = crate::util::proof_cost(&store);
+            store.operation_count = ops;
+            debug!("exporting completed answer");
+            self.answers.push(store);
+            // Update best bound on operations for branch-and-bound
+            let (ops, inputs) = self
+                .answers
+                .last()
+                .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
+                .unwrap_or((0, 0));
+            self.best_ops_so_far = Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+            self.best_inputs_so_far =
+                Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
+            // Early exit mode: return immediately after the first exported answer
+            if self.config.early_exit_on_first_answer {
+                return Ok(FinalizeAction::EarlyExit);
+            }
+        } else {
+            // Not exported: still retain store for table publishing above
+        }
+        if let Some(pat) = table_for.clone() {
+            self.maybe_complete_table(&pat);
+        }
+        let dt_total = t_final_start.elapsed();
+        if dt_total.as_millis() > 100 {
+            trace!(
+                frame_id = id,
+                ms = dt_total.as_millis(),
+                "finalize: total finalize time"
+            );
+        }
+        Ok(FinalizeAction::Continue)
     }
 
     fn expand_custom_rule_to_producer(
@@ -971,6 +652,179 @@ impl<'a> Engine<'a> {
         })
     }
 
+    #[inline]
+    fn instantiate_call_args(
+        &self,
+        store: &ConstraintStore,
+        call_args: &[StatementTmplArg],
+    ) -> Vec<StatementTmplArg> {
+        call_args
+            .iter()
+            .cloned()
+            .map(|a| match a {
+                StatementTmplArg::Wildcard(w) => store
+                    .bindings
+                    .get(&w.index)
+                    .cloned()
+                    .map(StatementTmplArg::Literal)
+                    .unwrap_or(StatementTmplArg::Wildcard(w)),
+                other => other,
+            })
+            .collect()
+    }
+
+    // Returns true if the custom goal was handled (either pruned or tabled), indicating the caller should break.
+    fn handle_custom_goal(
+        &mut self,
+        idx: usize,
+        goals: &[StatementTmpl],
+        store: &ConstraintStore,
+    ) -> bool {
+        let g = &goals[idx];
+        let Predicate::Custom(ref cpr) = g.pred else {
+            return false;
+        };
+        let inst_call_args = self.instantiate_call_args(store, &goals[idx].args);
+        let pattern = CallPattern::from_call(cpr.clone(), &inst_call_args);
+        // Enforce head arguments policy: only literals or wildcards are allowed
+        let head_args_ok = inst_call_args.iter().all(|a| {
+            matches!(
+                a,
+                StatementTmplArg::Literal(_) | StatementTmplArg::Wildcard(_)
+            )
+        });
+        if !head_args_ok {
+            debug!(
+                ?pattern,
+                "rejecting custom call: head args must be literals or wildcards"
+            );
+            return true;
+        }
+        if self.config.branch_and_bound_on_ops
+            && self.custom_call_exceeds_bound(cpr, goals, idx, store)
+        {
+            debug!(?pattern, "pruning custom call: LB exceeds best bound");
+            return true;
+        }
+        let is_new = !self.tables.contains_key(&pattern);
+        let _ = self
+            .tables
+            .entry(pattern.clone())
+            .or_insert_with(Table::new);
+        if is_new {
+            debug!(predicate = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), "creating new table and spawning producers");
+            let rules = self.rules.get(cpr).to_vec();
+            if rules.is_empty() {
+                if let Some(t) = self.tables.get_mut(&pattern) {
+                    t.is_complete = true;
+                }
+                trace!(?pattern, "no rules for predicate; table marked complete");
+            } else {
+                for rule in rules.iter() {
+                    if let Some(mut prod) =
+                        self.expand_custom_rule_to_producer(goals, store, idx, cpr, rule)
+                    {
+                        trace!("enqueuing rule-body producer");
+                        prod.table_for = Some(pattern.clone());
+                        self.sched.enqueue(prod);
+                    }
+                }
+            }
+        }
+        trace!(?pattern, "registering waiter for custom call");
+        let waiter = Waiter::from_call(cpr.clone(), idx, goals, store, &inst_call_args);
+        let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
+        let mut to_deliver: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> = Vec::new();
+        let mut delivered_any = false;
+        if let Some(t) = self.tables.get(&pattern) {
+            let (sel, _inc, exceeded) =
+                select_answers_for_waiter(t, &waiter, cap, t.delivered_this_epoch);
+            to_deliver = sel;
+            delivered_any = !to_deliver.is_empty();
+            if exceeded {
+                debug!(
+                    ?pattern,
+                    cap, "per-table fanout cap reached during waiter streaming"
+                );
+            }
+        }
+        for (tuple, tag) in to_deliver.iter() {
+            trace!("stream existing table answer to caller");
+            let cont = waiter.continuation_frame(self, tuple, tag.clone());
+            self.sched.enqueue(cont);
+        }
+        if let Some(t) = self.tables.get_mut(&pattern) {
+            let inc = to_deliver.len() as u32;
+            if inc > 0 {
+                t.delivered_this_epoch = t.delivered_this_epoch.saturating_add(inc);
+            }
+            if t.is_complete {
+                trace!(?pattern, "table complete; not storing waiter");
+                if !delivered_any {
+                    debug!(
+                        ?pattern,
+                        "dropping caller: complete table yielded no matches"
+                    );
+                }
+            } else {
+                let is_dup = t.waiters.iter().any(|w| w.same_signature(&waiter));
+                if is_dup {
+                    trace!(?pattern, "duplicate waiter ignored");
+                } else {
+                    t.waiters.push(waiter);
+                }
+            }
+        }
+        // handled (tabled); caller should break
+        true
+    }
+
+    fn handle_native_goal(
+        &mut self,
+        goal_pred: pod2::middleware::NativePredicate,
+        tmpl_args: &[StatementTmplArg],
+        g: &StatementTmpl,
+        store: &ConstraintStore,
+        union_waits: &mut std::collections::HashSet<usize>,
+        any_stmt_for_park: &mut Option<StatementTmpl>,
+    ) -> Result<Vec<Choice>, EngineError> {
+        trace!(pred = ?goal_pred, args = ?tmpl_args, "processing native goal");
+        let handlers = self.registry.get(goal_pred);
+        if handlers.is_empty() {
+            debug!(
+                ?goal_pred,
+                "no handlers registered for native predicate; aborting run"
+            );
+            return Err(EngineError::MissingHandlers {
+                predicate: goal_pred,
+            });
+        }
+        let mut local_choices: Vec<Choice> = Vec::new();
+        for h in handlers {
+            match h.propagate(tmpl_args, &mut store.clone(), self.edb) {
+                PropagatorResult::Entailed { bindings, op_tag } => {
+                    local_choices.push(Choice { bindings, op_tag })
+                }
+                PropagatorResult::Choices { mut alternatives } => {
+                    local_choices.append(&mut alternatives)
+                }
+                PropagatorResult::Suspend { on } => {
+                    if any_stmt_for_park.is_none() {
+                        *any_stmt_for_park = Some(g.clone());
+                    }
+                    for w in on {
+                        if !store.bindings.contains_key(&w) {
+                            union_waits.insert(w);
+                        }
+                    }
+                }
+                PropagatorResult::Contradiction => {}
+            }
+        }
+        trace!(pred = ?goal_pred, choices = local_choices.len(), waits = ?union_waits, "native goal outcome");
+        Ok(local_choices)
+    }
+
     fn publish_custom_answers(&mut self, final_store: &crate::types::ConstraintStore) -> bool {
         let t_start = std::time::Instant::now();
         let mut heads_scanned = 0usize;
@@ -1004,22 +858,14 @@ impl<'a> Engine<'a> {
                         }
                     }
                     if let Some(entry) = self.tables.get(&pat) {
-                        let budget_left = cap.saturating_sub(entry.delivered_this_epoch);
-                        if budget_left == 0 {
-                            exceeded = true;
-                        } else {
-                            let mut remaining = budget_left;
-                            for w in entry.waiters.iter().cloned() {
-                                if remaining == 0 {
-                                    break;
-                                }
-                                if w.matches(&key_vec) {
-                                    to_deliver.push(w);
-                                    remaining -= 1;
-                                }
-                            }
-                            exceeded = remaining == 0 && cap != u32::MAX;
-                        }
+                        let (sel, inc, exc) = select_waiters_for_answer(
+                            entry,
+                            &key_vec,
+                            cap,
+                            entry.delivered_this_epoch,
+                        );
+                        to_deliver = sel;
+                        exceeded = exc;
                     }
                     // Now mutate: insert answer and update delivered count; enqueue outside of borrow
                     if let Some(entry) = self.tables.get_mut(&pat) {
@@ -1048,7 +894,7 @@ impl<'a> Engine<'a> {
                             // Directly record the answer and exit without further scheduling
                             let mut store = cont.store.clone();
                             // Recompute accurate proof costs before exporting
-                            let (ops, inputs) = crate::util::proof_cost(&store);
+                            let (ops, _inputs) = crate::util::proof_cost(&store);
                             store.operation_count = ops;
                             self.answers.push(store);
                             // Update best bounds (ops and inputs) for branch-and-bound
@@ -1111,6 +957,120 @@ impl<'a> Engine<'a> {
         max_idx
     }
 
+    #[inline]
+    fn dedup_and_score_choices(&self, choices: Vec<Choice>) -> Vec<Choice> {
+        use std::collections::BTreeMap;
+
+        use crate::types::OpTag;
+        // Stable map keyed by a canonical string of bindings
+        let mut best: BTreeMap<String, (i32, Choice)> = BTreeMap::new();
+        for ch in choices.into_iter() {
+            let mut b = ch.bindings.clone();
+            b.sort_by_key(|(i, _)| *i);
+            let key = {
+                let mut s = String::new();
+                for (i, v) in b.iter() {
+                    use hex::ToHex;
+                    s.push_str(&format!("{i}:"));
+                    let raw = v.raw();
+                    s.push_str(&format!("{}|", raw.encode_hex::<String>()));
+                }
+                s
+            };
+            let score = match &ch.op_tag {
+                OpTag::Derived { premises } => {
+                    if premises
+                        .iter()
+                        .any(|(_, tag)| matches!(tag, OpTag::GeneratedContains { .. }))
+                    {
+                        3
+                    } else if premises
+                        .iter()
+                        .any(|(_, tag)| matches!(tag, OpTag::CopyStatement { .. }))
+                    {
+                        2
+                    } else {
+                        1
+                    }
+                }
+                OpTag::GeneratedContains { .. } => 3,
+                OpTag::CopyStatement { .. } => 2,
+                _ => 1,
+            };
+            match best.get_mut(&key) {
+                Some((best_score, _)) if *best_score >= score => {}
+                _ => {
+                    best.insert(key, (score, ch));
+                }
+            }
+        }
+        // Use the best choices in a stable order
+        best.into_iter().map(|(_, (_, ch))| ch).collect()
+    }
+
+    fn enqueue_continuations_for_choices(
+        &mut self,
+        choices: Vec<Choice>,
+        chosen_goal_idx: usize,
+        goals: &[StatementTmpl],
+        store: &ConstraintStore,
+        export: bool,
+        table_for: Option<CallPattern>,
+    ) {
+        for ch in choices.into_iter() {
+            let mut cont_store = store.clone();
+            for (w, v) in ch.bindings.iter().cloned() {
+                cont_store.bindings.insert(w, v);
+            }
+            // Wake any parked frames that were waiting on these bindings
+            for woke in self.sched.wake_with_bindings(&ch.bindings) {
+                self.sched.enqueue(woke);
+            }
+            let mut ng = goals.to_vec();
+            ng.remove(chosen_goal_idx);
+            // Record head proof step for this goal in the continuation store
+            let head_tmpl = &goals[chosen_goal_idx];
+            if let Some(head) = crate::util::instantiate_goal(head_tmpl, &cont_store.bindings) {
+                // Record proof step and update optimization counters
+                let tag = ch.op_tag.clone();
+                record_head_step(&mut cont_store, head, tag.clone());
+            }
+            // Branch-and-bound pruning by POD budget using ops/inputs limits
+            if self.config.branch_and_bound_on_ops {
+                let (realized_ops, realized_inputs) = crate::util::proof_cost(&cont_store);
+                let remaining_native = ng
+                    .iter()
+                    .filter(|t| matches!(t.pred, Predicate::Native(_)))
+                    .count();
+                let remaining_custom = ng
+                    .iter()
+                    .filter(|t| matches!(t.pred, Predicate::Custom(_)))
+                    .count();
+                let exceeds = exceeds_best_pods_bound(
+                    &self.config,
+                    self.best_ops_so_far,
+                    self.best_inputs_so_far,
+                    realized_ops,
+                    realized_inputs,
+                    remaining_native,
+                    remaining_custom,
+                    0,
+                );
+                if exceeds {
+                    continue;
+                }
+            }
+            let cont = Frame {
+                id: self.sched.new_id(),
+                goals: ng,
+                store: cont_store,
+                export,
+                table_for: table_for.clone(),
+            };
+            self.sched.enqueue(cont);
+        }
+    }
+
     fn maybe_complete_table(&mut self, pat: &CallPattern) {
         // If there are no runnable or parked frames producing for this pattern, mark complete and prune waiters
         let has_runnable = self
@@ -1131,8 +1091,150 @@ impl<'a> Engine<'a> {
             }
         }
     }
+
+    #[inline]
+    fn custom_call_exceeds_bound(
+        &self,
+        cpr: &pod2::middleware::CustomPredicateRef,
+        goals: &[StatementTmpl],
+        current_idx: usize,
+        store: &ConstraintStore,
+    ) -> bool {
+        let (realized_ops, realized_inputs) = crate::util::proof_cost(store);
+        // Structural LB: minimal body cost across rules (native steps + subcalls)
+        let rules = self.rules.get(cpr);
+        let min_body_cost = if rules.is_empty() {
+            1usize
+        } else {
+            rules
+                .iter()
+                .map(|r| r.min_native_cost + r.min_subcall_count)
+                .min()
+                .unwrap_or(1)
+        };
+        let remaining_native = goals
+            .iter()
+            .skip(current_idx + 1)
+            .filter(|t| matches!(t.pred, Predicate::Native(_)))
+            .count();
+        let remaining_custom = goals
+            .iter()
+            .skip(current_idx + 1)
+            .filter(|t| matches!(t.pred, Predicate::Custom(_)))
+            .count();
+        let extra_lb_ops = store.accumulated_lb_ops + min_body_cost;
+        exceeds_best_pods_bound(
+            &self.config,
+            self.best_ops_so_far,
+            self.best_inputs_so_far,
+            realized_ops,
+            realized_inputs,
+            remaining_native,
+            remaining_custom,
+            extra_lb_ops,
+        )
+    }
 }
 
+#[inline]
+fn record_head_step(
+    store: &mut crate::types::ConstraintStore,
+    head: pod2::middleware::Statement,
+    tag: crate::types::OpTag,
+) {
+    store.premises.push((head, tag.clone()));
+    store.operation_count = store.operation_count.saturating_add(1);
+    if let crate::types::OpTag::CopyStatement { source } = tag {
+        store.input_pods.insert(source);
+    }
+}
+
+#[inline]
+fn log_if_slow(label: &str, start: std::time::Instant, threshold_ms: u128) {
+    let dt = start.elapsed();
+    if dt.as_millis() > threshold_ms {
+        trace!(ms = dt.as_millis(), label);
+    }
+}
+
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn exceeds_best_pods_bound(
+    cfg: &EngineConfig,
+    best_ops: Option<usize>,
+    best_inputs: Option<usize>,
+    realized_ops: usize,
+    realized_inputs: usize,
+    remaining_native: usize,
+    remaining_custom: usize,
+    extra_lb_ops: usize,
+) -> bool {
+    let lb_ops = realized_ops + extra_lb_ops + remaining_native + remaining_custom;
+    let ops_per_pod = cfg.ops_per_pod.max(1);
+    let inputs_per_pod = cfg.inputs_per_pod.max(1);
+    let pods_lb_ops = lb_ops.div_ceil(ops_per_pod);
+    let pods_lb_inputs = realized_inputs.div_ceil(inputs_per_pod);
+    let pods_lb = std::cmp::max(pods_lb_ops, pods_lb_inputs);
+    match (best_ops, best_inputs) {
+        (Some(bo), Some(bi)) => {
+            let best_pods = std::cmp::max(bo.div_ceil(ops_per_pod), bi.div_ceil(inputs_per_pod));
+            pods_lb > best_pods
+        }
+        _ => false,
+    }
+}
+
+#[inline]
+fn select_answers_for_waiter(
+    table: &Table,
+    waiter: &Waiter,
+    cap: u32,
+    delivered_this_epoch: u32,
+) -> (Vec<(Vec<RawOrdValue>, crate::types::OpTag)>, u32, bool) {
+    let mut budget_left = cap.saturating_sub(delivered_this_epoch);
+    let mut to_deliver: Vec<(Vec<RawOrdValue>, crate::types::OpTag)> = Vec::new();
+    if budget_left == 0 {
+        return (to_deliver, 0, cap != u32::MAX);
+    }
+    for (tuple, tag) in table.answers.iter() {
+        if budget_left == 0 {
+            break;
+        }
+        if waiter.matches(tuple) {
+            to_deliver.push((tuple.clone(), tag.clone()));
+            budget_left -= 1;
+        }
+    }
+    let inc = to_deliver.len() as u32;
+    let exceeded = budget_left == 0 && cap != u32::MAX;
+    (to_deliver, inc, exceeded)
+}
+
+#[inline]
+fn select_waiters_for_answer(
+    table: &Table,
+    key_vec: &[RawOrdValue],
+    cap: u32,
+    delivered_this_epoch: u32,
+) -> (Vec<Waiter>, u32, bool) {
+    let mut budget_left = cap.saturating_sub(delivered_this_epoch);
+    let mut to_deliver: Vec<Waiter> = Vec::new();
+    if budget_left == 0 {
+        return (to_deliver, 0, cap != u32::MAX);
+    }
+    for w in table.waiters.iter().cloned() {
+        if budget_left == 0 {
+            break;
+        }
+        if w.matches(key_vec) {
+            to_deliver.push(w);
+            budget_left -= 1;
+        }
+    }
+    let inc = to_deliver.len() as u32;
+    let exceeded = budget_left == 0 && cap != u32::MAX;
+    (to_deliver, inc, exceeded)
+}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SchedulePolicy {
     DepthFirst,
@@ -1313,7 +1415,7 @@ impl Waiter {
             self.pred.clone(),
             tuple.iter().map(|rv| rv.0.clone()).collect(),
         );
-        cont_store.premises.push((head_stmt, head_tag));
+        record_head_step(&mut cont_store, head_stmt, head_tag);
 
         let mut ng = self.goals.clone();
         // Remove the custom goal at goal_idx
@@ -1403,7 +1505,7 @@ impl Table {
 mod tests {
     use pod2::{
         lang::parse,
-        middleware::{containers::Dictionary, Key, Params, Signer, Value},
+        middleware::{containers::Dictionary, Key, Params, Value},
     };
     use tracing_subscriber::{fmt, EnvFilter};
 

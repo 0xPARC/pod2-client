@@ -528,9 +528,7 @@ fn order_custom_premises(
         let matched = premises.iter().find(|s| match (tmpl.pred(), (*s).clone()) {
             (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0)
-                    && arg_matches(&args[1], &a1)
-                    && arg_matches(&args[2], &a2)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1) && arg_matches(&args[2], a2)
             }
             (Predicate::BatchSelf(i), Stmt::Custom(sub_cpr, sub_args)) => {
                 if !(sub_cpr.batch == cpr.batch && sub_cpr.index == *i) {
@@ -556,31 +554,23 @@ fn order_custom_premises(
             (Predicate::Custom(exp_cpr), Stmt::Custom(sub_cpr, _)) => *sub_cpr == *exp_cpr,
             (Predicate::Native(NP::SignedBy), Stmt::SignedBy(a0, a1)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
             }
             (Predicate::Native(NP::Equal), Stmt::Equal(a0, a1)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
             }
             (Predicate::Native(NP::Lt), Stmt::Lt(a0, a1)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
             }
             (Predicate::Native(NP::LtEq), Stmt::LtEq(a0, a1)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
             }
             (Predicate::Native(NP::SumOf), Stmt::SumOf(a0, a1, a2)) => {
                 let args = tmpl.args();
-                arg_matches(&args[0], &a0)
-                    && arg_matches(&args[1], &a1)
-                    && arg_matches(&args[2], &a2)
-            }
-            (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], &a0)
-                    && arg_matches(&args[1], &a1)
-                    && arg_matches(&args[2], &a2)
+                arg_matches(&args[0], a0) && arg_matches(&args[1], a1) && arg_matches(&args[2], a2)
             }
             _ => false,
         });
