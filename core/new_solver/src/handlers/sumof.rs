@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Helper: classify an argument into a numeric int if possible, with premises when using AKs.
-enum NumArg {
+pub(super) enum NumArg {
     Ground {
         i: i64,
         premises: Vec<(Statement, OpTag)>,
@@ -28,7 +28,11 @@ fn int_from_value(v: &Value) -> Result<i64, ()> {
     i64::try_from(v.typed()).map_err(|_| ())
 }
 
-fn classify_num(arg: &StatementTmplArg, store: &ConstraintStore, edb: &dyn EdbView) -> NumArg {
+pub(super) fn classify_num(
+    arg: &StatementTmplArg,
+    store: &ConstraintStore,
+    edb: &dyn EdbView,
+) -> NumArg {
     match arg {
         StatementTmplArg::Literal(v) => match int_from_value(v) {
             Ok(i) => NumArg::Ground {

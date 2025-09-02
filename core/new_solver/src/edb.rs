@@ -21,6 +21,7 @@ pub enum BinaryPred {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TernaryPred {
     SumOf,
+    ProductOf,
     Contains,
 }
 
@@ -168,6 +169,8 @@ pub struct MockEdbView {
     pub full_dict_objs: HashMap<Hash, Dictionary>,
     /// SumOf rows available to copy.
     pub sum_rows: Vec<(Statement, PodRef)>,
+    /// ProductOf rows available to copy.
+    pub product_rows: Vec<(Statement, PodRef)>,
     /// SignedBy rows available to copy.
     pub signed_by_rows: Vec<(Statement, PodRef)>,
     /// NotContains copied rows: Statement::NotContains(root,key)
@@ -344,6 +347,61 @@ impl MockEdbView {
         self.sum_rows.push((st, src));
     }
 
+    /// Register a ProductOf row for copying.
+    pub fn add_product_row_vals(&mut self, a: Value, b: Value, c: Value, src: PodRef) {
+        let st = Statement::ProductOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.product_rows.push((st, src));
+    }
+    pub fn add_product_row_ak_val_val(
+        &mut self,
+        root: Hash,
+        key: Key,
+        b: Value,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::ProductOf(
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(b),
+            ValueRef::Literal(c),
+        );
+        self.product_rows.push((st, src));
+    }
+    pub fn add_product_row_val_ak_val(
+        &mut self,
+        a: Value,
+        root: Hash,
+        key: Key,
+        c: Value,
+        src: PodRef,
+    ) {
+        let st = Statement::ProductOf(
+            ValueRef::Literal(a),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+            ValueRef::Literal(c),
+        );
+        self.product_rows.push((st, src));
+    }
+    pub fn add_product_row_val_val_ak(
+        &mut self,
+        a: Value,
+        b: Value,
+        root: Hash,
+        key: Key,
+        src: PodRef,
+    ) {
+        let st = Statement::ProductOf(
+            ValueRef::Literal(a),
+            ValueRef::Literal(b),
+            ValueRef::Key(AnchoredKey::new(root, key)),
+        );
+        self.product_rows.push((st, src));
+    }
+
     /// Register a ground custom head tuple with provenance.
     pub fn add_custom_row(&mut self, pred: CustomPredicateRef, args: Vec<Value>, src: PodRef) {
         self.custom_rows
@@ -429,12 +487,13 @@ impl EdbView for MockEdbView {
         use pod2::middleware::Statement::*;
         let rows: &Vec<(Statement, PodRef)> = match pred {
             TernaryPred::SumOf => &self.sum_rows,
-            // Contains is indexed separately in MockEdbView; return empty here.
+            TernaryPred::ProductOf => &self.product_rows,
+            // Contains rows are materialized via contains_* helpers; skip here.
             TernaryPred::Contains => return Vec::new(),
         };
         rows.iter()
             .filter(|(st, _)| match st {
-                SumOf(la, lb, lc) => {
+                SumOf(la, lb, lc) | ProductOf(la, lb, lc) => {
                     Self::matches_arg(la, &a)
                         && Self::matches_arg(lb, &b)
                         && Self::matches_arg(lc, &c)
@@ -596,6 +655,7 @@ pub struct ImmutableEdb {
     // Optional copied rows for other predicates (kept for parity/extension)
     not_contains_rows: Vec<(Statement, PodRef)>,
     sum_rows: Vec<(Statement, PodRef)>,
+    product_rows: Vec<(Statement, PodRef)>,
     signed_by_rows: Vec<(Statement, PodRef)>,
     signed_dicts: std::collections::BTreeMap<Hash, SignedDict>,
     // Custom statement rows: predicate key (batch id + index) -> list of (args, PodRef)
@@ -715,6 +775,10 @@ impl ImmutableEdbBuilder {
                 Stmt::SumOf(_, _, _) => {
                     self.inner.sum_rows.push((st.clone(), pod_ref.clone()));
                 }
+                // ProductOf (copied)
+                Stmt::ProductOf(_, _, _) => {
+                    self.inner.product_rows.push((st.clone(), pod_ref.clone()));
+                }
                 // Lt/LtEq copied rows
                 Stmt::Lt(_, _) => {
                     self.inner.lt_rows.push((st.clone(), pod_ref.clone()));
@@ -816,6 +880,7 @@ impl EdbView for ImmutableEdb {
         use pod2::middleware::Statement::*;
         let rows: &Vec<(Statement, PodRef)> = match pred {
             TernaryPred::SumOf => &self.sum_rows,
+            TernaryPred::ProductOf => &self.product_rows,
             // Contains rows are materialized via contains_* helpers; skip here.
             TernaryPred::Contains => return Vec::new(),
         };
@@ -834,7 +899,9 @@ impl EdbView for ImmutableEdb {
         }
         rows.iter()
             .filter(|(st, _)| match st {
-                SumOf(la, lb, lc) => matches(la, &a) && matches(lb, &b) && matches(lc, &c),
+                SumOf(la, lb, lc) | ProductOf(la, lb, lc) => {
+                    matches(la, &a) && matches(lb, &b) && matches(lc, &c)
+                }
                 _ => false,
             })
             .cloned()
