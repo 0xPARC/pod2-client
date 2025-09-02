@@ -56,6 +56,13 @@ where
     let mut builder = MainPodBuilder::new(params, vd_set);
     // Resolve required input pods from the EDB using the answer's provenance
     let required = edb.required_pods_for_answer(answer);
+    if required.len() > params.max_input_pods {
+        return Err(format!(
+            "replay requires {} input pods; exceeds max_input_pods {}",
+            required.len(),
+            params.max_input_pods
+        ));
+    }
     for r in required.iter() {
         let pod = edb.resolve_pod(r).ok_or_else(|| {
             format!(
@@ -164,6 +171,7 @@ where
     }
 
     // Emit operations following topological order
+    let mut inserted_ops: usize = 0;
     for op_key in topo_ops.into_iter() {
         let tag = match dag.op_nodes.get(&op_key) {
             Some(t) => t,
@@ -187,11 +195,19 @@ where
 
         // Map (tag, head, premises) -> frontend Operation
         if let Some(op) = map_to_operation(tag, head_stmt, &premise_stmts, edb)? {
+            if inserted_ops + 1 > params.max_statements {
+                return Err(format!(
+                    "replay requires {} operations; exceeds max_statements {}",
+                    inserted_ops + 1,
+                    params.max_statements
+                ));
+            }
             let public = public_selector(head_stmt);
             // Insert operation as private to ensure an earlier source for public copies,
             // then mark as public if selected.
             println!("op: {op}");
             let st = builder.priv_op(op).map_err(|e| e.to_string())?;
+            inserted_ops += 1;
             if public {
                 builder.reveal(&st);
             }
