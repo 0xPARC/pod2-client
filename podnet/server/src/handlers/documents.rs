@@ -361,7 +361,9 @@ pub async fn publish_document(
                 StatusCode::INTERNAL_SERVER_ERROR
             })?
             .ok_or(StatusCode::NOT_FOUND)?;
-        let thread_root_post_id = parent_post.id.unwrap();
+        let thread_root_post_id = parent_post
+            .thread_root_post_id
+            .unwrap_or(parent_post.id.unwrap());
         state
             .db
             .set_post_thread_links(

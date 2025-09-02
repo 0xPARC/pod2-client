@@ -69,6 +69,7 @@ pub struct Post {
     pub id: Option<i64>,
     pub created_at: Option<String>,
     pub last_edited_at: Option<String>,
+    pub thread_root_post_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

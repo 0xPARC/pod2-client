@@ -79,8 +79,9 @@ impl Database {
 
     pub fn get_post(&self, id: i64) -> Result<Option<Post>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt =
-            conn.prepare("SELECT id, created_at, last_edited_at FROM posts WHERE id = ?1")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, created_at, last_edited_at, thread_root_post_id FROM posts WHERE id = ?1",
+        )?;
 
         let post = stmt
             .query_row([id], |row| {
@@ -88,6 +89,7 @@ impl Database {
                     id: Some(row.get(0)?),
                     created_at: Some(row.get(1)?),
                     last_edited_at: Some(row.get(2)?),
+                    thread_root_post_id: Some(row.get(3)?),
                 })
             })
             .optional()?;
@@ -98,7 +100,7 @@ impl Database {
     pub fn get_all_posts(&self) -> Result<Vec<Post>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, created_at, last_edited_at FROM posts ORDER BY last_edited_at DESC",
+            "SELECT id, created_at, last_edited_at, thread_root_post_id FROM posts ORDER BY last_edited_at DESC",
         )?;
 
         let posts = stmt
@@ -107,6 +109,7 @@ impl Database {
                     id: Some(row.get(0)?),
                     created_at: Some(row.get(1)?),
                     last_edited_at: Some(row.get(2)?),
+                    thread_root_post_id: Some(row.get(3)?),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
