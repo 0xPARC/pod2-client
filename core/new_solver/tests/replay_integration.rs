@@ -1,17 +1,15 @@
-use std::collections::{BTreeMap, HashMap};
-
 use pod2::{
     backends::plonky2::{
         mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signer::Signer,
     },
     examples::MOCK_VD_SET,
-    frontend::{MainPod, MainPodBuilder, SignedDictBuilder},
+    frontend::{MainPodBuilder, SignedDictBuilder},
     middleware::{containers::Dictionary, AnchoredKey, Key, Params, Statement, Value, ValueRef},
 };
 use pod2_new_solver::{
     build_pod_from_answer_top_level_public,
     edb::MockEdbView,
-    types::{ConstraintStore, OpTag, PodRef},
+    types::{ConstraintStore, OpTag},
 };
 
 #[test]
@@ -84,16 +82,12 @@ fn replay_builds_pod_with_equal_ak_ak_and_signedby() {
     edb.add_full_dict(d2.clone());
     edb.add_signed_dict(sd.clone());
 
-    // No input pods needed
-    let input_pods: HashMap<PodRef, MainPod> = HashMap::new();
-
     // Build the Pod by replaying the answer
     let pod = build_pod_from_answer_top_level_public(
         &store,
         &params,
         vd,
         |b: &MainPodBuilder| b.prove(&MockProver {}).map_err(|e| format!("{e}")),
-        &input_pods,
         &edb,
     )
     .expect("replay failed");

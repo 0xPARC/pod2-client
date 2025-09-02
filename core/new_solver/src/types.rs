@@ -48,6 +48,21 @@ pub enum OpTag {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PodRef(pub Hash);
 
+impl std::cmp::Ord for PodRef {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use hex::ToHex;
+        let a: String = self.0.encode_hex();
+        let b: String = other.0.encode_hex();
+        a.cmp(&b)
+    }
+}
+
+impl std::cmp::PartialOrd for PodRef {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// Local constraint store per producer branch.
 #[derive(Clone, Debug, Default)]
 pub struct ConstraintStore {

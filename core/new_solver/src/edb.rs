@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
 use pod2::{
-    frontend::SignedDict,
-    middleware::{containers::Dictionary, AnchoredKey, Hash, Key, Statement, Value, ValueRef},
+    frontend::{MainPod, SignedDict},
+    middleware::{
+        containers::Dictionary, AnchoredKey, CustomPredicateRef, Hash, Key, Statement, Value,
+        ValueRef,
+    },
 };
 
-use crate::types::PodRef;
+use crate::types::{ConstraintStore, OpTag, PodRef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryPred {
@@ -88,6 +91,21 @@ pub trait EdbView: Send + Sync {
         Vec::new()
     }
 
+    /// Enumerate existing custom heads matching the literal mask.
+    /// `filters[i] = Some(v)` requires head arg i == v; `None` matches any.
+    fn custom_matches(
+        &self,
+        _pred: &CustomPredicateRef,
+        _filters: &[Option<Value>],
+    ) -> Vec<(Vec<Value>, PodRef)> {
+        Vec::new()
+    }
+
+    /// Convenience predicate: true if at least one custom head matches the filter mask.
+    fn custom_any_match(&self, pred: &CustomPredicateRef, filters: &[Option<Value>]) -> bool {
+        !self.custom_matches(pred, filters).is_empty()
+    }
+
     /// Lookup a SignedDict by its root commitment, if tracked by the EDB.
     fn signed_dict(&self, _root: &Hash) -> Option<SignedDict> {
         None
@@ -113,6 +131,19 @@ pub trait EdbView: Send + Sync {
     /// If we know the full dictionary for `root`, return Some(true) if key absent, Some(false) if present, None if unknown.
     fn full_dict_absence(&self, _root: &Hash, _key: &Key) -> Option<bool> {
         None
+    }
+
+    /// Resolve a stored MainPod by its PodRef, if available.
+    fn resolve_pod(&self, _id: &PodRef) -> Option<MainPod> {
+        None
+    }
+
+    /// Compute the minimal set of PodRefs required to justify Copy-style proofs in an answer.
+    fn required_pods_for_answer(
+        &self,
+        _ans: &ConstraintStore,
+    ) -> std::collections::BTreeSet<PodRef> {
+        std::collections::BTreeSet::new()
     }
 }
 
@@ -143,6 +174,8 @@ pub struct MockEdbView {
     pub not_contains_rows: Vec<(Statement, PodRef)>,
     /// Signed dictionaries indexed by their root commitment
     pub signed_dicts: HashMap<Hash, SignedDict>,
+    /// Custom statement rows: predicate key (batch id + index) -> list of (args, PodRef)
+    custom_rows: std::collections::BTreeMap<CprKey, Vec<(Vec<Value>, PodRef)>>,
 }
 
 fn key_hash(k: &Key) -> Hash {
@@ -311,6 +344,14 @@ impl MockEdbView {
         self.sum_rows.push((st, src));
     }
 
+    /// Register a ground custom head tuple with provenance.
+    pub fn add_custom_row(&mut self, pred: CustomPredicateRef, args: Vec<Value>, src: PodRef) {
+        self.custom_rows
+            .entry(CprKey::from(&pred))
+            .or_default()
+            .push((args, src));
+    }
+
     /// Register a SignedDict; also index its full dictionary for GeneratedContains.
     pub fn add_signed_dict(&mut self, signed: SignedDict) {
         let root = signed.dict.commitment();
@@ -351,6 +392,32 @@ impl EdbView for MockEdbView {
             })
             .cloned()
             .collect()
+    }
+
+    fn custom_matches(
+        &self,
+        pred: &CustomPredicateRef,
+        filters: &[Option<Value>],
+    ) -> Vec<(Vec<Value>, PodRef)> {
+        let rows = match self.custom_rows.get(&CprKey::from(pred)) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let mut out = Vec::new();
+        'row: for (args, src) in rows.iter() {
+            if args.len() != filters.len() {
+                continue;
+            }
+            for (a, f) in args.iter().zip(filters.iter()) {
+                if let Some(v) = f {
+                    if a.raw() != v.raw() {
+                        continue 'row;
+                    }
+                }
+            }
+            out.push((args.clone(), src.clone()));
+        }
+        out
     }
     fn query_ternary(
         &self,
@@ -531,6 +598,26 @@ pub struct ImmutableEdb {
     sum_rows: Vec<(Statement, PodRef)>,
     signed_by_rows: Vec<(Statement, PodRef)>,
     signed_dicts: std::collections::BTreeMap<Hash, SignedDict>,
+    // Custom statement rows: predicate key (batch id + index) -> list of (args, PodRef)
+    custom_rows: std::collections::BTreeMap<CprKey, Vec<(Vec<Value>, PodRef)>>,
+    // Stored pods by id for replay
+    pods: std::collections::BTreeMap<PodRef, MainPod>,
+}
+
+/// Ordered key for indexing CustomPredicateRef by (batch_id, index)
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct CprKey {
+    batch_id: Hash,
+    index: usize,
+}
+
+impl From<&CustomPredicateRef> for CprKey {
+    fn from(cpr: &CustomPredicateRef) -> Self {
+        Self {
+            batch_id: cpr.batch.id(),
+            index: cpr.index,
+        }
+    }
 }
 
 pub struct ImmutableEdbBuilder {
@@ -589,17 +676,18 @@ impl ImmutableEdbBuilder {
         self.inner
     }
 
-    /// Ingest a set of ground statements from a MainPod (identified by PodRef).
-    /// This is a lightweight normalization step that populates Equal/Contains/full-dict indices.
-    pub fn add_main_pod(mut self, pod: PodRef, statements: &[Statement]) -> Self {
+    /// Ingest a MainPod: store it and index its public statements and dictionaries.
+    pub fn add_main_pod(mut self, pod: &MainPod) -> Self {
         use pod2::middleware::{Statement as Stmt, TypedValue};
-        for st in statements.iter() {
+        let pod_ref = PodRef(pod.id());
+        self.inner.pods.insert(pod_ref.clone(), pod.clone());
+        for st in pod.public_statements.iter() {
             match st {
                 // Equal rows (copyable)
                 Stmt::Equal(ValueRef::Key(_), ValueRef::Key(_))
                 | Stmt::Equal(ValueRef::Key(_), ValueRef::Literal(_))
                 | Stmt::Equal(ValueRef::Literal(_), ValueRef::Key(_)) => {
-                    self.inner.equal_rows.push((st.clone(), pod.clone()));
+                    self.inner.equal_rows.push((st.clone(), pod_ref.clone()));
                 }
                 // Contains rows (copied): Contains(root_hash, key_string, value)
                 Stmt::Contains(
@@ -614,26 +702,38 @@ impl ImmutableEdbBuilder {
                             .contains_copied
                             .entry((root, key.hash()))
                             .or_default()
-                            .push((v.clone(), pod.clone()));
+                            .push((v.clone(), pod_ref.clone()));
                     }
                 }
                 // NotContains (copied)
                 Stmt::NotContains(ValueRef::Literal(_), ValueRef::Literal(_)) => {
-                    self.inner.not_contains_rows.push((st.clone(), pod.clone()));
+                    self.inner
+                        .not_contains_rows
+                        .push((st.clone(), pod_ref.clone()));
                 }
                 // SumOf (copied)
                 Stmt::SumOf(_, _, _) => {
-                    self.inner.sum_rows.push((st.clone(), pod.clone()));
+                    self.inner.sum_rows.push((st.clone(), pod_ref.clone()));
                 }
                 // Lt/LtEq copied rows
                 Stmt::Lt(_, _) => {
-                    self.inner.lt_rows.push((st.clone(), pod.clone()));
+                    self.inner.lt_rows.push((st.clone(), pod_ref.clone()));
                 }
                 Stmt::LtEq(_, _) => {
-                    self.inner.lte_rows.push((st.clone(), pod.clone()));
+                    self.inner.lte_rows.push((st.clone(), pod_ref.clone()));
                 }
                 Stmt::SignedBy(_, _) => {
-                    self.inner.signed_by_rows.push((st.clone(), pod.clone()));
+                    self.inner
+                        .signed_by_rows
+                        .push((st.clone(), pod_ref.clone()));
+                }
+                Stmt::Custom(pred, vals) => {
+                    let args = vals.clone();
+                    self.inner
+                        .custom_rows
+                        .entry(CprKey::from(pred))
+                        .or_default()
+                        .push((args, pod_ref.clone()));
                 }
                 _ => {}
             }
@@ -679,6 +779,32 @@ impl EdbView for ImmutableEdb {
             })
             .cloned()
             .collect()
+    }
+
+    fn custom_matches(
+        &self,
+        pred: &CustomPredicateRef,
+        filters: &[Option<Value>],
+    ) -> Vec<(Vec<Value>, PodRef)> {
+        let rows = match self.custom_rows.get(&CprKey::from(pred)) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let mut out = Vec::new();
+        'row: for (args, src) in rows.iter() {
+            if args.len() != filters.len() {
+                continue;
+            }
+            for (a, f) in args.iter().zip(filters.iter()) {
+                if let Some(v) = f {
+                    if a.raw() != v.raw() {
+                        continue 'row;
+                    }
+                }
+            }
+            out.push((args.clone(), src.clone()));
+        }
+        out
     }
     fn query_ternary(
         &self,
@@ -818,5 +944,34 @@ impl EdbView for ImmutableEdb {
 
     fn enumerate_signed_dicts(&self) -> Vec<SignedDict> {
         self.signed_dicts.values().cloned().collect()
+    }
+
+    fn resolve_pod(&self, id: &PodRef) -> Option<MainPod> {
+        self.pods.get(id).cloned()
+    }
+
+    fn required_pods_for_answer(
+        &self,
+        ans: &ConstraintStore,
+    ) -> std::collections::BTreeSet<PodRef> {
+        use std::collections::BTreeSet;
+        fn walk(tag: &OpTag, acc: &mut BTreeSet<PodRef>) {
+            match tag {
+                OpTag::CopyStatement { source } => {
+                    acc.insert(source.clone());
+                }
+                OpTag::Derived { premises } | OpTag::CustomDeduction { premises, .. } => {
+                    for (_, t) in premises.iter() {
+                        walk(t, acc);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut out = BTreeSet::new();
+        for (_stmt, tag) in ans.premises.iter() {
+            walk(tag, &mut out);
+        }
+        out
     }
 }

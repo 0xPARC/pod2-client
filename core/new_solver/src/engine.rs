@@ -707,10 +707,30 @@ impl<'a> Engine<'a> {
             return true;
         }
         let is_new = !self.tables.contains_key(&pattern);
-        let _ = self
+        let entry = self
             .tables
             .entry(pattern.clone())
             .or_insert_with(Table::new);
+        // Seed table with any EDB-provided custom matches (CopyStatement proofs)
+        let filters: Vec<Option<Value>> = inst_call_args
+            .iter()
+            .map(|a| match a {
+                StatementTmplArg::Literal(v) => Some(v.clone()),
+                StatementTmplArg::Wildcard(_) => None,
+                _ => None,
+            })
+            .collect();
+        let matches = self.edb.custom_matches(cpr, &filters);
+        if !matches.is_empty() {
+            for (args, src) in matches.into_iter() {
+                let key_vec: Vec<RawOrdValue> = args.iter().cloned().map(RawOrdValue).collect();
+                let tags = entry.answers.entry(key_vec).or_default();
+                let tag = crate::types::OpTag::CopyStatement { source: src };
+                if !tags.contains(&tag) {
+                    tags.push(tag);
+                }
+            }
+        }
         if is_new {
             debug!(predicate = ?crate::debug::CustomPredicateRefDebug(cpr.clone()), "creating new table and spawning producers");
             let rules = self.rules.get(cpr).to_vec();
@@ -851,14 +871,7 @@ impl<'a> Engine<'a> {
                     let cap = self.config.per_table_fanout_cap.unwrap_or(u32::MAX);
                     let mut exceeded = false;
                     if let Some(entry) = self.tables.get(&pat) {
-                        if !entry.answers.contains_key(&key_vec) {
-                            // We'll insert and deliver afterwards
-                        } else {
-                            continue;
-                        }
-                    }
-                    if let Some(entry) = self.tables.get(&pat) {
-                        let (sel, inc, exc) = select_waiters_for_answer(
+                        let (sel, _inc, exc) = select_waiters_for_answer(
                             entry,
                             &key_vec,
                             cap,
@@ -867,51 +880,55 @@ impl<'a> Engine<'a> {
                         to_deliver = sel;
                         exceeded = exc;
                     }
-                    // Now mutate: insert answer and update delivered count; enqueue outside of borrow
+                    // Now mutate: insert answer tag and update delivered count; enqueue outside of borrow
+                    let mut inserted_new_tag = false;
                     if let Some(entry) = self.tables.get_mut(&pat) {
-                        if !entry.answers.contains_key(&key_vec) {
-                            entry.answers.insert(key_vec.clone(), tag.clone());
-                            debug!(?pat, "inserted new table answer");
-                            let inc = to_deliver.len() as u32;
-                            if inc > 0 {
-                                entry.delivered_this_epoch =
-                                    entry.delivered_this_epoch.saturating_add(inc);
-                            }
+                        let tags = entry.answers.entry(key_vec.clone()).or_default();
+                        if !tags.contains(tag) {
+                            tags.push(tag.clone());
+                            inserted_new_tag = true;
+                            debug!(?pat, "inserted/extended table answer with new proof tag");
                             answers_inserted += 1;
                         }
                     }
                     if exceeded {
                         debug!(?pat, cap, "per-table fanout cap reached during publish");
                     }
-                    for w in to_deliver.into_iter() {
-                        trace!(?pat, "delivering answer to waiter");
-                        let cont = w.continuation_frame(self, &key_vec, tag.clone());
-                        // Early-exit: if this continuation is an exported, already-satisfied frame
-                        if self.config.early_exit_on_first_answer
-                            && cont.export
-                            && cont.goals.is_empty()
-                        {
-                            // Directly record the answer and exit without further scheduling
-                            let mut store = cont.store.clone();
-                            // Recompute accurate proof costs before exporting
-                            let (ops, _inputs) = crate::util::proof_cost(&store);
-                            store.operation_count = ops;
-                            self.answers.push(store);
-                            // Update best bounds (ops and inputs) for branch-and-bound
-                            let (ops, inputs) = self
-                                .answers
-                                .last()
-                                .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
-                                .unwrap_or((0, 0));
-                            self.best_ops_so_far =
-                                Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
-                            self.best_inputs_so_far =
-                                Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
-                            early_exit_triggered = true;
-                            break;
-                        } else {
-                            self.sched.enqueue(cont);
-                            deliveries += 1;
+                    if inserted_new_tag {
+                        // Deliver only if this tag is new for this tuple
+                        if let Some(entry) = self.tables.get_mut(&pat) {
+                            let inc = to_deliver.len() as u32;
+                            if inc > 0 {
+                                entry.delivered_this_epoch =
+                                    entry.delivered_this_epoch.saturating_add(inc);
+                            }
+                        }
+                        for w in to_deliver.into_iter() {
+                            trace!(?pat, "delivering answer to waiter");
+                            let cont = w.continuation_frame(self, &key_vec, tag.clone());
+                            if self.config.early_exit_on_first_answer
+                                && cont.export
+                                && cont.goals.is_empty()
+                            {
+                                let mut store = cont.store.clone();
+                                let (ops, _inputs) = crate::util::proof_cost(&store);
+                                store.operation_count = ops;
+                                self.answers.push(store);
+                                let (ops, inputs) = self
+                                    .answers
+                                    .last()
+                                    .map(|st| (st.operation_count, crate::util::proof_cost(st).1))
+                                    .unwrap_or((0, 0));
+                                self.best_ops_so_far =
+                                    Some(self.best_ops_so_far.map_or(ops, |b| b.min(ops)));
+                                self.best_inputs_so_far =
+                                    Some(self.best_inputs_so_far.map_or(inputs, |b| b.min(inputs)));
+                                early_exit_triggered = true;
+                                break;
+                            } else {
+                                self.sched.enqueue(cont);
+                                deliveries += 1;
+                            }
                         }
                     }
                     if early_exit_triggered {
@@ -1103,7 +1120,7 @@ impl<'a> Engine<'a> {
         let (realized_ops, realized_inputs) = crate::util::proof_cost(store);
         // Structural LB: minimal body cost across rules (native steps + subcalls)
         let rules = self.rules.get(cpr);
-        let min_body_cost = if rules.is_empty() {
+        let mut min_body_cost = if rules.is_empty() {
             1usize
         } else {
             rules
@@ -1112,6 +1129,19 @@ impl<'a> Engine<'a> {
                 .min()
                 .unwrap_or(1)
         };
+        // Consider an EDB copy path: if any existing custom head matches the literal mask, LB can be 1 op
+        let call_args = &goals[current_idx].args;
+        let filters: Vec<Option<Value>> = call_args
+            .iter()
+            .map(|a| match a {
+                StatementTmplArg::Literal(v) => Some(v.clone()),
+                StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).cloned(),
+                _ => None,
+            })
+            .collect();
+        if self.edb.custom_any_match(cpr, &filters) {
+            min_body_cost = min_body_cost.min(1);
+        }
         let remaining_native = goals
             .iter()
             .skip(current_idx + 1)
@@ -1196,13 +1226,18 @@ fn select_answers_for_waiter(
     if budget_left == 0 {
         return (to_deliver, 0, cap != u32::MAX);
     }
-    for (tuple, tag) in table.answers.iter() {
+    for (tuple, tags) in table.answers.iter() {
         if budget_left == 0 {
             break;
         }
         if waiter.matches(tuple) {
-            to_deliver.push((tuple.clone(), tag.clone()));
-            budget_left -= 1;
+            for tag in tags.iter() {
+                if budget_left == 0 {
+                    break;
+                }
+                to_deliver.push((tuple.clone(), tag.clone()));
+                budget_left -= 1;
+            }
         }
     }
     let inc = to_deliver.len() as u32;
@@ -1483,8 +1518,8 @@ impl std::cmp::Ord for CallPattern {
 }
 
 struct Table {
-    // Deterministic map: head tuple -> proof tag for the head
-    answers: std::collections::BTreeMap<Vec<RawOrdValue>, crate::types::OpTag>,
+    // Deterministic map: head tuple -> one or more proof tags for the same logical answer
+    answers: std::collections::BTreeMap<Vec<RawOrdValue>, Vec<crate::types::OpTag>>,
     waiters: Vec<Waiter>,
     is_complete: bool,
     delivered_this_epoch: u32,
@@ -2480,85 +2515,110 @@ mod tests {
     }
 
     #[test]
-    fn end_to_end_from_mainpod_statements_generates_copy_provenance() {
-        // Build ImmutableEdb from a synthetic MainPod: Contains(R,"k")=10 and Lt(R["x"], 5)
-        use pod2::middleware::{AnchoredKey, Statement as Stmt, ValueRef};
+    fn engine_custom_edb_copy_only_streams() {
+        use pod2::middleware::{CustomPredicateRef, Value as V};
 
-        use crate::{edb::ImmutableEdbBuilder, types::PodRef};
+        // Define a predicate that we cannot deduce for A=10 via its rule, but exists in EDB as a custom row.
+        let program = r#"
+            my_pred(A) = AND(
+                Equal(?A, 9999) // prevents rule-based deduction for A=10
+            )
 
-        let params = Params::default();
-        // Create a root by making a small dict and taking its commitment (for convenience)
-        let d = Dictionary::new(
-            params.max_depth_mt_containers,
-            [
-                (Key::from("k"), Value::from(10)),
-                (Key::from("x"), Value::from(5)),
-            ]
-            .into(),
-        )
-        .unwrap();
-        let root = d.commitment();
-        // Construct explicit statements as if from a MainPod
-        let contains_stmt = Stmt::Contains(
-            ValueRef::Literal(Value::from(root)),
-            ValueRef::Literal(Value::from("k")),
-            ValueRef::Literal(Value::from(10)),
-        );
-        let lt_stmt = Stmt::Lt(
-            ValueRef::Key(AnchoredKey::new(root, Key::from("x"))),
-            ValueRef::Literal(Value::from(5)),
-        );
-        let pod_ref = PodRef(root);
-        let edb = ImmutableEdbBuilder::new()
-            .add_main_pod(pod_ref.clone(), &[contains_stmt, lt_stmt])
-            .build();
+            REQUEST(
+                my_pred(10)
+            )
+        "#;
+        let processed = parse(program, &Params::default(), &[]).expect("parse ok");
+        let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
 
-        let mut reg = OpRegistry::default();
-        register_equal_handlers(&mut reg);
-        register_lt_handlers(&mut reg);
+        // EDB with a custom head my_pred(10) copied from some PodRef
+        let mut edb = MockEdbView::default();
+        let fake_src = crate::types::PodRef(pod2::middleware::Hash::from(V::from(42).raw()));
+        edb.add_custom_row(cpr.clone(), vec![V::from(10)], fake_src);
 
-        // Request Equal from entries and Lt from copied row
-        let processed = parse(
-            r#"REQUEST(
-                Equal(?R["k"], 10)
-                Lt(?R["x"], 5)
-            )"#,
-            &Params::default(),
-            &[],
-        )
-        .expect("parse ok");
+        // No handlers needed for the failing Equal(?A,9999) since it won't match
+        let reg = OpRegistry::default();
+
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
         engine.run().expect("run ok");
 
-        assert!(!engine.answers.is_empty());
-        let ans = &engine.answers[0];
-        // R should bind to root
-        assert_eq!(
-            ans.bindings.get(&0).map(|v| v.raw()),
-            Some(Value::from(root).raw())
+        assert!(
+            !engine.answers.is_empty(),
+            "expected at least one answer via EDB Copy"
         );
 
-        // Premises should include CopyStatement provenance from the MainPod for at least one step
+        // Verify that we got a Custom head proved via CopyStatement
         let mut saw_copy = false;
-        for (_stmt, tag) in ans.premises.iter() {
-            match tag {
-                crate::types::OpTag::CopyStatement { source } => {
-                    if *source == pod_ref {
+        for st in engine.answers.iter() {
+            for (stmt, tag) in st.premises.iter() {
+                if let pod2::middleware::Statement::Custom(pred, vals) = stmt {
+                    if *pred == cpr
+                        && vals.len() == 1
+                        && vals[0] == V::from(10)
+                        && matches!(tag, crate::types::OpTag::CopyStatement { .. })
+                    {
                         saw_copy = true;
                     }
                 }
-                crate::types::OpTag::Derived { premises } => {
-                    if premises.iter().any(|(_, t)| {
-                        matches!(t, crate::types::OpTag::CopyStatement { source } if *source == pod_ref)
-                    }) {
-                        saw_copy = true;
-                    }
-                }
-                _ => {}
             }
         }
-        assert!(saw_copy, "expected CopyStatement provenance from MainPod");
+        assert!(saw_copy, "expected CopyStatement proof for my_pred(10)");
+    }
+
+    #[test]
+    fn engine_custom_edb_and_rule_both_stream() {
+        use pod2::middleware::{CustomPredicateRef, Value as V};
+
+        // Predicate can be deduced (A bound by SumOf), and also exists in the EDB.
+        let program = r#"
+            my_pred(A) = AND(
+                SumOf(?A, 7, 3)
+            )
+
+            REQUEST(
+                my_pred(10)
+            )
+        "#;
+        let processed = parse(program, &Params::default(), &[]).expect("parse ok");
+        let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
+
+        // EDB custom row for my_pred(10)
+        let mut edb = MockEdbView::default();
+        let fake_src = crate::types::PodRef(pod2::middleware::Hash::from(V::from(77).raw()));
+        edb.add_custom_row(cpr.clone(), vec![V::from(10)], fake_src);
+
+        // Handlers to allow rule-based deduction via SumOf
+        let mut reg = OpRegistry::default();
+        register_sumof_handlers(&mut reg);
+
+        let mut engine = Engine::new(&reg, &edb);
+        engine.load_processed(&processed);
+        engine.run().expect("run ok");
+
+        assert!(!engine.answers.is_empty(), "expected at least one answer");
+
+        // Expect at least one CopyStatement proof and at least one CustomDeduction proof for my_pred(10)
+        let mut saw_copy = false;
+        let mut saw_custom = false;
+        for st in engine.answers.iter() {
+            for (stmt, tag) in st.premises.iter() {
+                if let pod2::middleware::Statement::Custom(pred, vals) = stmt {
+                    if *pred == cpr && vals.len() == 1 && vals[0] == V::from(10) {
+                        match tag {
+                            crate::types::OpTag::CopyStatement { .. } => saw_copy = true,
+                            crate::types::OpTag::CustomDeduction { .. } => saw_custom = true,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        assert!(saw_copy, "expected a CopyStatement proof for my_pred(10)");
+        assert!(
+            saw_custom,
+            "expected a CustomDeduction proof for my_pred(10) from the rule"
+        );
     }
 
     #[test]

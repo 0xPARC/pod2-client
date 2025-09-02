@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use hex::ToHex;
 use pod2::{
@@ -12,7 +12,7 @@ use pod2::{
 use crate::{
     edb::EdbView,
     proof_dag::ProofDagWithOps,
-    types::{ConstraintStore, OpTag, PodRef},
+    types::{ConstraintStore, OpTag},
 };
 
 /// Build a MainPod from a single engine answer by replaying its proof steps into frontend Operations.
@@ -25,7 +25,6 @@ pub fn build_pod_from_answer<F, G>(
     params: &Params,
     vd_set: &VDSet,
     prove_with: G,
-    input_pods: &HashMap<PodRef, MainPod>,
     edb: &dyn EdbView,
     public_selector: F,
 ) -> Result<MainPod, String>
@@ -55,7 +54,18 @@ where
     }
 
     let mut builder = MainPodBuilder::new(params, vd_set);
-    // Add unique input pods referenced by CopyStatement tags
+    // Resolve required input pods from the EDB using the answer's provenance
+    let required = edb.required_pods_for_answer(answer);
+    for r in required.iter() {
+        let pod = edb.resolve_pod(r).ok_or_else(|| {
+            format!(
+                "missing input pod for ref: 0x{}",
+                r.0.encode_hex::<String>()
+            )
+        })?;
+        builder.add_pod(pod);
+    }
+    /* old behavior: only add pods referenced by answer
     for r in answer.input_pods.iter() {
         let pod = input_pods.get(r).ok_or_else(|| {
             format!(
@@ -65,6 +75,7 @@ where
         })?;
         builder.add_pod(pod.clone());
     }
+    */
 
     // Build op dependency graph: producer_op -> consumer_op if consumer uses a statement produced by producer
     let mut stmt_producers: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -177,12 +188,17 @@ where
         // Map (tag, head, premises) -> frontend Operation
         if let Some(op) = map_to_operation(tag, head_stmt, &premise_stmts, edb)? {
             let public = public_selector(head_stmt);
-            // Insert operation; frontend validates
+            // Insert operation as private to ensure an earlier source for public copies,
+            // then mark as public if selected.
             println!("op: {op}");
+            let st = builder.priv_op(op).map_err(|e| e.to_string())?;
             if public {
-                let _ = builder.pub_op(op).map_err(|e| e.to_string())?;
-            } else {
-                let _ = builder.priv_op(op).map_err(|e| e.to_string())?;
+                builder.reveal(&st);
+            }
+        } else {
+            // Even if we skip emitting an op (e.g., CopyStatement), still mark as public if selected
+            if public_selector(head_stmt) {
+                builder.reveal(head_stmt);
             }
         }
     }
@@ -230,16 +246,13 @@ pub fn build_pod_from_answer_top_level_public<G>(
     params: &Params,
     vd_set: &VDSet,
     prove_with: G,
-    input_pods: &HashMap<PodRef, MainPod>,
     edb: &dyn EdbView,
 ) -> Result<MainPod, String>
 where
     G: Fn(&MainPodBuilder) -> Result<MainPod, String>,
 {
     let selector = top_level_public_selector(answer);
-    build_pod_from_answer(
-        answer, params, vd_set, prove_with, input_pods, edb, selector,
-    )
+    build_pod_from_answer(answer, params, vd_set, prove_with, edb, selector)
 }
 
 fn canonical_stmt_key(st: &Statement) -> String {
@@ -272,16 +285,25 @@ fn map_to_operation(
 ) -> Result<Option<Operation>, String> {
     use pod2::middleware::{NativeOperation, Predicate};
 
-    // Copy stays copy regardless of predicate
+    // Skip emitting private Copy operations; rely on public Copy from input pods or other proofs
     if let OpTag::CopyStatement { .. } = tag {
-        return Ok(Some(Operation::copy(head.clone())));
+        return Ok(None);
     }
 
     match head.predicate() {
         Predicate::Custom(cpr) => match tag {
             OpTag::CustomDeduction { .. } => {
                 // Order and normalize premises to match the predicate's template order
-                let args = order_custom_premises(&cpr, head, premises, edb)?;
+                let ordered = order_custom_premises(&cpr, head, premises, edb)?;
+                let mut args: Vec<Statement> = Vec::new();
+                for s in ordered.into_iter() {
+                    // Normalize Contains root to full dict values when possible; preserve None placeholders
+                    if let Statement::None = s {
+                        args.push(s);
+                    } else {
+                        args.push(normalize_stmt_for_op_arg(s, edb)?);
+                    }
+                }
                 Ok(Some(Operation::custom(cpr.clone(), args)))
             }
             _ => Ok(None),

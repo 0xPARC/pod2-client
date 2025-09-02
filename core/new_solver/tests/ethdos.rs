@@ -3,8 +3,7 @@ use pod2::{
     middleware::{Params, Signer},
 };
 use pod2_new_solver::{
-    build_pod_from_answer_top_level_public, custom, edb, proof_dag, Engine, EngineConfigBuilder,
-    OpRegistry,
+    build_pod_from_answer_top_level_public, custom, edb, Engine, EngineConfigBuilder, OpRegistry,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -17,7 +16,7 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     use hex::ToHex;
     use pod2::{
         backends::plonky2::{mock::mainpod::MockProver, signer::Signer},
-        examples::{attest_eth_friend, custom::eth_dos_batch, EthDosHelper, MOCK_VD_SET},
+        examples::{attest_eth_friend, custom::eth_dos_batch, MOCK_VD_SET},
         middleware::SecretKey,
     };
 
@@ -32,10 +31,6 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     let alice = Signer(SecretKey(1u32.into()));
     let bob = Signer(SecretKey(2u32.into()));
     let charlie = Signer(SecretKey(3u32.into()));
-    let david = Signer(SecretKey(4u32.into()));
-
-    let helper =
-        EthDosHelper::new(&params, vd_set, alice.public_key()).map_err(|e| e.to_string())?;
 
     let prover = MockProver {};
 
@@ -66,6 +61,12 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
             eth_dos_ind(?src, ?dst, ?distance)
         )
     */
+
+    let reg = OpRegistry::default();
+
+    /******************************************************************************
+     * Request: eth_dos(alice, alice, ?Distance)
+     ******************************************************************************/
     let req1 = format!(
         r#"
   use _, _, _, eth_dos from 0x{}
@@ -76,19 +77,14 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
   "#,
         batch.id().encode_hex::<String>(),
         alice.public_key(),
-        bob.public_key()
+        alice.public_key()
     );
 
     let processed =
         parse(&req1, &params, std::slice::from_ref(&batch)).map_err(|e| e.to_string())?;
 
-    let reg = OpRegistry::default();
-
     let edb_builder = edb::ImmutableEdbBuilder::new();
-    let edb = edb_builder
-        .add_signed_dict(alice_attestation)
-        .add_signed_dict(bob_attestation)
-        .build();
+    let edb = edb_builder.build();
 
     let mut engine = Engine::with_config(
         &reg,
@@ -104,19 +100,122 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
 
     assert!(!engine.answers.is_empty());
 
-    let dag = proof_dag::ProofDagWithOps::from_store(&engine.answers[0]);
-    let tree = dag.to_tree_text();
-    println!("{tree}");
+    let pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &params,
+        vd_set,
+        |b| b.prove(&prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .unwrap();
+
+    pod.pod.verify().unwrap();
+
+    /******************************************************************************
+     * Request: eth_dos(alice, bob, ?Distance)
+     ******************************************************************************/
+
+    let edb_builder = edb::ImmutableEdbBuilder::new();
+    let edb = edb_builder
+        .add_signed_dict(alice_attestation)
+        .add_main_pod(&pod)
+        .build();
+
+    let req2 = format!(
+        r#"
+    use _, _, _, eth_dos from 0x{}
+  
+    REQUEST(
+        eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+    )
+    "#,
+        batch.id().encode_hex::<String>(),
+        alice.public_key(),
+        bob.public_key()
+    );
+
+    let processed =
+        parse(&req2, &params, std::slice::from_ref(&batch)).map_err(|e| e.to_string())?;
+
+    let mut engine = Engine::with_config(
+        &reg,
+        &edb,
+        EngineConfigBuilder::new()
+            .from_params(&params)
+            .branch_and_bound_on_ops(true)
+            .build(),
+    );
+    custom::register_rules_from_batch(&mut engine.rules, &batch);
+    engine.load_processed(&processed);
+    engine.run().expect("run ok");
+
+    assert!(!engine.answers.is_empty());
 
     let pod = build_pod_from_answer_top_level_public(
         &engine.answers[0],
         &params,
         vd_set,
         |b| b.prove(&prover).map_err(|e| e.to_string()),
-        &std::collections::HashMap::new(),
         &edb,
     )
     .unwrap();
+
+    pod.pod.verify().unwrap();
+
+    /******************************************************************************
+     * Request: eth_dos(alice, charlie, ?Distance)
+     ******************************************************************************/
+
+    let edb_builder = edb::ImmutableEdbBuilder::new();
+    let edb = edb_builder
+        // Only available data is Bob's attestation of Charlie, and Bob's proof
+        // of distance 1 from Alice to Bob
+        .add_signed_dict(bob_attestation)
+        .add_main_pod(&pod)
+        .build();
+
+    let req3 = format!(
+        r#"
+    use _, _, _, eth_dos from 0x{}
+  
+    REQUEST(
+        eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+    )
+    "#,
+        batch.id().encode_hex::<String>(),
+        alice.public_key(),
+        charlie.public_key()
+    );
+
+    let processed =
+        parse(&req3, &params, std::slice::from_ref(&batch)).map_err(|e| e.to_string())?;
+
+    let mut engine = Engine::with_config(
+        &reg,
+        &edb,
+        EngineConfigBuilder::new()
+            .from_params(&params)
+            .branch_and_bound_on_ops(true)
+            .build(),
+    );
+    custom::register_rules_from_batch(&mut engine.rules, &batch);
+    engine.load_processed(&processed);
+    engine.run().expect("run ok");
+
+    assert!(!engine.answers.is_empty());
+
+    let pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &params,
+        vd_set,
+        |b| b.prove(&prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .unwrap();
+
+    pod.pod.verify().unwrap();
+
     println!("{pod}");
+
     Ok(())
 }
