@@ -410,15 +410,10 @@ mod tests {
     use super::*;
     use crate::{
         edb::MockEdbView,
-        test_helpers,
+        test_helpers::{self, args_from},
         types::{ConstraintStore, PodRef},
         OpTag,
     };
-
-    fn args_from(query: &str) -> Vec<StatementTmplArg> {
-        let tmpl = crate::test_helpers::parse_first_tmpl(query);
-        tmpl.args().to_vec()
-    }
 
     #[test]
     fn lt_from_entries_literals() {

@@ -380,19 +380,14 @@ pub fn register_equal_handlers(reg: &mut crate::op::OpRegistry) {
 
 #[cfg(test)]
 mod tests {
-    use pod2::middleware::{containers::Dictionary, Params, StatementTmplArg, Value};
+    use pod2::middleware::{containers::Dictionary, Params, Value};
 
     use super::*;
     use crate::{
         edb::MockEdbView,
-        test_helpers,
+        test_helpers::{self, args_from},
         types::{ConstraintStore, PodRef},
     };
-
-    fn args_from(query: &str) -> Vec<StatementTmplArg> {
-        let tmpl = test_helpers::parse_first_tmpl(query);
-        tmpl.args().to_vec()
-    }
 
     #[test]
     fn equal_from_entries_ak_v_generated_bound() {

@@ -475,12 +475,11 @@ mod tests {
     use pod2::middleware::{containers::Dictionary, Params};
 
     use super::*;
-    use crate::{edb::MockEdbView, test_helpers, types::ConstraintStore};
-
-    fn args_from(query: &str) -> Vec<StatementTmplArg> {
-        let tmpl = test_helpers::parse_first_tmpl(query);
-        tmpl.args().to_vec()
-    }
+    use crate::{
+        edb::MockEdbView,
+        test_helpers::{self, args_from},
+        types::ConstraintStore,
+    };
 
     #[test]
     fn sumof_two_of_three_binds_wildcard() {

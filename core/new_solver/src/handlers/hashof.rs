@@ -296,12 +296,11 @@ mod tests {
     };
 
     use super::*;
-    use crate::{edb::MockEdbView, test_helpers, types::ConstraintStore};
-
-    fn args_from(query: &str) -> Vec<StatementTmplArg> {
-        let tmpl = test_helpers::parse_first_tmpl(query);
-        tmpl.args().to_vec()
-    }
+    use crate::{
+        edb::MockEdbView,
+        test_helpers::{self, args_from},
+        types::ConstraintStore,
+    };
 
     #[test]
     fn hashof_compute_hash() {

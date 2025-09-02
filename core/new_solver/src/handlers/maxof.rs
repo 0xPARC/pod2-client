@@ -391,12 +391,11 @@ pub fn register_maxof_handlers(reg: &mut crate::op::OpRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{edb::MockEdbView, test_helpers, types::ConstraintStore};
-
-    fn args_from(query: &str) -> Vec<StatementTmplArg> {
-        let tmpl = test_helpers::parse_first_tmpl(query);
-        tmpl.args().to_vec()
-    }
+    use crate::{
+        edb::MockEdbView,
+        test_helpers::{self, args_from},
+        types::ConstraintStore,
+    };
 
     #[test]
     fn maxof_two_of_three_binds_wildcard() {

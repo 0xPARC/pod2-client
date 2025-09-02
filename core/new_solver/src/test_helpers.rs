@@ -1,5 +1,8 @@
-use pod2::middleware::{
-    Hash, Key, NativePredicate, Params, Predicate, StatementTmpl, StatementTmplArg, Value,
+use pod2::{
+    lang::parse,
+    middleware::{
+        Hash, Key, NativePredicate, Params, Predicate, StatementTmpl, StatementTmplArg, Value,
+    },
 };
 
 pub fn params() -> Params {
@@ -14,24 +17,10 @@ pub fn key(name: &str) -> Key {
     Key::from(name)
 }
 
-pub fn parse_first_tmpl(podlang: &str) -> StatementTmpl {
-    use pod2::lang::parse;
-    let req = parse(podlang, &Params::default(), &[])
+pub fn args_from(query: &str) -> Vec<StatementTmplArg> {
+    let req = parse(query, &Params::default(), &[])
         .expect("parse ok")
         .request;
-    req.request_templates.first().cloned().expect("one tmpl")
-}
-
-pub fn parse_native_goals(podlang: &str) -> Vec<(NativePredicate, Vec<StatementTmplArg>)> {
-    use pod2::lang::parse;
-    let processed = parse(podlang, &Params::default(), &[]).expect("parse ok");
-    processed
-        .request
-        .templates()
-        .iter()
-        .filter_map(|t| match &t.pred {
-            Predicate::Native(p) => Some((*p, t.args.clone())),
-            _ => None,
-        })
-        .collect()
+    let tmpl = req.request_templates.first().cloned().expect("one tmpl");
+    tmpl.args().to_vec()
 }
