@@ -1659,7 +1659,6 @@ mod tests {
             [(Key::from("k"), Value::from(1))].into(),
         )
         .unwrap();
-        let root = dict.commitment();
         let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut reg = OpRegistry::default();

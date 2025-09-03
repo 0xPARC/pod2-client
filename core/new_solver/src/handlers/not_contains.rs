@@ -1,5 +1,6 @@
 use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg};
 
+use super::util::{arg_to_selector, create_bindings};
 use crate::{
     edb::EdbView,
     op::OpHandler,
@@ -15,23 +16,53 @@ impl OpHandler for CopyNotContainsHandler {
         &self,
         args: &[StatementTmplArg],
         store: &mut ConstraintStore,
-        _edb: &dyn EdbView,
+        edb: &dyn EdbView,
     ) -> PropagatorResult {
         if args.len() != 2 {
             return PropagatorResult::Contradiction;
         }
 
-        // NotContains is not a predicate in the EDB, so we can't query for it directly.
-        // The old logic for this handler was also incorrect.
-        // For now, we will just suspend on any unbound wildcards.
-        let waits = crate::prop::wildcards_in_args(args)
+        // We need to store owned values for selectors, since ArgSel holds references.
+        let (mut l_val, mut l_root) = (None, None);
+        let (mut r_val, mut r_root) = (None, None);
+
+        let lhs = arg_to_selector(&args[0], store, &mut l_val, &mut l_root);
+        let rhs = arg_to_selector(&args[1], store, &mut r_val, &mut r_root);
+
+        let results = edb.query(
+            crate::edb::PredicateKey::Native(pod2::middleware::NativePredicate::NotContains),
+            &[lhs, rhs],
+        );
+
+        if results.is_empty() {
+            let waits = crate::prop::wildcards_in_args(args)
+                .into_iter()
+                .filter(|i| !store.bindings.contains_key(i))
+                .collect::<Vec<_>>();
+            return if waits.is_empty() {
+                PropagatorResult::Contradiction
+            } else {
+                PropagatorResult::Suspend { on: waits }
+            };
+        }
+
+        let choices: Vec<crate::prop::Choice> = results
             .into_iter()
-            .filter(|i| !store.bindings.contains_key(i))
-            .collect::<Vec<_>>();
-        if waits.is_empty() {
+            .map(|(stmt, pod_ref)| {
+                let bindings = create_bindings(args, &stmt, store);
+                crate::prop::Choice {
+                    bindings,
+                    op_tag: OpTag::CopyStatement { source: pod_ref },
+                }
+            })
+            .collect();
+
+        if choices.is_empty() {
             PropagatorResult::Contradiction
         } else {
-            PropagatorResult::Suspend { on: waits }
+            PropagatorResult::Choices {
+                alternatives: choices,
+            }
         }
     }
 }
@@ -81,7 +112,7 @@ impl OpHandler for NotContainsFromEntriesHandler {
                 }
             },
             (None, _) => {
-                // Root unbound → suspend on root wildcard
+                // Root unbound -> suspend on root wildcard
                 let waits = crate::prop::wildcards_in_args(args)
                     .into_iter()
                     .filter(|i| !store.bindings.contains_key(i))

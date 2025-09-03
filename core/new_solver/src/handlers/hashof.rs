@@ -3,7 +3,7 @@ use tracing::trace;
 
 use super::util::{arg_to_selector, create_bindings};
 use crate::{
-    edb::{EdbView, TernaryPred},
+    edb::EdbView,
     op::OpHandler,
     prop::{Choice, PropagatorResult},
     types::{ConstraintStore, OpTag},
@@ -154,7 +154,10 @@ impl OpHandler for CopyHashOfHandler {
         let sel_b = arg_to_selector(&args[1], store, &mut b_val, &mut b_root);
         let sel_c = arg_to_selector(&args[2], store, &mut c_val, &mut c_root);
 
-        let results = edb.query_ternary(TernaryPred::HashOf, sel_a, sel_b, sel_c);
+        let results = edb.query(
+            crate::edb::PredicateKey::Native(pod2::middleware::NativePredicate::HashOf),
+            &[sel_a, sel_b, sel_c],
+        );
 
         if results.is_empty() {
             let waits = crate::prop::wildcards_in_args(args)

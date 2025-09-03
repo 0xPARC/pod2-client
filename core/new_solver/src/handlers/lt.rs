@@ -5,7 +5,7 @@ use super::{
     util::{arg_to_selector, create_bindings},
 };
 use crate::{
-    edb::{BinaryPred, EdbView},
+    edb::EdbView,
     op::OpHandler,
     prop::PropagatorResult,
     types::{ConstraintStore, OpTag},
@@ -32,7 +32,10 @@ impl OpHandler for CopyLtHandler {
         let lhs = arg_to_selector(&args[0], store, &mut l_val, &mut l_root);
         let rhs = arg_to_selector(&args[1], store, &mut r_val, &mut r_root);
 
-        let results = edb.query_binary(BinaryPred::Lt, lhs, rhs);
+        let results = edb.query(
+            crate::edb::PredicateKey::Native(NativePredicate::Lt),
+            &[lhs, rhs],
+        );
 
         if results.is_empty() {
             let waits = crate::prop::wildcards_in_args(args)

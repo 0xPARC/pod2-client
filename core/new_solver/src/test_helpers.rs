@@ -1,8 +1,6 @@
 use pod2::{
     lang::parse,
-    middleware::{
-        Hash, Key, NativePredicate, Params, Predicate, StatementTmpl, StatementTmplArg, Value,
-    },
+    middleware::{Hash, Key, Params, StatementTmplArg, Value},
 };
 
 pub fn params() -> Params {

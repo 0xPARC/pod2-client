@@ -10,23 +10,6 @@ use pod2::{
 
 use crate::{types::PodRef, RawOrdValue};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinaryPred {
-    Equal,
-    Lt,
-    LtEq,
-    SignedBy,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TernaryPred {
-    SumOf,
-    ProductOf,
-    MaxOf,
-    HashOf,
-    Contains,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum ArgSel<'a> {
     /// Match a literal value exactly
@@ -44,24 +27,8 @@ pub enum ArgSel<'a> {
 
 /// Minimal read-only EDB interface for OpHandlers in MVP.
 pub trait EdbView {
-    /// Generic binary predicate query. Implementors should override this; all exact wrappers delegate here.
-    fn query_binary(
-        &self,
-        _pred: BinaryPred,
-        _lhs: ArgSel,
-        _rhs: ArgSel,
-    ) -> Vec<(Statement, PodRef)> {
-        Vec::new()
-    }
-
-    /// Generic ternary predicate query. Implementors can override as needed.
-    fn query_ternary(
-        &self,
-        _pred: TernaryPred,
-        _a: ArgSel,
-        _b: ArgSel,
-        _c: ArgSel,
-    ) -> Vec<(Statement, PodRef)> {
+    /// Generic predicate query.
+    fn query(&self, _pred: PredicateKey, _args: &[ArgSel]) -> Vec<(Statement, PodRef)> {
         Vec::new()
     }
 
@@ -72,9 +39,6 @@ pub trait EdbView {
 
     /// Enumerate roots that can justify Contains(root,key,val) along with their provenance.
     fn enumerate_contains_sources(&self, _key: &Key, _val: &Value) -> Vec<(Hash, ContainsSource)>;
-
-    /// CopyContains support: list copied values for (root,key).
-    fn contains_copied_values(&self, _root: &Hash, _key: &Key) -> Vec<(Value, PodRef)>;
 
     /// ContainsFromEntries support: get a value only if it comes from a full dictionary (generation).
     fn contains_full_value(&self, _root: &Hash, _key: &Key) -> Option<Value>;
@@ -136,6 +100,38 @@ struct PerPredicateIndex {
     arg_indexes: Vec<std::collections::BTreeMap<IndexKey, Vec<usize>>>,
 }
 
+impl PerPredicateIndex {
+    fn new(num_args: usize) -> Self {
+        Self {
+            facts: Vec::new(),
+            arg_indexes: vec![std::collections::BTreeMap::new(); num_args],
+        }
+    }
+
+    fn add_fact(&mut self, statement: Statement, pod_ref: PodRef) {
+        let fact_id = self.facts.len();
+        let args = statement.args();
+        self.facts.push((statement, pod_ref));
+
+        for (i, arg) in args.iter().enumerate() {
+            let keys = match arg {
+                StatementArg::Literal(v) => vec![
+                    IndexKey::Literal(RawOrdValue(v.clone())),
+                    IndexKey::AnyLiteral,
+                ],
+                StatementArg::Key(ak) => vec![
+                    IndexKey::FullAnchoredKey(ak.root, ak.key.hash()),
+                    IndexKey::PartialAnchoredKey(ak.key.hash()),
+                ],
+                StatementArg::None => vec![],
+            };
+            for key in keys {
+                self.arg_indexes[i].entry(key).or_default().push(fact_id);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PredicateKey {
     Native(pod2::middleware::NativePredicate),
@@ -168,8 +164,6 @@ impl Ord for PredicateKey {
 pub struct ImmutableEdb {
     per_predicate_indexes: std::collections::BTreeMap<PredicateKey, PerPredicateIndex>,
 
-    // Copied Contains facts: (root, key_hash) -> Vec<(value, PodRef)>
-    contains_copied: std::collections::BTreeMap<(Hash, Hash), Vec<(Value, PodRef)>>,
     // Full dictionaries registered: root -> key_hash -> value
     full_dicts: std::collections::BTreeMap<Hash, std::collections::BTreeMap<Hash, Value>>,
     // Original full dictionary objects by root (used for replay)
@@ -229,62 +223,33 @@ impl ImmutableEdbBuilder {
     }
 
     fn add_statement(&mut self, statement: Statement, pod_ref: PodRef) {
-        use pod2::middleware::{Key, Statement, StatementArg};
-        if let Statement::Contains(
-            ValueRef::Literal(root_val),
-            ValueRef::Literal(key_val),
-            ValueRef::Literal(val),
-        ) = &statement
-        {
-            if let Ok(key_str) = String::try_from(key_val.typed()) {
-                let root = Hash::from(root_val.raw());
-                let key = Key::from(key_str);
-                self.inner
-                    .contains_copied
-                    .entry((root, key.hash()))
-                    .or_default()
-                    .push((val.clone(), pod_ref.clone()));
-            }
-        }
-
-        let pred_key = if let Some(native_pred) = native_predicate_from_statement(&statement) {
-            PredicateKey::Native(native_pred)
-        } else if let Statement::Custom(cpr, _) = &statement {
-            PredicateKey::Custom(CprKey::from(cpr))
-        } else {
-            // Contains is handled above, so this should not be reached for other statement types.
-            return;
-        };
-
-        let index = self
-            .inner
-            .per_predicate_indexes
-            .entry(pred_key)
-            .or_default();
-
-        let fact_id = index.facts.len();
-        let args = statement.args();
-        index.facts.push((statement.clone(), pod_ref));
-
-        let arity = args.len();
-        while index.arg_indexes.len() < arity {
-            index.arg_indexes.push(std::collections::BTreeMap::new());
-        }
-        for (i, arg) in args.iter().enumerate() {
-            let keys = match arg {
-                StatementArg::Literal(v) => vec![
-                    IndexKey::Literal(RawOrdValue(v.clone())),
-                    IndexKey::AnyLiteral,
-                ],
-                StatementArg::Key(ak) => vec![
-                    IndexKey::FullAnchoredKey(ak.root, ak.key.hash()),
-                    IndexKey::PartialAnchoredKey(ak.key.hash()),
-                ],
-                StatementArg::None => vec![],
-            };
-            for key in keys {
-                index.arg_indexes[i].entry(key).or_default().push(fact_id);
-            }
+        if let Some(native_pred) = native_predicate_from_statement(&statement) {
+            let key = PredicateKey::Native(native_pred);
+            let num_args = statement.args().len();
+            let index = self
+                .inner
+                .per_predicate_indexes
+                .entry(key)
+                .or_insert_with(|| PerPredicateIndex::new(num_args));
+            index.add_fact(statement, pod_ref);
+        } else if let Statement::Custom(cpr, args) = &statement {
+            let key = PredicateKey::Custom(cpr.into());
+            let num_args = args.len();
+            let index = self
+                .inner
+                .per_predicate_indexes
+                .entry(key)
+                .or_insert_with(|| PerPredicateIndex::new(num_args));
+            index.add_fact(statement, pod_ref);
+        } else if let Statement::Contains(..) = &statement {
+            let key = PredicateKey::Native(pod2::middleware::NativePredicate::Contains);
+            let num_args = statement.args().len();
+            let index = self
+                .inner
+                .per_predicate_indexes
+                .entry(key)
+                .or_insert_with(|| PerPredicateIndex::new(num_args));
+            index.add_fact(statement, pod_ref);
         }
     }
 
@@ -461,14 +426,8 @@ fn matches_arg_sel(arg: &StatementArg, sel: &ArgSel) -> bool {
 }
 
 impl EdbView for ImmutableEdb {
-    fn query_binary(&self, pred: BinaryPred, lhs: ArgSel, rhs: ArgSel) -> Vec<(Statement, PodRef)> {
-        let native_pred = match pred {
-            BinaryPred::Equal => pod2::middleware::NativePredicate::Equal,
-            BinaryPred::Lt => pod2::middleware::NativePredicate::Lt,
-            BinaryPred::LtEq => pod2::middleware::NativePredicate::LtEq,
-            BinaryPred::SignedBy => pod2::middleware::NativePredicate::SignedBy,
-        };
-        self.query(PredicateKey::Native(native_pred), &[lhs, rhs])
+    fn query(&self, pred: PredicateKey, args: &[ArgSel]) -> Vec<(Statement, PodRef)> {
+        ImmutableEdb::query(self, pred, args)
     }
 
     fn custom_matches(
@@ -476,51 +435,47 @@ impl EdbView for ImmutableEdb {
         pred: &CustomPredicateRef,
         filters: &[Option<Value>],
     ) -> Vec<(Vec<Value>, PodRef)> {
-        let pred_key = PredicateKey::Custom(CprKey::from(pred));
-        let args: Vec<ArgSel> = filters
+        let selectors: Vec<ArgSel> = filters
             .iter()
             .map(|f| match f {
                 Some(v) => ArgSel::Literal(v),
                 None => ArgSel::Val,
             })
             .collect();
-
-        let results = self.query(pred_key, &args);
-
-        results
+        self.query(PredicateKey::Custom(pred.into()), &selectors)
             .into_iter()
-            .filter_map(|(stmt, pod_ref)| {
-                if let Statement::Custom(_, custom_args) = stmt {
-                    Some((custom_args, pod_ref))
-                } else {
-                    None
-                }
+            .map(|(s, p)| {
+                (
+                    s.args()
+                        .into_iter()
+                        .map(|a| match a {
+                            StatementArg::Literal(v) => v.clone(),
+                            _ => panic!("non-literal arg in custom statement"),
+                        })
+                        .collect(),
+                    p,
+                )
             })
             .collect()
     }
-    fn query_ternary(
-        &self,
-        pred: TernaryPred,
-        a: ArgSel,
-        b: ArgSel,
-        c: ArgSel,
-    ) -> Vec<(Statement, PodRef)> {
-        let native_pred = match pred {
-            TernaryPred::SumOf => pod2::middleware::NativePredicate::SumOf,
-            TernaryPred::ProductOf => pod2::middleware::NativePredicate::ProductOf,
-            TernaryPred::MaxOf => pod2::middleware::NativePredicate::MaxOf,
-            TernaryPred::HashOf => pod2::middleware::NativePredicate::HashOf,
-            TernaryPred::Contains => pod2::middleware::NativePredicate::Contains,
-        };
-        self.query(PredicateKey::Native(native_pred), &[a, b, c])
-    }
 
     fn contains_value(&self, root: &Hash, key: &Key) -> Option<Value> {
-        if let Some(vs) = self.contains_copied.get(&(*root, key.hash())) {
-            if let Some((v, _)) = vs.first() {
-                return Some(v.clone());
+        // Query for copied facts first.
+        let results = self.query(
+            PredicateKey::Native(pod2::middleware::NativePredicate::Contains),
+            &[
+                ArgSel::Literal(&Value::from(*root)),
+                ArgSel::Literal(&Value::from(key.name())),
+                ArgSel::Val,
+            ],
+        );
+        if let Some((stmt, _)) = results.first() {
+            if let Some(StatementArg::Literal(val)) = stmt.args().get(2) {
+                return Some(val.clone());
             }
         }
+
+        // Fall back to full dictionaries.
         self.full_dicts
             .get(root)
             .and_then(|m| m.get(&key.hash()).cloned())
@@ -534,27 +489,39 @@ impl EdbView for ImmutableEdb {
                 }
             }
         }
-        if let Some(vs) = self.contains_copied.get(&(*root, key.hash())) {
-            for (v, pod) in vs.iter() {
-                if v == val {
-                    return Some(ContainsSource::Copied { pod: pod.clone() });
-                }
-            }
-        }
-        None
+        let results = self.query(
+            PredicateKey::Native(pod2::middleware::NativePredicate::Contains),
+            &[
+                ArgSel::Literal(&Value::from(*root)),
+                ArgSel::Literal(&Value::from(key.name())),
+                ArgSel::Literal(val),
+            ],
+        );
+        results.first().map(|(_, pod_ref)| ContainsSource::Copied {
+            pod: pod_ref.clone(),
+        })
     }
 
     fn enumerate_contains_sources(&self, key: &Key, val: &Value) -> Vec<(Hash, ContainsSource)> {
         let mut out = Vec::new();
-        for ((root, k), vs) in self.contains_copied.iter() {
-            if *k == key.hash() {
-                for (v, pod) in vs.iter() {
-                    if v == val {
-                        out.push((*root, ContainsSource::Copied { pod: pod.clone() }));
-                    }
-                }
+
+        // From copied statements
+        let results = self.query(
+            PredicateKey::Native(pod2::middleware::NativePredicate::Contains),
+            &[
+                ArgSel::Val,
+                ArgSel::Literal(&Value::from(key.name())),
+                ArgSel::Literal(val),
+            ],
+        );
+        for (stmt, pod_ref) in results {
+            if let Some(StatementArg::Literal(root_val)) = stmt.args().first() {
+                let root = Hash::from(root_val.raw());
+                out.push((root, ContainsSource::Copied { pod: pod_ref }));
             }
         }
+
+        // From full dictionaries
         for (root, kvs) in self.full_dicts.iter() {
             if let Some(v) = kvs.get(&key.hash()) {
                 if v == val {
@@ -562,31 +529,12 @@ impl EdbView for ImmutableEdb {
                 }
             }
         }
-        out.sort_by(|(r1, s1), (r2, s2)| {
-            r1.cmp(r2).then_with(|| match (s1, s2) {
-                (ContainsSource::GeneratedFromFullDict { .. }, ContainsSource::Copied { .. }) => {
-                    std::cmp::Ordering::Greater
-                }
-                (ContainsSource::Copied { .. }, ContainsSource::GeneratedFromFullDict { .. }) => {
-                    std::cmp::Ordering::Less
-                }
-                _ => std::cmp::Ordering::Equal,
-            })
-        });
         out
     }
 
-    fn contains_copied_values(&self, root: &Hash, key: &Key) -> Vec<(Value, PodRef)> {
-        self.contains_copied
-            .get(&(*root, key.hash()))
-            .cloned()
-            .unwrap_or_else(Vec::new)
-    }
-
     fn contains_full_value(&self, root: &Hash, key: &Key) -> Option<Value> {
-        self.full_dicts
-            .get(root)
-            .and_then(|m| m.get(&key.hash()).cloned())
+        // With unified indexing, this is the same as contains_value.
+        self.contains_value(root, key)
     }
 
     fn signed_dict(&self, root: &Hash) -> Option<SignedDict> {
