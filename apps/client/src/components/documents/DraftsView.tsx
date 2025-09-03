@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
 import {
   EditIcon,
@@ -12,7 +13,6 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { deleteDraft, DraftInfo, listDrafts } from "../../lib/documentApi";
-import { useDocuments } from "../../lib/store";
 import { formatTimeAgo } from "../../lib/timeUtils";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -27,7 +27,13 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   const [publishingDrafts, setPublishingDrafts] = useState<Set<string>>(
     new Set()
   );
-  const { navigateToPublish } = useDocuments();
+  const navigate = useNavigate();
+  const navigateToPublish = (draftId?: string) => {
+    navigate({
+      to: "/documents/publish",
+      search: { draftId }
+    });
+  };
 
   const loadDrafts = async () => {
     try {
@@ -46,8 +52,8 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
     loadDrafts();
   }, []);
 
-  // Reload drafts when component mounts (handled by DocumentsApp routing)
-  // This component is now managed by DocumentsApp navigation
+  // Reload drafts when component mounts (handled by TanStack Router)
+  // This component is now managed by TanStack Router navigation
 
   const handleDeleteDraft = async (draftId: string) => {
     try {
@@ -121,7 +127,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
 
   if (loading) {
     return (
-      <div className="p-6 min-h-screen w-full overflow-y-auto">
+      <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
         <div className="w-full max-w-4xl mx-auto">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b border-current"></div>
@@ -133,7 +139,7 @@ export function DraftsView({ onEditDraft }: DraftsViewProps) {
   }
 
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
+    <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
       <div className="w-full mx-auto">
         {drafts.length === 0 ? (
           <Card>

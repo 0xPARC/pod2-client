@@ -5,13 +5,13 @@ import Editor, {
 } from "@monaco-editor/react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { useCallback, useEffect, useRef } from "react";
-import { useTheme } from "../theme-provider";
+import { useTheme } from "../core/theme-provider";
 
+import { createDebouncedValidator } from "../../lib/features/authoring/editor";
 import {
   setupMonacoEditor,
   updateEditorMarkers
 } from "../../lib/features/authoring/monaco";
-import { createDebouncedValidator } from "../../lib/features/authoring/editor";
 import { usePodEditor } from "../../lib/store";
 
 // Configure Monaco loader

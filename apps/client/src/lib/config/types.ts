@@ -1,11 +1,5 @@
 // Auto-generated TypeScript interfaces for Rust configuration structs
 
-export interface FeatureConfig {
-  pod_management: boolean;
-  authoring: boolean;
-  frogcrypto: boolean;
-}
-
 export interface DatabaseConfig {
   path: string;
 }
@@ -29,7 +23,6 @@ export interface LoggingConfig {
 }
 
 export interface AppConfig {
-  features: FeatureConfig;
   database: DatabaseConfig;
   network: NetworkConfig;
   ui: UiConfig;

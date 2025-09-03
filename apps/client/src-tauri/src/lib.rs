@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use anyhow::Context;
-use config::{AppConfig, FeatureConfig};
+use config::AppConfig;
 use features::{blockies, *};
 use num::BigUint;
 use pod2::{
@@ -85,12 +85,6 @@ fn calculate_directory_size(path: &std::path::Path) -> Result<u64, String> {
     }
 
     Ok(total_size)
-}
-
-/// Tauri command to get the current feature configuration
-#[tauri::command]
-async fn get_feature_config_command() -> Result<FeatureConfig, String> {
-    Ok(config::config().features.clone())
 }
 
 /// Tauri command to get the full application configuration
@@ -240,8 +234,6 @@ async fn clear_pod2_disk_cache(app_handle: AppHandle) -> Result<(), String> {
 async fn get_config_section(section: String) -> Result<serde_json::Value, String> {
     let config = config::config();
     match section.as_str() {
-        "features" => serde_json::to_value(&config.features)
-            .map_err(|e| format!("Failed to serialize features: {e}")),
         "network" => serde_json::to_value(&config.network)
             .map_err(|e| format!("Failed to serialize network config: {e}")),
         "database" => serde_json::to_value(&config.database)
@@ -691,9 +683,7 @@ pub fn run() {
                     .await
                     .expect("failed to initialize state");
 
-                if AppConfig::get().features.frogcrypto {
-                    frog::setup_background_threads(app.handle());
-                }
+                frog::setup_background_threads(app.handle());
 
                 app.manage(Mutex::new(app_state));
 
@@ -724,7 +714,6 @@ pub fn run() {
             frog::request_leaderboard,
             frog::reregister_all_frogs,
             // Configuration commands
-            get_feature_config_command,
             get_app_config,
             get_extended_app_config,
             // HTTP utilities

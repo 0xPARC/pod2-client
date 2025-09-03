@@ -1,30 +1,42 @@
-import { MessageSquareIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { fetchDocument, type DocumentMetadata } from "../../../lib/documentApi";
+import { useNavigate } from "@tanstack/react-router";
+import { fetchDocument, type Document } from "../../../lib/documentApi";
 import { useDraftAutoSave, type DraftContent } from "../../../lib/drafts";
-import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { InlineChipInput } from "../../ui/inline-chip-input";
+import { ContextPreview } from "../ContextPreview";
 import { PublishButton } from "../PublishButton";
 import { MarkdownEditor } from "../editors/MarkdownEditor";
+import type { EditingDocument } from "../PublishPage";
 
 interface PublishDocumentFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
   replyTo?: string;
   editingDraftId?: string; // UUID
+  editingDocument?: EditingDocument; // For editing existing documents
 }
 
 export function PublishDocumentForm({
   onPublishSuccess,
   onCancel,
   replyTo,
-  editingDraftId
+  editingDraftId,
+  editingDocument
 }: PublishDocumentFormProps) {
-  const { currentRoute, navigateToDrafts } = useDocuments();
+  const navigate = useNavigate();
+  const navigateToDrafts = () => navigate({ to: "/documents/drafts" });
+  const navigateToDocument = (documentId: number) => {
+    navigate({
+      to: "/documents/document/$documentId",
+      params: { documentId: documentId.toString() }
+    });
+  };
+  const goBack = () => navigate({ to: ".." });
 
-  // Get route-specific edit document data
-  const editDocumentData = currentRoute?.editDocumentData;
+  // Check if we're editing an existing document
+  const isEditingDocument = !!editingDocument;
 
   // Use the draft auto-save hook
   const {
@@ -36,27 +48,32 @@ export function PublishDocumentForm({
     registerContentGetter
   } = useDraftAutoSave({ editingDraftId });
 
-  // Form state - initialize from loaded draft or defaults
-  const [title, setTitle] = useState(initialContent?.title ?? "");
-  const [titleTouched, setTitleTouched] = useState(false);
-  const [message, setMessage] = useState(initialContent?.message ?? "");
-  const [tags, setTags] = useState<string[]>(initialContent?.tags ?? []);
-  const [authors, setAuthors] = useState<string[]>(
-    initialContent?.authors ?? []
+  // Form state - initialize from editing document, draft, or defaults
+  const [title, setTitle] = useState(
+    editingDocument?.title ?? initialContent?.title ?? ""
   );
-  const [replyToDocument, setReplyToDocument] =
-    useState<DocumentMetadata | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [message, setMessage] = useState(
+    editingDocument?.content.message ?? initialContent?.message ?? ""
+  );
+  const [tags, setTags] = useState<string[]>(
+    editingDocument?.tags ?? initialContent?.tags ?? []
+  );
+  const [authors, setAuthors] = useState<string[]>(
+    editingDocument?.authors ?? initialContent?.authors ?? []
+  );
+  const [replyToDocument, setReplyToDocument] = useState<Document | null>(null);
   const [replyToLoading, setReplyToLoading] = useState(false);
 
-  // Update form state when initial content loads
+  // Update form state when initial content loads (but not when editing document)
   useEffect(() => {
-    if (initialContent) {
+    if (initialContent && !isEditingDocument) {
       setTitle(initialContent.title);
       setMessage(initialContent.message);
       setTags(initialContent.tags);
       setAuthors(initialContent.authors);
     }
-  }, [initialContent]);
+  }, [initialContent, isEditingDocument]);
 
   // Helper functions that mark content as changed
   const handleTagsChange = (newTags: string[]) => {
@@ -84,9 +101,9 @@ export function PublishDocumentForm({
       message: message.trim(),
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
-      replyTo,
+      replyTo: editingDocument?.replyTo ?? replyTo,
       draftId: currentDraftId || editingDraftId, // Pass the draft ID for deletion after publish
-      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
+      postId: editingDocument?.postId // Include postId when editing existing document
     };
 
     return data;
@@ -104,11 +121,41 @@ export function PublishDocumentForm({
   const handleDiscardDraft = async () => {
     const success = await discardDraft();
     if (success) {
-      // Navigate based on context
-      if (editingDraftId) {
-        navigateToDrafts();
-      } else if (onCancel) {
+      // Navigate based on context priority:
+
+      // 1. Modal context - highest priority (user expects modal behavior)
+      if (onCancel) {
         onCancel();
+
+        // 2. Reply context - navigate back to the document being replied to
+        // Check editing document, props replyTo, and draft's replyTo
+      } else if (effectiveReplyTo || initialContent?.replyTo) {
+        const replyToId = effectiveReplyTo || initialContent?.replyTo;
+        if (replyToId) {
+          try {
+            // replyTo format is "post_id:document_id", we want the document_id
+            const documentId = parseInt(replyToId.split(":")[1]);
+            if (!isNaN(documentId)) {
+              navigateToDocument(documentId);
+            } else {
+              // If we can't parse document ID, use history navigation
+              goBack();
+            }
+          } catch (error) {
+            console.error("Failed to parse replyTo document ID:", error);
+            goBack();
+          }
+        } else {
+          goBack();
+        }
+
+        // 3. Existing draft context - navigate back to drafts list
+      } else if (editingDraftId) {
+        navigateToDrafts();
+
+        // 4. Fallback - use browser-like back navigation
+      } else {
+        goBack();
       }
     }
   };
@@ -118,42 +165,17 @@ export function PublishDocumentForm({
     registerContentGetter(getCurrentContent);
   }, [registerContentGetter, title, message, tags, authors, replyTo]); // Re-register when content changes
 
-  // Load document data if editing a document
+  // Initialize reply context from editing document if present
+  const effectiveReplyTo = editingDocument?.replyTo ?? replyTo;
+
   useEffect(() => {
-    const loadEditDocument = async () => {
-      if (editDocumentData && !editingDraftId) {
-        // Only load if not editing a draft
-        try {
-          console.log("Loading edit document data:", editDocumentData);
-
-          setTitle(editDocumentData.title);
-          setTags(editDocumentData.tags);
-          setAuthors(editDocumentData.authors);
-
-          // Load message content
-          if (editDocumentData.content.message) {
-            setMessage(editDocumentData.content.message);
-          }
-
-          // Document is freshly loaded, no unsaved changes yet
-        } catch (error) {
-          console.error("Failed to load edit document data:", error);
-        }
-      }
-    };
-
-    loadEditDocument();
-  }, [editDocumentData, editingDraftId]); // React to changes in editDocumentData, but prevent running when editing drafts
-
-  // Fetch the document being replied to
-  useEffect(() => {
-    if (replyTo) {
+    if (effectiveReplyTo && !replyToDocument && !replyToLoading) {
       setReplyToLoading(true);
       // Extract document_id from "post_id:document_id" format
-      const documentId = parseInt(replyTo.split(":")[1]);
+      const documentId = parseInt(effectiveReplyTo.split(":")[1]);
       fetchDocument(documentId)
         .then((doc) => {
-          setReplyToDocument(doc.metadata);
+          setReplyToDocument(doc);
         })
         .catch((error) => {
           console.error("Failed to fetch reply-to document:", error);
@@ -162,7 +184,9 @@ export function PublishDocumentForm({
           setReplyToLoading(false);
         });
     }
-  }, [replyTo]);
+  }, [effectiveReplyTo, replyToDocument, replyToLoading]);
+
+  // This effect is now handled above in the effectiveReplyTo useEffect
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -236,21 +260,25 @@ export function PublishDocumentForm({
         </div>
       </div>
 
-      {/* Reply To Banner */}
-      {replyTo && replyToDocument && (
-        <div className="px-6 py-2 bg-muted/50 border-b shrink-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MessageSquareIcon className="h-4 w-4" />
-            <span>Replying to:</span>
-            <span className="font-medium text-foreground">
-              {replyToDocument.title}
-            </span>
-            <span className="text-xs">by {replyToDocument.uploader_id}</span>
-          </div>
+      {/* Reply Context Preview */}
+      {effectiveReplyTo && replyToDocument && (
+        <div className="shrink-0 border-b">
+          <ContextPreview
+            document={replyToDocument}
+            onQuoteText={(quotedText) => {
+              // Append quoted text to current message
+              const currentMessage = message;
+              const newMessage = currentMessage
+                ? `${currentMessage}\n\n${quotedText}`
+                : quotedText;
+              setMessage(newMessage);
+              markContentChanged();
+            }}
+          />
         </div>
       )}
 
-      {replyTo && replyToLoading && (
+      {effectiveReplyTo && replyToLoading && (
         <div className="px-6 py-2 bg-muted/50 border-b shrink-0">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="animate-spin rounded-full h-4 w-4 border-b border-current"></div>

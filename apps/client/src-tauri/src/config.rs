@@ -6,28 +6,6 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-/// Configuration for enabling/disabling application features
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default = "FeatureConfig::default")]
-pub struct FeatureConfig {
-    /// Core POD collection management - viewing, organizing, and basic operations
-    pub pod_management: bool,
-    /// Creating and signing new PODs
-    pub authoring: bool,
-    /// FrogCrypto experimental features
-    pub frogcrypto: bool,
-}
-
-impl Default for FeatureConfig {
-    fn default() -> Self {
-        Self {
-            pod_management: true,
-            authoring: true,
-            frogcrypto: true,
-        }
-    }
-}
-
 /// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default = "DatabaseConfig::default")]
@@ -117,8 +95,6 @@ impl Default for LoggingConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AppConfig {
-    /// Feature toggles
-    pub features: FeatureConfig,
     /// Database configuration
     pub database: DatabaseConfig,
     /// Network configuration
@@ -224,21 +200,6 @@ impl AppConfig {
                 self.network.timeout_seconds = value
                     .parse()
                     .map_err(|e| format!("Invalid timeout_seconds value '{value}': {e}"))?;
-            }
-            ["features", "pod_management"] => {
-                self.features.pod_management = value
-                    .parse()
-                    .map_err(|e| format!("Invalid pod_management value '{value}': {e}"))?;
-            }
-            ["features", "authoring"] => {
-                self.features.authoring = value
-                    .parse()
-                    .map_err(|e| format!("Invalid authoring value '{value}': {e}"))?;
-            }
-            ["features", "frogcrypto"] => {
-                self.features.frogcrypto = value
-                    .parse()
-                    .map_err(|e| format!("Invalid frogcrypto value '{value}': {e}"))?;
             }
             ["database", "path"] => {
                 self.database.path = value.to_string();
@@ -366,7 +327,6 @@ mod tests {
         // Verify other defaults
         assert_eq!(config.database.path, "pod2.db");
         assert_eq!(config.database.name, "pod2.db");
-        assert!(config.features.pod_management);
     }
 
     #[test]

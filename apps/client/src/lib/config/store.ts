@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { create } from "zustand";
-import type { AppConfig, FeatureConfig } from "./types";
+import type { AppConfig } from "./types";
 
 interface ConfigStore {
   // State
@@ -15,7 +15,6 @@ interface ConfigStore {
   loadConfig: () => Promise<void>;
   subscribeToChanges: () => Promise<UnlistenFn>;
   reloadConfig: (configPath?: string) => Promise<void>;
-  getFeature: (feature: keyof FeatureConfig) => boolean;
   getConfigSection: <K extends keyof AppConfig>(
     section: K
   ) => AppConfig[K] | null;
@@ -128,11 +127,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       });
       throw error;
     }
-  },
-
-  getFeature: (feature: keyof FeatureConfig): boolean => {
-    const { config } = get();
-    return config?.features[feature] ?? false;
   },
 
   getConfigSection: <K extends keyof AppConfig>(

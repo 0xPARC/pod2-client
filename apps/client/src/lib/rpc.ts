@@ -12,20 +12,6 @@ import * as authoringFeature from "./features/authoring";
 import * as podManagementFeature from "./features/pod-management";
 
 // =============================================================================
-// Configuration Types
-// =============================================================================
-
-/**
- * Feature configuration for the application
- * This matches the Rust FeatureConfig struct
- */
-export interface FeatureConfig {
-  pod_management: boolean;
-  authoring: boolean;
-  frogcrypto: boolean;
-}
-
-// =============================================================================
 // Build Information
 // =============================================================================
 
@@ -61,28 +47,6 @@ export interface RpcError {
  * Result type for RPC operations
  */
 export type RpcResult<T> = Promise<T>;
-
-// =============================================================================
-// Configuration Operations
-// =============================================================================
-
-/**
- * Get the current feature configuration from the backend
- * @returns The feature configuration loaded from environment variables
- */
-export async function getFeatureConfig(): Promise<FeatureConfig> {
-  try {
-    return await invoke("get_feature_config_command");
-  } catch (error) {
-    console.error("Failed to get feature configuration:", error);
-    // Return default configuration as fallback
-    return {
-      pod_management: true,
-      authoring: true,
-      frogcrypto: false
-    };
-  }
-}
 
 // =============================================================================
 // Re-export functions for backward compatibility

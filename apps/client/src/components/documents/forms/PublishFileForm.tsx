@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useDocuments } from "../../../lib/store";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { ChipInput } from "../../ui/chip-input";
@@ -7,27 +6,28 @@ import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { PublishButton } from "../PublishButton";
 import { FileEditor } from "../editors/FileEditor";
+import type { EditingDocument } from "../PublishPage";
 
 interface PublishFileFormProps {
   onPublishSuccess?: (documentId: number) => void;
   onCancel?: () => void;
+  editingDocument?: EditingDocument; // For editing existing documents
 }
 
 export function PublishFileForm({
   onPublishSuccess,
-  onCancel
+  onCancel,
+  editingDocument
 }: PublishFileFormProps) {
-  const { currentRoute } = useDocuments();
+  const isEditMode = !!editingDocument;
 
-  // Get route-specific edit document data
-  const editDocumentData = currentRoute?.editDocumentData;
-
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(editingDocument?.title ?? "");
   const [titleTouched, setTitleTouched] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [tags, setTags] = useState<string[]>([]);
-  const [authors, setAuthors] = useState<string[]>([]);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [file, setFile] = useState<File | null>(null); // File editing will allow replacement
+  const [tags, setTags] = useState<string[]>(editingDocument?.tags ?? []);
+  const [authors, setAuthors] = useState<string[]>(
+    editingDocument?.authors ?? []
+  );
 
   const getPublishData = () => {
     return {
@@ -35,7 +35,8 @@ export function PublishFileForm({
       file: file || undefined,
       tags: tags.length > 0 ? tags : undefined,
       authors: authors.length > 0 ? authors : undefined,
-      postId: editDocumentData?.postId // Pass post ID for editing documents (creating revisions)
+      replyTo: editingDocument?.replyTo ?? undefined,
+      postId: editingDocument?.postId // Include postId when editing existing document
     };
   };
 
@@ -55,41 +56,26 @@ export function PublishFileForm({
     }
   };
 
-  // Load existing document data for editing
+  // Initialize existing file info when editing
   useEffect(() => {
-    if (editDocumentData) {
-      console.log("Loading file edit document data:", editDocumentData);
-      setIsEditMode(true);
-
-      setTitle(editDocumentData.title);
-      setTags(editDocumentData.tags);
-      setAuthors(editDocumentData.authors);
-
-      // For file editing, we don't pre-populate the file since it requires
-      // the user to select a new file or keep the existing one
-      // The existing file information is available in editDocumentData.content.file
+    if (isEditMode && editingDocument?.content.file?.name) {
+      // For editing, we show the existing file name but allow replacement
+      console.log("Editing file:", editingDocument.content.file.name);
     }
-  }, [editDocumentData]);
+  }, [isEditMode, editingDocument]);
 
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl">
-            {isEditMode ? "Edit File Document" : "Upload File"}
+            {isEditMode ? "Edit File" : "Upload File"}
           </CardTitle>
         </div>
-        {isEditMode && editDocumentData?.content.file && (
-          <div className="text-sm text-muted-foreground">
-            Currently editing:{" "}
-            <span className="font-medium">
-              {editDocumentData.content.file.name}
-            </span>{" "}
-            ({editDocumentData.content.file.mime_type})
-            <br />
-            Upload a new file to replace it, or leave empty to keep the existing
-            file.
-          </div>
+        {isEditMode && editingDocument?.content.file?.name && (
+          <p className="text-sm text-muted-foreground">
+            Editing: {editingDocument.content.file.name}
+          </p>
         )}
       </CardHeader>
 
@@ -121,7 +107,8 @@ export function PublishFileForm({
         {/* File Editor */}
         <div>
           <Label className="text-base font-medium">
-            File {isEditMode ? "(optional - upload new file to replace)" : "*"}
+            File{" "}
+            {isEditMode ? "(optional - leave blank to keep existing)" : "*"}
           </Label>
           <div className="mt-2">
             <FileEditor file={file} onFileChange={setFile} />

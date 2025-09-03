@@ -14,7 +14,6 @@ serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 hex.workspace = true
-log.workspace = true
 num-bigint.workspace = true
 chrono.workspace = true
 
@@ -23,9 +22,14 @@ axum = { version = "0.7", features = ["macros"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs"] }
 rusqlite = { workspace = true, features = ["bundled"] }
+rusqlite_migration = { workspace = true }
+lazy_static = { workspace = true }
 pulldown-cmark = "0.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 config = "0.14"
 sha2 = "0.10"
 rand = "0.9.1"
+
+[dev-dependencies]
+tokio-test = "0.4"

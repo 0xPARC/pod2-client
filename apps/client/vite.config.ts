@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
@@ -7,10 +8,21 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // Exclude worker and non-React markdown utils from React Fast Refresh
+    react({
+      fastRefresh: true,
+      exclude: [/src\/workers\//, /src\/lib\/markdown\//]
+    }),
+    tailwindcss(),
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true
+    })
+  ],
 
   build: {
-    sourcemap: !!process.env.TAURI_ENV_DEBUG
+    sourcemap: true //!!process.env.TAURI_ENV_DEBUG
   },
 
   worker: {

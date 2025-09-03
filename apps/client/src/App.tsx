@@ -1,39 +1,17 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "@tanstack/react-router";
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
-import { AppSidebar } from "./components/AppSidebar";
-import { GitHubIdentitySetupModal } from "./components/GitHubIdentitySetupModal";
-import { MainContent } from "./components/MainContent";
-import { ThemeProvider } from "./components/theme-provider";
-import { TopBar } from "./components/TopBar";
-import { TopBarProvider } from "./components/TopBarContext";
-import { SidebarProvider, useSidebar } from "./components/ui/sidebar";
+import { ThemeProvider } from "./components/core/theme-provider";
+import { GitHubIdentitySetupModal } from "./components/identity/GitHubIdentitySetupModal";
 import { Toaster } from "./components/ui/sonner";
 import { useConfigInitialization, useConfigSection } from "./lib/config/hooks";
-import { testDeepLink, useDeepLinkManager } from "./lib/deeplink";
-import { FeatureConfigProvider } from "./lib/features/config";
+import { simpleDeepLinkManager, testDeepLink } from "./lib/deeplink-simple";
 import { KeyboardProvider } from "./lib/keyboard/KeyboardProvider";
-import { createShortcut } from "./lib/keyboard/types";
-import { useKeyboardShortcuts } from "./lib/keyboard/useKeyboardShortcuts";
+import { queryClient } from "./lib/query";
+import { router } from "./lib/router";
 import { useAppStore } from "./lib/store";
-
-// Component that handles global keyboard shortcuts within the sidebar context
-function GlobalKeyboardShortcuts() {
-  const { toggleSidebar } = useSidebar();
-
-  const globalShortcuts = [
-    createShortcut("b", () => toggleSidebar(), "Toggle Sidebar", {
-      cmd: true
-    })
-  ];
-
-  useKeyboardShortcuts(globalShortcuts, {
-    enabled: true,
-    context: "global"
-  });
-
-  return null;
-}
 
 function App() {
   const { initialize } = useAppStore((state) => state);
@@ -45,44 +23,15 @@ function App() {
   // Initialize config store
   useConfigInitialization();
 
-  // Initialize deep-link manager with navigation functions
-  const setActiveApp = useAppStore((state) => state.setActiveApp);
-  const navigateToDocumentsList = useAppStore(
-    (state) => state.documentsActions.navigateToDocumentsList
-  );
-  const navigateToDocument = useAppStore(
-    (state) => state.documentsActions.navigateToDocument
-  );
-  const navigateToDrafts = useAppStore(
-    (state) => state.documentsActions.navigateToDrafts
-  );
-  const navigateToPublish = useAppStore(
-    (state) => state.documentsActions.navigateToPublish
-  );
-  const navigateToDebug = useAppStore(
-    (state) => state.documentsActions.navigateToDebug
-  );
+  // Initialize simplified deep-link manager
+  useEffect(() => {
+    simpleDeepLinkManager.initialize(router);
+    simpleDeepLinkManager.startListening();
 
-  const navigation = useMemo(
-    () => ({
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
-    }),
-    [
-      setActiveApp,
-      navigateToDocumentsList,
-      navigateToDocument,
-      navigateToDrafts,
-      navigateToPublish,
-      navigateToDebug
-    ]
-  );
-
-  useDeepLinkManager(navigation);
+    return () => {
+      simpleDeepLinkManager.stopListening();
+    };
+  }, [router]);
 
   // Check if setup is completed and detect GitHub OAuth server
   useEffect(() => {
@@ -147,28 +96,21 @@ function App() {
 
   return (
     <ThemeProvider>
-      <FeatureConfigProvider>
-        <KeyboardProvider>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
           <div className="h-screen overflow-hidden overscroll-none">
             {/* TODO: Maybe make this MacOS-only? */}
             {/* <div
-              data-tauri-drag-region
-              className="fixed top-0 left-0 right-0 z-[99]! h-[20px]"
-              onDoubleClick={() => {
-                getCurrentWindow().maximize();
-              }}
-            ></div> */}
+                data-tauri-drag-region
+                className="fixed top-0 left-0 right-0 z-[99]! h-[20px]"
+                onDoubleClick={() => {
+                  getCurrentWindow().maximize();
+                }}
+              ></div> */}
 
-            <SidebarProvider className="h-screen">
-              <TopBarProvider>
-                <GlobalKeyboardShortcuts />
-                <TopBar />
-                <AppSidebar />
-                <div className="pt-(--top-bar-height) w-full h-full">
-                  <MainContent />
-                </div>
-              </TopBarProvider>
-            </SidebarProvider>
+            {/* Router renders AppSidebar + route content via file-based Root route */}
+            <RouterProvider router={router} context={{ queryClient }} />
+
             <Toaster />
 
             {/* Identity Setup Modal - Use GitHub OAuth modal if detected */}
@@ -177,8 +119,8 @@ function App() {
               onComplete={handleSetupComplete}
             />
           </div>
-        </KeyboardProvider>
-      </FeatureConfigProvider>
+        </QueryClientProvider>
+      </KeyboardProvider>
     </ThemeProvider>
   );
 }

@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
   ArrowUpDownIcon,
@@ -13,10 +15,11 @@ import {
   SearchIcon,
   XIcon
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DocumentMetadata, fetchDocuments } from "../../lib/documentApi";
 import { createShortcut } from "../../lib/keyboard/types";
 import { useKeyboardShortcuts } from "../../lib/keyboard/useKeyboardShortcuts";
+import { documentsQueryKey } from "../../lib/query";
 import { useDocuments } from "../../lib/store";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -36,18 +39,26 @@ import { Input } from "../ui/input";
 import { HackMDImportDialog } from "./import/HackMDImportDialog";
 
 export function DocumentsView() {
-  const {
-    searchQuery,
-    selectedTag,
-    navigateToDocument,
-    navigateToPublish,
-    updateSearch,
-    selectTag
-  } = useDocuments();
-  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"recent" | "upvotes">("recent");
+  const { searchQuery, selectedTag, updateSearch, selectTag } = useDocuments();
+  const navigate = useNavigate();
+  const navigateToDocument = (documentId: number) => {
+    navigate({
+      to: "/documents/document/$documentId",
+      params: { documentId: documentId.toString() }
+    });
+  };
+  const navigateToPublish = (
+    draftId?: string,
+    contentType?: "document" | "link" | "file"
+  ) => {
+    navigate({
+      to: "/documents/publish",
+      search: { draftId, contentType }
+    });
+  };
+  const [sortBy, setSortBy] = useState<"activity" | "newest" | "upvotes">(
+    "activity"
+  );
   const [showHackMDImport, setShowHackMDImport] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,22 +81,16 @@ export function DocumentsView() {
     context: "documents-list"
   });
 
-  const loadDocuments = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const docs = await fetchDocuments();
-      setDocuments(docs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load documents");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadDocuments();
-  }, []);
+  const {
+    data: documents = [],
+    error,
+    isPending, // initial load
+    isFetching, // background refetch (e.g., after Refresh)
+    refetch
+  } = useQuery<DocumentMetadata[]>({
+    queryKey: documentsQueryKey,
+    queryFn: fetchDocuments
+  });
 
   // Extract all unique tags from documents
   const availableTags = useMemo(() => {
@@ -115,11 +120,16 @@ export function DocumentsView() {
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === "recent") {
-        // Sort by created_at in reverse chronological order (most recent first)
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return dateB - dateA;
+      if (sortBy === "activity") {
+        // Sort by recent activity: max(created_at, latest_reply_at)
+        const timeA = a.latest_reply_at || a.created_at || "";
+        const timeB = b.latest_reply_at || b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      } else if (sortBy === "newest") {
+        // Sort strictly by post creation time
+        const timeA = a.created_at || "";
+        const timeB = b.created_at || "";
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
       } else if (sortBy === "upvotes") {
         // Sort by upvote count (highest first)
         return b.upvote_count - a.upvote_count;
@@ -169,8 +179,21 @@ export function DocumentsView() {
     navigateToPublish(undefined, contentType);
   };
 
+  const formatAuthors = (authors: string[]) => {
+    const formatter = new Intl.ListFormat("en", {
+      style: "long",
+      type: "conjunction"
+    });
+
+    return formatter.format(
+      authors.sort((a, b) =>
+        a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase())
+      )
+    );
+  };
+
   return (
-    <div className="p-6 min-h-screen w-full overflow-y-auto">
+    <div className="p-6 min-h-calc(100vh - var(--top-bar-height)) w-full overflow-y-auto">
       <div className="w-full">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex gap-2">
@@ -226,12 +249,12 @@ export function DocumentsView() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
-              onClick={loadDocuments}
-              disabled={loading}
+              onClick={() => refetch()}
+              disabled={isFetching}
               variant="outline"
             >
               <RefreshCwIcon
-                className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>
@@ -269,16 +292,27 @@ export function DocumentsView() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
                 <ArrowUpDownIcon className="h-4 w-4" />
-                Sort: {sortBy === "recent" ? "Most Recent" : "Most Upvoted"}
+                Sort:{" "}
+                {sortBy === "activity"
+                  ? "Recent Activity"
+                  : sortBy === "newest"
+                    ? "Newest Posts"
+                    : "Most Upvoted"}
                 <ChevronDownIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44">
               <DropdownMenuLabel>Sort By</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSortBy("recent")}>
-                <span>Most Recent</span>
-                {sortBy === "recent" && (
+              <DropdownMenuItem onClick={() => setSortBy("activity")}>
+                <span>Recent Activity</span>
+                {sortBy === "activity" && (
+                  <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortBy("newest")}>
+                <span>Newest Posts</span>
+                {sortBy === "newest" && (
                   <div className="ml-auto h-2 w-2 bg-primary rounded-full" />
                 )}
               </DropdownMenuItem>
@@ -353,13 +387,15 @@ export function DocumentsView() {
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircleIcon className="h-5 w-5" />
-                <span>{error}</span>
+                <span>
+                  {error instanceof Error ? error.message : String(error)}
+                </span>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {loading ? (
+        {isPending ? (
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-center py-8">
@@ -405,15 +441,27 @@ export function DocumentsView() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-blue-600 hover:underline line-clamp-2 mb-1">
-                        {doc.title}
-                      </h3>
+                      <div className="flex items-baseline">
+                        <h3 className="text-base font-medium text-accent-foreground hover:underline line-clamp-2 mb-1">
+                          {doc.title}
+                        </h3>
+                        {doc.authors && doc.authors.length > 0 && (
+                          <span className="text-sm line-clamp-2 mb-1 text-muted-foreground">
+                            , by{" "}
+                            <span className="text-accent-foreground">
+                              {formatAuthors(doc.authors)}
+                            </span>
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                         <span>submitted</span>
                         <span>{formatDate(doc.created_at)}</span>
                         <span>by</span>
-                        <span className="text-blue-600">{doc.uploader_id}</span>
+                        <span className="text-accent-foreground">
+                          {doc.uploader_id}
+                        </span>
                         {doc.reply_to && (
                           <>
                             <span>•</span>
@@ -425,7 +473,23 @@ export function DocumentsView() {
                         )}
                       </div>
 
-                      {/* Tags and authors in compact format */}
+                      {doc.latest_reply_at && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                          <MessageSquareIcon className="h-3 w-3" />
+                          <span>last comment</span>
+                          <span>{formatDate(doc.latest_reply_at)}</span>
+                          {doc.latest_reply_by && (
+                            <>
+                              <span>by</span>
+                              <span className="text-accent-foreground">
+                                {doc.latest_reply_by}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tags in compact format */}
                       <div className="flex items-center gap-2 text-xs">
                         {doc.tags.length > 0 && (
                           <div className="flex gap-1">
@@ -444,35 +508,9 @@ export function DocumentsView() {
                             )}
                           </div>
                         )}
-
-                        {doc.authors.length > 0 && (
-                          <div className="flex gap-1">
-                            <span className="text-muted-foreground">
-                              authors:
-                            </span>
-                            {doc.authors.slice(0, 2).map((author, index) => (
-                              <span key={index} className="text-blue-600">
-                                {author}
-                                {index < Math.min(doc.authors.length, 2) - 1 &&
-                                  ","}
-                              </span>
-                            ))}
-                            {doc.authors.length > 2 && (
-                              <span className="text-muted-foreground">
-                                +{doc.authors.length - 2} more
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Right side info */}
-                <div className="text-xs text-muted-foreground text-right">
-                  <div>#{doc.id}</div>
-                  <div>r{doc.revision}</div>
                 </div>
               </div>
             ))}

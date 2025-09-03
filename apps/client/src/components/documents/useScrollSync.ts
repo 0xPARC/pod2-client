@@ -140,14 +140,33 @@ export function useScrollSync(
 
       // Note: MathJax containers are now properly wrapped with line mapping attributes
 
-      setBlockGeometries(newGeometries);
+      // Only update state if geometries have actually changed to prevent infinite loops
+      setBlockGeometries((prevGeometries) => {
+        // Check if geometries are effectively the same
+        if (prevGeometries.length === newGeometries.length) {
+          const areEqual = prevGeometries.every((prev, index) => {
+            const curr = newGeometries[index];
+            return (
+              prev.mapping.elementIndex === curr.mapping.elementIndex &&
+              prev.mapping.startLine === curr.mapping.startLine &&
+              prev.mapping.endLine === curr.mapping.endLine &&
+              Math.abs(prev.offsetTop - curr.offsetTop) < 1 && // Allow tiny differences due to rounding
+              Math.abs(prev.offsetHeight - curr.offsetHeight) < 1 &&
+              Math.abs(prev.editorStartPixel - curr.editorStartPixel) < 1 &&
+              Math.abs(prev.editorEndPixel - curr.editorEndPixel) < 1
+            );
+          });
+
+          if (areEqual) {
+            return prevGeometries; // Return the same reference to prevent re-render
+          }
+        }
+
+        return newGeometries;
+      });
     },
     [cooldownMs]
   );
-
-  // Note: findBlockForLine removed - we now use direct scroll position matching
-
-  // Note: findBlockForScrollTop removed - we now use viewport-center-based matching
 
   // Sync editor scroll to preview
   const syncEditorToPreview = useCallback(() => {
@@ -240,38 +259,26 @@ export function useScrollSync(
     syncingFromPreview.current = true;
 
     try {
-      // Get preview viewport info
+      // Get current preview scroll position
       const previewScrollTop = preview.scrollTop;
-      const previewViewportHeight = preview.clientHeight;
 
-      // Calculate preview viewport center for more stable syncing
-      const previewViewportCenter =
-        previewScrollTop + previewViewportHeight / 2;
-
-      // Find the block containing the preview viewport center
+      // Find which block contains this scroll position
       let targetBlock: BlockGeometry | null = null;
-      let proportionWithinBlock = 0;
+      let scrollWithinBlock = 0;
 
       for (const block of blockGeometries) {
         if (
-          previewViewportCenter >= block.offsetTop &&
-          previewViewportCenter <= block.offsetTop + block.offsetHeight
+          previewScrollTop >= block.offsetTop &&
+          previewScrollTop <= block.offsetTop + block.offsetHeight
         ) {
           targetBlock = block;
-          const elementScrollOffset = previewViewportCenter - block.offsetTop;
-          proportionWithinBlock =
-            block.offsetHeight > 0
-              ? Math.max(
-                  0,
-                  Math.min(1, elementScrollOffset / block.offsetHeight)
-                )
-              : 0;
+          scrollWithinBlock = previewScrollTop - block.offsetTop;
           break;
         }
-        // Check if viewport center is between blocks (use the next block)
-        if (previewViewportCenter < block.offsetTop) {
+        // Check if scroll position is between blocks (use the next block)
+        if (previewScrollTop < block.offsetTop) {
           targetBlock = block;
-          proportionWithinBlock = 0; // At the start of this block
+          scrollWithinBlock = 0; // At the start of this block
           break;
         }
       }
@@ -279,34 +286,63 @@ export function useScrollSync(
       // If no block found, use the last block
       if (!targetBlock && blockGeometries.length > 0) {
         targetBlock = blockGeometries[blockGeometries.length - 1];
-        const elementScrollOffset = Math.max(
+        const lastBlockRange = targetBlock.offsetHeight;
+        scrollWithinBlock = Math.max(
           0,
-          previewViewportCenter - targetBlock.offsetTop
+          previewScrollTop - targetBlock.offsetTop
         );
-        proportionWithinBlock =
-          targetBlock.offsetHeight > 0
-            ? Math.max(
-                0,
-                Math.min(1, elementScrollOffset / targetBlock.offsetHeight)
-              )
-            : 0;
+        scrollWithinBlock = Math.min(scrollWithinBlock, lastBlockRange);
       }
 
       if (!targetBlock) return;
 
-      // Calculate corresponding position in editor and center it in editor viewport
-      const blockPixelRange =
+      // Calculate proportional position within the preview block
+      const blockPixelRange = targetBlock.offsetHeight;
+      const proportion =
+        blockPixelRange > 0
+          ? Math.max(0, Math.min(1, scrollWithinBlock / blockPixelRange))
+          : 0;
+
+      // Apply same proportion to editor block
+      const editorBlockRange =
         targetBlock.editorEndPixel - targetBlock.editorStartPixel;
-      const targetElementPosition =
-        targetBlock.editorStartPixel + proportionWithinBlock * blockPixelRange;
+      let targetScrollTop =
+        targetBlock.editorStartPixel + proportion * editorBlockRange;
 
-      // Center this position in the editor viewport
-      const editorViewportHeight = editor.getLayoutInfo().height;
-      const targetEditorScrollTop =
-        targetElementPosition - editorViewportHeight / 2;
+      // Edge convergence logic: adjust position when near preview top/bottom
+      const previewHeight = preview.scrollHeight;
+      const maxPreviewScroll = previewHeight - preview.clientHeight;
+      const lineCount = editor.getModel()?.getLineCount() || 0;
+      const lastLineTop =
+        lineCount > 0 ? editor.getTopForLineNumber(lineCount + 1) : 0;
+      const editorHeight = editor.getLayoutInfo().height;
+      const maxEditorScroll = Math.max(0, lastLineTop - editorHeight) + 30;
 
-      // Scroll editor to center the corresponding portion
-      editor.setScrollTop(Math.max(0, targetEditorScrollTop)); // Don't scroll above content
+      const EDGE_THRESHOLD = 50; // 50px threshold for edge behavior
+
+      // Check distance from top
+      if (previewScrollTop <= EDGE_THRESHOLD) {
+        const distanceFromTop = previewScrollTop;
+        const adjustment = -(
+          (targetScrollTop * (EDGE_THRESHOLD - distanceFromTop)) /
+          EDGE_THRESHOLD
+        );
+        targetScrollTop += adjustment;
+      }
+      // Check distance from bottom
+      else if (previewScrollTop >= maxPreviewScroll - EDGE_THRESHOLD) {
+        const distanceFromBottom = maxPreviewScroll - previewScrollTop;
+        const editorBottomOffset = maxEditorScroll - targetScrollTop;
+        const adjustment =
+          (editorBottomOffset * (EDGE_THRESHOLD - distanceFromBottom)) /
+          EDGE_THRESHOLD;
+        targetScrollTop += adjustment;
+      }
+
+      // Scroll editor to maintain the same proportional position with edge convergence
+      editor.setScrollTop(
+        Math.max(0, Math.min(maxEditorScroll, targetScrollTop))
+      );
     } finally {
       // Record sync time and direction
       lastSyncTime.current = Date.now();
@@ -386,23 +422,28 @@ export function useScrollSync(
     preview.addEventListener("scroll", handlePreviewScroll, { passive: true });
 
     // Set up ResizeObserver to detect preview container size changes (view mode transitions, window resizes)
+    let resizeDebounceTimer: NodeJS.Timeout | null = null;
     const handlePreviewResize = () => {
+      // Clear any existing debounce timer
+      if (resizeDebounceTimer) {
+        clearTimeout(resizeDebounceTimer);
+      }
+
       // Mark that layout is changing to prevent scroll sync with stale geometry
-      console.log("📏 ResizeObserver fired - blocking scroll sync");
       isLayoutChanging.current = true;
 
-      // Delay geometry refresh to ensure layout has settled after resize
-      setTimeout(() => {
-        console.log("📏 Updating block geometries after resize");
+      // Debounce the geometry update to prevent rapid repeated calls
+      resizeDebounceTimer = setTimeout(() => {
         // Use stored current mappings instead of extracting from stale blockGeometries
         updateBlockGeometries(currentMappings.current);
 
         // Re-enable scroll sync after geometry is updated
         setTimeout(() => {
-          console.log("✅ Re-enabling scroll sync after layout");
           isLayoutChanging.current = false;
         }, 50);
-      }, 100);
+
+        resizeDebounceTimer = null;
+      }, 150); // Increased debounce time to prevent rapid updates
     };
 
     const resizeObserver = new ResizeObserver(handlePreviewResize);
@@ -479,6 +520,11 @@ export function useScrollSync(
 
       // Disconnect ResizeObserver
       resizeObserver.disconnect();
+
+      // Clear any pending resize debounce timer
+      if (resizeDebounceTimer) {
+        clearTimeout(resizeDebounceTimer);
+      }
 
       // Remove all MathJax event listeners
       mathJaxEvents.forEach((eventName) => {

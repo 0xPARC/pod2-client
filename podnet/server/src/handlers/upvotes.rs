@@ -22,41 +22,41 @@ pub async fn upvote_document(
     State(state): State<Arc<crate::AppState>>,
     Json(payload): Json<UpvoteRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    log::info!("Processing upvote for document {document_id} with main pod verification");
+    tracing::info!("Processing upvote for document {document_id} with main pod verification");
 
     let (_vd_set, _prover) = state.pod_config.get_prover_setup()?;
 
     // Verify main pod proof
-    log::info!("Verifying upvote main pod proof");
+    tracing::info!("Verifying upvote main pod proof");
     payload.upvote_main_pod.pod.verify().map_err(|e| {
-        log::error!("Failed to verify upvote main pod: {e}");
+        tracing::error!("Failed to verify upvote main pod: {e}");
         StatusCode::UNAUTHORIZED
     })?;
-    log::info!("✓ Upvote main pod proof verified");
+    tracing::info!("✓ Upvote main pod proof verified");
 
     // Get the document first to get its content hash for verification
-    log::info!("Getting document for content hash verification");
+    tracing::info!("Getting document for content hash verification");
     let document = state
         .db
         .get_document_metadata(document_id)
         .map_err(|e| {
-            log::error!("Database error retrieving document {document_id}: {e}");
+            tracing::error!("Database error retrieving document {document_id}: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or_else(|| {
-            log::error!("Document {document_id} not found");
+            tracing::error!("Document {document_id} not found");
             StatusCode::NOT_FOUND
         })?;
 
     // We need to verify with all registered identity servers, since we don't know which one was used
-    log::info!("Getting all registered identity servers for verification");
+    tracing::info!("Getting all registered identity servers for verification");
     let identity_servers = state.db.get_all_identity_servers().map_err(|e| {
-        log::error!("Database error retrieving identity servers: {e}");
+        tracing::error!("Database error retrieving identity servers: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     if identity_servers.is_empty() {
-        log::error!("No identity servers registered");
+        tracing::error!("No identity servers registered");
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -67,14 +67,14 @@ pub async fn upvote_document(
         // Parse the identity server public key from database
         let server_pk: pod2::backends::plonky2::primitives::ec::curve::Point =
             serde_json::from_str(&identity_server.public_key).map_err(|e| {
-                log::error!("Failed to parse identity server public key: {e}");
+                tracing::error!("Failed to parse identity server public key: {e}");
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
 
         let server_pk_value = Value::from(server_pk);
 
         // Try verification with this identity server using username from request
-        log::info!(
+        tracing::info!(
             "Trying upvote verification with identity server: {}",
             identity_server.server_id
         );
@@ -85,7 +85,7 @@ pub async fn upvote_document(
             &server_pk_value,
         ) {
             Ok(_) => {
-                log::info!(
+                tracing::info!(
                     "✓ Solver verification succeeded with identity server: {}",
                     identity_server.server_id
                 );
@@ -93,7 +93,7 @@ pub async fn upvote_document(
                 break;
             }
             Err(_) => {
-                log::debug!(
+                tracing::debug!(
                     "Verification failed with identity server: {}",
                     identity_server.server_id
                 );
@@ -103,11 +103,11 @@ pub async fn upvote_document(
     }
 
     if !verification_succeeded {
-        log::error!("Solver-based verification failed with all registered identity servers");
+        tracing::error!("Solver-based verification failed with all registered identity servers");
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    log::info!(
+    tracing::info!(
         "✓ Solver verification passed: username={}, content_hash={}",
         payload.username,
         document.content_id
@@ -120,12 +120,12 @@ pub async fn upvote_document(
         .db
         .user_has_upvoted(document_id, &payload.username)
         .map_err(|e| {
-            log::error!("Database error checking existing upvote: {e}");
+            tracing::error!("Database error checking existing upvote: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     if already_upvoted {
-        log::warn!(
+        tracing::warn!(
             "User {} has already upvoted document {document_id}",
             payload.username
         );
@@ -134,7 +134,7 @@ pub async fn upvote_document(
 
     // Store the upvote with the main pod (no user public key needed)
     let upvote_main_pod_json = serde_json::to_string(&payload.upvote_main_pod).map_err(|e| {
-        log::error!("Failed to serialize upvote main pod: {e}");
+        tracing::error!("Failed to serialize upvote main pod: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -142,19 +142,19 @@ pub async fn upvote_document(
         .db
         .create_upvote(document_id, &payload.username, &upvote_main_pod_json)
         .map_err(|e| {
-            log::error!("Failed to store upvote: {e}");
+            tracing::error!("Failed to store upvote: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    log::info!("✓ Upvote stored with ID: {upvote_id}");
+    tracing::info!("✓ Upvote stored with ID: {upvote_id}");
 
     // Get updated upvote count
     let upvote_count = state.db.get_upvote_count(document_id).map_err(|e| {
-        log::error!("Failed to get upvote count: {e}");
+        tracing::error!("Failed to get upvote count: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    log::info!("Document {document_id} now has {upvote_count} upvotes");
+    tracing::info!("Document {document_id} now has {upvote_count} upvotes");
 
     // Spawn background task to generate inductive upvote count pod
     let state_clone = state.clone();
@@ -172,7 +172,9 @@ pub async fn upvote_document(
         )
         .await
         {
-            log::error!("Failed to generate inductive upvote count pod for document {doc_id}: {e}");
+            tracing::error!(
+                "Failed to generate inductive upvote count pod for document {doc_id}: {e}"
+            );
         }
     });
 
@@ -208,7 +210,7 @@ pub async fn generate_base_case_upvote_pod(
         .verify()
         .map_err(|e| format!("Failed to verify base case upvote count pod: {e}"))?;
 
-    log::info!("✓ Successfully proved upvote_count(0) for document {document_id} using solver");
+    tracing::info!("✓ Successfully proved upvote_count(0) for document {document_id} using solver");
 
     // Store the pod in the database
     let pod_json = serde_json::to_string(&main_pod)
@@ -219,7 +221,7 @@ pub async fn generate_base_case_upvote_pod(
         .update_upvote_count_pod(document_id, &pod_json)
         .map_err(|e| format!("Failed to store upvote count pod: {e}"))?;
 
-    log::info!("✓ Stored base case upvote count pod for document {document_id}");
+    tracing::info!("✓ Stored base case upvote count pod for document {document_id}");
 
     Ok(())
 }
@@ -231,7 +233,7 @@ async fn generate_inductive_upvote_pod(
     current_count: i64,
     upvote_verification_pod: &MainPod,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    log::info!(
+    tracing::info!(
         "Generating inductive upvote count pod for document {document_id} (count={current_count}) using solver"
     );
 
@@ -245,7 +247,7 @@ async fn generate_inductive_upvote_pod(
         Some(json) => serde_json::from_str::<pod2::frontend::MainPod>(&json)
             .map_err(|e| format!("Failed to parse previous main pod: {e}"))?,
         None => {
-            log::warn!(
+            tracing::warn!(
                 "No previous upvote count pod found for document {document_id}, generating base case first"
             );
             // If no previous pod exists, generate base case first
@@ -280,7 +282,7 @@ async fn generate_inductive_upvote_pod(
         .verify()
         .map_err(|e| format!("Failed to verify inductive upvote count pod: {e}"))?;
 
-    log::info!(
+    tracing::info!(
         "✓ Successfully proved upvote_count({current_count}) for document {document_id} using solver"
     );
 
@@ -293,7 +295,7 @@ async fn generate_inductive_upvote_pod(
         .update_upvote_count_pod(document_id, &pod_json)
         .map_err(|e| format!("Failed to store upvote count pod: {e}"))?;
 
-    log::info!(
+    tracing::info!(
         "✓ Stored inductive upvote count pod for document {document_id} (count={current_count})"
     );
 

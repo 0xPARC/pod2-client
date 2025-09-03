@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use pod2::{
     backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer},
@@ -13,17 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::{config::config, AppState};
-
-/// Macro to check if authoring feature is enabled
-macro_rules! check_feature_enabled {
-    () => {
-        if !config().features.authoring {
-            log::warn!("Authoring feature is disabled");
-            return Err("Authoring feature is disabled".to_string());
-        }
-    };
-}
+use crate::AppState;
 
 // =============================================================================
 // Editor Types
@@ -60,6 +50,8 @@ pub struct ValidateCodeResponse {
 pub struct ExecuteCodeResponse {
     pub main_pod: MainPod,
     pub diagram: String,
+    pub solver_time_ms: u64,
+    pub pod_build_time_ms: u64,
 }
 
 /// Convert LangError to diagnostics
@@ -105,7 +97,6 @@ fn lang_error_to_diagnostics(lang_error: &LangError) -> Vec<Diagnostic> {
 pub async fn get_private_key_info(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<serde_json::Value, String> {
-    check_feature_enabled!();
     let app_state = state.lock().await;
 
     store::get_default_private_key_info(&app_state.db)
@@ -151,8 +142,6 @@ pub async fn sign_pod(
 /// Validate Podlang code for syntax and semantic errors
 #[tauri::command]
 pub async fn validate_code_command(code: String) -> Result<ValidateCodeResponse, String> {
-    check_feature_enabled!();
-
     log::debug!(
         "Validating code: {:?}",
         code.chars().take(50).collect::<String>()
@@ -180,8 +169,6 @@ pub async fn execute_code_command(
     code: String,
     mock: bool,
 ) -> Result<ExecuteCodeResponse, String> {
-    check_feature_enabled!();
-
     log::debug!(
         "Executing code (mock: {}): {:?}",
         mock,
@@ -214,6 +201,9 @@ pub async fn execute_code_command(
     if all_pod_infos.is_empty() {
         log::warn!("No PODs found for execution. Proceeding with empty facts.");
     }
+
+    // Start solver timing
+    let solver_start = Instant::now();
 
     let mut owned_signed_pods: Vec<SignedPod> = Vec::new();
     let mut owned_main_pods: Vec<MainPod> = Vec::new();
@@ -287,6 +277,9 @@ pub async fn execute_code_command(
         }
     };
 
+    // End solver timing
+    let solver_time = solver_start.elapsed();
+
     let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
@@ -323,13 +316,21 @@ pub async fn execute_code_command(
         Box::new(Prover {})
     };
 
+    // Start POD build timing
+    let pod_build_start = Instant::now();
+
     let result_main_pod = builder
         .prove(&*prover)
         .map_err(|e| format!("Failed to prove: {e}"))?;
 
+    // End POD build timing
+    let pod_build_time = pod_build_start.elapsed();
+
     let result = ExecuteCodeResponse {
         main_pod: result_main_pod,
         diagram: pod2_solver::vis::mermaid_markdown(&proof),
+        solver_time_ms: solver_time.as_millis() as u64,
+        pod_build_time_ms: pod_build_time.as_millis() as u64,
     };
 
     Ok(result)
