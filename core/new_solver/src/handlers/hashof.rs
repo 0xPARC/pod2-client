@@ -1,15 +1,12 @@
-use pod2::{
-    lang::PrettyPrint,
-    middleware::{hash_values, StatementTmplArg, Value},
-};
+use pod2::middleware::{hash_values, StatementTmplArg, Value};
 use tracing::trace;
 
+use super::util::{arg_to_selector, create_bindings};
 use crate::{
-    edb::{ArgSel, EdbView, TernaryPred},
+    edb::{EdbView, TernaryPred},
     op::OpHandler,
     prop::{Choice, PropagatorResult},
     types::{ConstraintStore, OpTag},
-    util::ternary_view,
 };
 
 /// Classification of an argument for HashOf operations
@@ -148,131 +145,42 @@ impl OpHandler for CopyHashOfHandler {
             return PropagatorResult::Contradiction;
         }
 
-        // Query all HashOf rows from EDB
-        let rows = ternary_view(
-            edb,
-            TernaryPred::HashOf,
-            ArgSel::Val,
-            ArgSel::Val,
-            ArgSel::Val,
-        );
-        tracing::trace!("CopyHashOfHandler: found {} HashOf rows in EDB", rows.len());
-        let mut choices: Vec<Choice> = Vec::new();
-        for row in rows.into_iter() {
-            let mut binds: Vec<(usize, Value)> = Vec::new();
+        // We need to store owned values for selectors, since ArgSel holds references.
+        let (mut a_val, mut a_root) = (None, None);
+        let (mut b_val, mut b_root) = (None, None);
+        let (mut c_val, mut c_root) = (None, None);
 
-            // Try to bind each position
-            if let StatementTmplArg::Wildcard(w) = &args[0] {
-                if !store.bindings.contains_key(&w.index) {
-                    if let Some(val) = row.a.as_literal() {
-                        binds.push((w.index, val.clone()));
-                    } else {
-                        continue; // Skip this row if we can't bind
-                    }
-                } else if let Some(bound_val) = store.bindings.get(&w.index) {
-                    if let Some(val) = row.a.as_literal() {
-                        if bound_val != val {
-                            continue; // Values don't match
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-            } else if let StatementTmplArg::Literal(expected) = &args[0] {
-                if let Some(val) = row.a.as_literal() {
-                    println!(
-                        "expected: {}, val: {}",
-                        expected.to_podlang_string(),
-                        val.to_podlang_string()
-                    );
-                    if expected != val {
-                        continue; // Literal doesn't match
-                    }
-                } else {
-                    continue;
-                }
-            }
+        let sel_a = arg_to_selector(&args[0], store, &mut a_val, &mut a_root);
+        let sel_b = arg_to_selector(&args[1], store, &mut b_val, &mut b_root);
+        let sel_c = arg_to_selector(&args[2], store, &mut c_val, &mut c_root);
 
-            // Try to bind position B
-            if let StatementTmplArg::Wildcard(w) = &args[1] {
-                if !store.bindings.contains_key(&w.index) {
-                    if let Some(val) = row.b.as_literal() {
-                        binds.push((w.index, val.clone()));
-                    } else {
-                        continue;
-                    }
-                } else if let Some(bound_val) = store.bindings.get(&w.index) {
-                    if let Some(val) = row.b.as_literal() {
-                        if bound_val != val {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-            } else if let StatementTmplArg::Literal(expected) = &args[1] {
-                if let Some(val) = row.b.as_literal() {
-                    if expected != val {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
-            }
+        let results = edb.query_ternary(TernaryPred::HashOf, sel_a, sel_b, sel_c);
 
-            // Try to bind position C
-            if let StatementTmplArg::Wildcard(w) = &args[2] {
-                if !store.bindings.contains_key(&w.index) {
-                    if let Some(val) = row.c.as_literal() {
-                        binds.push((w.index, val.clone()));
-                    } else {
-                        continue;
-                    }
-                } else if let Some(bound_val) = store.bindings.get(&w.index) {
-                    if let Some(val) = row.c.as_literal() {
-                        if bound_val != val {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-            } else if let StatementTmplArg::Literal(expected) = &args[2] {
-                if let Some(val) = row.c.as_literal() {
-                    if expected != val {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
-            }
-
-            // If we got here, all args matched
-            choices.push(Choice {
-                bindings: binds,
-                op_tag: OpTag::CopyStatement { source: row.src },
-            });
-        }
-
-        if choices.is_empty() {
-            // No matches found - suspend on unbound wildcards
-            let unbound_wildcards: Vec<usize> = args
-                .iter()
-                .filter_map(|arg| match arg {
-                    StatementTmplArg::Wildcard(w) if !store.bindings.contains_key(&w.index) => {
-                        Some(w.index)
-                    }
-                    _ => None,
-                })
-                .collect();
-
-            if unbound_wildcards.is_empty() {
+        if results.is_empty() {
+            let waits = crate::prop::wildcards_in_args(args)
+                .into_iter()
+                .filter(|i| !store.bindings.contains_key(i))
+                .collect::<Vec<_>>();
+            return if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
-                PropagatorResult::Suspend {
-                    on: unbound_wildcards,
+                PropagatorResult::Suspend { on: waits }
+            };
+        }
+
+        let choices: Vec<crate::prop::Choice> = results
+            .into_iter()
+            .map(|(stmt, pod_ref)| {
+                let bindings = create_bindings(args, &stmt, store);
+                crate::prop::Choice {
+                    bindings,
+                    op_tag: OpTag::CopyStatement { source: pod_ref },
                 }
-            }
+            })
+            .collect();
+
+        if choices.is_empty() {
+            PropagatorResult::Contradiction
         } else {
             PropagatorResult::Choices {
                 alternatives: choices,
@@ -292,19 +200,19 @@ pub fn register_hashof_handlers(reg: &mut crate::op::OpRegistry) {
 mod tests {
     use pod2::{
         lang::PrettyPrint,
-        middleware::{StatementTmplArg, Value},
+        middleware::{Statement, StatementTmplArg, Value},
     };
 
     use super::*;
     use crate::{
-        edb::MockEdbView,
+        edb::ImmutableEdbBuilder,
         test_helpers::{self, args_from},
         types::ConstraintStore,
     };
 
     #[test]
     fn hashof_compute_hash() {
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
@@ -326,7 +234,7 @@ mod tests {
 
     #[test]
     fn hashof_all_ground_invalid() {
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
@@ -337,7 +245,7 @@ mod tests {
 
     #[test]
     fn hashof_unknown_b_suspends() {
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
@@ -349,7 +257,7 @@ mod tests {
 
     #[test]
     fn hashof_unknown_c_suspends() {
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
@@ -361,7 +269,6 @@ mod tests {
 
     #[test]
     fn copy_hashof_validates_all_ground() {
-        let mut edb = MockEdbView::default();
         let mut store = ConstraintStore::default();
         let handler = CopyHashOfHandler;
         let src = crate::types::PodRef(test_helpers::root("s"));
@@ -369,7 +276,12 @@ mod tests {
         let val_b = Value::from("hello");
         let val_c = Value::from("world");
         let hash_val = Value::from(hash_values(&[val_b.clone(), val_c.clone()]));
-        edb.add_hash_row(hash_val.clone(), val_b.clone(), val_c.clone(), src);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::HashOf(hash_val.clone().into(), val_b.into(), val_c.into()),
+                src,
+            )
+            .build();
 
         // Copy handler should validate all-ground facts
         let args = args_from(&format!(
@@ -393,15 +305,14 @@ mod tests {
 
     #[test]
     fn copy_hashof_matches_two_of_three_and_binds_third() {
-        let mut edb = MockEdbView::default();
         let src = crate::types::PodRef(test_helpers::root("s"));
         let hash_val = Value::from(hash_values(&[Value::from("hello"), Value::from("world")]));
-        edb.add_hash_row(
-            hash_val.clone(),
-            Value::from("hello"),
-            Value::from("world"),
-            src,
-        );
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::HashOf(hash_val.clone().into(), "hello".into(), "world".into()),
+                src,
+            )
+            .build();
         let mut store = ConstraintStore::default();
         let handler = CopyHashOfHandler;
         // Match first two, bind third
@@ -409,10 +320,9 @@ mod tests {
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
-                assert!(alternatives.iter().any(|ch| ch
-                    .bindings
+                assert!(alternatives
                     .iter()
-                    .any(|(i, v)| *i == 0 || (*i == 2 && *v == hash_val))));
+                    .any(|ch| ch.bindings.iter().any(|(i, v)| *i == 0 && *v == hash_val)));
             }
             other => panic!("unexpected: {other:?}"),
         }
@@ -420,7 +330,7 @@ mod tests {
 
     #[test]
     fn copy_hashof_no_match_contradiction() {
-        let edb = MockEdbView::default(); // Empty EDB
+        let edb = ImmutableEdbBuilder::new().build(); // Empty EDB
         let mut store = ConstraintStore::default();
         let handler = CopyHashOfHandler;
 
@@ -431,7 +341,7 @@ mod tests {
 
     #[test]
     fn hashof_wrong_argument_count_contradiction() {
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 

@@ -1,7 +1,8 @@
 use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg, Value};
 
+use super::util::{arg_to_selector, create_bindings};
 use crate::{
-    edb::EdbView,
+    edb::{EdbView, TernaryPred},
     op::OpHandler,
     prop::PropagatorResult,
     types::{ConstraintStore, OpTag},
@@ -51,56 +52,46 @@ impl OpHandler for CopyContainsHandler {
         if args.len() != 3 {
             return PropagatorResult::Contradiction;
         }
-        let (a_root, a_key, a_val) = (&args[0], &args[1], &args[2]);
-        // Need root and key to proceed
-        let root = match root_from_arg(a_root, store) {
-            Some(r) => r,
-            None => {
-                // If either wildcard is unbound, suspend on them
-                let waits = crate::prop::wildcards_in_args(args)
-                    .into_iter()
-                    .filter(|i| !store.bindings.contains_key(i))
-                    .collect::<Vec<_>>();
-                return if waits.is_empty() {
-                    PropagatorResult::Contradiction
-                } else {
-                    PropagatorResult::Suspend { on: waits }
-                };
-            }
-        };
-        let key = match key_from_arg(a_key, store) {
-            Some(k) => k,
-            None => return PropagatorResult::Contradiction,
-        };
 
-        match a_val {
-            // Bind the value wildcard from copied facts
-            StatementTmplArg::Wildcard(wv) => {
-                let mut alts = Vec::new();
-                for (v, src) in edb.contains_copied_values(&root, &key) {
-                    alts.push(crate::prop::Choice {
-                        bindings: vec![(wv.index, v)],
-                        op_tag: OpTag::CopyStatement { source: src },
-                    });
-                }
-                if alts.is_empty() {
-                    // No copied fact to bind value → Contradiction (lets other handlers try)
-                    PropagatorResult::Contradiction
-                } else {
-                    PropagatorResult::Choices { alternatives: alts }
-                }
-            }
-            // Literal or bound wildcard value: check for copied provenance
-            StatementTmplArg::Literal(v) => match edb.contains_source(&root, &key, v) {
-                Some(crate::edb::ContainsSource::Copied { pod }) => PropagatorResult::Entailed {
-                    bindings: vec![],
-                    op_tag: OpTag::CopyStatement { source: pod },
-                },
-                _ => PropagatorResult::Contradiction,
-            },
-            StatementTmplArg::AnchoredKey(_, _) | StatementTmplArg::None => {
-                // Not a valid value for Contains; fail this branch
+        // We need to store owned values for selectors, since ArgSel holds references.
+        let (mut a_val, mut a_root) = (None, None);
+        let (mut b_val, mut b_root) = (None, None);
+        let (mut c_val, mut c_root) = (None, None);
+
+        let sel_a = arg_to_selector(&args[0], store, &mut a_val, &mut a_root);
+        let sel_b = arg_to_selector(&args[1], store, &mut b_val, &mut b_root);
+        let sel_c = arg_to_selector(&args[2], store, &mut c_val, &mut c_root);
+
+        let results = edb.query_ternary(TernaryPred::Contains, sel_a, sel_b, sel_c);
+
+        if results.is_empty() {
+            let waits = crate::prop::wildcards_in_args(args)
+                .into_iter()
+                .filter(|i| !store.bindings.contains_key(i))
+                .collect::<Vec<_>>();
+            return if waits.is_empty() {
                 PropagatorResult::Contradiction
+            } else {
+                PropagatorResult::Suspend { on: waits }
+            };
+        }
+
+        let choices: Vec<crate::prop::Choice> = results
+            .into_iter()
+            .map(|(stmt, pod_ref)| {
+                let bindings = create_bindings(args, &stmt, store);
+                crate::prop::Choice {
+                    bindings,
+                    op_tag: OpTag::CopyStatement { source: pod_ref },
+                }
+            })
+            .collect();
+
+        if choices.is_empty() {
+            PropagatorResult::Contradiction
+        } else {
+            PropagatorResult::Choices {
+                alternatives: choices,
             }
         }
     }
@@ -221,18 +212,17 @@ pub fn register_contains_handlers(reg: &mut crate::op::OpRegistry) {
 
 #[cfg(test)]
 mod tests {
-    use pod2::middleware::{containers::Dictionary, Params, Value};
+    use pod2::middleware::{containers::Dictionary, Params, Statement, Value};
 
     use super::*;
     use crate::{
-        edb::MockEdbView,
+        edb::ImmutableEdbBuilder,
         test_helpers::{self, args_from},
         types::{ConstraintStore, PodRef},
     };
 
     #[test]
     fn copy_contains_binds_value_when_root_key_known() {
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -241,7 +231,12 @@ mod tests {
         .unwrap();
         let root = dict.commitment();
         let pod = PodRef(root);
-        edb.add_copied_contains(root, test_helpers::key("k"), Value::from(7), pod.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Contains(root.into(), "k".into(), 7.into()),
+                pod.clone(),
+            )
+            .build();
 
         let mut store = ConstraintStore::default();
         // Bind root and key via wildcards or literals; here we bind root as wildcard
@@ -263,7 +258,6 @@ mod tests {
 
     #[test]
     fn contains_from_entries_binds_value_from_full_dict() {
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -271,7 +265,7 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));
@@ -291,7 +285,6 @@ mod tests {
 
     #[test]
     fn contains_handlers_prefer_generated_when_both_exist() {
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -300,8 +293,13 @@ mod tests {
         .unwrap();
         let root = dict.commitment();
         // Both copied and full
-        edb.add_copied_contains(root, test_helpers::key("k"), Value::from(1), PodRef(root));
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Contains(root.into(), "k".into(), 1.into()),
+                PodRef(root),
+            )
+            .add_full_dict(dict)
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));

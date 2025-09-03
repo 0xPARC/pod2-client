@@ -1,17 +1,15 @@
-#[cfg(test)]
-use pod2::middleware::{AnchoredKey, Statement, ValueRef};
-use pod2::middleware::{NativePredicate, StatementTmplArg, Value};
+use pod2::middleware::{NativePredicate, StatementTmplArg};
 use tracing::trace;
 
+use super::util::{arg_to_selector, create_bindings};
 use crate::{
-    edb::{ArgSel, BinaryPred, EdbView},
+    edb::{BinaryPred, EdbView},
     op::OpHandler,
     prop::{Choice, PropagatorResult},
     types::{ConstraintStore, OpTag},
     util::{
-        binary_view, bound_root, contains_stmt, entailed_if_both_bound_equal,
-        entailed_if_bound_matches, enumerate_choices_for, enumerate_other_root_choices,
-        tag_from_source,
+        bound_root, contains_stmt, entailed_if_both_bound_equal, entailed_if_bound_matches,
+        enumerate_choices_for, enumerate_other_root_choices, tag_from_source,
     },
 };
 
@@ -22,125 +20,47 @@ impl OpHandler for CopyEqualHandler {
     fn propagate(
         &self,
         args: &[StatementTmplArg],
-        _store: &mut ConstraintStore,
+        store: &mut ConstraintStore,
         edb: &dyn EdbView,
     ) -> PropagatorResult {
         if args.len() != 2 {
             return PropagatorResult::Contradiction;
         }
-        let left = &args[0];
-        let right = &args[1];
-        let mut choices: Vec<Choice> = Vec::new();
-        match (left, right) {
-            // CopyEqual binds value from Equal(AK, v) when root bound
-            (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Wildcard(wv)) => {
-                if let Some(root) = bound_root(_store, wc_l.index) {
-                    for view in binary_view(
-                        edb,
-                        BinaryPred::Equal,
-                        ArgSel::AkExact {
-                            root: &root,
-                            key: key_l,
-                        },
-                        ArgSel::Val,
-                    ) {
-                        if let Some(val) = view.right.as_literal() {
-                            choices.push(Choice {
-                                bindings: vec![(wv.index, val.clone())],
-                                op_tag: OpTag::CopyStatement { source: view.src },
-                            });
-                        }
-                    }
-                }
-            }
-            // CopyEqual binds value from Equal(v, AK) when root bound
-            (StatementTmplArg::Wildcard(wv), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                if let Some(root) = bound_root(_store, wc_r.index) {
-                    for view in binary_view(
-                        edb,
-                        BinaryPred::Equal,
-                        ArgSel::Val,
-                        ArgSel::AkExact {
-                            root: &root,
-                            key: key_r,
-                        },
-                    ) {
-                        if let Some(val) = view.left.as_literal() {
-                            choices.push(Choice {
-                                bindings: vec![(wv.index, val.clone())],
-                                op_tag: OpTag::CopyStatement { source: view.src },
-                            });
-                        }
-                    }
-                }
-            }
-            (StatementTmplArg::AnchoredKey(wc_l, key_l), StatementTmplArg::Literal(val_r)) => {
-                for v in binary_view(
-                    edb,
-                    BinaryPred::Equal,
-                    ArgSel::AkByKey(key_l),
-                    ArgSel::Literal(val_r),
-                ) {
-                    if let Some((root, _)) = v.left.as_ak() {
-                        choices.push(Choice {
-                            bindings: vec![(wc_l.index, Value::from(*root))],
-                            op_tag: OpTag::CopyStatement { source: v.src },
-                        });
-                    }
-                }
-            }
-            (StatementTmplArg::Literal(val_l), StatementTmplArg::AnchoredKey(wc_r, key_r)) => {
-                for v in binary_view(
-                    edb,
-                    BinaryPred::Equal,
-                    ArgSel::Literal(val_l),
-                    ArgSel::AkByKey(key_r),
-                ) {
-                    if let Some((root, _)) = v.right.as_ak() {
-                        choices.push(Choice {
-                            bindings: vec![(wc_r.index, Value::from(*root))],
-                            op_tag: OpTag::CopyStatement { source: v.src },
-                        });
-                    }
-                }
-            }
-            (
-                StatementTmplArg::AnchoredKey(wc_l, key_l),
-                StatementTmplArg::AnchoredKey(wc_r, key_r),
-            ) => {
-                for v in binary_view(
-                    edb,
-                    BinaryPred::Equal,
-                    ArgSel::AkByKey(key_l),
-                    ArgSel::AkByKey(key_r),
-                ) {
-                    if let (Some((rl, _)), Some((rr, _))) = (v.left.as_ak(), v.right.as_ak()) {
-                        choices.push(Choice {
-                            bindings: vec![
-                                (wc_l.index, Value::from(*rl)),
-                                (wc_r.index, Value::from(*rr)),
-                            ],
-                            op_tag: OpTag::CopyStatement { source: v.src },
-                        });
-                    }
-                }
-            }
-            // For V–V copy we would need an Equal(lit,lit) fact; skip in MVP unless present in EDB
-            (StatementTmplArg::Literal(_), StatementTmplArg::Literal(_)) => {}
-            _ => {}
-        }
-        if choices.is_empty() {
-            // Under-constrained: suspend on any referenced wildcards
-            let waits_all = crate::prop::wildcards_in_args(args);
-            let waits: Vec<_> = waits_all
+
+        // We need to store owned values for selectors, since ArgSel holds references.
+        let (mut l_val, mut l_root) = (None, None);
+        let (mut r_val, mut r_root) = (None, None);
+
+        let lhs = arg_to_selector(&args[0], store, &mut l_val, &mut l_root);
+        let rhs = arg_to_selector(&args[1], store, &mut r_val, &mut r_root);
+
+        let results = edb.query_binary(BinaryPred::Equal, lhs, rhs);
+
+        if results.is_empty() {
+            let waits = crate::prop::wildcards_in_args(args)
                 .into_iter()
-                .filter(|i| !_store.bindings.contains_key(i))
-                .collect();
-            if waits.is_empty() {
+                .filter(|i| !store.bindings.contains_key(i))
+                .collect::<Vec<_>>();
+            return if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
                 PropagatorResult::Suspend { on: waits }
-            }
+            };
+        }
+
+        let choices: Vec<crate::prop::Choice> = results
+            .into_iter()
+            .map(|(stmt, pod_ref)| {
+                let bindings = create_bindings(args, &stmt, store);
+                crate::prop::Choice {
+                    bindings,
+                    op_tag: OpTag::CopyStatement { source: pod_ref },
+                }
+            })
+            .collect();
+
+        if choices.is_empty() {
+            PropagatorResult::Contradiction
         } else {
             PropagatorResult::Choices {
                 alternatives: choices,
@@ -380,11 +300,11 @@ pub fn register_equal_handlers(reg: &mut crate::op::OpRegistry) {
 
 #[cfg(test)]
 mod tests {
-    use pod2::middleware::{containers::Dictionary, Params, Value};
+    use pod2::middleware::{containers::Dictionary, AnchoredKey, Params, Statement, Value};
 
     use super::*;
     use crate::{
-        edb::MockEdbView,
+        edb::ImmutableEdbBuilder,
         test_helpers::{self, args_from},
         types::{ConstraintStore, PodRef},
     };
@@ -392,7 +312,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_v_generated_bound() {
         // Equal(?R["k"], 1) with bound R and full dict containing (k -> 1)
-        let mut edb = MockEdbView::default();
         // Build a real dictionary with {k:1}
         let params = Params::default();
         let dict = Dictionary::new(
@@ -401,7 +320,7 @@ mod tests {
         )
         .unwrap();
         let r = dict.commitment();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
         // wildcard index is 0 for first ?R variable in a simple REQUEST
@@ -428,7 +347,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_v_bound_to_full_dictionary_value_normalizes_root() {
         // Bind the AK root wildcard to a full Dictionary value; handler should normalize to its commitment
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -436,7 +354,9 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        edb.add_full_dict(dict.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_full_dict(dict.clone())
+            .build();
 
         let mut store = ConstraintStore::default();
         // Attempt to bind wildcard to the full dictionary value (normalize to commitment internally)
@@ -463,7 +383,6 @@ mod tests {
     #[test]
     fn copy_equal_binds_wildcard_from_left_ak() {
         // CopyEqual should bind ?X when ?R is bound and Equal(R["k"], 1) exists to copy
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -472,7 +391,12 @@ mod tests {
         .unwrap();
         let r = dict.commitment();
         let src = PodRef(r);
-        edb.add_equal_row(r, test_helpers::key("k"), Value::from(1), src.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Equal(AnchoredKey::new(r, test_helpers::key("k")).into(), 1.into()),
+                src.clone(),
+            )
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(r)); // bind ?R
@@ -498,7 +422,6 @@ mod tests {
     #[test]
     fn copy_equal_binds_wildcard_from_right_ak() {
         // CopyEqual should bind ?X when ?R is bound and Equal(1, R["k"]) exists to copy
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -508,11 +431,10 @@ mod tests {
         let r = dict.commitment();
         let src = PodRef(r);
         // Add Equal(lit, AK)
-        let st = Statement::Equal(
-            ValueRef::Literal(Value::from(1)),
-            ValueRef::Key(AnchoredKey::new(r, test_helpers::key("k"))),
-        );
-        edb.equal_rows.push((st, src.clone()));
+        let st = Statement::Equal(1.into(), AnchoredKey::new(r, test_helpers::key("k")).into());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(st, src.clone())
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(1, Value::from(r)); // bind ?R (second wildcard)
@@ -538,7 +460,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_v_copied_unbound() {
         // Equal(?R["k"], 1) with unbound R and only a copied Contains fact
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -547,7 +468,12 @@ mod tests {
         .unwrap();
         let r = dict.commitment();
         let pod = PodRef(r);
-        edb.add_copied_contains(r, test_helpers::key("k"), Value::from(1), pod.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Contains(r.into(), "k".into(), 1.into()),
+                pod.clone(),
+            )
+            .build();
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
@@ -575,7 +501,6 @@ mod tests {
     #[test]
     fn equal_from_entries_v_ak_generated_unbound() {
         // Equal(1, ?R["k"]) unbound R, full dict
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -583,7 +508,7 @@ mod tests {
         )
         .unwrap();
         let r = dict.commitment();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
         let args = args_from("REQUEST(Equal(1, ?R[\"k\"]))");
@@ -606,7 +531,6 @@ mod tests {
     #[test]
     fn equal_from_entries_v_ak_copied_unbound() {
         // Equal(1, ?R["k"]) unbound R, only copied Contains
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -615,7 +539,12 @@ mod tests {
         .unwrap();
         let r = dict.commitment();
         let pod = PodRef(r);
-        edb.add_copied_contains(r, test_helpers::key("k"), Value::from(1), pod.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Contains(r.into(), "k".into(), 1.into()),
+                pod.clone(),
+            )
+            .build();
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
@@ -639,7 +568,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_ak_one_bound_enumerate_generated() {
         // Equal(?L["a"], ?R["b"]) with left bound (value 7), right unbound; enumerate right from full dict
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         // Left dict has a:7 (can be copied or full; contains_value prefers copied if both)
         let dict_l = Dictionary::new(
@@ -650,7 +578,6 @@ mod tests {
         let rl = dict_l.commitment();
         // Register copied fact for left so contains_value works
         let podl = PodRef(rl);
-        edb.add_copied_contains(rl, test_helpers::key("a"), Value::from(7), podl);
         // Right dict has b:7 as full dict to generate
         let dict_r = Dictionary::new(
             params.max_depth_mt_containers,
@@ -658,7 +585,10 @@ mod tests {
         )
         .unwrap();
         let rr = dict_r.commitment();
-        edb.add_full_dict(dict_r);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(Statement::Contains(rl.into(), "a".into(), 7.into()), podl)
+            .add_full_dict(dict_r)
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(rl)); // bind left
@@ -697,7 +627,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_ak_one_bound_enumerate_copied() {
         // Equal(?L["a"], ?R["b"]) with left bound (value 7), right unbound; enumerate right from copied Contains
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         // Left dict has a:7
         let dict_l = Dictionary::new(
@@ -707,7 +636,6 @@ mod tests {
         .unwrap();
         let rl = dict_l.commitment();
         let podl = PodRef(rl);
-        edb.add_copied_contains(rl, test_helpers::key("a"), Value::from(7), podl);
         // Right copied contains b:7
         let dict_r = Dictionary::new(
             params.max_depth_mt_containers,
@@ -716,7 +644,16 @@ mod tests {
         .unwrap();
         let rr = dict_r.commitment();
         let podr = PodRef(rr);
-        edb.add_copied_contains(rr, test_helpers::key("b"), Value::from(7), podr.clone());
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(
+                Statement::Contains(rl.into(), "a".into(), 7.into()),
+                podl.clone(),
+            )
+            .add_statement_for_test(
+                Statement::Contains(rr.into(), "b".into(), 7.into()),
+                podr.clone(),
+            )
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(rl)); // bind left
@@ -755,7 +692,7 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_ak_both_unbound_suspends() {
         // Both AK roots unbound; handler should suspend on both wildcard indices
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
         let args = args_from(r#"REQUEST(Equal(?L["a"], ?R["b"]))"#);
@@ -772,14 +709,13 @@ mod tests {
     #[test]
     fn equal_from_entries_negative_no_match() {
         // AK–V: query Equal(?R["k"], 1) but only have k:2 in full dict → no choices
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
             [(test_helpers::key("k"), Value::from(2))].into(),
         )
         .unwrap();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
@@ -804,10 +740,10 @@ mod tests {
         .unwrap();
         let rl = dict_l.commitment();
         let rr = dict_r.commitment();
-        let mut edb2 = MockEdbView::default();
-        // Register full dicts so contains_value works
-        edb2.add_full_dict(dict_l);
-        edb2.add_full_dict(dict_r);
+        let edb2 = ImmutableEdbBuilder::new()
+            .add_full_dict(dict_l)
+            .add_full_dict(dict_r)
+            .build();
 
         let mut store2 = ConstraintStore::default();
         store2.bindings.insert(0, Value::from(rl));
@@ -823,7 +759,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_ak_both_bound_equal_mixed_sources() {
         // Equal(?L["a"], ?R["b"]) with both roots bound, values equal; left copied, right generated
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict_l = Dictionary::new(
             params.max_depth_mt_containers,
@@ -838,8 +773,10 @@ mod tests {
         let rl = dict_l.commitment();
         let rr = dict_r.commitment();
         let podl = PodRef(rl);
-        edb.add_copied_contains(rl, test_helpers::key("a"), Value::from(7), podl);
-        edb.add_full_dict(dict_r);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(Statement::Contains(rl.into(), "a".into(), 7.into()), podl)
+            .add_full_dict(dict_r)
+            .build();
 
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(rl));
@@ -870,7 +807,6 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_wildcard_bind_value_when_root_bound() {
         // Equal(?R["k"], ?X) with bound R and full dict containing (k -> 1) binds ?X=1
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -878,7 +814,7 @@ mod tests {
         )
         .unwrap();
         let r = dict.commitment();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
         // wildcard index 0 for ?R, 1 for ?X in this template order
@@ -907,7 +843,7 @@ mod tests {
     #[test]
     fn equal_from_entries_ak_wildcard_unbound_suspends() {
         // Equal(?R["k"], ?X) with both unbound should suspend (no guessing)
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
         let args = args_from("REQUEST(Equal(?R[\"k\"], ?X))");
@@ -924,7 +860,6 @@ mod tests {
     #[test]
     fn equal_from_entries_wildcard_ak_bound_value_enumerates() {
         // Equal(?X, ?R["k"]) with ?X bound to 1 enumerates roots with k->1
-        let mut edb = MockEdbView::default();
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -932,7 +867,7 @@ mod tests {
         )
         .unwrap();
         let r = dict.commitment();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
         let mut store = ConstraintStore::default();
         // ?X is first wildcard (index 0), ?R is index 1
         store.bindings.insert(0, Value::from(1));

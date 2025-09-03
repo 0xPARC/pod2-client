@@ -55,7 +55,7 @@ where
 
     let mut builder = MainPodBuilder::new(params, vd_set);
     // Resolve required input pods from the EDB using the answer's provenance
-    let required = edb.required_pods_for_answer(answer);
+    let required = answer.required_pods();
     if required.len() > params.max_input_pods {
         return Err(format!(
             "replay requires {} input pods; exceeds max_input_pods {}",
@@ -205,7 +205,6 @@ where
             let public = public_selector(head_stmt);
             // Insert operation as private to ensure an earlier source for public copies,
             // then mark as public if selected.
-            println!("op: {op}");
             let st = builder.priv_op(op).map_err(|e| e.to_string())?;
             inserted_ops += 1;
             if public {
@@ -218,8 +217,6 @@ where
             }
         }
     }
-
-    println!("builder: {builder}");
 
     prove_with(&builder)
 }

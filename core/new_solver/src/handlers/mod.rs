@@ -18,3 +18,8 @@ pub mod hashof;
 pub use hashof::register_hashof_handlers;
 pub mod signed_by;
 pub use signed_by::register_signed_by_handlers;
+pub mod binary;
+pub mod ternary;
+pub mod util;
+//pub mod publickeyof;
+//pub use publickeyof::register_publickeyof_handlers;

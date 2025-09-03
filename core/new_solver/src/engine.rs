@@ -1540,13 +1540,13 @@ impl Table {
 mod tests {
     use pod2::{
         lang::parse,
-        middleware::{containers::Dictionary, Key, Params, Value},
+        middleware::{containers::Dictionary, Key, Params, Statement, Value},
     };
     use tracing_subscriber::{fmt, EnvFilter};
 
     use super::*;
     use crate::{
-        edb::MockEdbView,
+        edb::ImmutableEdbBuilder,
         handlers::{
             lteq::register_lteq_handlers, register_contains_handlers, register_equal_handlers,
             register_lt_handlers, register_sumof_handlers,
@@ -1572,8 +1572,7 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        let mut edb = MockEdbView::default();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         // Registry with Equal and Lt handlers
         let mut reg = OpRegistry::default();
@@ -1660,8 +1659,8 @@ mod tests {
             [(Key::from("k"), Value::from(1))].into(),
         )
         .unwrap();
-        let mut edb = MockEdbView::default();
-        edb.add_full_dict(dict);
+        let root = dict.commitment();
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -1687,7 +1686,7 @@ mod tests {
     fn engine_fair_delivery_interleaves_with_independent_goal() {
         // Many roots for k:1 to create a large table of answers, and a separate small goal Equal(?S["x"],3).
         let params = Params::default();
-        let mut edb = MockEdbView::default();
+        let mut builder = ImmutableEdbBuilder::new();
         // Add 20 distinct roots with k:1 (make roots unique by adding a varying filler key)
         for i in 0..20 {
             let d = Dictionary::new(
@@ -1699,7 +1698,7 @@ mod tests {
                 .into(),
             )
             .unwrap();
-            edb.add_full_dict(d);
+            builder = builder.add_full_dict(d);
         }
         // Add independent root S with x:3
         let d_s = Dictionary::new(
@@ -1708,7 +1707,7 @@ mod tests {
         )
         .unwrap();
         let root_s = d_s.commitment();
-        edb.add_full_dict(d_s);
+        let edb = builder.add_full_dict(d_s).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -1781,7 +1780,7 @@ mod tests {
             .with_env_filter(EnvFilter::from_default_env())
             .try_init();
         // Build two trivial frames with prepopulated bindings and no goals; check answer order
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let reg = OpRegistry::default();
 
         // Depth-first (default): last enqueued should be answered first
@@ -1847,7 +1846,7 @@ mod tests {
             .try_init();
         // Build 5 roots each with k:1; query Equal(?R["k"], 1). Ordering should be stable across runs.
         let params = Params::default();
-        let mut edb = MockEdbView::default();
+        let mut builder = ImmutableEdbBuilder::new();
         let mut roots = Vec::new();
         for _i in 0..5 {
             let key = Key::from("k");
@@ -1857,9 +1856,10 @@ mod tests {
             )
             .unwrap();
             let r = dict.commitment();
-            edb.add_full_dict(dict);
+            builder = builder.add_full_dict(dict);
             roots.push(r);
         }
+        let edb = builder.build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -1927,7 +1927,6 @@ mod tests {
     fn engine_propagates_calling_context_constraints_into_subcall() {
         // Parent has Lt(?A, 20); subcall binds ?A via Equal from entries
         let params = Params::default();
-        let mut edb = MockEdbView::default();
         // Two dicts: one satisfies A=15 (<20), another violates A=25
         let d_ok = Dictionary::new(
             params.max_depth_mt_containers,
@@ -1941,8 +1940,10 @@ mod tests {
         .unwrap();
         let r_ok = d_ok.commitment();
         let r_bad = d_bad.commitment();
-        edb.add_full_dict(d_ok);
-        edb.add_full_dict(d_bad);
+        let edb = ImmutableEdbBuilder::new()
+            .add_full_dict(d_ok)
+            .add_full_dict(d_bad)
+            .build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -1984,13 +1985,12 @@ mod tests {
     fn engine_does_not_propagate_constraints_with_private_vars() {
         // A parent constraint mentioning a non-head wildcard should not be propagated
         let params = Params::default();
-        let mut edb = MockEdbView::default();
         let d = Dictionary::new(
             params.max_depth_mt_containers,
             [(Key::from("x"), Value::from(10))].into(),
         )
         .unwrap();
-        edb.add_full_dict(d);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(d).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2055,8 +2055,7 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        let mut edb = MockEdbView::default();
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2135,7 +2134,7 @@ mod tests {
     #[test]
     fn engine_single_frame_suspends_when_no_progress() {
         // Single goal: Lt(?R["x"], 10) with no other goal to bind ?R → should park the frame
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut reg = OpRegistry::default();
         register_lt_handlers(&mut reg);
         let processed = parse(
@@ -2177,15 +2176,7 @@ mod tests {
         )
         .unwrap();
         let root = dict.commitment();
-        let mut edb = MockEdbView::default();
-        // Register both sources for the same (root, key, value)
-        edb.add_copied_contains(
-            root,
-            Key::from("k"),
-            Value::from(1),
-            crate::types::PodRef(root),
-        );
-        edb.add_full_dict(dict);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2252,7 +2243,7 @@ mod tests {
 
         let params = Params::default();
         // EDB: R has some_key:20; C has other_key:20
-        let mut edb = MockEdbView::default();
+        let builder = ImmutableEdbBuilder::new();
         let dict_r = Dictionary::new(
             params.max_depth_mt_containers,
             [(Key::from("some_key"), Value::from(20))].into(),
@@ -2265,8 +2256,7 @@ mod tests {
         .unwrap();
         let root_r = dict_r.commitment();
         let root_c = dict_c.commitment();
-        edb.add_full_dict(dict_r);
-        edb.add_full_dict(dict_c);
+        let edb = builder.add_full_dict(dict_r).add_full_dict(dict_c).build();
 
         // Registry with all needed native handlers
         let mut reg = OpRegistry::default();
@@ -2334,21 +2324,21 @@ mod tests {
 
         let params = Params::default();
         // EDB: two roots with a:1 and a:2 respectively
-        let mut edb = MockEdbView::default();
+        let mut builder = ImmutableEdbBuilder::new();
         let d1 = Dictionary::new(
             params.max_depth_mt_containers,
             [(Key::from("a"), Value::from(1))].into(),
         )
         .unwrap();
         let r1 = d1.commitment();
-        edb.add_full_dict(d1);
+        builder = builder.add_full_dict(d1);
         let d2 = Dictionary::new(
             params.max_depth_mt_containers,
             [(Key::from("a"), Value::from(2))].into(),
         )
         .unwrap();
         let r2 = d2.commitment();
-        edb.add_full_dict(d2);
+        let edb = builder.add_full_dict(d2).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2397,7 +2387,6 @@ mod tests {
     fn engine_custom_or_with_custom_branch() {
         // OR with a custom subcall branch (non-recursive) + native branch
         let params = Params::default();
-        let mut edb = MockEdbView::default();
         let _ = env_logger::builder().is_test(true).try_init();
         // Root has x:7
         let d = Dictionary::new(
@@ -2406,7 +2395,7 @@ mod tests {
         )
         .unwrap();
         let r = d.commitment();
-        edb.add_full_dict(d);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(d).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2532,9 +2521,10 @@ mod tests {
         let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
 
         // EDB with a custom head my_pred(10) copied from some PodRef
-        let mut edb = MockEdbView::default();
         let fake_src = crate::types::PodRef(pod2::middleware::Hash::from(V::from(42).raw()));
-        edb.add_custom_row(cpr.clone(), vec![V::from(10)], fake_src);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(Statement::Custom(cpr.clone(), vec![V::from(10)]), fake_src)
+            .build();
 
         // No handlers needed for the failing Equal(?A,9999) since it won't match
         let reg = OpRegistry::default();
@@ -2584,9 +2574,10 @@ mod tests {
         let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
 
         // EDB custom row for my_pred(10)
-        let mut edb = MockEdbView::default();
         let fake_src = crate::types::PodRef(pod2::middleware::Hash::from(V::from(77).raw()));
-        edb.add_custom_row(cpr.clone(), vec![V::from(10)], fake_src);
+        let edb = ImmutableEdbBuilder::new()
+            .add_statement_for_test(Statement::Custom(cpr.clone(), vec![V::from(10)]), fake_src)
+            .build();
 
         // Handlers to allow rule-based deduction via SumOf
         let mut reg = OpRegistry::default();
@@ -2625,14 +2616,13 @@ mod tests {
     fn engine_custom_or_rejects_self_recursion() {
         // Bad(R) = OR(Bad(?R), Equal(?R["y"], 1)) should reject the recursive branch and still solve via Equal
         let params = Params::default();
-        let mut edb = MockEdbView::default();
         let d = Dictionary::new(
             params.max_depth_mt_containers,
             [(Key::from("y"), Value::from(1))].into(),
         )
         .unwrap();
         let r = d.commitment();
-        edb.add_full_dict(d);
+        let edb = ImmutableEdbBuilder::new().add_full_dict(d).build();
 
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
@@ -2670,7 +2660,7 @@ mod tests {
     fn engine_custom_and_self_recursion_yields_empty_rule_table_completed() {
         // AND body with a self-recursive statement is rejected at registration → zero rules for that predicate.
         // The table should be marked complete immediately and no waiter is stored.
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let reg = OpRegistry::default();
 
         // Define a self-recursive AND predicate and call it.
@@ -2708,7 +2698,7 @@ mod tests {
         // dec(A,B) :- SumOf(B, 1, A)
         // step(N)  :- dec(N, M), nat_down(M)
         // nat_down(N) :- OR(Equal(N,0), step(N))
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
         register_lt_handlers(&mut reg);
@@ -2768,7 +2758,7 @@ mod tests {
             .with_env_filter(EnvFilter::from_default_env())
             .try_init();
         // Mutual recursion with base case even(0)
-        let edb = MockEdbView::default();
+        let edb = ImmutableEdbBuilder::new().build();
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
         register_sumof_handlers(&mut reg);

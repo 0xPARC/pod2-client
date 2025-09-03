@@ -169,7 +169,10 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     let edb_builder = edb::ImmutableEdbBuilder::new();
     let edb = edb_builder
         // Only available data is Bob's attestation of Charlie, and Bob's proof
-        // of distance 1 from Alice to Bob
+        // of distance 1 from Alice to Bob.
+        // Charlie only needs to know Bob's distance to Alice, and to have a
+        // friend attestation from Bob, and doesn't need to know anything about
+        // Alice beyond their public key.
         .add_signed_dict(bob_attestation)
         .add_main_pod(&pod)
         .build();

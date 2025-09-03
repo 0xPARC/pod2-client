@@ -78,6 +78,30 @@ pub struct ConstraintStore {
     pub pending_custom: Vec<PendingCustom>,
 }
 
+impl ConstraintStore {
+    pub fn required_pods(&self) -> std::collections::BTreeSet<PodRef> {
+        use std::collections::BTreeSet;
+        fn walk(tag: &OpTag, acc: &mut BTreeSet<PodRef>) {
+            match tag {
+                OpTag::CopyStatement { source } => {
+                    acc.insert(source.clone());
+                }
+                OpTag::Derived { premises } | OpTag::CustomDeduction { premises, .. } => {
+                    for (_, t) in premises.iter() {
+                        walk(t, acc);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut out = BTreeSet::new();
+        for (_stmt, tag) in self.premises.iter() {
+            walk(tag, &mut out);
+        }
+        out
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PendingCustom {
     pub rule_id: CustomPredicateRef,

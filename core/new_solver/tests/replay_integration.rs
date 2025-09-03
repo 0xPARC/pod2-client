@@ -7,8 +7,7 @@ use pod2::{
     middleware::{containers::Dictionary, AnchoredKey, Key, Params, Statement, Value, ValueRef},
 };
 use pod2_new_solver::{
-    build_pod_from_answer_top_level_public,
-    edb::MockEdbView,
+    build_pod_from_answer_top_level_public, edb,
     types::{ConstraintStore, OpTag},
 };
 
@@ -77,10 +76,11 @@ fn replay_builds_pod_with_equal_ak_ak_and_signedby() {
         .push((signed_by_head.clone(), OpTag::FromLiterals));
 
     // Prepare EDB (evidence)
-    let mut edb = MockEdbView::default();
-    edb.add_full_dict(d1.clone());
-    edb.add_full_dict(d2.clone());
-    edb.add_signed_dict(sd.clone());
+    let edb = edb::ImmutableEdbBuilder::new()
+        .add_full_dict(d1.clone())
+        .add_full_dict(d2.clone())
+        .add_signed_dict(sd.clone())
+        .build();
 
     // Build the Pod by replaying the answer
     let pod = build_pod_from_answer_top_level_public(

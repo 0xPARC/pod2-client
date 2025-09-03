@@ -1,12 +1,12 @@
 use pod2::middleware::{NativePredicate, StatementTmplArg, Value};
 use tracing::trace;
 
+use super::util::{arg_to_selector, create_bindings};
 use crate::{
-    edb::{ArgSel, BinaryPred, EdbView},
+    edb::{BinaryPred, EdbView},
     op::OpHandler,
     prop::PropagatorResult,
     types::{ConstraintStore, OpTag},
-    util::binary_view,
 };
 
 /// Copy SignedBy: copy existing SignedBy(Value, PublicKey) rows.
@@ -23,98 +23,41 @@ impl OpHandler for CopySignedByHandler {
             return PropagatorResult::Contradiction;
         }
         trace!("SignedBy(copy): args={:?}", args);
-        // Fast path: enumerate roots by known PK when left is an unbound wildcard
-        let pk_opt: Option<Value> = match &args[1] {
-            StatementTmplArg::Literal(v) => Some(v.clone()),
-            StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).cloned(),
-            _ => None,
-        };
-        if let (StatementTmplArg::Wildcard(wl), Some(pk)) = (&args[0], pk_opt.clone()) {
-            if !store.bindings.contains_key(&wl.index) {
-                let mut alts: Vec<crate::prop::Choice> = Vec::new();
-                let all = edb.enumerate_signed_dicts();
-                let mut matched = 0usize;
-                for sd in all.into_iter() {
-                    if Value::from(sd.public_key).raw() == pk.raw() {
-                        let root = sd.dict.commitment();
-                        let mut binds = vec![(wl.index, Value::from(root))];
-                        if let StatementTmplArg::Wildcard(wr) = &args[1] {
-                            if !store.bindings.contains_key(&wr.index) {
-                                binds.push((wr.index, pk.clone()));
-                            }
-                        }
-                        alts.push(crate::prop::Choice {
-                            bindings: binds,
-                            op_tag: OpTag::FromLiterals,
-                        });
-                        matched += 1;
-                    }
-                }
-                trace!(?pk, matched, "SignedBy enum by PK");
-                return if alts.is_empty() {
-                    PropagatorResult::Contradiction
-                } else {
-                    PropagatorResult::Choices { alternatives: alts }
-                };
-            }
-        }
-        // Build selectors independently per side
-        let sel_l = match &args[0] {
-            StatementTmplArg::Literal(v) => ArgSel::Literal(v),
-            StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
-                Some(v) => ArgSel::Literal(v),
-                None => ArgSel::Val,
-            },
-            // AK not meaningful for SignedBy; leave unconstrained
-            StatementTmplArg::AnchoredKey(_, _) => ArgSel::Val,
-            StatementTmplArg::None => ArgSel::Val,
-        };
-        let sel_r = match &args[1] {
-            StatementTmplArg::Literal(v) => ArgSel::Literal(v),
-            StatementTmplArg::Wildcard(w) => match store.bindings.get(&w.index) {
-                Some(v) => ArgSel::Literal(v),
-                None => ArgSel::Val,
-            },
-            // AK not meaningful here; leave unconstrained
-            StatementTmplArg::AnchoredKey(_, _) | StatementTmplArg::None => ArgSel::Val,
-        };
 
-        let mut choices: Vec<crate::prop::Choice> = Vec::new();
-        for row in binary_view(edb, BinaryPred::SignedBy, sel_l, sel_r).into_iter() {
-            let mut binds: Vec<(usize, Value)> = Vec::new();
-            // Left side bindings (wildcard literal)
-            if let StatementTmplArg::Wildcard(wl) = &args[0] {
-                if !store.bindings.contains_key(&wl.index) {
-                    if let Some(v) = row.left.as_literal() {
-                        binds.push((wl.index, v.clone()));
-                    }
-                }
-            }
-            // Right side bindings (wildcard public key as Value)
-            if let StatementTmplArg::Wildcard(wr) = &args[1] {
-                if !store.bindings.contains_key(&wr.index) {
-                    if let Some(v) = row.right.as_literal() {
-                        binds.push((wr.index, v.clone()));
-                    }
-                }
-            }
-            choices.push(crate::prop::Choice {
-                bindings: binds,
-                op_tag: OpTag::CopyStatement { source: row.src },
-            });
-        }
-        trace!(choices = choices.len(), "SignedBy(copy) normalized choices");
-        if choices.is_empty() {
-            // Suspend on referenced unbound wildcards
+        // We need to store owned values for selectors, since ArgSel holds references.
+        let (mut l_val, mut l_root) = (None, None);
+        let (mut r_val, mut r_root) = (None, None);
+
+        let lhs = arg_to_selector(&args[0], store, &mut l_val, &mut l_root);
+        let rhs = arg_to_selector(&args[1], store, &mut r_val, &mut r_root);
+
+        let results = edb.query_binary(BinaryPred::SignedBy, lhs, rhs);
+
+        if results.is_empty() {
             let waits = crate::prop::wildcards_in_args(args)
                 .into_iter()
                 .filter(|i| !store.bindings.contains_key(i))
                 .collect::<Vec<_>>();
-            if waits.is_empty() {
+            return if waits.is_empty() {
                 PropagatorResult::Contradiction
             } else {
                 PropagatorResult::Suspend { on: waits }
-            }
+            };
+        }
+
+        let choices: Vec<crate::prop::Choice> = results
+            .into_iter()
+            .map(|(stmt, pod_ref)| {
+                let bindings = create_bindings(args, &stmt, store);
+                crate::prop::Choice {
+                    bindings,
+                    op_tag: OpTag::CopyStatement { source: pod_ref },
+                }
+            })
+            .collect();
+
+        if choices.is_empty() {
+            PropagatorResult::Contradiction
         } else {
             PropagatorResult::Choices {
                 alternatives: choices,
