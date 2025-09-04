@@ -2,14 +2,9 @@ use pod2::middleware::{NativePredicate, StatementTmplArg};
 
 use super::{
     ternary::TernaryArithmeticHandler,
-    util::{arg_to_selector, create_bindings},
+    util::{arg_to_selector, handle_copy_results},
 };
-use crate::{
-    edb::EdbView,
-    op::OpHandler,
-    prop::PropagatorResult,
-    types::{ConstraintStore, OpTag},
-};
+use crate::{edb::EdbView, op::OpHandler, prop::PropagatorResult, types::ConstraintStore};
 
 /// Copy SumOf rows matching two-of-three syntactically, binding the third when wildcard or AK root wildcard.
 pub struct CopySumOfHandler;
@@ -39,36 +34,7 @@ impl OpHandler for CopySumOfHandler {
             &[sel_a, sel_b, sel_c],
         );
 
-        if results.is_empty() {
-            let waits = crate::prop::wildcards_in_args(args)
-                .into_iter()
-                .filter(|i| !store.bindings.contains_key(i))
-                .collect::<Vec<_>>();
-            return if waits.is_empty() {
-                PropagatorResult::Contradiction
-            } else {
-                PropagatorResult::Suspend { on: waits }
-            };
-        }
-
-        let choices: Vec<crate::prop::Choice> = results
-            .into_iter()
-            .map(|(stmt, pod_ref)| {
-                let bindings = create_bindings(args, &stmt, store);
-                crate::prop::Choice {
-                    bindings,
-                    op_tag: OpTag::CopyStatement { source: pod_ref },
-                }
-            })
-            .collect();
-
-        if choices.is_empty() {
-            PropagatorResult::Contradiction
-        } else {
-            PropagatorResult::Choices {
-                alternatives: choices,
-            }
-        }
+        handle_copy_results(results, args, store)
     }
 }
 
@@ -192,7 +158,7 @@ mod tests {
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
-                OpTag::Derived { premises } => assert_eq!(premises.len(), 2),
+                crate::OpTag::Derived { premises } => assert_eq!(premises.len(), 2),
                 other => panic!("unexpected tag: {other:?}"),
             },
             other => panic!("unexpected: {other:?}"),

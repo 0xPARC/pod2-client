@@ -2,14 +2,9 @@ use pod2::middleware::{NativePredicate, StatementTmplArg};
 
 use super::{
     binary::BinaryComparisonHandler,
-    util::{arg_to_selector, create_bindings},
+    util::{arg_to_selector, handle_copy_results},
 };
-use crate::{
-    edb::EdbView,
-    op::OpHandler,
-    prop::PropagatorResult,
-    types::{ConstraintStore, OpTag},
-};
+use crate::{edb::EdbView, op::OpHandler, prop::PropagatorResult, types::ConstraintStore};
 
 /// Structural copy of LtEq matching template shape; can bind wildcard value when AK root bound.
 pub struct CopyLtEqHandler;
@@ -37,36 +32,7 @@ impl OpHandler for CopyLtEqHandler {
             &[lhs, rhs],
         );
 
-        if results.is_empty() {
-            let waits = crate::prop::wildcards_in_args(args)
-                .into_iter()
-                .filter(|i| !store.bindings.contains_key(i))
-                .collect::<Vec<_>>();
-            return if waits.is_empty() {
-                PropagatorResult::Contradiction
-            } else {
-                PropagatorResult::Suspend { on: waits }
-            };
-        }
-
-        let choices: Vec<crate::prop::Choice> = results
-            .into_iter()
-            .map(|(stmt, pod_ref)| {
-                let bindings = create_bindings(args, &stmt, store);
-                crate::prop::Choice {
-                    bindings,
-                    op_tag: OpTag::CopyStatement { source: pod_ref },
-                }
-            })
-            .collect();
-
-        if choices.is_empty() {
-            PropagatorResult::Contradiction
-        } else {
-            PropagatorResult::Choices {
-                alternatives: choices,
-            }
-        }
+        handle_copy_results(results, args, store)
     }
 }
 

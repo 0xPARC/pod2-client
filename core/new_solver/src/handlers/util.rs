@@ -2,7 +2,8 @@ use pod2::middleware::{Hash, Key, Statement, StatementArg, StatementTmplArg, Val
 
 use crate::{
     edb::EdbView,
-    types::{ConstraintStore, OpTag},
+    prop::{wildcards_in_args, Choice, PropagatorResult},
+    types::{ConstraintStore, OpTag, PodRef},
     util::{contains_stmt, tag_from_source},
 };
 
@@ -137,4 +138,41 @@ pub fn create_bindings(
         }
     }
     bindings
+}
+
+pub fn handle_copy_results(
+    results: Vec<(Statement, PodRef)>,
+    template_args: &[StatementTmplArg],
+    store: &ConstraintStore,
+) -> PropagatorResult {
+    if results.is_empty() {
+        let waits = wildcards_in_args(template_args)
+            .into_iter()
+            .filter(|i| !store.bindings.contains_key(i))
+            .collect::<Vec<_>>();
+        return if waits.is_empty() {
+            PropagatorResult::Contradiction
+        } else {
+            PropagatorResult::Suspend { on: waits }
+        };
+    }
+
+    let choices: Vec<Choice> = results
+        .into_iter()
+        .map(|(stmt, pod_ref)| {
+            let bindings = create_bindings(template_args, &stmt, store);
+            Choice {
+                bindings,
+                op_tag: OpTag::CopyStatement { source: pod_ref },
+            }
+        })
+        .collect();
+
+    if choices.is_empty() {
+        PropagatorResult::Contradiction
+    } else {
+        PropagatorResult::Choices {
+            alternatives: choices,
+        }
+    }
 }
