@@ -1,0 +1,56 @@
+/* FrogCrypto-specific styles */
+
+/* Font overrides for FrogCrypto */
+.frogcrypto-container {
+  --font-sans: "SF Pro Display", "Segoe UI Variable", "Segoe UI", "Cantarell", "Ubuntu", -apple-system, BlinkMacSystemFont, "Roboto", "Oxygen", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
+.frogcrypto-container * {
+  font-family: var(--font-sans);
+}
+
+/* Coming Soon Animations */
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: rotate(-3deg) translateY(0px);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-8px);
+  }
+}
+
+@keyframes gentleFade {
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.9;
+  }
+}
+
+/* Coming Soon Animations */
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: rotate(-3deg) translateY(0px);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-8px);
+  }
+}
+
+@keyframes gentleFade {
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.9;
+  }
+}
+
+.coming-soon-container {
+  animation: gentleFloat 4s ease-in-out infinite;
+}
+
+.coming-soon-subtitle {
+  animation: gentleFade 2.5s ease-in-out infinite alternate;
+}

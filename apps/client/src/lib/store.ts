@@ -96,11 +96,12 @@ export interface PodEditorState {
 }
 
 export interface FrogCryptoState {
-  currentScreen: "game" | "leaderboard" | "frogedex";
+  currentScreen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding";
   frogTimeout: number | null;
   score: number;
   mining: boolean;
   levelUpId: string | null;
+  hashesChecked: string;
 }
 
 // Action types for each mini-app
@@ -149,11 +150,12 @@ export interface PodEditorActions {
 }
 
 export interface FrogCryptoActions {
-  navigateToScreen: (screen: "game" | "leaderboard" | "frogedex") => void;
+  navigateToScreen: (screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding") => void;
   setFrogTimeout: (timeout: number | null) => void;
   setScore: (score: number) => void;
   setMining: (mining: boolean) => void;
   setLevelUpId: (levelUpId: string | null) => void;
+  setHashesChecked: (hashesChecked: string) => void;
 }
 
 interface AppStoreState {
@@ -268,6 +270,7 @@ export const useAppStore = create<AppStoreState>()(
       score: 0,
       mining: false,
       levelUpId: null,
+      hashesChecked: "",
     },
 
     initialize: async () => {
@@ -902,7 +905,7 @@ export const useAppStore = create<AppStoreState>()(
     },
 
     frogCryptoActions: {
-      navigateToScreen: (screen: "game" | "leaderboard" | "frogedex") => {
+      navigateToScreen: (screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding") => {
         set((state) => {
           state.frogCrypto.currentScreen = screen;
         });
@@ -927,6 +930,12 @@ export const useAppStore = create<AppStoreState>()(
           if (changed) {
             emit("toggle-mining", mining).catch((e) => console.log(e));
           }
+        });
+      },
+      
+      setHashesChecked: (hashesChecked: string) => {
+        set((state) => {
+          state.frogCrypto.hashesChecked = hashesChecked;
         });
       },
 
@@ -1065,6 +1074,7 @@ export const useFrogCrypto = () => {
     score: frogCrypto.score,
     mining: frogCrypto.mining,
     levelUpId: frogCrypto.levelUpId,
+    hashesChecked: frogCrypto.hashesChecked,
 
     // Actions
     navigateToScreen: frogCryptoActions.navigateToScreen,
@@ -1072,6 +1082,7 @@ export const useFrogCrypto = () => {
     setMining: frogCryptoActions.setMining,
     setScore: frogCryptoActions.setScore,
     setLevelUpId: frogCryptoActions.setLevelUpId,
+    setHashesChecked: frogCryptoActions.setHashesChecked,
   };
 };
 
