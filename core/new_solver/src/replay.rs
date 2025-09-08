@@ -72,17 +72,6 @@ where
         })?;
         builder.add_pod(pod);
     }
-    /* old behavior: only add pods referenced by answer
-    for r in answer.input_pods.iter() {
-        let pod = input_pods.get(r).ok_or_else(|| {
-            format!(
-                "missing input pod for ref: 0x{}",
-                r.0.encode_hex::<String>()
-            )
-        })?;
-        builder.add_pod(pod.clone());
-    }
-    */
 
     // Build op dependency graph: producer_op -> consumer_op if consumer uses a statement produced by producer
     let mut stmt_producers: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -217,6 +206,8 @@ where
             }
         }
     }
+
+    println!("Builder: {builder}");
 
     prove_with(&builder)
 }
@@ -404,10 +395,11 @@ fn map_to_operation(
                     Ok(Some(Operation::copy(head.clone())))
                 }
                 SignedBy => {
-                    if let Statement::SignedBy(ValueRef::Literal(msg), _v_pk) = head.clone() {
+                    if let Statement::SignedBy(ValueRef::Literal(msg), v_pk) = head.clone() {
                         let root = Hash::from(msg.raw());
+                        let pk = op_arg_from_vr(v_pk, premises, edb)?;
                         if let Some(sd) = edb.signed_dict(&root) {
-                            return Ok(Some(Operation::dict_signed_by(&sd)));
+                            return Ok(Some(Operation::signed_by(root, pk, sd.signature.clone())));
                         } else {
                             return Err(
                                 "missing SignedDict for SignedBy; cannot replay".to_string()

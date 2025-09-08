@@ -7,6 +7,7 @@ use pod2::{
         StatementArg, Value, ValueRef,
     },
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{types::PodRef, RawOrdValue};
 
@@ -85,7 +86,7 @@ pub enum ContainsSource {
     GeneratedFromFullDict { root: Hash },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 enum IndexKey {
     Literal(RawOrdValue),
     AnyLiteral,
@@ -93,7 +94,7 @@ enum IndexKey {
     PartialAnchoredKey(Hash),
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 struct PerPredicateIndex {
     facts: Vec<(Statement, PodRef)>,
 
@@ -132,7 +133,7 @@ impl PerPredicateIndex {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PredicateKey {
     Native(pod2::middleware::NativePredicate),
     Custom(CprKey),
@@ -160,7 +161,7 @@ impl Ord for PredicateKey {
 }
 
 /// Immutable, deterministically ordered EDB built from pods and/or signed dictionaries.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct ImmutableEdb {
     per_predicate_indexes: std::collections::BTreeMap<PredicateKey, PerPredicateIndex>,
 
@@ -175,7 +176,7 @@ pub struct ImmutableEdb {
     keypairs: std::collections::BTreeMap<OrderedPublicKey, SecretKey>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct OrderedPublicKey(PublicKey);
 
 impl std::cmp::Ord for OrderedPublicKey {
@@ -191,7 +192,7 @@ impl std::cmp::PartialOrd for OrderedPublicKey {
 }
 
 /// Ordered key for indexing CustomPredicateRef by (batch_id, index)
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct CprKey {
     batch_id: Hash,
     index: usize,

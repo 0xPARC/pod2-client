@@ -456,7 +456,7 @@ impl<'a> Engine<'a> {
             let t_mat_start = std::time::Instant::now();
             let mut pendings = std::mem::take(&mut store.pending_custom);
             // Process innermost first to compress bodies into heads iteratively
-            while let Some(p) = pendings.pop() {
+            if let Some(p) = pendings.pop() {
                 if let Some(head) =
                     crate::util::instantiate_custom(&p.rule_id, &p.head_args, &store.bindings)
                 {
@@ -470,6 +470,8 @@ impl<'a> Engine<'a> {
                         },
                     ));
                 }
+                // Restore any outer pending frames
+                store.pending_custom = pendings;
             }
             log_if_slow(
                 "finalize: materialize pending custom heads",
@@ -2772,6 +2774,7 @@ mod tests {
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
         register_sumof_handlers(&mut reg);
+        register_lt_handlers(&mut reg);
 
         let program = r#"
             dec(A, B) = AND(
@@ -2779,6 +2782,7 @@ mod tests {
             )
 
             even_step(N, private: M) = AND(
+                Lt(0, ?N)
                 dec(?N, ?M)
                 odd(?M)
             )
@@ -2789,6 +2793,7 @@ mod tests {
             )
 
             odd(N, private: M) = AND(
+                Lt(0, ?N)
                 dec(?N, ?M)
                 even(?M)
             )

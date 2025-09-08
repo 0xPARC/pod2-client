@@ -198,10 +198,13 @@ impl ProofDagWithOps {
             dag.stmt_nodes
                 .entry(head_skey.clone())
                 .or_insert(head.clone());
+
+            // Always create an op node, even for leaves, to represent the proof step
             let op_key = format!("O|{}|{}", &head_skey, short_op_key(&tag));
             dag.op_nodes.entry(op_key.clone()).or_insert(tag.clone());
             // op -> head statement
             dag.edges.insert((op_key.clone(), head_skey.clone()));
+
             match tag {
                 OpTag::Derived { premises } => {
                     for (pst, ptag) in premises.into_iter() {

@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pod2::middleware::{CustomPredicateRef, Hash, Key, Statement, StatementTmplArg, Value};
+use serde::{Deserialize, Serialize};
 
 /// Unique identifier for a frame.
 pub type FrameId = usize;
@@ -45,7 +46,7 @@ pub enum OpTag {
 
 /// Provenance reference to a POD for CopyStatement.
 /// This is the Pod::statements_hash.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PodRef(pub Hash);
 
 impl std::cmp::Ord for PodRef {
@@ -113,7 +114,7 @@ pub struct PendingCustom {
 }
 
 /// A wrapper for `Value` that orders by its raw bytes commitment for use in BTree* maps.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RawOrdValue(pub Value);
 
 impl std::cmp::PartialEq for RawOrdValue {

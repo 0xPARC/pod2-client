@@ -185,6 +185,7 @@ pub fn instantiate_goal(
     }
 
     match tmpl.pred {
+        // TODO better matching
         Predicate::Native(NativePredicate::Equal) => {
             if tmpl.args.len() != 2 {
                 return None;

@@ -1,5 +1,5 @@
 [package]
-name = "pod2_new_solver"
+name = "pod2_solver"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,6 +16,8 @@ env_logger = { workspace = true }
 itertools = { workspace = true }
 hex = { workspace = true }
 tracing = "0.1"
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 pod2 = { workspace = true, features = ["examples"] }
