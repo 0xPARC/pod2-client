@@ -32,6 +32,8 @@ pub enum EngineError {
     IterationCap { steps: u64 },
     #[error("Wall-clock timeout after {elapsed_ms} ms")]
     Timeout { elapsed_ms: u128 },
+    #[error("No answers found")]
+    NoAnswers,
 }
 
 #[derive(Default)]
@@ -389,6 +391,9 @@ impl<'a> Engine<'a> {
                     continue;
                 }
             }
+        }
+        if self.answers.is_empty() {
+            return Err(EngineError::NoAnswers);
         }
         Ok(())
     }
@@ -2168,7 +2173,7 @@ mod tests {
             export: true,
             table_for: None,
         });
-        engine.run().expect("run ok");
+        engine.run().expect_err("should not produce an answer");
 
         assert!(engine.answers.is_empty(), "should not produce an answer");
         assert_eq!(
@@ -2689,7 +2694,7 @@ mod tests {
         let mut engine = Engine::new(&reg, &edb);
         // Register rules (self-recursive AND is rejected → no rules for 'bad') and enqueue request
         engine.load_processed(&processed);
-        engine.run().expect("run ok");
+        engine.run().expect_err("should not produce an answer");
 
         // Expect no answers
         assert!(engine.answers.is_empty());

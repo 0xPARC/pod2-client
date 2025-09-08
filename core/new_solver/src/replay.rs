@@ -552,55 +552,63 @@ fn order_custom_premises(
         };
 
         // Find a premise that matches this template's predicate and constraints
-        let matched = premises.iter().find(|s| match (tmpl.pred(), (*s).clone()) {
-            (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1) && arg_matches(&args[2], a2)
-            }
-            (Predicate::BatchSelf(i), Stmt::Custom(sub_cpr, sub_args)) => {
-                if !(sub_cpr.batch == cpr.batch && sub_cpr.index == *i) {
-                    return false;
+        let matched = premises
+            .iter()
+            .find(|s| match (tmpl.pred(), (**s).clone()) {
+                (Predicate::Native(NP::Contains), Stmt::Contains(a0, a1, a2)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0)
+                        && arg_matches(&args[1], &a1)
+                        && arg_matches(&args[2], &a2)
                 }
-                // Enforce head-projected args where template uses head wildcards
-                let targs = tmpl.args();
-                for (pos, targ) in targs.iter().enumerate() {
-                    if let STA::Wildcard(w) = targ {
-                        if w.index < args_len {
-                            if let Some(hv) = head_vals.as_ref().and_then(|hv| hv.get(w.index)) {
-                                if let Some(v) = sub_args.get(pos) {
-                                    if v.raw() != hv.raw() {
-                                        return false;
+                (Predicate::BatchSelf(i), Stmt::Custom(sub_cpr, sub_args)) => {
+                    if !(sub_cpr.batch == cpr.batch && sub_cpr.index == *i) {
+                        return false;
+                    }
+                    // Enforce head-projected args where template uses head wildcards
+                    let targs = tmpl.args();
+                    for (pos, targ) in targs.iter().enumerate() {
+                        if let STA::Wildcard(w) = targ {
+                            if w.index < args_len {
+                                if let Some(hv) = head_vals.as_ref().and_then(|hv| hv.get(w.index))
+                                {
+                                    if let Some(v) = sub_args.get(pos) {
+                                        if v.raw() != hv.raw() {
+                                            return false;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    true
                 }
-                true
-            }
-            (Predicate::Custom(exp_cpr), Stmt::Custom(sub_cpr, _)) => *sub_cpr == *exp_cpr,
-            (Predicate::Native(NP::SignedBy), Stmt::SignedBy(a0, a1)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
-            }
-            (Predicate::Native(NP::Equal), Stmt::Equal(a0, a1)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
-            }
-            (Predicate::Native(NP::Lt), Stmt::Lt(a0, a1)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
-            }
-            (Predicate::Native(NP::LtEq), Stmt::LtEq(a0, a1)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1)
-            }
-            (Predicate::Native(NP::SumOf), Stmt::SumOf(a0, a1, a2)) => {
-                let args = tmpl.args();
-                arg_matches(&args[0], a0) && arg_matches(&args[1], a1) && arg_matches(&args[2], a2)
-            }
-            _ => false,
-        });
+                (Predicate::Custom(exp_cpr), Stmt::Custom(sub_cpr, _)) => sub_cpr == *exp_cpr,
+                (Predicate::Native(NP::SignedBy), Stmt::SignedBy(a0, a1)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                }
+                (Predicate::Native(NP::Equal), Stmt::Equal(a0, a1)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                }
+                (Predicate::Native(NP::Lt), Stmt::Lt(a0, a1)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                }
+                (Predicate::Native(NP::LtEq), Stmt::LtEq(a0, a1)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                }
+                (Predicate::Native(NP::SumOf), Stmt::SumOf(a0, a1, a2)) => {
+                    let args = tmpl.args();
+                    arg_matches(&args[0], &a0)
+                        && arg_matches(&args[1], &a1)
+                        && arg_matches(&args[2], &a2)
+                }
+                _ => false,
+            })
+            .cloned();
         if let Some(sref) = matched {
             let s = sref.clone();
             out.push(normalize_stmt_for_op_arg(s.clone(), edb)?);
