@@ -303,6 +303,7 @@ impl<'a> Engine<'a> {
             let mut union_waits: std::collections::HashSet<usize> =
                 std::collections::HashSet::new();
             let mut any_stmt_for_park: Option<StatementTmpl> = None;
+            let mut frame_contradiction = false;
             for (idx, g) in goals.iter().enumerate() {
                 // Count this step and yield if exceeding per-frame cap
                 frame_steps = frame_steps.saturating_add(1);
@@ -336,9 +337,19 @@ impl<'a> Engine<'a> {
                         chosen_goal_idx = Some(idx);
                         choices_for_goal = choices;
                         break;
+                    } else if union_waits.is_empty() {
+                        // No choices and no new suspensions means this goal is a contradiction
+                        frame_contradiction = true;
+                        break;
                     }
                 }
             }
+
+            if frame_contradiction {
+                debug!(frame_id = id, "dropping frame: native goal contradiction");
+                continue;
+            }
+
             if choices_for_goal.is_empty() {
                 // No immediate choices; if any suspensions, park frame on their union
                 if !union_waits.is_empty() {

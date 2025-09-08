@@ -289,7 +289,7 @@ impl ImmutableEdbBuilder {
 
     /// Ingest a MainPod: store it and index its public statements and dictionaries.
     pub fn add_main_pod(mut self, pod: &MainPod) -> Self {
-        let pod_ref = PodRef(pod.id());
+        let pod_ref = PodRef(pod.statements_hash());
         self.inner.pods.insert(pod_ref.clone(), pod.clone());
         for st in pod.public_statements.iter() {
             self.add_statement(st.clone(), pod_ref.clone());
