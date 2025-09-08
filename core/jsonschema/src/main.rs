@@ -1,4 +1,4 @@
-use pod2::frontend::{SerializedMainPod, SerializedSignedPod};
+use pod2::frontend::{SerializedMainPod, SignedDict};
 use pod2_db::store::{PodInfo, SpaceInfo};
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 struct JsonTypes {
     main_pod: SerializedMainPod,
-    signed_pod: SerializedSignedPod,
+    signed_dict: SignedDict,
     pod_info: PodInfo,
     space_info: SpaceInfo,
 }

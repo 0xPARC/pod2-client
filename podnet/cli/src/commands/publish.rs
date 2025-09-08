@@ -6,10 +6,10 @@ use std::{
 use num_bigint::BigUint;
 use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-    frontend::{SignedPod, SignedPodBuilder},
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signer::Signer},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::{
-        KEY_SIGNER, Key, Value,
+        Key, Value,
         containers::{Dictionary, Set},
         hash_values,
     },
@@ -142,7 +142,7 @@ pub async fn publish_content(
     // Load and verify identity pod
     println!("Loading identity pod from: {identity_pod_file}");
     let identity_pod_json = std::fs::read_to_string(identity_pod_file)?;
-    let identity_pod: SignedPod = serde_json::from_str(&identity_pod_json)?;
+    let identity_pod: SignedDict = serde_json::from_str(&identity_pod_json)?;
 
     // Verify the identity pod
     identity_pod.verify()?;
@@ -289,7 +289,7 @@ pub async fn publish_content(
         &main_pod,
         &username,
         &data_dict,
-        identity_pod.get(KEY_SIGNER).unwrap(),
+        &identity_pod.public_key.into(),
     )
     .map_err(|e| format!("Failed to verify publish verification MainPod: {e}"))?;
 

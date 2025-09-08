@@ -3,19 +3,23 @@
 // Import solver dependencies
 use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
-    frontend::{MainPod, MainPodBuilder, SignedPod},
+    backends::plonky2::signer::Signer,
+    frontend::{MainPod, SignedDict},
     lang::parse,
-    middleware::{Hash, KEY_SIGNER, Value},
+    middleware::{Hash, Value},
 };
-use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
+use pod2_new_solver::{
+    Engine, EngineConfigBuilder, ImmutableEdbBuilder, OpRegistry,
+    build_pod_from_answer_top_level_public,
+};
 
 use super::{MainPodError, MainPodResult, verify_mainpod_basics};
 use crate::get_upvote_verification_predicate;
 
 /// Parameters for upvote verification proof generation
 pub struct UpvoteProofParams<'a> {
-    pub identity_pod: &'a SignedPod,
-    pub upvote_pod: &'a SignedPod,
+    pub identity_pod: &'a SignedDict,
+    pub upvote_pod: &'a SignedDict,
     pub identity_server_public_key: Value,
     pub content_hash: &'a Hash,
     pub use_mock_proofs: bool,
@@ -23,8 +27,8 @@ pub struct UpvoteProofParams<'a> {
 
 /// Simplified parameters for solver-based upvote verification proof generation
 pub struct UpvoteProofParamsSolver<'a> {
-    pub identity_pod: &'a SignedPod,
-    pub upvote_pod: &'a SignedPod,
+    pub identity_pod: &'a SignedDict,
+    pub upvote_pod: &'a SignedDict,
     pub use_mock_proofs: bool,
 }
 
@@ -105,14 +109,7 @@ pub fn prove_upvote_verification_with_solver(
             field: "content_hash",
         })?;
 
-    let identity_server_pk =
-        params
-            .identity_pod
-            .get(KEY_SIGNER)
-            .ok_or(MainPodError::MissingField {
-                pod_type: "Identity",
-                field: "identity_server_pk",
-            })?;
+    let identity_server_pk: Value = params.identity_pod.public_key.into();
 
     // Start with the upvote verification predicate definitions and append REQUEST
     let mut query = get_upvote_verification_predicate();
@@ -129,52 +126,33 @@ pub fn prove_upvote_verification_with_solver(
     // Parse the complete query - only need upvote verification predicates
     let pod_params = PodNetProverSetup::get_params();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-        .request;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?;
 
-    // Provide both pods as facts
-    let pods = [
-        IndexablePod::signed_pod(params.identity_pod),
-        IndexablePod::signed_pod(params.upvote_pod),
-    ];
+    let edb = ImmutableEdbBuilder::new()
+        .add_signed_dict(params.identity_pod.clone())
+        .add_signed_dict(params.upvote_pod.clone())
+        .build();
 
-    // Let the solver find the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
+    let reg = OpRegistry::default();
+    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let mut engine = Engine::with_config(&reg, &edb, config);
+    engine.load_processed(&request);
+    engine
+        .run()
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
 
-    let mut builder = MainPodBuilder::new(&pod_params, vd_set);
-
-    let (pod_ids, ops) = proof.to_inputs();
-
-    for (op, public) in ops {
-        if public {
-            builder
-                .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        } else {
-            builder
-                .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        }
-    }
-
-    // Add all the pods that were referenced in the proof
-    for pod_id in pod_ids {
-        if params.identity_pod.id() == pod_id {
-            builder.add_signed_pod(params.identity_pod);
-        } else if params.upvote_pod.id() == pod_id {
-            builder.add_signed_pod(params.upvote_pod);
-        }
-    }
-
-    let main_pod = builder
-        .prove(&*prover)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
+    let main_pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &pod_params,
+        vd_set,
+        |b| b.prove(&*prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .map_err(|e| MainPodError::ProofGeneration(format!("Pod build error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -210,13 +188,11 @@ pub fn verify_upvote_verification_with_solver(
         .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request;
 
-    // Provide the MainPod as a fact
-    let pods = [IndexablePod::main_pod(main_pod)];
+    request
+        .exact_match_pod(&*main_pod.pod)
+        .map_err(|e| MainPodError::Verification(format!("Exact match pod error: {e:?}")))?;
 
-    // Let the solver verify the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (_proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
+    log::info!("GOT PROOF: {main_pod}");
 
     Ok(())
 }
@@ -236,13 +212,12 @@ pub fn prove_upvote_count_base_with_solver(
 ) -> MainPodResult<MainPod> {
     use num_bigint::BigUint;
     use pod2::{
-        backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-        frontend::SignedPodBuilder,
+        backends::plonky2::primitives::ec::schnorr::SecretKey, frontend::SignedDictBuilder,
     };
 
     // Create a data pod with the content hash (signed by server)
     let pod_params = PodNetProverSetup::get_params();
-    let mut data_builder = SignedPodBuilder::new(&pod_params);
+    let mut data_builder = SignedDictBuilder::new(&pod_params);
     data_builder.insert("content_hash", *params.content_hash);
 
     // For now, use a dummy secret key for data pod signing
@@ -286,46 +261,31 @@ pub fn prove_upvote_count_base_with_solver(
         &pod_params,
         &[upvote_verification_batch],
     )
-    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-    .request;
+    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?;
 
-    // Provide the data pod as a fact
-    let pods = [IndexablePod::signed_pod(&data_pod)];
+    let edb = ImmutableEdbBuilder::new()
+        .add_signed_dict(data_pod.clone())
+        .build();
 
-    // Let the solver find the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
+    let reg = OpRegistry::default();
+    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let mut engine = Engine::with_config(&reg, &edb, config);
+    engine.load_processed(&request);
+    engine
+        .run()
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
 
-    let mut builder = MainPodBuilder::new(&pod_params, vd_set);
-
-    let (pod_ids, ops) = proof.to_inputs();
-
-    for (op, public) in ops {
-        if public {
-            builder
-                .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        } else {
-            builder
-                .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        }
-    }
-
-    // Add the data pod that was referenced in the proof
-    for pod_id in pod_ids {
-        if data_pod.id() == pod_id {
-            builder.add_signed_pod(&data_pod);
-        }
-    }
-
-    let main_pod = builder
-        .prove(&*prover)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
+    let main_pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &pod_params,
+        vd_set,
+        |b| b.prove(&*prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .map_err(|e| MainPodError::ProofGeneration(format!("Pod build error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -379,51 +339,32 @@ pub fn prove_upvote_count_inductive_with_solver(
         &pod_params,
         &[upvote_verification_batch],
     )
-    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-    .request;
+    .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?;
 
-    // Provide both the previous count pod and upvote verification pod as facts
-    let pods = [
-        IndexablePod::main_pod(params.previous_count_pod),
-        IndexablePod::main_pod(params.upvote_verification_pod),
-    ];
+    let edb = ImmutableEdbBuilder::new()
+        .add_main_pod(params.previous_count_pod)
+        .add_main_pod(params.upvote_verification_pod)
+        .build();
 
-    // Let the solver find the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
+    let reg = OpRegistry::default();
+    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let mut engine = Engine::with_config(&reg, &edb, config);
+    engine.load_processed(&request);
+    engine
+        .run()
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
 
-    let mut builder = MainPodBuilder::new(&pod_params, vd_set);
-
-    let (pod_ids, ops) = proof.to_inputs();
-
-    for (op, public) in ops {
-        if public {
-            builder
-                .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        } else {
-            builder
-                .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        }
-    }
-
-    // Add the MainPods that were referenced in the proof
-    for pod_id in pod_ids {
-        if params.previous_count_pod.id() == pod_id {
-            builder.add_recursive_pod(params.previous_count_pod.clone());
-        } else if params.upvote_verification_pod.id() == pod_id {
-            builder.add_recursive_pod(params.upvote_verification_pod.clone());
-        }
-    }
-
-    let main_pod = builder
-        .prove(&*prover)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
+    let main_pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &pod_params,
+        vd_set,
+        |b| b.prove(&*prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .map_err(|e| MainPodError::ProofGeneration(format!("Pod build error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -471,13 +412,11 @@ pub fn verify_upvote_count_with_solver(
     .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
     .request;
 
-    // Provide the MainPod as a fact
-    let pods = [IndexablePod::main_pod(main_pod)];
+    request
+        .exact_match_pod(&*main_pod.pod)
+        .map_err(|e| MainPodError::Verification(format!("Exact match pod error: {e:?}")))?;
 
-    // Let the solver verify the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (_proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
+    log::info!("GOT PROOF: {main_pod}");
 
     Ok(())
 }

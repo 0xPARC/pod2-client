@@ -14,6 +14,8 @@ num-bigint.workspace = true
 pod2_solver = { workspace = true }
 log.workspace = true
 env_logger = "0.11.8"
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["rt", "macros"] }

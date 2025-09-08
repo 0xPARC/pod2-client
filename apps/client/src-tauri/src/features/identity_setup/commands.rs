@@ -23,18 +23,18 @@ pub struct IdentityPodResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct IdentityRequest {
-    server_challenge_pod: pod2::frontend::SignedPod,
-    user_response_pod: pod2::frontend::SignedPod,
+    server_challenge_pod: pod2::frontend::SignedDict,
+    user_response_pod: pod2::frontend::SignedDict,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ChallengeResponse {
-    challenge_pod: pod2::frontend::SignedPod,
+    challenge_pod: pod2::frontend::SignedDict,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct IdentityResponse {
-    identity_pod: pod2::frontend::SignedPod,
+    identity_pod: pod2::frontend::SignedDict,
 }
 
 /// Configure and validate connection to an identity server
@@ -176,11 +176,11 @@ pub async fn register_username(
 
     // Create and sign user response pod
     let params = pod2::middleware::Params::default();
-    let mut challenge_builder = pod2::frontend::SignedPodBuilder::new(&params);
+    let mut challenge_builder = pod2::frontend::SignedDictBuilder::new(&params);
     challenge_builder.insert("challenge", challenge_string);
     challenge_builder.insert("username", username.as_str());
 
-    let user_signer = pod2::backends::plonky2::signedpod::Signer(private_key);
+    let user_signer = pod2::backends::plonky2::signer::Signer(private_key);
     let user_response_pod = challenge_builder
         .sign(&user_signer)
         .map_err(|e| format!("Failed to sign challenge response: {e}"))?;

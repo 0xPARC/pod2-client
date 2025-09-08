@@ -474,7 +474,7 @@ pub async fn publish_document(
         })?;
     tracing::info!("Document created with ID: {:?}", document.metadata.id);
 
-    // Spawn background task to generate base case upvote count pod
+    // // Spawn background task to generate base case upvote count pod
     if let Some(document_id) = document.metadata.id {
         let state_clone = state.clone();
         let content_hash = document.metadata.content_id;
@@ -494,7 +494,7 @@ pub async fn publish_document(
         });
     }
 
-    tracing::info!("Document publish completed successfully using main pod verification");
+    // tracing::info!("Document publish completed successfully using main pod verification");
     Ok(Json(document))
 }
 

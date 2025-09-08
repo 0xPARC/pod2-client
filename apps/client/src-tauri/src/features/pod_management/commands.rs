@@ -96,22 +96,22 @@ pub async fn delete_pod(
     Ok(())
 }
 
-/// Debug command to insert ZuKYC sample pods
-#[tauri::command]
-pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    use crate::insert_zukyc_pods;
+// /// Debug command to insert ZuKYC sample pods
+// #[tauri::command]
+// pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+//     use crate::insert_zukyc_pods;
 
-    let mut app_state = state.lock().await;
+//     let mut app_state = state.lock().await;
 
-    insert_zukyc_pods(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
+//     insert_zukyc_pods(&app_state.db)
+//         .await
+//         .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
 
-    // Trigger state sync to update frontend
-    app_state.trigger_state_sync().await?;
+//     // Trigger state sync to update frontend
+//     app_state.trigger_state_sync().await?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Return pretty-printed Podlang for custom predicates
 #[tauri::command]

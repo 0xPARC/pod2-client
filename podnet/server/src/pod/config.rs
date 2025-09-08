@@ -1,6 +1,6 @@
 use axum::http::StatusCode;
 use pod_utils::prover_setup::PodNetProverSetup;
-use pod2::middleware::{Params, PodProver, VDSet};
+use pod2::middleware::{MainPodProver, Params, VDSet};
 
 /// Configuration for POD-related operations
 pub struct PodConfig {
@@ -13,7 +13,7 @@ impl PodConfig {
     }
 
     /// Get the appropriate prover setup (VDSet and Prover) based on configuration
-    pub fn get_prover_setup(&self) -> Result<(&'static VDSet, Box<dyn PodProver>), StatusCode> {
+    pub fn get_prover_setup(&self) -> Result<(&'static VDSet, Box<dyn MainPodProver>), StatusCode> {
         PodNetProverSetup::create_prover_setup(self.use_mock)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }

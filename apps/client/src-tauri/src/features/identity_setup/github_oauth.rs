@@ -156,7 +156,7 @@ pub async fn complete_github_identity_verification(
         .map_err(|e| format!("Failed to parse GitHub identity response: {e}"))?;
 
     // Convert the identity POD from JSON to the actual SignedPod type
-    let identity_pod: pod2::frontend::SignedPod =
+    let identity_pod: pod2::frontend::SignedDict =
         serde_json::from_value(identity_response.identity_pod.clone())
             .map_err(|e| format!("Failed to deserialize identity POD: {e}"))?;
 

@@ -3,9 +3,9 @@ use pod_utils::ValueExt;
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{SignedPod, SignedPodBuilder},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::Params,
 };
 use reqwest::Client;
@@ -20,13 +20,13 @@ pub struct IdentityServerChallengeRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct IdentityServerChallengeResponse {
-    pub challenge_pod: SignedPod,
+    pub challenge_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IdentityServerRegistrationRequest {
-    pub server_challenge_pod: SignedPod,
-    pub identity_response_pod: SignedPod,
+    pub server_challenge_pod: SignedDict,
+    pub identity_response_pod: SignedDict,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,7 +87,7 @@ pub async fn register_with_podnet_server(
 
     // Step 3: Create identity server's response pod
     let params = Params::default();
-    let mut response_builder = SignedPodBuilder::new(&params);
+    let mut response_builder = SignedDictBuilder::new(&params);
 
     response_builder.insert("challenge", challenge);
     response_builder.insert("server_id", server_id);
