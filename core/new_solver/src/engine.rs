@@ -67,14 +67,15 @@ impl Scheduler {
         id
     }
 
-    pub fn park(&mut self, frame: Frame, on: Vec<usize>, goal_stmt: StatementTmpl) {
+    pub fn park(&mut self, frame: Frame, on: Vec<usize>, _goal_stmt: StatementTmpl) {
         // Reinsert the suspended goal at the front so it retries on wake
-        let mut goals = frame.goals;
-        goals.insert(0, goal_stmt);
-        let id = frame.id;
-        let store = frame.store;
-        let export = frame.export;
-        let table_for = frame.table_for;
+        let Frame {
+            id,
+            goals,
+            store,
+            export,
+            table_for,
+        } = frame;
         // Filter out already-bound wildcards
         let on_copy = on.clone();
         let waiting_on: std::collections::HashSet<usize> = on_copy
@@ -323,7 +324,7 @@ impl<'a> Engine<'a> {
                     && self.handle_custom_goal(idx, &goals, &store)
                 {
                     chosen_goal_idx = Some(idx);
-                    choices_for_goal = Vec::new();
+                    // Do not clear choices here; tabling is a valid continuation
                     break;
                 }
                 if let Predicate::Native(p) = g.pred {
@@ -352,31 +353,6 @@ impl<'a> Engine<'a> {
                 continue;
             }
 
-            if choices_for_goal.is_empty() {
-                // No immediate choices; if any suspensions, park frame on their union
-                if !union_waits.is_empty() {
-                    let on: Vec<usize> = union_waits.into_iter().collect();
-                    debug!(waits = ?on, "parking frame on wildcards");
-                    let stmt_for_park = any_stmt_for_park.unwrap_or_else(|| goals[0].clone());
-                    self.sched.park(
-                        Frame {
-                            id,
-                            goals: goals.clone(),
-                            store: store.clone(),
-                            export,
-                            table_for: table_for.clone(),
-                        },
-                        on,
-                        stmt_for_park,
-                    );
-                    continue;
-                } else {
-                    // No choices and no suspends → no progress possible; drop frame
-                    debug!(frame_id = id, "dropping frame: no choices and no suspends");
-                    continue;
-                }
-            }
-            // De-dup choices, prefer GeneratedContains, instantiate steps, and enqueue continuations
             if let Some(i) = chosen_goal_idx {
                 if !choices_for_goal.is_empty() {
                     let best = self.dedup_and_score_choices(choices_for_goal);
@@ -388,8 +364,31 @@ impl<'a> Engine<'a> {
                         export,
                         table_for.clone(),
                     );
-                    continue;
                 }
+                // If a custom goal was chosen, even with no immediate choices,
+                // we've made progress via tabling. Continue to next frame.
+                continue;
+            }
+
+            // No goal was chosen to produce choices. If any goal suspended, park.
+            if !union_waits.is_empty() {
+                let on: Vec<usize> = union_waits.into_iter().collect();
+                debug!(waits = ?on, "parking frame on wildcards");
+                let stmt_for_park = any_stmt_for_park.unwrap_or_else(|| goals[0].clone());
+                self.sched.park(
+                    Frame {
+                        id,
+                        goals: goals.clone(),
+                        store: store.clone(),
+                        export,
+                        table_for: table_for.clone(),
+                    },
+                    on,
+                    stmt_for_park,
+                );
+            } else {
+                // No choices and no suspends → no progress possible; drop frame
+                debug!(frame_id = id, "dropping frame: no choices and no suspends");
             }
         }
         if self.answers.is_empty() {
@@ -543,6 +542,8 @@ impl<'a> Engine<'a> {
         let mut map: HashMap<usize, usize> = HashMap::new();
         let mut next_idx = self.next_available_wildcard_index(goals, store) + 1;
         let call_args = &goals[goal_idx].args;
+        let mut head_bindings = store.bindings.clone();
+
         for (h, call) in rule.head.iter().zip(call_args.iter()) {
             match (h, call) {
                 (StatementTmplArg::Wildcard(hw), StatementTmplArg::Wildcard(cw)) => {
@@ -551,9 +552,10 @@ impl<'a> Engine<'a> {
                 (StatementTmplArg::Wildcard(hw), StatementTmplArg::AnchoredKey(cw, _)) => {
                     map.insert(hw.index, cw.index);
                 }
-                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(_v)) => {
+                (StatementTmplArg::Wildcard(hw), StatementTmplArg::Literal(v)) => {
                     let target = next_idx;
                     map.insert(hw.index, target);
+                    head_bindings.insert(target, v.clone());
                     next_idx += 1;
                 }
                 _ => return None,
@@ -586,6 +588,7 @@ impl<'a> Engine<'a> {
             rule.body.iter().map(|t| remap_tmpl(t, &map)).collect();
 
         let mut cont_store = store.clone();
+        cont_store.bindings = head_bindings;
         // Accumulate structural lower bound for this rule's body
         cont_store.accumulated_lb_ops = cont_store
             .accumulated_lb_ops

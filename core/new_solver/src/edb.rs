@@ -8,6 +8,7 @@ use pod2::{
     },
 };
 use serde::{Deserialize, Serialize};
+use serde_with::{json::JsonString, serde_as};
 
 use crate::{types::PodRef, RawOrdValue};
 
@@ -94,10 +95,12 @@ enum IndexKey {
     PartialAnchoredKey(Hash),
 }
 
+#[serde_as]
 #[derive(Default, Clone, Serialize, Deserialize)]
 struct PerPredicateIndex {
     facts: Vec<(Statement, PodRef)>,
 
+    #[serde_as(as = "Vec<JsonString<Vec<(JsonString, _)>>>")]
     arg_indexes: Vec<std::collections::BTreeMap<IndexKey, Vec<usize>>>,
 }
 
@@ -160,19 +163,46 @@ impl Ord for PredicateKey {
     }
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct DictionaryMap {
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
+    kvs: std::collections::BTreeMap<Hash, Value>,
+}
+
+impl DictionaryMap {
+    fn insert(&mut self, key: Hash, value: Value) {
+        self.kvs.insert(key, value);
+    }
+
+    fn get(&self, key: &Hash) -> Option<&Value> {
+        self.kvs.get(key)
+    }
+
+    fn contains_key(&self, key: &Hash) -> bool {
+        self.kvs.contains_key(key)
+    }
+}
+
 /// Immutable, deterministically ordered EDB built from pods and/or signed dictionaries.
+#[serde_as]
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct ImmutableEdb {
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
     per_predicate_indexes: std::collections::BTreeMap<PredicateKey, PerPredicateIndex>,
-
     // Full dictionaries registered: root -> key_hash -> value
-    full_dicts: std::collections::BTreeMap<Hash, std::collections::BTreeMap<Hash, Value>>,
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
+    full_dicts: std::collections::BTreeMap<Hash, DictionaryMap>,
     // Original full dictionary objects by root (used for replay)
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
     full_dict_objs: std::collections::BTreeMap<Hash, Dictionary>,
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
     signed_dicts: std::collections::BTreeMap<Hash, SignedDict>,
     // Stored pods by id for replay
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
     pods: std::collections::BTreeMap<PodRef, MainPod>,
     // Keypairs registered: public key -> secret key
+    #[serde_as(as = "JsonString<Vec<(JsonString, _)>>")]
     keypairs: std::collections::BTreeMap<OrderedPublicKey, SecretKey>,
 }
 
