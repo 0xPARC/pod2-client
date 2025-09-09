@@ -455,6 +455,7 @@ impl FrogSearch {
         let mut builder = SignedDictBuilder::new(&Default::default());
         builder.insert("biome", self.biome);
         builder.insert("nonce", *self.kvs.get(&self.nonce_key).unwrap());
+        builder.insert("signer", *self.kvs.get(&hash_str("signer").into()).unwrap());
         let signer = Signer(private_key);
         builder.sign(&signer).map_err(|e| e.to_string())
     }
@@ -600,6 +601,8 @@ mod test {
         builder.insert("biome", biome);
         let nonce_key: RawValue = hash_str("nonce").into();
         builder.insert("nonce", *search.kvs.get(&nonce_key).unwrap());
+        let signer_key: RawValue = hash_str("signer").into();
+        builder.insert("signer", *search.kvs.get(&signer_key).unwrap());
         let pod = builder.sign(&Signer(sk)).unwrap();
         assert_eq!(search_id, pod.dict.commitment())
     }
