@@ -134,7 +134,7 @@ pub fn prove_upvote_verification_with_solver(
         .build();
 
     let reg = OpRegistry::default();
-    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let config = EngineConfigBuilder::new().recommended(&pod_params).build();
     let mut engine = Engine::with_config(&reg, &edb, config);
     engine.load_processed(&request);
     engine
@@ -268,7 +268,7 @@ pub fn prove_upvote_count_base_with_solver(
         .build();
 
     let reg = OpRegistry::default();
-    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let config = EngineConfigBuilder::new().recommended(&pod_params).build();
     let mut engine = Engine::with_config(&reg, &edb, config);
     engine.load_processed(&request);
     engine
@@ -425,4 +425,69 @@ pub fn verify_upvote_count_with_solver(
 mod tests {
 
     // Add unit tests for upvote verification functions
+
+    use pod_utils::prover_setup::PodNetProverSetup;
+    use pod2::lang::parse;
+    use pod2_new_solver::{
+        Engine, EngineConfigBuilder, ImmutableEdb, OpRegistry,
+        build_pod_from_answer_top_level_public,
+    };
+
+    use crate::mainpod::MainPodError;
+
+    #[test]
+    fn test_upvote_verification_with_solver() {
+        tracing_subscriber::fmt::init();
+        let edb: ImmutableEdb = serde_json::from_str(
+            r#"
+{"per_predicate_indexes":{},"full_dicts":{"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"0687b2a7196cb8263d8270328ecdb6e4bd1fb27ecc691be282fae087b2bf9c68":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"17417d2499f6ade7f3387f402392febcbf2f8f59878ce96cdbe7eaa224200e2a":"Rob","2457fb6a7997ef0687afe36dc26cfb77f057e30b13be3374ec07fb18618df000":"2025-09-08T07:30:51.833205+00:00","410014c23f8d137d972b6bf48a908eeeb095737793331de7ae739295f5c021c7":"strawman-identity-server"},"b9a6c039e6a374366b67e3e771bdec83f8a840c980e4c20954dbeb17d285ef2a":{"42bd0386a28ebfca8ac534027c8c9aaf1e3f95799eda79f0a99b918f35cd289a":"upvote","ecd9e9c64727f1573068dde584199f7618eab0945db2c4e97d144abaacdbed25":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"fe4ff0e81f0a00a031e3b200e67542d870a092e1156441df7742ac7939ed8c01":{"Int":"1757398210"}}},"full_dict_objs":{"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"max_depth":32,"kvs":{"identity_server_id":"strawman-identity-server","issued_at":"2025-09-08T07:30:51.833205+00:00","user_public_key":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"username":"Rob"}},"b9a6c039e6a374366b67e3e771bdec83f8a840c980e4c20954dbeb17d285ef2a":{"max_depth":32,"kvs":{"content_hash":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"request_type":"upvote","timestamp":{"Int":"1757398210"}}}},"signed_dicts":{"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"dict":{"max_depth":32,"kvs":{"identity_server_id":"strawman-identity-server","issued_at":"2025-09-08T07:30:51.833205+00:00","user_public_key":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"username":"Rob"}},"public_key":"81XmHMoxDXka5UPoTpy2VXo77se4mSSPzbBaXFBMnebhMu5GetHRtwi","signature":"8pWhKvziTPDdomccWF200HIgOy5ZlEjepYD13XsR+TwzllurAauHJ+6wZwtDF2P4tyrJrDvLTLECzjOdnGDcWHW1sfdOdbm4YBKMWtg7jHg="},"b9a6c039e6a374366b67e3e771bdec83f8a840c980e4c20954dbeb17d285ef2a":{"dict":{"max_depth":32,"kvs":{"content_hash":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"request_type":"upvote","timestamp":{"Int":"1757398210"}}},"public_key":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m","signature":"bseR+ZRVYGtgB09AQqXvhheq12UAzh1e6cCFV8S4JH8ftCJYZRZ9KhXfZ0vgfVrTvLPlmA7cF171jq6eE35y/J3j/avXbqv43jrMCaaarRc="}},"pods":{},"keypairs":{}}
+"#,
+        ).unwrap();
+        let query = r#"
+        identity_verified(username, identity_pod) = AND(
+            Equal(?identity_pod["username"], ?username)
+        )
+
+        upvote_verified(content_hash, upvote_pod) = AND(
+            Equal(?upvote_pod["content_hash"], ?content_hash)
+            Equal(?upvote_pod["request_type"], "upvote")
+        )
+
+        upvote_verification(username, content_hash, identity_server_pk, private: identity_pod, upvote_pod, upvote_pod_signer) = AND(
+            identity_verified(?username, ?identity_pod)
+            upvote_verified(?content_hash, ?upvote_pod)
+            SignedBy(?identity_pod, ?identity_server_pk)
+            SignedBy(?upvote_pod, ?upvote_pod_signer)
+            Equal(?identity_pod["user_public_key"], ?upvote_pod_signer)
+        )
+        
+
+        REQUEST(
+            upvote_verification("Rob", Raw(0xcde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d), PublicKey(81XmHMoxDXka5UPoTpy2VXo77se4mSSPzbBaXFBMnebhMu5GetHRtwi))
+        )
+        "#;
+
+        let request = parse(query, &PodNetProverSetup::get_params(), &[]).unwrap();
+        let reg = OpRegistry::default();
+        let config = EngineConfigBuilder::new()
+            .recommended(&PodNetProverSetup::get_params())
+            .build();
+        let mut engine = Engine::with_config(&reg, &edb, config);
+        engine.load_processed(&request);
+        engine.run().unwrap();
+
+        let (vd_set, prover) = PodNetProverSetup::create_prover_setup(true)
+            .map_err(MainPodError::ProofGeneration)
+            .unwrap();
+
+        build_pod_from_answer_top_level_public(
+            &engine.answers[0],
+            &PodNetProverSetup::get_params(),
+            vd_set,
+            |b| b.prove(&*prover).map_err(|e| e.to_string()),
+            &edb,
+        )
+        .map_err(|e| MainPodError::ProofGeneration(format!("Pod build error: {e:?}")))
+        .unwrap();
+    }
 }
