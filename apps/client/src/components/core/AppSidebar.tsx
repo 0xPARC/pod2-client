@@ -234,7 +234,7 @@ export function AppSidebar() {
                   trigger={
                     <SidebarMenuButton>
                       <ImportIcon />
-                      Import POD
+                      Import
                     </SidebarMenuButton>
                   }
                 />
@@ -244,7 +244,7 @@ export function AppSidebar() {
                   onClick={() => setIsCreateSignedPodDialogOpen(true)}
                 >
                   <FilePenLineIcon />
-                  Sign POD
+                  Sign Dictionary
                 </SidebarMenuButton>
                 <CreateSignedPodDialog
                   isOpen={isCreateSignedPodDialogOpen}
