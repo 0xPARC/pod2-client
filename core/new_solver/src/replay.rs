@@ -386,22 +386,23 @@ fn map_to_operation(
                     Ok(Some(Operation::copy(head.clone())))
                 }
                 NotContains => {
-                    if let OpTag::FromLiterals = tag {
-                        if let Statement::NotContains(r, k) = head.clone() {
-                            if let (ValueRef::Literal(vr), ValueRef::Literal(kv)) = (r, k) {
-                                // This was proven from a literal container. The container itself is the proof.
+                    // This predicate can be proven from a literal container OR from a full dictionary
+                    // in the EDB. In both cases, the MainPod operation is NotContainsFromEntries.
+                    if let Statement::NotContains(r, k) = head.clone() {
+                        if let (ValueRef::Literal(vr), ValueRef::Literal(kv)) = (r, k) {
+                            // First, check if the value is already a literal container.
+                            if let pod2::middleware::TypedValue::Dictionary(_)
+                            | pod2::middleware::TypedValue::Array(_)
+                            | pod2::middleware::TypedValue::Set(_) = vr.typed()
+                            {
                                 return Ok(Some(Operation(
                                     OperationType::Native(NativeOperation::NotContainsFromEntries),
                                     vec![OperationArg::from(vr), OperationArg::from(kv)],
                                     OperationAux::None,
                                 )));
                             }
-                        }
-                    }
 
-                    // Fallback for EDB-based proofs
-                    if let Statement::NotContains(r, k) = head.clone() {
-                        if let (ValueRef::Literal(vr), ValueRef::Literal(kv)) = (r, k) {
+                            // If not, it's a hash; try to look up the full dictionary in the EDB.
                             let root = Hash::from(vr.raw());
                             if let Some(dict) = edb.full_dict(&root) {
                                 return Ok(Some(Operation(
@@ -412,12 +413,10 @@ fn map_to_operation(
                                     ],
                                     OperationAux::None,
                                 )));
-                            } else {
-                                // If it's not a literal and not in the EDB, it must be a copied statement.
-                                return Ok(Some(Operation::copy(head.clone())));
                             }
                         }
                     }
+                    // If neither of the above, it must be a copied statement.
                     Ok(Some(Operation::copy(head.clone())))
                 }
                 SignedBy => {
