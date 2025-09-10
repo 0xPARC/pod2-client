@@ -58,10 +58,22 @@ pub async fn import_pod(
     let mut app_state = state.lock().await;
 
     let pod_data = match pod_type.as_str() {
-        "Signed" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
-        "MockSigned" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
-        "Main" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
-        "MockMain" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
+        "Signed" => PodData::Signed(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize signed dict: {e}"))?,
+        ),
+        "MockSigned" => PodData::Signed(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize signed dict: {e}"))?,
+        ),
+        "Main" => PodData::Main(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize main pod: {e}"))?,
+        ),
+        "MockMain" => PodData::Main(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize main pod: {e}"))?,
+        ),
         _ => return Err(format!("Not a valid POD type: {pod_type}")),
     };
 

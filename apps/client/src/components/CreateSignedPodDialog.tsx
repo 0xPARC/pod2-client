@@ -8,7 +8,8 @@ import { toast } from "sonner";
 //   importPodDataToSpace,
 //   signPod
 // } from "../lib/backendServiceClient";
-import { importPod, signPod } from "@/lib/rpc";
+import { importSignedDict } from "@/lib/features";
+import { signDict } from "@/lib/rpc";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -285,7 +286,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     // };
 
     try {
-      const signedPodData = await signPod(signedPodEntries);
+      const signedPodData = await signDict(signedPodEntries);
       console.log("Successfully Signed POD:", signedPodData);
 
       // // Now attempt to import the signed POD
@@ -309,12 +310,12 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
         //   // label: `Signed POD - ${new Date().toISOString()}`
         //   label: label.trim() ? label.trim() : undefined
         // };
-        await importPod(
+        await importSignedDict(
           signedPodData,
           label.trim().length > 0 ? label.trim() : undefined
         );
         toast.success(
-          `POD ${signedPodData.id.slice(0, 12)}... imported successfully!`
+          `POD ${signedPodData.signature.slice(0, 12)}... imported successfully!`
         );
       } catch (importError) {
         console.error("Failed to import signed POD:", importError);

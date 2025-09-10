@@ -109,13 +109,13 @@ pub async fn get_private_key_info(
 
 /// Sign a POD with the given key-value pairs
 #[tauri::command]
-pub async fn sign_pod(
+pub async fn sign_dict(
     state: State<'_, Mutex<AppState>>,
-    serialized_pod_values: String,
+    serialized_dict_values: String,
 ) -> Result<String, String> {
     let app_state = state.lock().await;
 
-    let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_pod_values)
+    let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_dict_values)
         .map_err(|e| format!("Failed to parse serialized pod values: {e}"))?;
 
     let params = Params::default();
@@ -131,11 +131,11 @@ pub async fn sign_pod(
 
     let signer = Signer(private_key);
 
-    let signed_pod = builder
+    let signed_dict = builder
         .sign(&signer)
-        .map_err(|e| format!("Failed to sign pod: {e}"))?;
+        .map_err(|e| format!("Failed to sign dict: {e}"))?;
 
-    Ok(serde_json::to_string(&signed_pod).unwrap())
+    Ok(serde_json::to_string(&signed_dict).unwrap())
 }
 
 // =============================================================================
@@ -284,7 +284,9 @@ pub async fn execute_code_command(
     let mut engine = Engine::with_config(&reg, &edb, engine_config.build());
 
     engine.load_processed(&processed_output);
-    engine.run().expect("run ok");
+    engine
+        .run()
+        .map_err(|e| format!("Failed to run engine: {e}"))?;
 
     // End solver timing
     let solver_time = solver_start.elapsed();
@@ -310,7 +312,7 @@ pub async fn execute_code_command(
         |b| b.prove(&*prover).map_err(|e| e.to_string()),
         &edb,
     )
-    .unwrap();
+    .map_err(|e| format!("Failed to build pod from answer: {e}"))?;
 
     // let mut builder = MainPodBuilder::new(&params, vd_set);
     // for (operation, public) in ops {

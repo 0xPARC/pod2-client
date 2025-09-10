@@ -58,10 +58,9 @@ export const triggerSync = podManagementFeature.triggerSync;
 export const importPod = podManagementFeature.importPod;
 export const deletePod = podManagementFeature.deletePod;
 export const listSpaces = podManagementFeature.listSpaces;
-export const insertZuKycPods = podManagementFeature.insertZuKycPods;
 
 // Authoring operations
-export const signPod = authoringFeature.signPod;
+export const signDict = authoringFeature.signDict;
 export const getPrivateKeyInfo = authoringFeature.getPrivateKeyInfo;
 
 /**
@@ -168,7 +167,7 @@ export async function requestLeaderboard(): RpcResult<LeaderboardItem[]> {
 // =============================================================================
 
 // Re-export the existing functions with their original names
-export { importPod as importPodLegacy, signPod as signPodLegacy };
+export { importPod as importPodLegacy, signDict as signPodLegacy };
 
 // =============================================================================
 // Feature modules for direct import

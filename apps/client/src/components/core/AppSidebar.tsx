@@ -2,7 +2,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
@@ -308,21 +307,6 @@ export function AppSidebar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48">
-            <DropdownMenuItem
-              onClick={() => {
-                invoke("insert_zukyc_pods")
-                  .then(() => {
-                    toast.success("ZuKYC PODs added successfully");
-                  })
-                  .catch((error) => {
-                    toast.error(`Failed to add ZuKYC PODs: ${error}`);
-                  });
-              }}
-            >
-              <ImportIcon className="h-4 w-4 mr-2" />
-              Add ZuKYC PODs
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link to="/debug">
                 <SettingsIcon className="h-4 w-4 mr-2" />

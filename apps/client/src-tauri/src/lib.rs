@@ -728,7 +728,7 @@ pub fn run() {
             blockies::commands::get_blockies_data,
             // Authoring commands
             authoring::get_private_key_info,
-            authoring::sign_pod,
+            authoring::sign_dict,
             authoring::validate_code_command,
             authoring::execute_code_command,
             // Document commands

@@ -1,4 +1,4 @@
-import { MainPod, SignedPod } from "@pod2/pod2js";
+import { MainPod, SignedDict } from "@pod2/pod2js";
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "typescript-result";
 
@@ -38,7 +38,7 @@ export interface ReplyReference {
 export interface DocumentPods {
   document_id: number;
   pod: MainPod; // MainPod proving document authenticity
-  timestamp_pod: SignedPod; // Server timestamp pod
+  timestamp_pod: SignedDict; // Server timestamp pod
   upvote_count_pod?: MainPod; // MainPod proving upvote count
 }
 
