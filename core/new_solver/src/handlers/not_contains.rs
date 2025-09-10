@@ -53,6 +53,68 @@ impl OpHandler for NotContainsFromEntriesHandler {
         }
         let a_root = &args[0];
         let a_key = &args[1];
+
+        // Handle literal container argument
+        if let Some(container_val) = match a_root {
+            StatementTmplArg::Literal(v) => Some(v.clone()),
+            StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).cloned(),
+            _ => None,
+        } {
+            match container_val.typed() {
+                pod2::middleware::TypedValue::Dictionary(dict) => {
+                    if let Some(key) = super::contains::key_from_arg(a_key, store) {
+                        return match dict.get(&key) {
+                            Ok(_) => PropagatorResult::Contradiction,
+                            Err(_) => PropagatorResult::Entailed {
+                                bindings: vec![],
+                                op_tag: OpTag::FromLiterals,
+                            },
+                        };
+                    }
+                }
+                pod2::middleware::TypedValue::Array(array) => {
+                    if let Some(index) = match a_key {
+                        StatementTmplArg::Literal(v) => match v.typed() {
+                            pod2::middleware::TypedValue::Int(i) => Some(*i),
+                            _ => None,
+                        },
+                        StatementTmplArg::Wildcard(w) => {
+                            store.bindings.get(&w.index).and_then(|v| match v.typed() {
+                                pod2::middleware::TypedValue::Int(i) => Some(*i),
+                                _ => None,
+                            })
+                        }
+                        _ => None,
+                    } {
+                        if array.get(index as usize).is_err() {
+                            return PropagatorResult::Entailed {
+                                bindings: vec![],
+                                op_tag: OpTag::FromLiterals,
+                            };
+                        } else {
+                            return PropagatorResult::Contradiction;
+                        }
+                    }
+                }
+                pod2::middleware::TypedValue::Set(set) => {
+                    if let Some(value_to_check) = match a_key {
+                        StatementTmplArg::Literal(v) => Some(v.clone()),
+                        StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).cloned(),
+                        _ => None,
+                    } {
+                        return match set.contains(&value_to_check) {
+                            false => PropagatorResult::Entailed {
+                                bindings: vec![],
+                                op_tag: OpTag::FromLiterals,
+                            },
+                            true => PropagatorResult::Contradiction,
+                        };
+                    }
+                }
+                _ => {} // Fall through for EDB-based logic
+            }
+        }
+
         // Extract root hash if bound
         let root = match a_root {
             StatementTmplArg::Literal(v) => Some(Hash::from(v.raw())),

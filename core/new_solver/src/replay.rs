@@ -207,8 +207,6 @@ where
         }
     }
 
-    println!("Builder: {builder}");
-
     prove_with(&builder)
 }
 
@@ -316,11 +314,12 @@ fn map_to_operation(
             use pod2::middleware::NativePredicate::*;
             match np {
                 // Value-centric natives: translate AKs to Contains statements from premises
-                Equal | Lt | LtEq => {
+                Equal | Lt | LtEq | NotEqual => {
                     let (l, r, op) = match head.clone() {
                         Statement::Equal(l, r) => (l, r, NativeOperation::EqualFromEntries),
                         Statement::Lt(l, r) => (l, r, NativeOperation::LtFromEntries),
                         Statement::LtEq(l, r) => (l, r, NativeOperation::LtEqFromEntries),
+                        Statement::NotEqual(l, r) => (l, r, NativeOperation::NotEqualFromEntries),
                         _ => unreachable!(),
                     };
                     let a0 = op_arg_from_vr(l, premises, edb)?;
@@ -331,19 +330,35 @@ fn map_to_operation(
                         OperationAux::None,
                     )))
                 }
-                SumOf => {
-                    if let Statement::SumOf(a, b, c) = head.clone() {
-                        let a0 = op_arg_from_vr(a, premises, edb)?;
-                        let a1 = op_arg_from_vr(b, premises, edb)?;
-                        let a2 = op_arg_from_vr(c, premises, edb)?;
-                        Ok(Some(Operation(
-                            OperationType::Native(NativeOperation::SumOf),
-                            vec![a0, a1, a2],
-                            OperationAux::None,
-                        )))
-                    } else {
-                        Err("head not SumOf".to_string())
-                    }
+                SumOf | ProductOf | MaxOf | HashOf => {
+                    let (a, b, c, op) = match head.clone() {
+                        Statement::SumOf(a, b, c) => (a, b, c, NativeOperation::SumOf),
+                        Statement::ProductOf(a, b, c) => (a, b, c, NativeOperation::ProductOf),
+                        Statement::MaxOf(a, b, c) => (a, b, c, NativeOperation::MaxOf),
+                        Statement::HashOf(a, b, c) => (a, b, c, NativeOperation::HashOf),
+                        _ => unreachable!(),
+                    };
+                    let a0 = op_arg_from_vr(a, premises, edb)?;
+                    let a1 = op_arg_from_vr(b, premises, edb)?;
+                    let a2 = op_arg_from_vr(c, premises, edb)?;
+                    Ok(Some(Operation(
+                        OperationType::Native(op),
+                        vec![a0, a1, a2],
+                        OperationAux::None,
+                    )))
+                }
+                PublicKeyOf => {
+                    let (a, b, op) = match head.clone() {
+                        Statement::PublicKeyOf(a, b) => (a, b, NativeOperation::PublicKeyOf),
+                        _ => unreachable!(),
+                    };
+                    let a0 = op_arg_from_vr(a, premises, edb)?;
+                    let a1 = op_arg_from_vr(b, premises, edb)?;
+                    Ok(Some(Operation(
+                        OperationType::Native(op),
+                        vec![a0, a1],
+                        OperationAux::None,
+                    )))
                 }
                 Contains => {
                     // If this was generated from a full dict, emit ContainsFromEntries using the dict value
@@ -371,7 +386,20 @@ fn map_to_operation(
                     Ok(Some(Operation::copy(head.clone())))
                 }
                 NotContains => {
-                    // Our handler uses FromLiterals when full dict shows absence. Generate only if dict is present.
+                    if let OpTag::FromLiterals = tag {
+                        if let Statement::NotContains(r, k) = head.clone() {
+                            if let (ValueRef::Literal(vr), ValueRef::Literal(kv)) = (r, k) {
+                                // This was proven from a literal container. The container itself is the proof.
+                                return Ok(Some(Operation(
+                                    OperationType::Native(NativeOperation::NotContainsFromEntries),
+                                    vec![OperationArg::from(vr), OperationArg::from(kv)],
+                                    OperationAux::None,
+                                )));
+                            }
+                        }
+                    }
+
+                    // Fallback for EDB-based proofs
                     if let Statement::NotContains(r, k) = head.clone() {
                         if let (ValueRef::Literal(vr), ValueRef::Literal(kv)) = (r, k) {
                             let root = Hash::from(vr.raw());
@@ -385,10 +413,8 @@ fn map_to_operation(
                                     OperationAux::None,
                                 )));
                             } else {
-                                return Err(
-                                    "missing dictionary for NotContainsFromEntries; cannot replay"
-                                        .to_string(),
-                                );
+                                // If it's not a literal and not in the EDB, it must be a copied statement.
+                                return Ok(Some(Operation::copy(head.clone())));
                             }
                         }
                     }
@@ -408,7 +434,11 @@ fn map_to_operation(
                     }
                     Err("SignedBy expects literal message root".to_string())
                 }
-                _ => Ok(::std::option::Option::None),
+                // TODO: Container update predicates should be supported
+                None | False | ContainerInsert | ContainerDelete | ContainerUpdate
+                | DictContains | DictNotContains | SetContains | SetNotContains | ArrayContains
+                | GtEq | Gt | DictInsert | DictUpdate | DictDelete | SetInsert | SetDelete
+                | ArrayUpdate => Ok(std::option::Option::None),
             }
         }
         _ => Ok(None),
@@ -467,8 +497,16 @@ fn op_arg_from_vr(
 }
 
 fn normalize_stmt_for_op_arg(s: Statement, edb: &dyn EdbView) -> Result<Statement, String> {
+    use pod2::middleware::TypedValue;
     match s.clone() {
         Statement::Contains(ValueRef::Literal(r), k, v) => {
+            // If the value is already a container literal, it's "normalized" and doesn't need EDB lookup.
+            if let TypedValue::Dictionary(_) | TypedValue::Array(_) | TypedValue::Set(_) = r.typed()
+            {
+                return Ok(s);
+            }
+
+            // Otherwise, assume it's a root hash and look it up in the EDB.
             let root = Hash::from(r.raw());
             if let Some(dict) = edb.full_dict(&root) {
                 Ok(Statement::Contains(

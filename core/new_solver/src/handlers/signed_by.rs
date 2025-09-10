@@ -234,7 +234,6 @@ mod tests {
         let args = args_from("REQUEST(SignedBy(?R, ?PK))");
 
         let res = handler.propagate(&args, &mut store, &edb);
-        println!("res: {res:?}");
         assert!(matches!(res, PropagatorResult::Contradiction));
     }
 

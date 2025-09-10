@@ -1,4 +1,4 @@
-use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg, Value};
+use pod2::middleware::{Hash, Key, NativePredicate, StatementTmplArg, TypedValue, Value};
 
 use super::util::{arg_to_selector, handle_copy_results};
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Utility: extract a bound root hash from a template arg (literal or wildcard).
-fn root_from_arg(arg: &StatementTmplArg, store: &ConstraintStore) -> Option<Hash> {
+pub fn root_from_arg(arg: &StatementTmplArg, store: &ConstraintStore) -> Option<Hash> {
     match arg {
         StatementTmplArg::Literal(v) => Some(Hash::from(v.raw())),
         StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).map(|v| Hash::from(v.raw())),
@@ -18,7 +18,7 @@ fn root_from_arg(arg: &StatementTmplArg, store: &ConstraintStore) -> Option<Hash
 }
 
 /// Utility: extract a Key from a template arg (literal string or wildcard bound to string).
-fn key_from_arg(arg: &StatementTmplArg, store: &ConstraintStore) -> Option<Key> {
+pub fn key_from_arg(arg: &StatementTmplArg, store: &ConstraintStore) -> Option<Key> {
     match arg {
         StatementTmplArg::Literal(v) => {
             if let Ok(s) = String::try_from(v.typed()) {
@@ -85,6 +85,169 @@ impl OpHandler for ContainsFromEntriesHandler {
             return PropagatorResult::Contradiction;
         }
         let (a_root, a_key, a_val) = (&args[0], &args[1], &args[2]);
+
+        // Handle literal container argument
+        if let Some(container_val) = match a_root {
+            StatementTmplArg::Literal(v) => Some(v.clone()),
+            StatementTmplArg::Wildcard(w) => store.bindings.get(&w.index).cloned(),
+            _ => None,
+        } {
+            match container_val.typed() {
+                pod2::middleware::TypedValue::Dictionary(dict) => {
+                    if let Some(key) = key_from_arg(a_key, store) {
+                        return match dict.get(&key) {
+                            Ok(dict_value) => match a_val {
+                                StatementTmplArg::Literal(v) => {
+                                    if dict_value == v {
+                                        PropagatorResult::Entailed {
+                                            bindings: vec![],
+                                            op_tag: OpTag::FromLiterals,
+                                        }
+                                    } else {
+                                        PropagatorResult::Contradiction
+                                    }
+                                }
+                                StatementTmplArg::Wildcard(wv) => {
+                                    if let Some(existing) = store.bindings.get(&wv.index) {
+                                        if existing == dict_value {
+                                            PropagatorResult::Entailed {
+                                                bindings: vec![],
+                                                op_tag: OpTag::FromLiterals,
+                                            }
+                                        } else {
+                                            PropagatorResult::Contradiction
+                                        }
+                                    } else {
+                                        PropagatorResult::Entailed {
+                                            bindings: vec![(wv.index, dict_value.clone())],
+                                            op_tag: OpTag::FromLiterals,
+                                        }
+                                    }
+                                }
+                                _ => PropagatorResult::Contradiction,
+                            },
+                            Err(_) => PropagatorResult::Contradiction, // Key not found
+                        };
+                    }
+                }
+                pod2::middleware::TypedValue::Array(array) => {
+                    // Index must be a bound integer
+                    if let Some(index) = match a_key {
+                        StatementTmplArg::Literal(v) => match v.typed() {
+                            TypedValue::Int(i) => Some(i),
+                            _ => None,
+                        },
+                        StatementTmplArg::Wildcard(w) => {
+                            store.bindings.get(&w.index).and_then(|v| match v.typed() {
+                                TypedValue::Int(i) => Some(i),
+                                _ => None,
+                            })
+                        }
+                        _ => None,
+                    } {
+                        if *index < 0 {
+                            return PropagatorResult::Contradiction;
+                        }
+                        return match array.get(*index as usize) {
+                            Ok(array_value) => match a_val {
+                                StatementTmplArg::Literal(v) => {
+                                    if array_value == v {
+                                        PropagatorResult::Entailed {
+                                            bindings: vec![],
+                                            op_tag: OpTag::FromLiterals,
+                                        }
+                                    } else {
+                                        PropagatorResult::Contradiction
+                                    }
+                                }
+                                StatementTmplArg::Wildcard(wv) => {
+                                    if let Some(existing) = store.bindings.get(&wv.index) {
+                                        if existing == array_value {
+                                            PropagatorResult::Entailed {
+                                                bindings: vec![],
+                                                op_tag: OpTag::FromLiterals,
+                                            }
+                                        } else {
+                                            PropagatorResult::Contradiction
+                                        }
+                                    } else {
+                                        PropagatorResult::Entailed {
+                                            bindings: vec![(wv.index, array_value.clone())],
+                                            op_tag: OpTag::FromLiterals,
+                                        }
+                                    }
+                                }
+                                _ => PropagatorResult::Contradiction,
+                            },
+                            Err(_) => PropagatorResult::Contradiction, // Index out of bounds or other error
+                        };
+                    }
+                }
+                pod2::middleware::TypedValue::Set(set) => {
+                    // For Sets, key and value arguments must unify to the same value.
+                    let (value_opt, bindings_opt) = match (a_key, a_val) {
+                        (StatementTmplArg::Literal(k), StatementTmplArg::Literal(v)) => {
+                            if k != v {
+                                return PropagatorResult::Contradiction;
+                            }
+                            (Some(k.clone()), Some(vec![]))
+                        }
+                        (StatementTmplArg::Literal(k), StatementTmplArg::Wildcard(wv)) => {
+                            if let Some(bound_v) = store.bindings.get(&wv.index) {
+                                if k != bound_v {
+                                    return PropagatorResult::Contradiction;
+                                }
+                                (Some(k.clone()), Some(vec![]))
+                            } else {
+                                (Some(k.clone()), Some(vec![(wv.index, k.clone())]))
+                            }
+                        }
+                        (StatementTmplArg::Wildcard(wk), StatementTmplArg::Literal(v)) => {
+                            if let Some(bound_k) = store.bindings.get(&wk.index) {
+                                if v != bound_k {
+                                    return PropagatorResult::Contradiction;
+                                }
+                                (Some(v.clone()), Some(vec![]))
+                            } else {
+                                (Some(v.clone()), Some(vec![(wk.index, v.clone())]))
+                            }
+                        }
+                        (StatementTmplArg::Wildcard(wk), StatementTmplArg::Wildcard(wv)) => {
+                            let k_bound = store.bindings.get(&wk.index);
+                            let v_bound = store.bindings.get(&wv.index);
+                            match (k_bound, v_bound) {
+                                (Some(k), Some(v)) => {
+                                    if k != v {
+                                        return PropagatorResult::Contradiction;
+                                    }
+                                    (Some(k.clone()), Some(vec![]))
+                                }
+                                (Some(k), None) => {
+                                    (Some(k.clone()), Some(vec![(wv.index, k.clone())]))
+                                }
+                                (None, Some(v)) => {
+                                    (Some(v.clone()), Some(vec![(wk.index, v.clone())]))
+                                }
+                                (None, None) => (None, None), // Cannot determine value if both unbound
+                            }
+                        }
+                        _ => (None, None),
+                    };
+
+                    if let (Some(value_to_check), Some(bindings)) = (value_opt, bindings_opt) {
+                        return match set.contains(&value_to_check) {
+                            true => PropagatorResult::Entailed {
+                                bindings,
+                                op_tag: OpTag::FromLiterals,
+                            },
+                            false => PropagatorResult::Contradiction,
+                        };
+                    }
+                }
+                _ => {} // Fall through for other types to handle via EDB
+            }
+        }
+
         // Enumeration: if root is an unbound wildcard and key/value are known, enumerate candidate roots.
         if let StatementTmplArg::Wildcard(wr) = a_root {
             if !store.bindings.contains_key(&wr.index) {

@@ -194,6 +194,14 @@ pub fn instantiate_goal(
             let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
             Some(Statement::Equal(a0, a1))
         }
+        Predicate::Native(NativePredicate::NotEqual) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::NotEqual(a0, a1))
+        }
         Predicate::Native(NativePredicate::Lt) => {
             if tmpl.args.len() != 2 {
                 return None;
