@@ -5,7 +5,7 @@ use std::sync::{
 
 use pod2::{
     backends::plonky2::mainpod::Prover,
-    frontend::{Error, MainPod, MainPodBuilder, Operation, SignedPod},
+    frontend::{Error, MainPod, MainPodBuilder, Operation, SignedDict},
     middleware::{
         CustomPredicateBatch, CustomPredicateRef, Params, Predicate, Statement, DEFAULT_VD_SET,
         SELF_ID_HASH,
@@ -86,6 +86,7 @@ struct LevelData {
     level_up_pred: Arc<CustomPredicateBatch>,
 }
 
+/*
 impl LevelData {
     fn try_new(pod: PodInfo, level_up_pred: Arc<CustomPredicateBatch>) -> Option<Self> {
         match pod.data {
@@ -131,7 +132,7 @@ impl LevelData {
     }
 
     fn new_from_signed(
-        signed_pod: &SignedPod,
+        signed_pod: &SignedDict,
         level_up_pred: Arc<CustomPredicateBatch>,
     ) -> Result<Self, anyhow::Error> {
         let params = Default::default();
@@ -231,6 +232,7 @@ impl LevelData {
         !finished
     }
 }
+*/
 
 fn level_up(
     app_handle: AppHandle,
@@ -239,6 +241,7 @@ fn level_up(
     level_up_pred: Arc<CustomPredicateBatch>,
     pod: PodInfo,
 ) {
+    /*
     if let Some(mut data) = LevelData::try_new(pod, level_up_pred) {
         while generation.load(Ordering::Acquire) == thread_generation && data.step(&app_handle) {
             if let Err(e) =
@@ -247,7 +250,7 @@ fn level_up(
                 log_err(&e);
             }
         }
-    }
+    }*/
 }
 
 fn build_level_up_pred() -> Arc<CustomPredicateBatch> {

@@ -1,0 +1,2 @@
+-- This migration cannot be safely reversed as it deletes all user data
+-- Down migration is intentionally left empty to prevent accidental data loss

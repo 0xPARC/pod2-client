@@ -5,8 +5,8 @@ use hex::FromHex;
 use num_bigint::BigUint;
 use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-    frontend::{SignedPod, SignedPodBuilder},
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signer::Signer},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::Hash,
 };
 use podnet_models::{
@@ -64,7 +64,7 @@ pub async fn upvote_document(
     // Load and verify identity pod
     println!("Loading identity pod from: {identity_pod_file}");
     let identity_pod_json = std::fs::read_to_string(identity_pod_file)?;
-    let identity_pod: SignedPod = serde_json::from_str(&identity_pod_json)?;
+    let identity_pod: SignedDict = serde_json::from_str(&identity_pod_json)?;
 
     // Verify the identity pod
     identity_pod.verify()?;
@@ -86,7 +86,7 @@ pub async fn upvote_document(
 
     // Create upvote pod with content hash, post ID, and request type
     let params = PodNetProverSetup::get_params();
-    let mut upvote_builder = SignedPodBuilder::new(&params);
+    let mut upvote_builder = SignedDictBuilder::new(&params);
 
     upvote_builder.insert("request_type", "upvote");
     upvote_builder.insert("content_hash", content_hash);

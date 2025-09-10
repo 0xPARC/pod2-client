@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use num::traits::Euclid;
 use pod2::{
-    frontend::{MainPod, SignedPod},
+    frontend::{MainPod, SignedDict},
     middleware::{Key, RawValue, TypedValue, Value},
 };
 use pod2_db::store::{PodData, PodInfo};
@@ -13,7 +13,7 @@ use crate::frog::{rarity_for, JUNK_RARITY};
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SerializablePod {
-    Signed(SignedPod),
+    Signed(SignedDict),
     Main(MainPod),
 }
 
@@ -37,14 +37,14 @@ pub trait IntoFrogPod: Clone {
     fn pod_data(self) -> PodData;
 }
 
-impl IntoFrogPod for SignedPod {
+impl IntoFrogPod for SignedDict {
     fn info(self) -> Option<FrogPodInfo> {
         let drop_table = match self.get("biome")?.typed() {
             TypedValue::Int(0) => DropTable::Search,
             TypedValue::Int(1) => DropTable::Mine,
             _ => return None,
         };
-        let id = RawValue::from(self.id().0);
+        let id = RawValue::from(self.dict.commitment());
         Some(FrogPodInfo {
             id,
             leveled_up: false,
@@ -92,7 +92,7 @@ impl IntoFrogPod for MainPod {
 pub fn get_frog_pod_info(pod: PodInfo) -> Option<FrogPodInfo> {
     match pod.data {
         PodData::Signed(s) => {
-            let inner = SignedPod::try_from(s.as_ref().clone()).ok()?;
+            let inner = SignedDict::try_from(s.as_ref().clone()).ok()?;
             inner.info()
         }
         PodData::Main(s) => {
@@ -160,7 +160,7 @@ pub struct FrogedexData {
 }
 
 impl FrogedexData {
-    pub fn from_pod(desc: &SignedPod) -> Option<Self> {
+    pub fn from_pod(desc: &SignedDict) -> Option<Self> {
         let frog_id = desc.get("frog_id")?.as_int()?;
         Some(Self {
             frog_id,

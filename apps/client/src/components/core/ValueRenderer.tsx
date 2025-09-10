@@ -76,11 +76,11 @@ const ValueRenderer: React.FC<ValueRendererProps> = ({ value }) => {
     if ("SecretKey" in value) {
       return <SecretKeyRenderer secretKey={value.SecretKey} />;
     }
-    if ("PodId" in value) {
+    if ("Root" in value) {
       return (
         <span className="font-mono text-blue-600 dark:text-blue-400 flex items-center gap-2">
-          <Badge className="px-1 w-[32px]">POD</Badge>
-          0x{value.PodId}
+          <Badge className="px-1 w-[32px]">Root</Badge>
+          0x{value.Root}
         </span>
       );
     }

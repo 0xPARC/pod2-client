@@ -2,8 +2,8 @@ use std::fs::File;
 
 use pod_utils::ValueExt;
 use pod2::{
-    backends::plonky2::{primitives::ec::curve::Point as PublicKey, signedpod::Signer},
-    frontend::{SignedPod, SignedPodBuilder},
+    backends::plonky2::{primitives::ec::curve::Point as PublicKey, signer::Signer},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::Params,
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use crate::{commands::keygen::KeypairData, utils::handle_error_response};
 
 #[derive(Debug, Deserialize)]
 pub struct ChallengeResponse {
-    pub challenge_pod: SignedPod,
+    pub challenge_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
@@ -23,13 +23,13 @@ pub struct ChallengeRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct IdentityResponse {
-    pub identity_pod: SignedPod,
+    pub identity_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IdentityRequest {
-    pub server_challenge_pod: SignedPod,
-    pub user_response_pod: SignedPod,
+    pub server_challenge_pod: SignedDict,
+    pub user_response_pod: SignedDict,
 }
 
 // GitHub Identity Server structures
@@ -236,7 +236,7 @@ async fn get_standard_identity(
 
     // Create challenge response pod
     let params = Params::default();
-    let mut challenge_builder = SignedPodBuilder::new(&params);
+    let mut challenge_builder = SignedDictBuilder::new(&params);
 
     challenge_builder.insert("challenge", challenge);
     challenge_builder.insert("username", username);

@@ -58,10 +58,22 @@ pub async fn import_pod(
     let mut app_state = state.lock().await;
 
     let pod_data = match pod_type.as_str() {
-        "Signed" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
-        "MockSigned" => PodData::Signed(serde_json::from_str(&serialized_pod).unwrap()),
-        "Main" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
-        "MockMain" => PodData::Main(serde_json::from_str(&serialized_pod).unwrap()),
+        "Signed" => PodData::Signed(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize signed dict: {e}"))?,
+        ),
+        "MockSigned" => PodData::Signed(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize signed dict: {e}"))?,
+        ),
+        "Main" => PodData::Main(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize main pod: {e}"))?,
+        ),
+        "MockMain" => PodData::Main(
+            serde_json::from_str(&serialized_pod)
+                .map_err(|e| format!("Failed to deserialize main pod: {e}"))?,
+        ),
         _ => return Err(format!("Not a valid POD type: {pod_type}")),
     };
 
@@ -96,22 +108,22 @@ pub async fn delete_pod(
     Ok(())
 }
 
-/// Debug command to insert ZuKYC sample pods
-#[tauri::command]
-pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    use crate::insert_zukyc_pods;
+// /// Debug command to insert ZuKYC sample pods
+// #[tauri::command]
+// pub async fn insert_zukyc_pods(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+//     use crate::insert_zukyc_pods;
 
-    let mut app_state = state.lock().await;
+//     let mut app_state = state.lock().await;
 
-    insert_zukyc_pods(&app_state.db)
-        .await
-        .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
+//     insert_zukyc_pods(&app_state.db)
+//         .await
+//         .map_err(|e| format!("Failed to insert ZuKYC pods: {e}"))?;
 
-    // Trigger state sync to update frontend
-    app_state.trigger_state_sync().await?;
+//     // Trigger state sync to update frontend
+//     app_state.trigger_state_sync().await?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Return pretty-printed Podlang for custom predicates
 #[tauri::command]

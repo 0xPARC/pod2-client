@@ -1,5 +1,5 @@
 import { Ajv2019, type ValidateFunction } from "ajv/dist/2019.js";
-import type { MainPod, SignedPod } from "../generated/types/pod2.d.ts";
+import type { MainPod, SignedDict } from "../generated/types/pod2.d.ts";
 import schema from "./schemas.json" with { type: "json" };
 
 export type * from "../generated/types/pod2.d.ts";
@@ -32,11 +32,11 @@ export function validateMainPod(data: any): Result<MainPod> {
   };
 }
 
-export function validateSignedPod(data: any): Result<SignedPod> {
-  if (!signedPodValidator) {
+export function validateSignedDict(data: any): Result<SignedDict> {
+  if (!signedDictValidator) {
     setupValidators();
   }
-  if (signedPodValidator && signedPodValidator(data)) {
+  if (signedDictValidator && signedDictValidator(data)) {
     return {
       success: true,
       pod: data
@@ -49,7 +49,7 @@ export function validateSignedPod(data: any): Result<SignedPod> {
 }
 
 let mainPodValidator: ValidateFunction<MainPod> | undefined;
-let signedPodValidator: ValidateFunction<SignedPod> | undefined;
+let signedDictValidator: ValidateFunction<SignedDict> | undefined;
 
 function setupValidators() {
   // --- AJV Setup ---
@@ -57,13 +57,13 @@ function setupValidators() {
   try {
     ajv.compile(schema);
     mainPodValidator = ajv.getSchema<MainPod>("#/definitions/MainPod");
-    signedPodValidator = ajv.getSchema<SignedPod>("#/definitions/SignedPod");
+    signedDictValidator = ajv.getSchema<SignedDict>("#/definitions/SignedDict");
 
     if (!mainPodValidator) {
       throw new Error("Could not get validator for MainPod");
     }
-    if (!signedPodValidator) {
-      throw new Error("Could not get validator for SignedPod");
+    if (!signedDictValidator) {
+      throw new Error("Could not get validator for SignedDict");
     }
   } catch (e) {
     console.error("Failed to compile AJV schemas:", e);

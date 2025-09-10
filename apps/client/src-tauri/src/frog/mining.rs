@@ -6,10 +6,10 @@ use std::sync::{
 use pod2::{
     backends::plonky2::{
         primitives::{ec::schnorr::SecretKey, merkletree::MerkleTree},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{SignedPod, SignedPodBuilder},
-    middleware::{hash_str, Hash, Params, PodType, RawValue, TypedValue, KEY_SIGNER, KEY_TYPE},
+    frontend::{SignedDict, SignedDictBuilder},
+    middleware::{hash_str, Hash, Params, RawValue},
 };
 use pod2_db::store::get_default_private_key;
 use rand::{rngs::OsRng, Rng};
@@ -144,17 +144,11 @@ struct FrogSearch {
 impl FrogSearch {
     pub fn new(data: &MiningData) -> Self {
         let mut kvs = std::collections::HashMap::new();
-        let type_key: RawValue = hash_str(KEY_TYPE).into();
-        let type_value: RawValue = (PodType::Signed as i64).into();
-        let signer_key: RawValue = hash_str(KEY_SIGNER).into();
-        let signer_value: RawValue = (&TypedValue::PublicKey(data.private_key.public_key())).into();
         let biome_key: RawValue = hash_str("biome").into();
         let biome_value: RawValue = data.biome.into();
         let nonce_key: RawValue = hash_str("nonce").into();
         let nonce_i64: i64 = OsRng.gen();
         let nonce_value: RawValue = nonce_i64.into();
-        kvs.insert(type_key, type_value);
-        kvs.insert(signer_key, signer_value);
         kvs.insert(biome_key, biome_value);
         kvs.insert(nonce_key, nonce_value);
         let max_depth = Params::default().max_depth_mt_containers;
@@ -185,8 +179,8 @@ impl FrogSearch {
         false
     }
 
-    fn generate_pod(&self, private_key: SecretKey) -> Result<SignedPod, String> {
-        let mut builder = SignedPodBuilder::new(&Default::default());
+    fn generate_pod(&self, private_key: SecretKey) -> Result<SignedDict, String> {
+        let mut builder = SignedDictBuilder::new(&Default::default());
         builder.insert("biome", self.biome);
         builder.insert("nonce", *self.kvs.get(&self.nonce_key).unwrap());
         let signer = Signer(private_key);
@@ -197,9 +191,9 @@ impl FrogSearch {
 #[cfg(test)]
 mod test {
     use pod2::{
-        backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-        frontend::SignedPodBuilder,
-        middleware::{hash_str, Params, PodId, RawValue},
+        backends::plonky2::{primitives::ec::schnorr::SecretKey, signer::Signer},
+        frontend::SignedDictBuilder,
+        middleware::{hash_str, Params, RawValue},
     };
 
     use crate::frog::mining::{FrogSearch, MiningData};
@@ -212,8 +206,8 @@ mod test {
             private_key: sk.clone(),
             biome,
         });
-        let search_id = PodId(search.pod_hash());
-        let mut builder = SignedPodBuilder::new(&Params::default());
+        let search_id = search.pod_hash();
+        let mut builder = SignedDictBuilder::new(&Params::default());
         builder.insert("biome", biome);
         let nonce_key: RawValue = hash_str("nonce").into();
         builder.insert("nonce", *search.kvs.get(&nonce_key).unwrap());

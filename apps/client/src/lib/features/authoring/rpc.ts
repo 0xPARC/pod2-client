@@ -1,5 +1,5 @@
 import { invokeCommand } from "@/lib/rpc";
-import type { MainPod, SignedPod, Value } from "@pod2/pod2js";
+import type { MainPod, SignedDict, Value } from "@pod2/pod2js";
 import type {
   Diagnostic,
   ExecuteCodeResponse,
@@ -18,21 +18,21 @@ export interface PrivateKeyInfo {
 }
 
 // =============================================================================
-// POD Authoring Operations
+// Authoring Operations
 // =============================================================================
 
 /**
  * Sign a POD with the given key-value pairs
  * @param values - The key-value pairs to include in the POD
- * @returns The signed POD
+ * @returns The signed dict
  */
-export async function signPod(
+export async function signDict(
   values: Record<string, Value>
-): Promise<SignedPod> {
-  const serializedPod = await invokeCommand<string>("sign_pod", {
-    serializedPodValues: JSON.stringify(values)
+): Promise<SignedDict> {
+  const serializedDict = await invokeCommand<string>("sign_dict", {
+    serializedDictValues: JSON.stringify(values)
   });
-  return JSON.parse(serializedPod);
+  return JSON.parse(serializedDict);
 }
 
 // =============================================================================

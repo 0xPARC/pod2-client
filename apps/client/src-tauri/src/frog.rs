@@ -11,13 +11,13 @@ use num::traits::Euclid;
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point, schnorr::SecretKey},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{MainPod, SerializedSignedPod, SignedPod, SignedPodBuilder},
-    middleware::{Hash, Key, PodId, RawValue, Statement, TypedValue, Value},
+    frontend::{MainPod, SignedDict, SignedDictBuilder},
+    middleware::{Hash, Key, RawValue, Statement, TypedValue, Value},
 };
 use pod2_db::{
-    store::{self, create_space, space_exists, PodData, PodInfo},
+    store::{self, create_space, space_exists, PodData, PodInfo, SignedDictWrapper},
     Db,
 };
 use reqwest::{Client, Response};
@@ -55,7 +55,7 @@ struct Challenge {
 
 #[derive(Deserialize)]
 struct FrogResponse {
-    pod: SignedPod,
+    pod: SignedDict,
     score: i64,
 }
 
@@ -64,7 +64,7 @@ pub(crate) fn setup_background_threads(app_handle: &AppHandle) {
     self::mining::setup_background_thread(app_handle.clone());
 }
 
-async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedPod, String> {
+async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedDict, String> {
     let challenge_url = server_url("auth");
     let challenge: Challenge = client
         .get(&challenge_url)
@@ -74,7 +74,7 @@ async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<Si
         .json()
         .await
         .map_err(connection_failed)?;
-    let mut builder = SignedPodBuilder::new(&Default::default());
+    let mut builder = SignedDictBuilder::new(&Default::default());
     builder.insert("public_key", challenge.public_key);
     builder.insert("time", challenge.time);
     let signer = Signer(private_key);
@@ -157,12 +157,9 @@ pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<Frog>, 
         .map(|pod| {
             let desc = description_for(&pod, &frog_descs);
             let derived = desc.map(|d| FrogDerived::from_info(&pod, d));
-            let pod_id = PodId(Hash(pod.id.0));
-            let id = if pod.leveled_up {
-                format!("{pod_id}+")
-            } else {
-                pod_id.to_string()
-            };
+            let pod_id = pod.id;
+            let level_up_indicator = if pod.leveled_up { "+" } else { "" };
+            let id = format!("{pod_id:#}{level_up_indicator}");
             // TODO: allow rare to be leveled up if there is no corresponding
             // epic frog
             let frog_pod = Frog {
@@ -227,7 +224,7 @@ async fn register_pod(
         .map_err(|e| e.to_string())
 }
 
-fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
+fn as_signed_owned(pod: PodInfo) -> Option<SignedDictWrapper> {
     match pod.data {
         PodData::Signed(p) => Some(*p),
         PodData::Main(_) => None,
@@ -236,7 +233,7 @@ fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
 
 #[derive(Serialize)]
 enum TaggedPod {
-    Signed(SignedPod),
+    Signed(SignedDict),
     Main(MainPod),
 }
 
@@ -261,7 +258,7 @@ async fn description_pods(db: &Db) -> Result<Vec<FrogedexData>, String> {
             infos
                 .into_iter()
                 .filter_map(|info| {
-                    FrogedexData::from_pod(&SignedPod::try_from(as_signed_owned(info)?).ok()?)
+                    FrogedexData::from_pod(&SignedDict::try_from(as_signed_owned(info)?).ok()?)
                 })
                 .collect()
         })
@@ -284,7 +281,7 @@ async fn request_frog_description(
         SerializablePod::Main(_) => "desc2",
     };
     let url = server_url(route);
-    let desc: SignedPod = client
+    let desc: SignedDict = client
         .post(&url)
         .json(&pod)
         .send()

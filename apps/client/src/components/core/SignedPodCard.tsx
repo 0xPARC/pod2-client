@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { SignedPod } from "@pod2/pod2js";
+import type { SignedDict } from "@pod2/pod2js";
 import { ClipboardCopy } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { Button } from "../ui/button";
 import ValueRenderer from "./ValueRenderer";
 
 interface SignedPodCardProps {
-  signedPod: SignedPod;
+  signedPod: SignedDict;
 }
 
 const SignedPodCard: React.FC<SignedPodCardProps> = ({ signedPod }) => {
@@ -29,9 +29,12 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({ signedPod }) => {
           <CardTitle className="flex items-center">
             <span
               className="font-mono text-sm cursor-pointer"
-              onClick={() => navigator.clipboard.writeText(signedPod.id)}
+              onClick={() => {
+                navigator.clipboard.writeText(signedPod.signature);
+                toast.success("Signature copied to clipboard.");
+              }}
             >
-              ID: {signedPod.id.slice(0, 32)}&hellip;
+              Signature: {signedPod.signature.slice(0, 32)}&hellip;
             </span>
           </CardTitle>
           <Button variant="outline" size="sm" onClick={handleExport}>
@@ -45,9 +48,9 @@ const SignedPodCard: React.FC<SignedPodCardProps> = ({ signedPod }) => {
           Entries:
         </h4>
 
-        {Object.keys(signedPod.entries).length > 0 ? (
+        {Object.keys(signedPod.dict.kvs).length > 0 ? (
           <div className="border rounded-md">
-            {Object.entries(signedPod.entries)
+            {Object.entries(signedPod.dict.kvs)
               .sort((a, b) => a[0].localeCompare(b[0]))
               .map(([key, value], index, arr) => (
                 <div

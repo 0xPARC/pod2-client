@@ -12,7 +12,7 @@ pub async fn request_identity_challenge(
     Json(payload): Json<IdentityServerChallengeRequest>,
 ) -> Result<Json<IdentityServerChallengeResponse>, StatusCode> {
     use pod2::{
-        backends::plonky2::signedpod::Signer, frontend::SignedPodBuilder, middleware::Params,
+        backends::plonky2::signer::Signer, frontend::SignedDictBuilder, middleware::Params,
     };
     use rand::Rng;
 
@@ -40,7 +40,7 @@ pub async fn request_identity_challenge(
 
     // Create challenge pod signed by server
     let params = Params::default();
-    let mut challenge_builder = SignedPodBuilder::new(&params);
+    let mut challenge_builder = SignedDictBuilder::new(&params);
 
     challenge_builder.insert("challenge", challenge.as_str());
     challenge_builder.insert("expires_at", expires_at_str.as_str());
@@ -79,16 +79,9 @@ pub async fn register_identity_server(
 
     // 2. Verify challenge pod was signed by this server
     let server_public_key = crate::pod::get_server_public_key();
-    let challenge_signer = payload
-        .server_challenge_pod
-        .get("_signer")
-        .and_then(|v| v.as_public_key())
-        .ok_or_else(|| {
-            tracing::error!("Server challenge pod missing signer");
-            StatusCode::BAD_REQUEST
-        })?;
+    let challenge_signer = payload.server_challenge_pod.public_key;
 
-    if *challenge_signer != server_public_key {
+    if challenge_signer != server_public_key {
         tracing::error!("Server challenge pod not signed by this server");
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -148,16 +141,9 @@ pub async fn register_identity_server(
     })?;
 
     // 6. Verify response pod signed by identity server
-    let response_signer = payload
-        .identity_response_pod
-        .get("_signer")
-        .and_then(|v| v.as_public_key())
-        .ok_or_else(|| {
-            tracing::error!("Identity response pod missing signer");
-            StatusCode::BAD_REQUEST
-        })?;
+    let response_signer = payload.identity_response_pod.public_key;
 
-    if *response_signer != *identity_server_public_key {
+    if response_signer != *identity_server_public_key {
         tracing::error!("Identity response pod not signed by expected identity server");
         return Err(StatusCode::BAD_REQUEST);
     }

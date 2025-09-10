@@ -3,7 +3,8 @@ use chrono::Utc;
 use hex::ToHex;
 use pod2::{
     backends::plonky2::primitives::ec::schnorr::SecretKey,
-    frontend::{MainPod, SerializedMainPod, SerializedSignedPod, SignedPod},
+    frontend::{MainPod, SerializedMainPod, SignedDict},
+    middleware::{hash_values, Hash},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,10 +19,37 @@ pub struct SpaceInfo {
     pub created_at: String,
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+pub struct SignedDictWrapper(pub SignedDict);
+
+impl From<SignedDict> for SignedDictWrapper {
+    fn from(pod: SignedDict) -> Self {
+        SignedDictWrapper(pod)
+    }
+}
+
+impl From<SignedDictWrapper> for SignedDict {
+    fn from(wrapper: SignedDictWrapper) -> Self {
+        wrapper.0
+    }
+}
+
+impl PartialEq for SignedDictWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.dict == other.0.dict && self.0.public_key == other.0.public_key
+    }
+}
+
+impl SignedDictWrapper {
+    pub fn id(&self) -> Hash {
+        hash_values(&[self.0.dict.commitment().into(), self.0.public_key.into()])
+    }
+}
+
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(tag = "pod_data_variant", content = "pod_data_payload")]
 pub enum PodData {
-    Signed(Box<SerializedSignedPod>),
+    Signed(Box<SignedDictWrapper>),
     Main(Box<SerializedMainPod>),
 }
 
@@ -36,15 +64,15 @@ impl PodData {
 
     pub fn id(&self) -> String {
         match self {
-            PodData::Signed(pod) => pod.id().0.encode_hex(),
-            PodData::Main(pod) => pod.id().0.encode_hex(),
+            PodData::Signed(pod) => pod.id().encode_hex(),
+            PodData::Main(pod) => pod.statements_hash().encode_hex(),
         }
     }
 }
 
-impl From<SignedPod> for PodData {
-    fn from(pod: SignedPod) -> Self {
-        PodData::Signed(Box::new(pod.into()))
+impl From<SignedDict> for PodData {
+    fn from(pod: SignedDict) -> Self {
+        PodData::Signed(Box::new(SignedDictWrapper(pod)))
     }
 }
 

@@ -2,12 +2,14 @@
 
 use pod_utils::prover_setup::PodNetProverSetup;
 use pod2::{
-    frontend::{MainPod, MainPodBuilder, SignedPod},
+    frontend::{MainPod, SignedDict},
     lang::parse,
-    middleware::{KEY_SIGNER, Params, Value, containers::Dictionary},
+    middleware::{Params, Value, containers::Dictionary},
 };
-// Import solver dependencies
-use pod2_solver::{SolverContext, db::IndexablePod, metrics::MetricsLevel, solve};
+use pod2_new_solver::{
+    Engine, EngineConfigBuilder, ImmutableEdbBuilder, OpRegistry,
+    build_pod_from_answer_top_level_public,
+};
 
 use super::{MainPodError, MainPodResult};
 use crate::get_publish_verification_predicate;
@@ -15,8 +17,8 @@ use crate::get_publish_verification_predicate;
 
 /// Parameters for publish verification proof generation
 pub struct PublishProofParams<'a> {
-    pub identity_pod: &'a SignedPod,
-    pub document_pod: &'a SignedPod,
+    pub identity_pod: &'a SignedDict,
+    pub document_pod: &'a SignedDict,
     pub use_mock_proofs: bool,
 }
 
@@ -36,14 +38,7 @@ pub fn prove_publish_verification_with_solver(
             pod_type: "Identity",
             field: "username",
         })?;
-    let identity_server_pk =
-        params
-            .identity_pod
-            .get(KEY_SIGNER)
-            .ok_or(MainPodError::MissingField {
-                pod_type: "Identity",
-                field: "identity_server_pk",
-            })?;
+    let identity_server_pk: Value = params.identity_pod.public_key.into();
     let data = params
         .document_pod
         .get("data")
@@ -69,59 +64,42 @@ pub fn prove_publish_verification_with_solver(
     // Parse the complete query
     let pod_params = Params::default();
     let request = parse(&query, &pod_params, &[])
-        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
-        .request;
+        .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?;
 
-    // Provide all three pods as facts
-    let pods = [
-        IndexablePod::signed_pod(params.identity_pod),
-        IndexablePod::signed_pod(params.document_pod),
-    ];
+    let edb = ImmutableEdbBuilder::new()
+        .add_signed_dict(params.identity_pod.clone())
+        .add_signed_dict(params.document_pod.clone())
+        .build();
 
-    // Let the solver find the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
+    let reg = OpRegistry::default();
+    let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+    let mut engine = Engine::with_config(&reg, &edb, config);
+
+    println!("EDB: {}", serde_json::to_string(&edb).unwrap());
+
+    engine.load_processed(&request);
+    engine
+        .run()
         .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
 
     let pod_params = PodNetProverSetup::get_params();
     let (vd_set, prover) = PodNetProverSetup::create_prover_setup(params.use_mock_proofs)
         .map_err(MainPodError::ProofGeneration)?;
 
-    let mut builder = MainPodBuilder::new(&pod_params, vd_set);
-
-    let (pod_ids, ops) = proof.to_inputs();
-
-    for (op, public) in ops {
-        if public {
-            builder
-                .pub_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        } else {
-            builder
-                .priv_op(op)
-                .map_err(|e| MainPodError::ProofGeneration(format!("Builder error: {e:?}")))?;
-        }
-    }
-
-    // Add all the pods that were referenced in the proof
-    for pod_id in pod_ids {
-        if params.identity_pod.id() == pod_id {
-            builder.add_signed_pod(params.identity_pod);
-        } else if params.document_pod.id() == pod_id {
-            builder.add_signed_pod(params.document_pod);
-        }
-    }
+    let main_pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &pod_params,
+        vd_set,
+        |b| b.prove(&*prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .map_err(|e| MainPodError::ProofGeneration(format!("Pod build error: {e:?}")))?;
 
     log::debug!(
         "Inputs: {}\n\n {}",
         serde_json::to_string(&params.document_pod).unwrap(),
         serde_json::to_string(&params.identity_pod).unwrap()
     );
-    log::debug!("Builder: {builder:#?}");
-
-    let main_pod = builder
-        .prove(&*prover)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Prove error: {e:?}")))?;
 
     Ok(main_pod)
 }
@@ -146,7 +124,7 @@ pub fn verify_publish_verification_with_solver(
         )
         "#
     ));
-    println!("QUERY: {query}");
+    log::debug!("QUERY: {query}");
 
     // Parse the complete query
     let pod_params = Params::default();
@@ -154,20 +132,79 @@ pub fn verify_publish_verification_with_solver(
         .map_err(|e| MainPodError::ProofGeneration(format!("Parse error: {e:?}")))?
         .request;
 
-    // Provide all three pods as facts
-    let pods = [IndexablePod::main_pod(main_pod)];
+    request
+        .exact_match_pod(&*main_pod.pod)
+        .map_err(|e| MainPodError::Verification(format!("Exact match pod error: {e:?}")))?;
 
-    // Let the solver find the proof
-    let context = SolverContext::new(&pods, &[]);
-    let (proof, _metrics) = solve(request.templates(), &context, MetricsLevel::Counters)
-        .map_err(|e| MainPodError::ProofGeneration(format!("Solver error: {e:?}")))?;
-    println!("GOT PROOF: {proof}");
+    log::debug!("GOT PROOF: {main_pod}");
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-
     // Add unit tests for publish verification functions
+
+    use pod_utils::prover_setup::PodNetProverSetup;
+    use pod2::{lang::parse, middleware::Params};
+    use pod2_new_solver::{
+        Engine, EngineConfigBuilder, ImmutableEdb, OpRegistry,
+        build_pod_from_answer_top_level_public,
+    };
+
+    use crate::mainpod::MainPodError;
+
+    #[ignore]
+    #[test]
+    fn test_publish_verification() {
+        tracing_subscriber::fmt::init();
+        let serialized_edb = r#"
+         {"per_predicate_indexes":"[]","full_dicts":{"40a15a15f1775f9ec57c9cc173acacfc47312d00f59117cf9b13fea4cbf383ac":{"42bd0386a28ebfca8ac534027c8c9aaf1e3f95799eda79f0a99b918f35cd289a":"publish","47b811229a2e01789fa1544e10bd1c420714e4b4baf292ccf9201bacdb90f3af":{"max_depth":6,"kvs":{"authors":{"max_depth":5,"set":["Rob"]},"content_hash":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"post_id":{"Int":"-1"},"reply_to":{"Int":"-1"},"tags":{"max_depth":5,"set":[]}}}},"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"0687b2a7196cb8263d8270328ecdb6e4bd1fb27ecc691be282fae087b2bf9c68":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"17417d2499f6ade7f3387f402392febcbf2f8f59878ce96cdbe7eaa224200e2a":"Rob","2457fb6a7997ef0687afe36dc26cfb77f057e30b13be3374ec07fb18618df000":"2025-09-08T07:30:51.833205+00:00","410014c23f8d137d972b6bf48a908eeeb095737793331de7ae739295f5c021c7":"strawman-identity-server"}},"full_dict_objs":{"40a15a15f1775f9ec57c9cc173acacfc47312d00f59117cf9b13fea4cbf383ac":{"max_depth":32,"kvs":{"data":{"max_depth":6,"kvs":{"authors":{"max_depth":5,"set":["Rob"]},"content_hash":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"post_id":{"Int":"-1"},"reply_to":{"Int":"-1"},"tags":{"max_depth":5,"set":[]}}},"request_type":"publish"}},"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"max_depth":32,"kvs":{"identity_server_id":"strawman-identity-server","issued_at":"2025-09-08T07:30:51.833205+00:00","user_public_key":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"username":"Rob"}}},"signed_dicts":{"40a15a15f1775f9ec57c9cc173acacfc47312d00f59117cf9b13fea4cbf383ac":{"dict":{"max_depth":32,"kvs":{"data":{"max_depth":6,"kvs":{"authors":{"max_depth":5,"set":["Rob"]},"content_hash":{"Raw":"cde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d"},"post_id":{"Int":"-1"},"reply_to":{"Int":"-1"},"tags":{"max_depth":5,"set":[]}}},"request_type":"publish"}},"public_key":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m","signature":"hw8SA0zaj4ITkf0eOb+3ks9MVfU3iH3Mttn+NKE3HLcYwIwmK870FI6k7/0PdLdcLWsXmvS/hqUkLdIQqDi2Y435d22hCSbKpTUpMtLirNc="},"4eb21bc5896a9ecdd2714050c7681174a297923e36b45b9157bfc6c98ad55ebf":{"dict":{"max_depth":32,"kvs":{"identity_server_id":"strawman-identity-server","issued_at":"2025-09-08T07:30:51.833205+00:00","user_public_key":{"PublicKey":"B3wniJWiwUgfNfj6oKV2beRWuhgBtYFCGSUab6xKCKWkNB4gePLi24m"},"username":"Rob"}},"public_key":"81XmHMoxDXka5UPoTpy2VXo77se4mSSPzbBaXFBMnebhMu5GetHRtwi","signature":"8pWhKvziTPDdomccWF200HIgOy5ZlEjepYD13XsR+TwzllurAauHJ+6wZwtDF2P4tyrJrDvLTLECzjOdnGDcWHW1sfdOdbm4YBKMWtg7jHg="}},"pods":{},"keypairs":{}}
+        "#;
+        let edb = serde_json::from_str::<ImmutableEdb>(serialized_edb).unwrap();
+
+        let query = r#"
+        identity_verified(username, identity_pod) = AND(
+            Equal(?identity_pod["username"], ?username)
+        )
+
+        publish_verified(username, data, identity_server_pk, private: identity_pod, document_pod) = AND(
+            identity_verified(?username, ?identity_pod)
+            Equal(?document_pod["request_type"], "publish")
+            Equal(?document_pod["data"], ?data)
+            SignedBy(?document_pod, ?identity_pod["user_public_key"])
+            SignedBy(?identity_pod, ?identity_server_pk)
+        )
+        
+        REQUEST(
+            publish_verified("Rob", { "authors": #["Rob"], "content_hash": Raw(0xcde8997260dd04765664a84b93889ea987c4ec14bdb5bd45cbc0d26bede0e30d), "post_id": -1, "reply_to": -1, "tags": #[] }, PublicKey(81XmHMoxDXka5UPoTpy2VXo77se4mSSPzbBaXFBMnebhMu5GetHRtwi))
+        )"#;
+
+        let pod_params = Params::default();
+        let request = parse(query, &pod_params, &[]).unwrap();
+
+        let reg = OpRegistry::default();
+        let config = EngineConfigBuilder::new().from_params(&pod_params).build();
+        let mut engine = Engine::with_config(&reg, &edb, config);
+        engine.load_processed(&request);
+        engine.run().unwrap();
+
+        // println!("GOT ANSWER: {:?}", &engine.answers[0]);
+
+        let (vd_set, prover) = PodNetProverSetup::create_prover_setup(true)
+            .map_err(MainPodError::ProofGeneration)
+            .unwrap();
+
+        let main_pod = build_pod_from_answer_top_level_public(
+            &engine.answers[0],
+            &pod_params,
+            vd_set,
+            |b| b.prove(&*prover).map_err(|e| e.to_string()),
+            &edb,
+        )
+        .unwrap();
+
+        println!("GOT MAINPOD: {main_pod}");
+        main_pod.pod.verify().unwrap();
+    }
 }

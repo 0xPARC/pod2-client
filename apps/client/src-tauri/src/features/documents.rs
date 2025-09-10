@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use chrono::Utc;
 use hex::FromHex;
 use pod2::{
-    backends::plonky2::signedpod::Signer,
-    frontend::SignedPodBuilder,
+    backends::plonky2::signer::Signer,
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::{
         containers::{Dictionary, Set},
         hash_values, Hash, Key, Params, Value,
@@ -176,10 +176,8 @@ pub async fn upvote_document(
                 .join(", ")
         ))?;
 
-    let identity_pod = match identity_pod_info.data {
-        PodData::Signed(pod) => (*pod)
-            .try_into()
-            .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
+    let identity_pod: SignedDict = match identity_pod_info.data {
+        PodData::Signed(pod) => (*pod).into(),
         PodData::Main(_) => {
             return Err("Expected signed pod for identity, got main pod".to_string())
         }
@@ -192,7 +190,7 @@ pub async fn upvote_document(
 
     // 4. Create upvote SignedPod with content_hash and timestamp
     let params = Params::default();
-    let mut upvote_builder = SignedPodBuilder::new(&params);
+    let mut upvote_builder = SignedDictBuilder::new(&params);
 
     upvote_builder.insert("request_type", "upvote");
     upvote_builder.insert("content_hash", content_hash);
@@ -211,7 +209,7 @@ pub async fn upvote_document(
 
     log::info!("✓ Upvote pod verification successful");
 
-    // 5. Generate upvote verification MainPod using prove_upvote_verification_with_solver
+    // // 5. Generate upvote verification MainPod using prove_upvote_verification_with_solver
     let upvote_params = podnet_models::mainpod::upvote::UpvoteProofParamsSolver {
         identity_pod: &identity_pod,
         upvote_pod: &upvote_pod,
@@ -224,11 +222,11 @@ pub async fn upvote_document(
 
     log::info!("✓ Upvote main pod created and verified");
 
-    // Store the upvote MainPod in local database for user's records
+    //Store the upvote MainPod in local database for user's records
     let upvote_pod_data = PodData::Main(Box::new(upvote_main_pod.clone().into()));
     let upvote_label = format!("Upvote for document {document_id}");
 
-    // Ensure "upvotes" folder exists
+    // // Ensure "upvotes" folder exists
     const UPVOTES_FOLDER: &str = "upvotes";
     if !pod2_db::store::space_exists(&app_state.db, UPVOTES_FOLDER)
         .await
@@ -251,7 +249,7 @@ pub async fn upvote_document(
 
     log::info!("✓ Upvote MainPod stored locally with label: {upvote_label}");
 
-    // 6. Submit UpvoteRequest to server
+    // // 6. Submit UpvoteRequest to server
     let upvote_request = UpvoteRequest {
         username: username.clone(),
         upvote_main_pod,
@@ -426,10 +424,8 @@ pub async fn publish_document(
             "Identity pod not found in database with ID: {identity_pod_id}"
         ))?;
 
-    let identity_pod: pod2::frontend::SignedPod = match identity_pod_info.data {
-        PodData::Signed(pod) => (*pod)
-            .try_into()
-            .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
+    let identity_pod: pod2::frontend::SignedDict = match identity_pod_info.data {
+        PodData::Signed(pod) => (*pod).into(),
         PodData::Main(_) => {
             return Err("Expected signed pod for identity, got main pod".to_string())
         }
@@ -520,7 +516,7 @@ pub async fn publish_document(
     )
     .map_err(|e| format!("Failed to create data dictionary: {e}"))?;
 
-    let mut document_builder = SignedPodBuilder::new(&params);
+    let mut document_builder = SignedDictBuilder::new(&params);
     document_builder.insert("request_type", "publish");
     document_builder.insert("data", data_dict.clone());
 
@@ -552,7 +548,7 @@ pub async fn publish_document(
         &publish_main_pod,
         &username,
         &data_dict,
-        identity_pod.get(pod2::middleware::KEY_SIGNER).unwrap(),
+        &identity_pod.public_key.into(),
     )
     .map_err(|e| format!("Failed to verify publish verification MainPod: {e}"))?;
 
@@ -885,10 +881,8 @@ pub async fn delete_document(
             "Identity pod not found in database with ID: {identity_pod_id}"
         ))?;
 
-    let identity_pod: pod2::frontend::SignedPod = match identity_pod_info.data {
-        PodData::Signed(pod) => (*pod)
-            .try_into()
-            .map_err(|e| format!("Failed to convert signed pod: {e}"))?,
+    let identity_pod: pod2::frontend::SignedDict = match identity_pod_info.data {
+        PodData::Signed(pod) => (*pod).into(),
         PodData::Main(_) => {
             return Err("Expected signed pod for identity, got main pod".to_string())
         }
@@ -967,10 +961,10 @@ pub async fn delete_document(
 
     // Create document pod for deletion request (signed by user) using the same data
     let params = Params::default();
-    let mut delete_document_builder = SignedPodBuilder::new(&params);
+    let mut delete_document_builder = SignedDictBuilder::new(&params);
     delete_document_builder.insert("request_type", "delete");
     delete_document_builder.insert("data", original_data.clone());
-    delete_document_builder.insert("timestamp_pod", timestamp_pod.id());
+    delete_document_builder.insert("timestamp_pod", timestamp_pod.dict.commitment());
 
     let delete_document_pod = delete_document_builder
         .sign(&Signer(private_key))

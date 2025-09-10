@@ -1,14 +1,17 @@
 use std::{collections::HashMap, time::Instant};
 
 use pod2::{
-    backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signedpod::Signer},
+    backends::plonky2::{mainpod::Prover, mock::mainpod::MockProver, signer::Signer},
     examples::MOCK_VD_SET,
-    frontend::{MainPod, MainPodBuilder, SignedPod, SignedPodBuilder},
+    frontend::{MainPod, SignedDict, SignedDictBuilder},
     lang::{self, parser, LangError},
-    middleware::{Params, PodProver, PodType, Value as PodValue, DEFAULT_VD_SET},
+    middleware::{MainPodProver, Params, Value as PodValue, DEFAULT_VD_SET},
 };
 use pod2_db::{store, store::PodData};
-use pod2_solver::{self, db::IndexablePod, metrics::MetricsLevel, SolverContext};
+use pod2_new_solver::{
+    build_pod_from_answer_top_level_public, edb::ImmutableEdbBuilder, engine::Engine,
+    EngineConfigBuilder, OpRegistry,
+};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
@@ -106,17 +109,17 @@ pub async fn get_private_key_info(
 
 /// Sign a POD with the given key-value pairs
 #[tauri::command]
-pub async fn sign_pod(
+pub async fn sign_dict(
     state: State<'_, Mutex<AppState>>,
-    serialized_pod_values: String,
+    serialized_dict_values: String,
 ) -> Result<String, String> {
     let app_state = state.lock().await;
 
-    let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_pod_values)
+    let kvs: HashMap<String, PodValue> = serde_json::from_str(&serialized_dict_values)
         .map_err(|e| format!("Failed to parse serialized pod values: {e}"))?;
 
     let params = Params::default();
-    let mut builder = SignedPodBuilder::new(&params);
+    let mut builder = SignedDictBuilder::new(&params);
     for (key, value) in kvs {
         builder.insert(key, value);
     }
@@ -128,11 +131,11 @@ pub async fn sign_pod(
 
     let signer = Signer(private_key);
 
-    let signed_pod = builder
+    let signed_dict = builder
         .sign(&signer)
-        .map_err(|e| format!("Failed to sign pod: {e}"))?;
+        .map_err(|e| format!("Failed to sign dict: {e}"))?;
 
-    Ok(serde_json::to_string(&signed_pod).unwrap())
+    Ok(serde_json::to_string(&signed_dict).unwrap())
 }
 
 // =============================================================================
@@ -205,7 +208,7 @@ pub async fn execute_code_command(
     // Start solver timing
     let solver_start = Instant::now();
 
-    let mut owned_signed_pods: Vec<SignedPod> = Vec::new();
+    let mut owned_signed_pods: Vec<SignedDict> = Vec::new();
     let mut owned_main_pods: Vec<MainPod> = Vec::new();
 
     // Convert stored PODs to runtime PODs
@@ -220,7 +223,7 @@ pub async fn execute_code_command(
 
         match pod_info.data {
             PodData::Signed(helper) => {
-                owned_signed_pods.push(SignedPod::try_from(*helper).unwrap());
+                owned_signed_pods.push(SignedDict::from(*helper));
             }
             PodData::Main(helper) => match MainPod::try_from(*helper) {
                 Ok(main_pod) => {
@@ -242,75 +245,58 @@ pub async fn execute_code_command(
         }
     }
 
-    let mut all_pods_for_facts: Vec<IndexablePod> = Vec::new();
-
-    for signed_pod_ref in &owned_signed_pods {
-        // If not in mock mode, Signed PODs must be of type Signed.
-        if !mock && signed_pod_ref.pod.pod_type().0 != PodType::Signed as usize {
-            continue;
-        }
-        all_pods_for_facts.push(IndexablePod::signed_pod(signed_pod_ref));
+    let mut edb_builder = ImmutableEdbBuilder::new();
+    for signed_dict in &owned_signed_pods {
+        edb_builder = edb_builder.add_signed_dict(signed_dict.clone());
+    }
+    for main_pod in &owned_main_pods {
+        edb_builder = edb_builder.add_main_pod(main_pod);
     }
 
-    for main_pod_ref in &owned_main_pods {
-        // If not in mock mode, Main PODs must be of type Main.
-        if !mock && main_pod_ref.pod.pod_type().0 != PodType::Main as usize {
-            continue;
-        }
-        all_pods_for_facts.push(IndexablePod::main_pod(main_pod_ref));
-    }
+    // let mut all_pods_for_facts: Vec<IndexablePod> = Vec::new();
 
-    let request_templates = processed_output.request.templates();
+    // for signed_pod_ref in &owned_signed_pods {
+    //     // // If not in mock mode, Signed PODs must be of type Signed.
+    //     // if !mock && signed_pod_ref.pod.pod_type().0 != PodType::Signed as usize {
+    //     //     continue;
+    //     // }
+    //     all_pods_for_facts.push(IndexablePod::signed_pod(signed_pod_ref));
+    // }
+
+    // for main_pod_ref in &owned_main_pods {
+    //     // If not in mock mode, Main PODs must be of type Main.
+    //     if !mock && main_pod_ref.pod.pod_type().0 != PodType::Main as usize {
+    //         continue;
+    //     }
+    //     all_pods_for_facts.push(IndexablePod::main_pod(main_pod_ref));
+    // }
 
     let sk = store::get_default_private_key(&app_state.db)
         .await
         .map_err(|e| format!("Failed to get private key: {e}"))?
         .clone();
-    let sks = vec![sk];
-    let context = SolverContext::new(&all_pods_for_facts, &sks);
-    // Solve the query
-    let (proof, _) = match pod2_solver::solve(request_templates, &context, MetricsLevel::None) {
-        Ok(solution) => solution,
-        Err(e) => {
-            log::error!("Solver error: {e:?}");
-            return Err(format!("Solver error: {e}"));
-        }
-    };
+    // let sks = vec![sk];
+
+    edb_builder = edb_builder.add_keypair(sk.public_key(), sk);
+    let engine_config = EngineConfigBuilder::new().from_params(&params);
+    let reg = OpRegistry::default();
+    let edb = edb_builder.build();
+    let mut engine = Engine::with_config(&reg, &edb, engine_config.build());
+
+    engine.load_processed(&processed_output);
+    engine
+        .run()
+        .map_err(|e| format!("Failed to run engine: {e}"))?;
 
     // End solver timing
     let solver_time = solver_start.elapsed();
-
-    let (pod_ids, ops) = proof.to_inputs();
 
     // Choose VD set based on mock mode
     #[allow(clippy::borrow_interior_mutable_const)]
     let vd_set = if mock { &MOCK_VD_SET } else { &*DEFAULT_VD_SET };
 
-    let mut builder = MainPodBuilder::new(&params, vd_set);
-    for (operation, public) in ops {
-        if public {
-            builder.pub_op(operation).unwrap();
-        } else {
-            builder.priv_op(operation).unwrap();
-        }
-    }
-    for pod_id in pod_ids {
-        let pod = all_pods_for_facts.iter().find(|p| p.id() == pod_id);
-        if let Some(pod) = pod {
-            match pod {
-                IndexablePod::SignedPod(pod) => {
-                    builder.add_signed_pod(pod);
-                }
-                IndexablePod::MainPod(pod) => {
-                    builder.add_recursive_pod(pod.as_ref().clone());
-                }
-                IndexablePod::TestPod(_pod) => {}
-            }
-        }
-    }
-
     // Create prover based on mock mode
-    let prover: Box<dyn PodProver> = if mock {
+    let prover: Box<dyn MainPodProver> = if mock {
         Box::new(MockProver {})
     } else {
         Box::new(Prover {})
@@ -319,16 +305,48 @@ pub async fn execute_code_command(
     // Start POD build timing
     let pod_build_start = Instant::now();
 
-    let result_main_pod = builder
-        .prove(&*prover)
-        .map_err(|e| format!("Failed to prove: {e}"))?;
+    let pod = build_pod_from_answer_top_level_public(
+        &engine.answers[0],
+        &params,
+        vd_set,
+        |b| b.prove(&*prover).map_err(|e| e.to_string()),
+        &edb,
+    )
+    .map_err(|e| format!("Failed to build pod from answer: {e}"))?;
+
+    // let mut builder = MainPodBuilder::new(&params, vd_set);
+    // for (operation, public) in ops {
+    //     if public {
+    //         builder.pub_op(operation).unwrap();
+    //     } else {
+    //         builder.priv_op(operation).unwrap();
+    //     }
+    // }
+    // for pod_id in pod_ids {
+    //     let pod = all_pods_for_facts.iter().find(|p| p.id() == pod_id);
+    //     if let Some(pod) = pod {
+    //         match pod {
+    //             IndexablePod::SignedPod(pod) => {
+    //                 //    builder.add_signed_pod(pod);
+    //             }
+    //             IndexablePod::MainPod(pod) => {
+    //                 builder.add_pod(pod.as_ref().clone());
+    //             }
+    //             IndexablePod::TestPod(_pod) => {}
+    //         }
+    //     }
+    // }
+
+    // let result_main_pod = builder
+    //     .prove(&*prover)
+    //     .map_err(|e| format!("Failed to prove: {e}"))?;
 
     // End POD build timing
     let pod_build_time = pod_build_start.elapsed();
 
     let result = ExecuteCodeResponse {
-        main_pod: result_main_pod,
-        diagram: pod2_solver::vis::mermaid_markdown(&proof),
+        main_pod: pod,
+        diagram: "".to_string(),
         solver_time_ms: solver_time.as_millis() as u64,
         pod_build_time_ms: pod_build_time.as_millis() as u64,
     };
