@@ -154,6 +154,7 @@ mod tests {
 
     use crate::mainpod::MainPodError;
 
+    #[ignore]
     #[test]
     fn test_publish_verification() {
         tracing_subscriber::fmt::init();

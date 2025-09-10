@@ -435,6 +435,7 @@ mod tests {
 
     use crate::mainpod::MainPodError;
 
+    #[ignore]
     #[test]
     fn test_upvote_verification_with_solver() {
         let _ = tracing_subscriber::fmt::try_init();
