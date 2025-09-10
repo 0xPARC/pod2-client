@@ -16,9 +16,9 @@ use pod_utils::ValueExt;
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{SignedPod, SignedPodBuilder},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::Params,
 };
 use rand::Rng;
@@ -55,13 +55,13 @@ pub struct UserChallengeRequest {
 
 #[derive(Debug, Serialize)]
 pub struct UserChallengeResponse {
-    /// SignedPod containing challenge information from identity server:
+    /// SignedDict containing challenge information from identity server:
     /// - challenge: String (random challenge value)
     /// - expires_at: String (ISO timestamp when challenge expires)
     /// - user_public_key: Point (user's public key from request)
     /// - username: String (username from request)
-    /// - _signer: Point (identity server's public key, automatically added by SignedPod)
-    pub challenge_pod: SignedPod,
+    /// - _signer: Point (identity server's public key, automatically added by SignedDict)
+    pub challenge_pod: SignedDict,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,18 +79,18 @@ pub struct IdentityRequest {
     /// - challenge: String (same challenge value, proving user received it)
     /// - username: String (confirming username)
     /// - _signer: Point (user's public key, proving control of private key)
-    pub server_challenge_pod: SignedPod,
-    pub user_response_pod: SignedPod,
+    pub server_challenge_pod: SignedDict,
+    pub user_response_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IdentityResponse {
-    /// SignedPod containing:
+    /// SignedDict containing:
     /// - username: String (user's chosen username)
     /// - user_public_key: Point (user's public key)
     /// - identity_server_id: String (ID of this identity server)
-    /// - _signer: Point (identity server's public key, automatically added by SignedPod)
-    pub identity_pod: SignedPod,
+    /// - _signer: Point (identity server's public key, automatically added by SignedDict)
+    pub identity_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,13 +108,13 @@ pub struct IdentityServerChallengeRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct IdentityServerChallengeResponse {
-    pub challenge_pod: SignedPod,
+    pub challenge_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
 pub struct IdentityServerRegistrationRequest {
-    pub server_challenge_pod: SignedPod,
-    pub identity_response_pod: SignedPod,
+    pub server_challenge_pod: SignedDict,
+    pub identity_response_pod: SignedDict,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,7 +179,7 @@ async fn request_user_challenge(
 
     // Create challenge pod signed by identity server
     let params = Params::default();
-    let mut challenge_builder = SignedPodBuilder::new(&params);
+    let mut challenge_builder = SignedDictBuilder::new(&params);
 
     challenge_builder.insert("challenge", challenge.as_str());
     challenge_builder.insert("expires_at", expires_at_str.as_str());
@@ -216,16 +216,9 @@ async fn issue_identity(
 
     // 2. Verify challenge pod was signed by this identity server
     let identity_server_public_key = state.server_public_key;
-    let challenge_signer = payload
-        .server_challenge_pod
-        .get("_signer")
-        .and_then(|v| v.as_public_key())
-        .ok_or_else(|| {
-            tracing::error!("Server challenge pod missing signer");
-            StatusCode::BAD_REQUEST
-        })?;
+    let challenge_signer = payload.server_challenge_pod.public_key;
 
-    if *challenge_signer != identity_server_public_key {
+    if challenge_signer != identity_server_public_key {
         tracing::error!("Server challenge pod not signed by this identity server");
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -285,16 +278,9 @@ async fn issue_identity(
     })?;
 
     // 6. Verify response pod signed by user
-    let response_signer = payload
-        .user_response_pod
-        .get("_signer")
-        .and_then(|v| v.as_public_key())
-        .ok_or_else(|| {
-            tracing::error!("User response pod missing signer");
-            StatusCode::BAD_REQUEST
-        })?;
+    let response_signer = payload.user_response_pod.public_key;
 
-    if *response_signer != *user_public_key {
+    if response_signer != *user_public_key {
         tracing::error!("User response pod not signed by expected user");
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -331,9 +317,9 @@ async fn issue_identity(
 
     tracing::info!("✓ All verifications passed for user: {}", username);
 
-    // Create identity pod using SignedPodBuilder
+    // Create identity pod using SignedDictBuilder
     let params = Params::default();
-    let mut identity_builder = SignedPodBuilder::new(&params);
+    let mut identity_builder = SignedDictBuilder::new(&params);
 
     identity_builder.insert("username", username);
     identity_builder.insert("user_public_key", *user_public_key);
@@ -435,7 +421,7 @@ async fn register_with_podnet_server(
 
     // Step 3: Create identity server's response pod
     let params = Params::default();
-    let mut response_builder = SignedPodBuilder::new(&params);
+    let mut response_builder = SignedDictBuilder::new(&params);
 
     response_builder.insert("challenge", challenge);
     response_builder.insert("server_id", server_id);

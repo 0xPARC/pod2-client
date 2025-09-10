@@ -4,7 +4,7 @@ members = [
     "core/jsonschema",
     "core/models", 
     "core/utils", 
-    "core/solver",
+    "core/new_solver",
     "podnet/server", 
     "podnet/cli", 
     "podnet/identity-strawman", 
@@ -14,8 +14,8 @@ members = [
 , "podnet/identity-github"]
 
 [workspace.dependencies]
-pod2 = { git = "https://github.com/0xPARC/pod2", rev = "bde35369d32a727e7d2964ce401158f1df248cb8", default-features = false,  features = [  "backend_plonky2", "zk", "examples", "disk_cache" ] }
-pod2_solver = { path = "core/solver" }
+pod2 = { git = "https://github.com/0xPARC/pod2", rev = "b02d0ec46247f3f64bd4d2e30db9da7f40903409", default-features = false,  features = [  "backend_plonky2", "zk", "examples", "disk_cache" ] }
+pod2_solver = { path = "core/new_solver" }
 podnet-models = { path = "core/models" }
 pod-utils = { path = "core/utils" }
 pod2_db = { path = "pod2-client/db" }

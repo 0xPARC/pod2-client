@@ -5,8 +5,8 @@ edition.workspace = true
 
 [dependencies]
 # Workspace dependencies (shared)
-podnet-models = { workspace = true }
 pod2.workspace = true
+podnet-models.workspace = true
 plonky2.workspace = true
 pod-utils.workspace = true
 tokio.workspace = true

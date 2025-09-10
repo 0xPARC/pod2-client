@@ -8,9 +8,9 @@ use num_bigint::BigUint;
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point, schnorr::SecretKey},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{MainPod, SignedPod, SignedPodBuilder},
+    frontend::{MainPod, SignedDict, SignedDictBuilder},
     middleware::Params,
 };
 
@@ -61,7 +61,7 @@ pub fn create_timestamp_pod_for_main_pod(
     main_pod: &MainPod,
     post_id: i64,
     document_id: i64,
-) -> Result<SignedPod, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<SignedDict, Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!("Creating timestamp pod for main pod");
 
     let params = Params::default();
@@ -71,8 +71,8 @@ pub fn create_timestamp_pod_for_main_pod(
     let timestamp = Utc::now().to_rfc3339();
     tracing::info!("Creating timestamp pod with timestamp: {timestamp}");
 
-    let mut timestamp_builder = SignedPodBuilder::new(&params);
-    timestamp_builder.insert("main-pod-id", main_pod.id());
+    let mut timestamp_builder = SignedDictBuilder::new(&params);
+    timestamp_builder.insert("main-pod-id", main_pod.statements_hash());
     timestamp_builder.insert("post-id", post_id);
     timestamp_builder.insert("document-id", document_id);
     timestamp_builder.insert("timestamp", timestamp.as_str());

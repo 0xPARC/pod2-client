@@ -5,7 +5,6 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export type Hash = string;
 /**
  * Type encapsulating statements with their associated arguments.
  */
@@ -106,8 +105,48 @@ export type Statement =
        * @minItems 2
        * @maxItems 2
        */
+      args: [ValueRef, ValueRef];
+      predicate: "SignedBy";
+    }
+  | {
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      args: [ValueRef, ValueRef, ValueRef, ValueRef];
+      predicate: "ContainerInsert";
+    }
+  | {
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      args: [ValueRef, ValueRef, ValueRef, ValueRef];
+      predicate: "ContainerUpdate";
+    }
+  | {
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      args: [ValueRef, ValueRef, ValueRef];
+      predicate: "ContainerDelete";
+    }
+  | {
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
       args: [CustomPredicateRef, Value[]];
       predicate: "Custom";
+    }
+  | {
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      args: [IntroPredicateRef, Value[]];
+      predicate: "Intro";
     };
 export type ValueRef =
   | {
@@ -123,7 +162,7 @@ export type ValueRef =
  */
 export type Value =
   | {
-      PodId: Hash;
+      Root: Hash;
     }
   | {
       /**
@@ -145,6 +184,7 @@ export type Value =
   | string
   | Set
   | boolean;
+export type Hash = string;
 export type RawValue = string;
 export type Key = string;
 export type StatementTmplArg =
@@ -179,6 +219,10 @@ export type Predicate =
   | {
       type: "Custom";
       value: CustomPredicateRef;
+    }
+  | {
+      type: "Intro";
+      value: IntroPredicateRef;
     };
 export type NativePredicate =
   | "None"
@@ -194,32 +238,43 @@ export type NativePredicate =
   | "MaxOf"
   | "HashOf"
   | "PublicKeyOf"
+  | "SignedBy"
+  | "ContainerInsert"
+  | "ContainerUpdate"
+  | "ContainerDelete"
   | "DictContains"
   | "DictNotContains"
   | "SetContains"
   | "SetNotContains"
   | "ArrayContains"
   | "GtEq"
-  | "Gt";
+  | "Gt"
+  | "DictInsert"
+  | "DictUpdate"
+  | "DictDelete"
+  | "SetInsert"
+  | "SetDelete"
+  | "ArrayUpdate";
 export type PodData =
   | {
-      pod_data_payload: SignedPod;
+      pod_data_payload: SignedDict;
       pod_data_variant: "Signed";
     }
   | {
       pod_data_payload: MainPod;
       pod_data_variant: "Main";
     };
+export type Point = string;
+export type Signature = string;
 
 export interface JsonTypes {
   main_pod: MainPod;
   pod_info: PodInfo;
-  signed_pod: SignedPod;
+  signed_dict: SignedDict;
   space_info: SpaceInfo;
 }
 export interface MainPod {
   data: unknown;
-  id: Hash;
   params: Params;
   /**
    * @minItems 2
@@ -227,6 +282,7 @@ export interface MainPod {
    */
   podType: [number, string];
   publicStatements: Statement[];
+  stsHash: Hash;
   vdSet: VDSet;
 }
 /**
@@ -240,16 +296,17 @@ export interface Params {
   maxCustomPredicateWildcards: number;
   maxDepthMtContainers: number;
   maxDepthMtVds: number;
+  maxInputPods: number;
   maxInputPodsPublicStatements: number;
-  maxInputRecursivePods: number;
-  maxInputSignedPods: number;
   maxMerkleProofsContainers: number;
+  maxMerkleTreeStateTransitionProofsContainers: number;
   maxOperationArgs: number;
+  maxPublicKeyOf: number;
   maxPublicStatements: number;
-  maxSignedPodValues: number;
+  maxSignedBy: number;
   maxStatementArgs: number;
   maxStatements: number;
-  numPublicStatementsId: number;
+  numPublicStatementsHash: number;
 }
 /**
  * Array: the elements are placed at the value field of each leaf, and the key field is just the array index (integer). leaf.key=i leaf.value=original_value
@@ -276,7 +333,7 @@ export interface Set {
 }
 export interface AnchoredKey {
   key: Key;
-  podId: Hash;
+  root: Hash;
 }
 export interface CustomPredicateRef {
   batch: CustomPredicateBatch;
@@ -314,6 +371,11 @@ export interface Wildcard {
   index: number;
   name: string;
 }
+export interface IntroPredicateRef {
+  args_len: number;
+  name: string;
+  verifier_data_hash: Hash;
+}
 /**
  * VDSet is the set of the allowed verifier_data hashes. When proving a MainPod, the circuit will enforce that all the used verifier_datas for verifying the recursive proofs of previous PODs appears in the VDSet. The VDSet struct that allows to get the specific merkle proofs for the given verifier_data.
  */
@@ -329,17 +391,10 @@ export interface PodInfo {
   pod_type: string;
   space: string;
 }
-export interface SignedPod {
-  data: unknown;
-  entries: {
-    [k: string]: Value;
-  };
-  id: Hash;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
-  podType: [number, string];
+export interface SignedDict {
+  dict: Dictionary;
+  public_key: Point;
+  signature: Signature;
 }
 export interface SpaceInfo {
   created_at: string;

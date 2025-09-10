@@ -3,15 +3,9 @@ use std::{path::PathBuf, str::FromStr};
 use anyhow::Context;
 use config::AppConfig;
 use features::{blockies, *};
-use num::BigUint;
-use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-    examples::zu_kyc_sign_pod_builders,
-    frontend::SignedPod,
-    middleware::Params,
-};
+use pod2::backends::plonky2::primitives::ec::schnorr::SecretKey;
 use pod2_db::{
-    store::{self, PodData, PodInfo, SpaceInfo},
+    store::{self, PodInfo, SpaceInfo},
     Db,
 };
 use serde::{Deserialize, Serialize};
@@ -386,21 +380,21 @@ impl AppState {
     }
 }
 
-pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
-    let params_for_test = Params::default();
-    let gov_signer = Signer(SecretKey(BigUint::from(1u32)));
-    let pay_signer = Signer(SecretKey(BigUint::from(2u32)));
+// pub fn sign_zukyc_pods() -> anyhow::Result<Vec<SignedPod>> {
+//     let params_for_test = Params::default();
+//     let gov_signer = Signer(SecretKey(BigUint::from(1u32)));
+//     let pay_signer = Signer(SecretKey(BigUint::from(2u32)));
 
-    let (gov_id_builder, pay_stub_builder) = zu_kyc_sign_pod_builders(&params_for_test);
+//     let (gov_id_builder, pay_stub_builder) = zu_kyc_sign_pod_builders(&params_for_test);
 
-    let sign_results = [
-        gov_id_builder.sign(&gov_signer),
-        pay_stub_builder.sign(&pay_signer),
-    ];
+//     let sign_results = [
+//         gov_id_builder.sign(&gov_signer),
+//         pay_stub_builder.sign(&pay_signer),
+//     ];
 
-    let all_signed: Result<Vec<_>, _> = sign_results.into_iter().collect();
-    all_signed.map_err(|e| anyhow::anyhow!("Failed to sign Zukyc pods: {}", e))
-}
+//     let all_signed: Result<Vec<_>, _> = sign_results.into_iter().collect();
+//     all_signed.map_err(|e| anyhow::anyhow!("Failed to sign Zukyc pods: {}", e))
+// }
 
 pub async fn setup_default_space(db: &Db) -> anyhow::Result<()> {
     if store::space_exists(db, DEFAULT_SPACE_ID).await? {
@@ -415,33 +409,33 @@ pub async fn setup_default_space(db: &Db) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
-    // Ensure default space exists
-    if !store::space_exists(db, "zukyc").await? {
-        store::create_space(db, "zukyc").await?;
-    }
+// pub async fn insert_zukyc_pods(db: &Db) -> anyhow::Result<()> {
+//     // Ensure default space exists
+//     if !store::space_exists(db, "zukyc").await? {
+//         store::create_space(db, "zukyc").await?;
+//     }
 
-    log::info!("Inserting ZuKYC sample pods to default space...");
+//     log::info!("Inserting ZuKYC sample pods to default space...");
 
-    match sign_zukyc_pods() {
-        Ok(pods) => {
-            log::info!("All pods signed successfully, importing to DB...");
-            let pod_names = ["Gov ID", "Pay Stub", "Sanctions List"];
+//     match sign_zukyc_pods() {
+//         Ok(pods) => {
+//             log::info!("All pods signed successfully, importing to DB...");
+//             let pod_names = ["Gov ID", "Pay Stub", "Sanctions List"];
 
-            for (pod, name) in pods.into_iter().zip(pod_names) {
-                let pod_data = PodData::from(pod);
-                store::import_pod(db, &pod_data, Some(name), "zukyc").await?;
-            }
-            log::info!("Successfully inserted ZuKYC pods to default space.");
-        }
-        Err(e) => {
-            log::error!("Failed to sign one or more pods for ZuKYC insertion: {e}");
-            return Err(e);
-        }
-    }
+//             for (pod, name) in pods.into_iter().zip(pod_names) {
+//                 let pod_data = PodData::from(pod);
+//                 store::import_pod(db, &pod_data, Some(name), "zukyc").await?;
+//             }
+//             log::info!("Successfully inserted ZuKYC pods to default space.");
+//         }
+//         Err(e) => {
+//             log::error!("Failed to sign one or more pods for ZuKYC insertion: {e}");
+//             return Err(e);
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 async fn init_db(path: &str) -> Result<Db, anyhow::Error> {
     log::info!("Initializing database at: {path}");
@@ -727,14 +721,14 @@ pub fn run() {
             pod_management::delete_pod,
             pod_management::list_spaces,
             pod_management::import_pod,
-            pod_management::insert_zukyc_pods,
+           // pod_management::insert_zukyc_pods,
             pod_management::pretty_print_custom_predicates,
             // Blockies commands
             blockies::commands::generate_blockies,
             blockies::commands::get_blockies_data,
             // Authoring commands
             authoring::get_private_key_info,
-            authoring::sign_pod,
+            authoring::sign_dict,
             authoring::validate_code_command,
             authoring::execute_code_command,
             // Document commands

@@ -256,7 +256,7 @@ export function PodViewer() {
                   </div>
                 </div>
               </div>
-              <ScrollArea className="flex-1 min-h-0">
+              <ScrollArea className="flex-1 min-h-0 [&>div>div]:!block">
                 <div className="p-4 space-y-6">
                   <div>
                     {selectedPod.data.pod_data_variant === "Main" && (

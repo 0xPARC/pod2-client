@@ -3,8 +3,8 @@ use std::fs::File;
 use num_bigint::BigUint;
 use pod_utils::{ValueExt, prover_setup::PodNetProverSetup};
 use pod2::{
-    backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-    frontend::{SignedPod, SignedPodBuilder},
+    backends::plonky2::{primitives::ec::schnorr::SecretKey, signer::Signer},
+    frontend::{SignedDict, SignedDictBuilder},
 };
 use podnet_models::{
     DeleteRequest, Document,
@@ -31,7 +31,7 @@ pub async fn delete_document(
     // Load and verify identity pod
     println!("Loading identity pod from: {identity_pod_file}");
     let identity_pod_json = std::fs::read_to_string(identity_pod_file)?;
-    let identity_pod: SignedPod = serde_json::from_str(&identity_pod_json)?;
+    let identity_pod: SignedDict = serde_json::from_str(&identity_pod_json)?;
 
     // Verify the identity pod
     identity_pod.verify()?;
@@ -106,7 +106,7 @@ pub async fn delete_document(
     let delete_document_pod = signed_pod!(&params, secret_key, {
         "request_type" => "delete",
         "data" => original_data.clone(),
-        "timestamp_pod" => timestamp_pod.id(),
+        "timestamp_pod" => timestamp_pod.dict.commitment(),
     });
 
     // Verify the delete document pod

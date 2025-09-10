@@ -5,7 +5,7 @@
   "required": [
     "main_pod",
     "pod_info",
-    "signed_pod",
+    "signed_dict",
     "space_info"
   ],
   "properties": {
@@ -15,8 +15,8 @@
     "pod_info": {
       "$ref": "#/definitions/PodInfo"
     },
-    "signed_pod": {
-      "$ref": "#/definitions/SignedPod"
+    "signed_dict": {
+      "$ref": "#/definitions/SignedDict"
     },
     "space_info": {
       "$ref": "#/definitions/SpaceInfo"
@@ -27,14 +27,14 @@
       "type": "object",
       "required": [
         "key",
-        "podId"
+        "root"
       ],
       "properties": {
         "key": {
           "$ref": "#/definitions/Key"
         },
-        "podId": {
-          "$ref": "#/definitions/PodId"
+        "root": {
+          "$ref": "#/definitions/Hash"
         }
       }
     },
@@ -161,6 +161,27 @@
       "type": "string",
       "pattern": "^[0-9a-fA-F]{64}$"
     },
+    "IntroPredicateRef": {
+      "type": "object",
+      "required": [
+        "args_len",
+        "name",
+        "verifier_data_hash"
+      ],
+      "properties": {
+        "args_len": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "name": {
+          "type": "string"
+        },
+        "verifier_data_hash": {
+          "$ref": "#/definitions/Hash"
+        }
+      }
+    },
     "Key": {
       "type": "string"
     },
@@ -168,17 +189,14 @@
       "type": "object",
       "required": [
         "data",
-        "id",
         "params",
         "podType",
         "publicStatements",
+        "stsHash",
         "vdSet"
       ],
       "properties": {
         "data": true,
-        "id": {
-          "$ref": "#/definitions/PodId"
-        },
         "params": {
           "$ref": "#/definitions/Params"
         },
@@ -203,6 +221,9 @@
             "$ref": "#/definitions/Statement"
           }
         },
+        "stsHash": {
+          "$ref": "#/definitions/Hash"
+        },
         "vdSet": {
           "$ref": "#/definitions/VDSet"
         }
@@ -224,13 +245,23 @@
         "MaxOf",
         "HashOf",
         "PublicKeyOf",
+        "SignedBy",
+        "ContainerInsert",
+        "ContainerUpdate",
+        "ContainerDelete",
         "DictContains",
         "DictNotContains",
         "SetContains",
         "SetNotContains",
         "ArrayContains",
         "GtEq",
-        "Gt"
+        "Gt",
+        "DictInsert",
+        "DictUpdate",
+        "DictDelete",
+        "SetInsert",
+        "SetDelete",
+        "ArrayUpdate"
       ]
     },
     "Params": {
@@ -244,16 +275,17 @@
         "maxCustomPredicateWildcards",
         "maxDepthMtContainers",
         "maxDepthMtVds",
+        "maxInputPods",
         "maxInputPodsPublicStatements",
-        "maxInputRecursivePods",
-        "maxInputSignedPods",
         "maxMerkleProofsContainers",
+        "maxMerkleTreeStateTransitionProofsContainers",
         "maxOperationArgs",
+        "maxPublicKeyOf",
         "maxPublicStatements",
-        "maxSignedPodValues",
+        "maxSignedBy",
         "maxStatementArgs",
         "maxStatements",
-        "numPublicStatementsId"
+        "numPublicStatementsHash"
       ],
       "properties": {
         "maxCustomBatchSize": {
@@ -291,17 +323,12 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "maxInputPods": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
         "maxInputPodsPublicStatements": {
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "maxInputRecursivePods": {
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "maxInputSignedPods": {
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
@@ -311,7 +338,17 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "maxMerkleTreeStateTransitionProofsContainers": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
         "maxOperationArgs": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "maxPublicKeyOf": {
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
@@ -321,7 +358,7 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "maxSignedPodValues": {
+        "maxSignedBy": {
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
@@ -336,7 +373,7 @@
           "format": "uint",
           "minimum": 0.0
         },
-        "numPublicStatementsId": {
+        "numPublicStatementsHash": {
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
@@ -353,7 +390,7 @@
           ],
           "properties": {
             "pod_data_payload": {
-              "$ref": "#/definitions/SignedPod"
+              "$ref": "#/definitions/SignedDictWrapper"
             },
             "pod_data_variant": {
               "type": "string",
@@ -382,9 +419,6 @@
           }
         }
       ]
-    },
-    "PodId": {
-      "$ref": "#/definitions/Hash"
     },
     "PodInfo": {
       "type": "object",
@@ -418,6 +452,9 @@
           "type": "string"
         }
       }
+    },
+    "Point": {
+      "type": "string"
     },
     "Predicate": {
       "oneOf": [
@@ -476,6 +513,24 @@
               "$ref": "#/definitions/CustomPredicateRef"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "Intro"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/IntroPredicateRef"
+            }
+          }
         }
       ]
     },
@@ -505,41 +560,30 @@
         }
       }
     },
-    "SignedPod": {
+    "Signature": {
+      "type": "string"
+    },
+    "SignedDict": {
       "type": "object",
       "required": [
-        "data",
-        "entries",
-        "id",
-        "podType"
+        "dict",
+        "public_key",
+        "signature"
       ],
       "properties": {
-        "data": true,
-        "entries": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/Value"
-          }
+        "dict": {
+          "$ref": "#/definitions/Dictionary"
         },
-        "id": {
-          "$ref": "#/definitions/PodId"
+        "public_key": {
+          "$ref": "#/definitions/Point"
         },
-        "podType": {
-          "type": "array",
-          "items": [
-            {
-              "type": "integer",
-              "format": "uint",
-              "minimum": 0.0
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "maxItems": 2,
-          "minItems": 2
+        "signature": {
+          "$ref": "#/definitions/Signature"
         }
       }
+    },
+    "SignedDictWrapper": {
+      "$ref": "#/definitions/SignedDict"
     },
     "SpaceInfo": {
       "type": "object",
@@ -907,6 +951,133 @@
               "type": "array",
               "items": [
                 {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "SignedBy"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 4,
+              "minItems": 4
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "ContainerInsert"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 4,
+              "minItems": 4
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "ContainerUpdate"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                },
+                {
+                  "$ref": "#/definitions/ValueRef"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "ContainerDelete"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
                   "$ref": "#/definitions/CustomPredicateRef"
                 },
                 {
@@ -923,6 +1094,37 @@
               "type": "string",
               "enum": [
                 "Custom"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "args",
+            "predicate"
+          ],
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/IntroPredicateRef"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Value"
+                  }
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "Intro"
               ]
             }
           }
@@ -1057,11 +1259,11 @@
         {
           "type": "object",
           "required": [
-            "PodId"
+            "Root"
           ],
           "properties": {
-            "PodId": {
-              "$ref": "#/definitions/PodId"
+            "Root": {
+              "$ref": "#/definitions/Hash"
             }
           }
         },

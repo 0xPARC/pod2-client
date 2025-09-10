@@ -8,7 +8,8 @@ import { toast } from "sonner";
 //   importPodDataToSpace,
 //   signPod
 // } from "../lib/backendServiceClient";
-import { importPod, signPod } from "@/lib/rpc";
+import { importSignedDict } from "@/lib/features";
+import { signDict } from "@/lib/rpc";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -264,7 +265,9 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     });
 
     if (conversionError) {
-      toast.error("Failed to prepare POD entries due to conversion errors.");
+      toast.error(
+        "Failed to prepare dictionary entries due to conversion errors."
+      );
       return;
     }
 
@@ -275,7 +278,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
       return;
     }
     if (entries.length === 0) {
-      toast.error("Cannot sign an empty POD. Please add entries.");
+      toast.error("Cannot sign an empty dictionary. Please add entries.");
       return;
     }
 
@@ -285,8 +288,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     // };
 
     try {
-      const signedPodData = await signPod(signedPodEntries);
-      console.log("Successfully Signed POD:", signedPodData);
+      const signedPodData = await signDict(signedPodEntries);
+      console.log("Successfully Signed Dictionary:", signedPodData);
 
       // // Now attempt to import the signed POD
       // if (!activeSpaceId) {
@@ -309,17 +312,17 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
         //   // label: `Signed POD - ${new Date().toISOString()}`
         //   label: label.trim() ? label.trim() : undefined
         // };
-        await importPod(
+        await importSignedDict(
           signedPodData,
           label.trim().length > 0 ? label.trim() : undefined
         );
         toast.success(
-          `POD ${signedPodData.id.slice(0, 12)}... imported successfully!`
+          `Dictionary ${signedPodData.signature.slice(0, 12)}... imported successfully!`
         );
       } catch (importError) {
-        console.error("Failed to import signed POD:", importError);
+        console.error("Failed to import signed dictionary:", importError);
         toast.error(
-          `Failed to import signed POD: ${(importError as Error).message}`
+          `Failed to import signed dictionary: ${(importError as Error).message}`
         );
         // Continue to close and reset, as signing itself was successful
       }
@@ -332,8 +335,8 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
       //   setPrivateKeyError(undefined);
       setLabel("");
     } catch (error) {
-      console.error("Failed to sign POD:", error);
-      toast.error(`Failed to sign POD: ${(error as Error).message}`);
+      console.error("Failed to sign dictionary:", error);
+      toast.error(`Failed to sign dictionary: ${(error as Error).message}`);
     }
   };
 
@@ -633,10 +636,10 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl h-[80vh] max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Create New Signed POD</DialogTitle>
+          <DialogTitle>Create New Signed Dictionary</DialogTitle>
           <DialogDescription>
-            Define the key-value entries for your new Signed POD. Keys must be
-            unique and non-empty.
+            Define the key-value entries for your new Signed Dictionary. Keys
+            must be unique and non-empty.
           </DialogDescription>
         </DialogHeader>
 
@@ -674,7 +677,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
                 type="text"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="Enter a label for this POD"
+                placeholder="Enter a label for this dictionary"
               />
             </div>
           </div>
@@ -791,7 +794,7 @@ const CreateSignedPodDialog: React.FC<CreateSignedPodDialogProps> = ({
             <Button variant="outline">Cancel</Button>
           </DialogClose>
           <Button onClick={handleSign} disabled={!isFormValid}>
-            Sign POD
+            Sign Dictionary
           </Button>
         </DialogFooter>
       </DialogContent>

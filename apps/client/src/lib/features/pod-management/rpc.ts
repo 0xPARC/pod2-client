@@ -1,5 +1,5 @@
 import { invokeCommand } from "@/lib/rpc";
-import type { MainPod, PodInfo, SignedPod } from "@pod2/pod2js";
+import type { MainPod, PodInfo, SignedDict } from "@pod2/pod2js";
 
 // Re-export types for convenience
 export type { PodInfo };
@@ -62,18 +62,31 @@ function isAppStateData(obj: any): obj is AppStateData {
 // =============================================================================
 
 /**
- * Import a POD into the application
- * @param pod - The POD to import (SignedPod or MainPod)
- * @param label - Optional label for the POD
+ * Import a signed dict into the application
+ * @param signedDict - The signed dict to import
+ * @param label - Optional label for the signed dict
+ * @returns
  */
-export async function importPod(
-  pod: SignedPod | MainPod,
+export async function importSignedDict(
+  signedDict: SignedDict,
   label?: string
 ): Promise<void> {
-  const podType = pod.podType[1]; // Extract the string type from the tuple
+  return invokeCommand("import_pod", {
+    serializedPod: JSON.stringify(signedDict),
+    podType: "Signed",
+    label
+  });
+}
+
+/**
+ * Import a POD into the application
+ * @param pod - The POD to import (MainPod)
+ * @param label - Optional label for the POD
+ */
+export async function importPod(pod: MainPod, label?: string): Promise<void> {
   return invokeCommand("import_pod", {
     serializedPod: JSON.stringify(pod),
-    podType,
+    podType: "Main",
     label
   });
 }
@@ -81,17 +94,15 @@ export async function importPod(
 /**
  * Import a POD from raw JSON content
  * @param serializedPod - JSON string containing the POD data
- * @param podType - Type of the POD ("Signed", "Main", etc.)
  * @param label - Optional label for the POD
  */
 export async function importPodFromJson(
   serializedPod: string,
-  podType: string,
   label?: string
 ): Promise<void> {
   return invokeCommand("import_pod", {
     serializedPod,
-    podType,
+    podType: "Main",
     label
   });
 }
@@ -114,14 +125,6 @@ export async function deletePod(spaceId: string, podId: string): Promise<void> {
  */
 export async function listSpaces(): Promise<SpaceInfo[]> {
   return invokeCommand<SpaceInfo[]>("list_spaces");
-}
-
-/**
- * Insert ZuKYC sample pods to the default space
- * @returns Promise that resolves when pods are inserted
- */
-export async function insertZuKycPods(): Promise<void> {
-  return invokeCommand<void>("insert_zukyc_pods");
 }
 
 // =============================================================================

@@ -37,7 +37,7 @@ macro_rules! signed_pod {
     ($params:expr, $secret_key:expr, {
         $($key:expr => $value:expr),* $(,)?
     }) => {{
-        let mut builder = SignedPodBuilder::new($params);
+        let mut builder = SignedDictBuilder::new($params);
         $(
             builder.insert($key, $value);
         )*

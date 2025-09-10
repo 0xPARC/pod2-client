@@ -3,9 +3,9 @@ use chrono::{DateTime, Utc};
 use pod2::{
     backends::plonky2::{
         primitives::ec::{curve::Point as PublicKey, schnorr::SecretKey},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{SignedPod, SignedPodBuilder},
+    frontend::{SignedDict, SignedDictBuilder},
     middleware::Params,
 };
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use crate::github::GitHubUser;
 
 #[derive(Debug, Serialize)]
 pub struct IdentityResponse {
-    pub identity_pod: SignedPod,
+    pub identity_pod: SignedDict,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,9 +41,9 @@ pub fn create_identity_pod(
     github_user: &GitHubUser,
     github_public_keys: &[String],
     oauth_verified_at: DateTime<Utc>,
-) -> Result<SignedPod> {
+) -> Result<SignedDict> {
     let params = Params::default();
-    let mut identity_builder = SignedPodBuilder::new(&params);
+    let mut identity_builder = SignedDictBuilder::new(&params);
 
     // Core identity fields (minimal in main pod)
     identity_builder.insert("username", username);

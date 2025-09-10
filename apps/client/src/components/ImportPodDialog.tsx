@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,11 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import { importPodFromJson } from "@/lib/features/pod-management";
-import { Upload, FileText, X } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { FileText, Upload, X } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface ImportPodDialogProps {
   trigger?: React.ReactNode;
@@ -53,23 +53,6 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
     }
   };
 
-  const detectPodType = (content: string): string => {
-    try {
-      const pod = JSON.parse(content);
-
-      const podTypeString = pod.podType[1]; // Extract the string type from the tuple
-      if (podTypeString === "Signed") {
-        return "Signed";
-      } else if (podTypeString === "Main") {
-        return "Main";
-      }
-      throw new Error("Invalid POD type");
-    } catch (error) {
-      console.error(error);
-      throw new Error("Failed to detect POD type");
-    }
-  };
-
   const handleImport = async () => {
     if (!podContent.trim()) {
       toast.error("Please provide POD content");
@@ -82,9 +65,7 @@ export function ImportPodDialog({ trigger }: ImportPodDialogProps) {
       // Validate JSON format
       JSON.parse(podContent);
 
-      const podType = detectPodType(podContent);
-
-      await importPodFromJson(podContent, podType, label || undefined);
+      await importPodFromJson(podContent, label || undefined);
 
       toast.success("POD imported successfully");
 

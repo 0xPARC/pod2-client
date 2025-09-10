@@ -4,15 +4,16 @@ use num::traits::Euclid;
 use pod2::{
     backends::plonky2::{
         primitives::{ec::schnorr::SecretKey, merkletree::MerkleTree},
-        signedpod::Signer,
+        signer::Signer,
     },
-    frontend::{SerializedSignedPod, SignedPod, SignedPodBuilder},
-    middleware::{
-        hash_str, Hash, Params, PodId, PodType, RawValue, TypedValue, Value, KEY_SIGNER, KEY_TYPE,
-    },
+    frontend::{SignedDict, SignedDictBuilder},
+    middleware::{hash_str, Hash, Params, RawValue, TypedValue, Value},
 };
 use pod2_db::{
-    store::{self, create_space, get_default_private_key, space_exists, PodData, PodInfo},
+    store::{
+        self, create_space, get_default_private_key, space_exists, PodData, PodInfo,
+        SignedDictWrapper,
+    },
     Db,
 };
 use rand::{rngs::OsRng, Rng};
@@ -40,11 +41,11 @@ struct Challenge {
 
 #[derive(Deserialize)]
 struct FrogResponse {
-    pod: SignedPod,
+    pod: SignedDict,
     score: i64,
 }
 
-async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedPod, String> {
+async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<SignedDict, String> {
     let challenge_url = server_url("auth");
     let challenge: Challenge = client
         .get(&challenge_url)
@@ -54,7 +55,7 @@ async fn process_challenge(client: &Client, private_key: SecretKey) -> Result<Si
         .json()
         .await
         .map_err(connection_failed)?;
-    let mut builder = SignedPodBuilder::new(&Default::default());
+    let mut builder = SignedDictBuilder::new(&Default::default());
     builder.insert("public_key", challenge.public_key);
     builder.insert("time", challenge.time);
     let signer = Signer(private_key);
@@ -93,7 +94,7 @@ pub struct FrogData {
 
 #[derive(Serialize)]
 pub struct FrogPod {
-    pod_id: PodId,
+    pod_id: Hash,
     data: Option<FrogData>,
 }
 
@@ -133,7 +134,7 @@ impl AsTyped for Value {
     }
 }
 
-fn frog_data_for(pod: &SignedPod, desc: &SignedPod) -> Option<FrogData> {
+fn frog_data_for(pod: &SignedDict, desc: &SignedDict) -> Option<FrogData> {
     let frog_id = desc.get("frog_id")?.as_int()?;
     let rarity = if (1..=80).contains(&frog_id) {
         FROG_RARITIES[(frog_id - 1) as usize]
@@ -150,7 +151,7 @@ fn frog_data_for(pod: &SignedPod, desc: &SignedPod) -> Option<FrogData> {
         image_url,
         rarity,
     };
-    let stats = compute_frog_stats(frog_id, pod.id().0);
+    let stats = compute_frog_stats(frog_id, pod.dict.commitment());
     Some(FrogData { desc, stats })
 }
 
@@ -165,7 +166,7 @@ pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod
             let desc = description_for(&pod, &frog_descs);
             let data = desc.and_then(|d| frog_data_for(&pod, d));
             FrogPod {
-                pod_id: pod.id(),
+                pod_id: pod.dict.commitment(),
                 data,
             }
         })
@@ -173,7 +174,7 @@ pub async fn list_frogs(state: State<'_, Mutex<AppState>>) -> Result<Vec<FrogPod
     Ok(frogs)
 }
 
-fn frogedex_data_for(desc: &SignedPod) -> Option<(i64, String, String)> {
+fn frogedex_data_for(desc: &SignedDict) -> Option<(i64, String, String)> {
     Some((
         desc.get("frog_id")?.as_int()?,
         desc.get("name")?.as_str()?.to_owned(),
@@ -209,7 +210,11 @@ pub async fn get_frogedex(state: State<'_, Mutex<AppState>>) -> Result<Vec<Froge
     Ok(entries)
 }
 
-async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> Result<(), String> {
+async fn register_pod(
+    app_state: &mut AppState,
+    pod: SignedDict,
+    space: &str,
+) -> Result<(), String> {
     if !space_exists(&app_state.db, space)
         .await
         .map_err(|e| e.to_string())?
@@ -220,7 +225,7 @@ async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> 
     }
     store::import_pod(
         &app_state.db,
-        &PodData::Signed(Box::new(pod.into())),
+        &PodData::Signed(Box::new(SignedDictWrapper(pod))),
         None,
         space,
     )
@@ -233,18 +238,18 @@ async fn register_pod(app_state: &mut AppState, pod: SignedPod, space: &str) -> 
         .map_err(|e| e.to_string())
 }
 
-fn as_signed_owned(pod: PodInfo) -> Option<SerializedSignedPod> {
+fn as_signed_owned(pod: PodInfo) -> Option<SignedDict> {
     match pod.data {
-        PodData::Signed(p) => Some(*p),
+        PodData::Signed(p) => Some(SignedDict::from(*p)),
         PodData::Main(_) => None,
     }
 }
 
-fn description_for<'a>(frog: &'_ SignedPod, descs: &'a [SignedPod]) -> Option<&'a SignedPod> {
+fn description_for<'a>(frog: &'_ SignedDict, descs: &'a [SignedDict]) -> Option<&'a SignedDict> {
     match frog.get("biome")?.typed() {
         TypedValue::Int(biome) if (0..=1).contains(biome) => {
             let offset = 2 * (*biome as usize);
-            let id = frog.id().0 .0[0].0;
+            let id = frog.dict.commitment().0[0].0;
             for desc in descs {
                 let RawValue(arr) = desc.get("seed_range")?.raw();
                 if id >= arr[offset].0 && id <= arr[offset + 1].0 {
@@ -257,33 +262,25 @@ fn description_for<'a>(frog: &'_ SignedPod, descs: &'a [SignedPod]) -> Option<&'
     }
 }
 
-async fn frog_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
+async fn frog_pods(db: &Db) -> Result<Vec<SignedDict>, String> {
     let mut infos = store::list_pods(db, "frogs")
         .await
         .map_err(|e| e.to_string())?;
     infos.sort_by(|i1, i2| i2.created_at.cmp(&i1.created_at));
-    Ok(infos
-        .into_iter()
-        .filter_map(|info| SignedPod::try_from(as_signed_owned(info)?).ok())
-        .collect())
+    Ok(infos.into_iter().filter_map(as_signed_owned).collect())
 }
 
-async fn description_pods(db: &Db) -> Result<Vec<SignedPod>, String> {
+async fn description_pods(db: &Db) -> Result<Vec<SignedDict>, String> {
     store::list_pods(db, "frog-descriptions")
         .await
-        .map(|infos| {
-            infos
-                .into_iter()
-                .filter_map(|info| SignedPod::try_from(as_signed_owned(info)?).ok())
-                .collect()
-        })
+        .map(|infos| infos.into_iter().filter_map(as_signed_owned).collect())
         .map_err(|e| e.to_string())
 }
 
-async fn request_frog_description(pod: SignedPod, app_handle: AppHandle) -> Result<(), String> {
+async fn request_frog_description(pod: SignedDict, app_handle: AppHandle) -> Result<(), String> {
     let client = Client::new();
     let url = server_url("desc");
-    let desc: SignedPod = client
+    let desc: SignedDict = client
         .post(&url)
         .json(&pod)
         .send()
@@ -297,7 +294,7 @@ async fn request_frog_description(pod: SignedPod, app_handle: AppHandle) -> Resu
     register_pod(&mut app_state, desc, "frog-descriptions").await
 }
 
-async fn register_frog(app_state: &mut AppState, pod: SignedPod) -> Result<(), String> {
+async fn register_frog(app_state: &mut AppState, pod: SignedDict) -> Result<(), String> {
     let frog_descriptions = description_pods(&app_state.db).await?;
     if description_for(&pod, &frog_descriptions).is_none() {
         tauri::async_runtime::spawn(request_frog_description(
@@ -416,16 +413,13 @@ const MINING_ZERO_MASK: u64 = !((1 << (64 - MINING_ZEROS_NEEDED)) - 1);
 impl FrogSearch {
     pub fn new(data: &WorkerData) -> Self {
         let mut kvs = std::collections::HashMap::new();
-        let type_key: RawValue = hash_str(KEY_TYPE).into();
-        let type_value: RawValue = (PodType::Signed as i64).into();
-        let signer_key: RawValue = hash_str(KEY_SIGNER).into();
+        let signer_key: RawValue = hash_str("signer").into();
         let signer_value: RawValue = (&TypedValue::PublicKey(data.private_key.public_key())).into();
         let biome_key: RawValue = hash_str("biome").into();
         let biome_value: RawValue = data.biome.into();
         let nonce_key: RawValue = hash_str("nonce").into();
         let nonce_i64: i64 = OsRng.gen();
         let nonce_value: RawValue = nonce_i64.into();
-        kvs.insert(type_key, type_value);
         kvs.insert(signer_key, signer_value);
         kvs.insert(biome_key, biome_value);
         kvs.insert(nonce_key, nonce_value);
@@ -457,10 +451,11 @@ impl FrogSearch {
         false
     }
 
-    fn generate_pod(&self, private_key: SecretKey) -> Result<SignedPod, String> {
-        let mut builder = SignedPodBuilder::new(&Default::default());
+    fn generate_pod(&self, private_key: SecretKey) -> Result<SignedDict, String> {
+        let mut builder = SignedDictBuilder::new(&Default::default());
         builder.insert("biome", self.biome);
         builder.insert("nonce", *self.kvs.get(&self.nonce_key).unwrap());
+        builder.insert("signer", *self.kvs.get(&hash_str("signer").into()).unwrap());
         let signer = Signer(private_key);
         builder.sign(&signer).map_err(|e| e.to_string())
     }
@@ -582,9 +577,9 @@ mod test {
     use std::path::PathBuf;
 
     use pod2::{
-        backends::plonky2::{primitives::ec::schnorr::SecretKey, signedpod::Signer},
-        frontend::SignedPodBuilder,
-        middleware::{hash_str, Params, PodId, RawValue},
+        backends::plonky2::{primitives::ec::schnorr::SecretKey, signer::Signer},
+        frontend::SignedDictBuilder,
+        middleware::{hash_str, Params, RawValue},
     };
     use reqwest::Client;
 
@@ -601,13 +596,15 @@ mod test {
             private_key: sk.clone(),
             biome,
         });
-        let search_id = PodId(search.pod_hash());
-        let mut builder = SignedPodBuilder::new(&Params::default());
+        let search_id = search.pod_hash();
+        let mut builder = SignedDictBuilder::new(&Params::default());
         builder.insert("biome", biome);
         let nonce_key: RawValue = hash_str("nonce").into();
         builder.insert("nonce", *search.kvs.get(&nonce_key).unwrap());
+        let signer_key: RawValue = hash_str("signer").into();
+        builder.insert("signer", *search.kvs.get(&signer_key).unwrap());
         let pod = builder.sign(&Signer(sk)).unwrap();
-        assert_eq!(search_id, pod.id())
+        assert_eq!(search_id, pod.dict.commitment())
     }
 
     #[ignore]

@@ -25,7 +25,7 @@ function ViewStatementArg({ arg }: { arg: ValueRef }) {
   if (arg.type === "Key") {
     return (
       <span>
-        {arg.value.podId}["{arg.value.key}"]
+        {arg.value.root}["{arg.value.key}"]
       </span>
     );
   }
@@ -107,9 +107,9 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
           <CardTitle className="flex items-center">
             <span
               className="font-mono text-sm cursor-pointer"
-              onClick={() => navigator.clipboard.writeText(mainPod.id)}
+              onClick={() => navigator.clipboard.writeText(mainPod.stsHash)}
             >
-              ID: {mainPod.id.slice(0, 32)}&hellip;
+              ID: {mainPod.stsHash.slice(0, 32)}&hellip;
             </span>
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -137,12 +137,13 @@ const MainPodCard: React.FC<MainPodCardProps> = ({ mainPod, podId, label }) => {
                 key={index}
                 className={`flex p-2 text-sm ${index < arr.length - 1 ? "border-b" : ""}`}
               >
-                <div className="w-1/3 font-medium text-gray-700 dark:text-gray-300 break-all pr-2">
+                <div className="w-1/4 font-medium text-gray-700 dark:text-gray-300 break-all pr-2">
                   {statement.predicate}
                 </div>
-                <div className="w-2/3 text-gray-900 dark:text-gray-100 break-all flex flex-col gap-0.5">
+                <div className="w-3/4 text-gray-900 dark:text-gray-100 break-all flex flex-col gap-0.5">
                   {statement.predicate !== "Custom" &&
                     statement.predicate !== "None" &&
+                    statement.predicate !== "Intro" &&
                     statement.args.map((arg, index) => (
                       <div key={index} className="flex items-center">
                         <ViewStatementArg key={index} arg={arg} />

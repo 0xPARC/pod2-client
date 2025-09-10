@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use pod2::{
     backends::plonky2::{basetypes::DEFAULT_VD_SET, mainpod::Prover, mock::mainpod::MockProver},
-    middleware::{Params, PodProver, VDSet},
+    middleware::{MainPodProver, Params, VDSet},
 };
 
 static MOCK_VD_SET: OnceLock<VDSet> = OnceLock::new();
@@ -15,7 +15,7 @@ impl PodNetProverSetup {
     /// Returns (VDSet, Prover) tuple for use in POD operations
     pub fn create_prover_setup(
         use_mock: bool,
-    ) -> Result<(&'static VDSet, Box<dyn PodProver>), String> {
+    ) -> Result<(&'static VDSet, Box<dyn MainPodProver>), String> {
         if use_mock {
             log::info!("Using MockMainPod for verification");
             let vd_set = MOCK_VD_SET
