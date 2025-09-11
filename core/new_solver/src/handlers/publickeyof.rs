@@ -54,8 +54,8 @@ impl OpHandler for PublicKeyOfHandler {
             return PropagatorResult::Contradiction;
         }
 
-        let a_secret_key = &args[0];
-        let a_public_key = &args[1];
+        let a_public_key = &args[0];
+        let a_secret_key = &args[1];
 
         // Extract secret key if available
         let sk_opt: Option<SecretKey> = match a_secret_key {
@@ -188,16 +188,16 @@ mod tests {
         let mut store = ConstraintStore::default();
         let sk = SecretKey::new_rand();
         let pk_val = Value::from(sk.public_key());
-        store.bindings.insert(0, Value::from(sk));
+        store.bindings.insert(1, Value::from(sk));
 
         let handler = PublicKeyOfHandler;
-        let args = args_from("REQUEST(PublicKeyOf(?SK, ?PK))");
+        let args = args_from("REQUEST(PublicKeyOf(?PK, ?SK))");
         let res = handler.propagate(&args, &mut store, &edb);
 
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 1); // ?PK index
+                assert_eq!(bindings[0].0, 0); // ?PK index
                 assert_eq!(bindings[0].1, pk_val);
                 assert!(matches!(op_tag, OpTag::FromLiterals));
             }
@@ -214,16 +214,16 @@ mod tests {
 
         let edb = ImmutableEdbBuilder::new().add_keypair(pk, sk).build();
         let mut store = ConstraintStore::default();
-        store.bindings.insert(1, pk_val.clone());
+        store.bindings.insert(0, pk_val.clone());
 
         let handler = PublicKeyOfHandler;
-        let args = args_from("REQUEST(PublicKeyOf(?SK, ?PK))");
+        let args = args_from("REQUEST(PublicKeyOf(?PK, ?SK))");
         let res = handler.propagate(&args, &mut store, &edb);
 
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 0); // ?SK index
+                assert_eq!(bindings[0].0, 1); // ?SK index
                 assert_eq!(bindings[0].1, sk_val);
                 assert!(matches!(op_tag, OpTag::FromLiterals));
             }
