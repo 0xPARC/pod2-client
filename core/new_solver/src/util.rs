@@ -270,7 +270,17 @@ pub fn instantiate_goal(
             let a2 = arg_to_vr(&tmpl.args[2], bindings)?;
             Some(Statement::HashOf(a0, a1, a2))
         }
-        _ => None,
+        Predicate::Native(NativePredicate::PublicKeyOf) => {
+            if tmpl.args.len() != 2 {
+                return None;
+            }
+            let a0 = arg_to_vr(&tmpl.args[0], bindings)?;
+            let a1 = arg_to_vr(&tmpl.args[1], bindings)?;
+            Some(Statement::PublicKeyOf(a0, a1))
+        }
+        _ => {
+            panic!("Unrecognized predicate head: {}", tmpl.pred);
+        }
     }
 }
 

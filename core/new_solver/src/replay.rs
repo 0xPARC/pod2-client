@@ -646,6 +646,10 @@ fn order_custom_premises(
                             && arg_matches(&args[1], &a1)
                             && arg_matches(&args[2], &a2)
                     }
+                    (Predicate::Native(NP::PublicKeyOf), Stmt::PublicKeyOf(a0, a1)) => {
+                        let args = tmpl.args();
+                        arg_matches(&args[0], &a0) && arg_matches(&args[1], &a1)
+                    }
                     _ => false,
                 });
         if let Some(pos) = matched_pos {
