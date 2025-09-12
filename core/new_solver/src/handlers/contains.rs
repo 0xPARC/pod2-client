@@ -379,13 +379,13 @@ mod tests {
         // Bind root and key via wildcards or literals; here we bind root as wildcard
         store.bindings.insert(0, Value::from(root));
         let handler = CopyContainsHandler;
-        let args = args_from("REQUEST(Contains(?R, \"k\", ?V))");
+        let args = args_from("REQUEST(Contains(R, \"k\", V))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
                 assert_eq!(alternatives.len(), 1);
                 let ch = &alternatives[0];
-                assert_eq!(ch.bindings[0].0, 1); // ?V index
+                assert_eq!(ch.bindings[0].0, 1); // V index
                 assert_eq!(ch.bindings[0].1, Value::from(7));
                 assert!(matches!(ch.op_tag, OpTag::CopyStatement { .. }));
             }
@@ -407,12 +407,12 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));
         let handler = ContainsFromEntriesHandler;
-        let args = args_from("REQUEST(Contains(?R, \"k\", ?V))");
+        let args = args_from("REQUEST(Contains(R, \"k\", V))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 1); // ?V index
+                assert_eq!(bindings[0].0, 1); // V index
                 assert_eq!(bindings[0].1, Value::from(9));
                 assert!(matches!(op_tag, OpTag::GeneratedContains { .. }));
             }
@@ -445,7 +445,7 @@ mod tests {
         // Engine will prefer GeneratedContains when deduping; here we just check individual handler outputs are reasonable.
         let copy = CopyContainsHandler;
         let gen = ContainsFromEntriesHandler;
-        let args = args_from("REQUEST(Contains(?R, \"k\", ?V))");
+        let args = args_from("REQUEST(Contains(R, \"k\", V))");
         let r1 = copy.propagate(&args, &mut store.clone(), &edb);
         let r2 = gen.propagate(&args, &mut store.clone(), &edb);
         assert!(matches!(r1, PropagatorResult::Choices { .. }));

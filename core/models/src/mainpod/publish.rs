@@ -165,15 +165,15 @@ mod tests {
 
         let query = r#"
         identity_verified(username, identity_pod) = AND(
-            Equal(?identity_pod["username"], ?username)
+            Equal(identity_pod["username"], username)
         )
 
         publish_verified(username, data, identity_server_pk, private: identity_pod, document_pod) = AND(
-            identity_verified(?username, ?identity_pod)
-            Equal(?document_pod["request_type"], "publish")
-            Equal(?document_pod["data"], ?data)
-            SignedBy(?document_pod, ?identity_pod["user_public_key"])
-            SignedBy(?identity_pod, ?identity_server_pk)
+            identity_verified(username, identity_pod)
+            Equal(document_pod["request_type"], "publish")
+            Equal(document_pod["data"], data)
+            SignedBy(document_pod, identity_pod["user_public_key"])
+            SignedBy(identity_pod, identity_server_pk)
         )
         
         REQUEST(

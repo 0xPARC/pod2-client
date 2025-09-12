@@ -72,7 +72,7 @@ mod tests {
             |a, b| Some(a - b),
             "SumOf",
         );
-        let args = args_from("REQUEST(SumOf(?X, 3, 4))");
+        let args = args_from("REQUEST(SumOf(X, 3, 4))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
@@ -105,7 +105,7 @@ mod tests {
             |a, b| Some(a - b),
             "SumOf",
         );
-        let args = args_from("REQUEST(SumOf(?R[\"a\"], 3, 4))");
+        let args = args_from("REQUEST(SumOf(R[\"a\"], 3, 4))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -154,7 +154,7 @@ mod tests {
             |a, b| Some(a - b),
             "SumOf",
         );
-        let args = args_from("REQUEST(SumOf(7, ?A[\"x\"], ?B[\"y\"]))");
+        let args = args_from("REQUEST(SumOf(7, A[\"x\"], B[\"y\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -174,7 +174,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = CopySumOfHandler;
         // Match first two, bind third
-        let args = args_from("REQUEST(SumOf(15, 5, ?Z))");
+        let args = args_from("REQUEST(SumOf(15, 5, Z))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {

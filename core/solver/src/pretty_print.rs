@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn test_format_wildcard() {
         let wildcard = Wildcard::new("count".to_string(), 0);
-        assert_eq!(format_wildcard(&wildcard), "?count");
+        assert_eq!(format_wildcard(&wildcard), "count");
     }
 
     #[test]
@@ -408,8 +408,8 @@ mod tests {
 
         let formatted = format_bindings(&bindings);
         // Should be sorted by key for consistent output
-        assert!(formatted.contains("?count: 42"));
-        assert!(formatted.contains("?name: \"alice\""));
+        assert!(formatted.contains("count: 42"));
+        assert!(formatted.contains("name: \"alice\""));
     }
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
     fn test_pretty_wildcard_wrapper() {
         let wildcard = Wildcard::new("test_var".to_string(), 0);
         let pretty_wildcard = PrettyWildcard(&wildcard);
-        assert_eq!(pretty_wildcard.to_string(), "?test_var");
+        assert_eq!(pretty_wildcard.to_string(), "test_var");
     }
 
     #[test]

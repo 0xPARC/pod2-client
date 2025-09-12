@@ -21,7 +21,7 @@ fn test_literal_dict() -> Result<(), String> {
 
     let req1 = r#"
 init_membership(state) = AND(
-    DictContains(?state, "test", 0)
+    DictContains(state, "test", 0)
 )
 
 REQUEST(

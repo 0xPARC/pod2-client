@@ -68,7 +68,7 @@ mod tests {
             |a, b| if b != 0 { a.checked_div(b) } else { None },
             "ProductOf",
         );
-        let args = args_from("REQUEST(ProductOf(?X, 3, 4))");
+        let args = args_from("REQUEST(ProductOf(X, 3, 4))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
@@ -120,7 +120,7 @@ mod tests {
             },
             "ProductOf",
         );
-        let args = args_from("REQUEST(ProductOf(7, 3, ?Z))");
+        let args = args_from("REQUEST(ProductOf(7, 3, Z))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Contradiction => {}

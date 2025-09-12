@@ -41,38 +41,38 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     /*
     eth_dos_batch:
         eth_friend(src, dst, private: attestation) = AND(
-            SignedBy(?attestation, ?src)
-            Contains(?attestation, "attestation", ?dst)
+            SignedBy(attestation, src)
+            Contains(attestation, "attestation", dst)
         )
 
         eth_dos_base(src, dst, distance) = AND(
-            Equal(?src, ?dst)
-            Equal(?distance, 0)
+            Equal(src, dst)
+            Equal(distance, 0)
         )
 
         eth_dos_ind(src, dst, distance, private: shorter_distance, intermed) = AND(
-            eth_dos(?src, ?intermed, ?shorter_distance)
-            SumOf(?distance, ?shorter_distance, 1)
-            eth_friend(?intermed, ?dst)
+            eth_dos(src, intermed, shorter_distance)
+            SumOf(distance, shorter_distance, 1)
+            eth_friend(intermed, dst)
         )
 
         eth_dos(src, dst, distance) = OR(
-            eth_dos_base(?src, ?dst, ?distance)
-            eth_dos_ind(?src, ?dst, ?distance)
+            eth_dos_base(src, dst, distance)
+            eth_dos_ind(src, dst, distance)
         )
     */
 
     let reg = OpRegistry::default();
 
     /******************************************************************************
-     * Request: eth_dos(alice, alice, ?Distance)
+     * Request: eth_dos(alice, alice, Distance)
      ******************************************************************************/
     let req1 = format!(
         r#"
   use _, _, _, eth_dos from 0x{}
 
   REQUEST(
-      eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+      eth_dos(PublicKey({}), PublicKey({}), Distance)
   )
   "#,
         batch.id().encode_hex::<String>(),
@@ -112,7 +112,7 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     pod.pod.verify().unwrap();
 
     /******************************************************************************
-     * Request: eth_dos(alice, bob, ?Distance)
+     * Request: eth_dos(alice, bob, Distance)
      ******************************************************************************/
 
     let edb_builder = edb::ImmutableEdbBuilder::new();
@@ -126,7 +126,7 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     use _, _, _, eth_dos from 0x{}
   
     REQUEST(
-        eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+        eth_dos(PublicKey({}), PublicKey({}), Distance)
     )
     "#,
         batch.id().encode_hex::<String>(),
@@ -163,7 +163,7 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     pod.pod.verify().unwrap();
 
     /******************************************************************************
-     * Request: eth_dos(alice, charlie, ?Distance)
+     * Request: eth_dos(alice, charlie, Distance)
      ******************************************************************************/
 
     let edb_builder = edb::ImmutableEdbBuilder::new();
@@ -182,7 +182,7 @@ fn engine_ethdos_end_to_end() -> Result<(), String> {
     use _, _, _, eth_dos from 0x{}
   
     REQUEST(
-        eth_dos(PublicKey({}), PublicKey({}), ?Distance)
+        eth_dos(PublicKey({}), PublicKey({}), Distance)
     )
     "#,
         batch.id().encode_hex::<String>(),

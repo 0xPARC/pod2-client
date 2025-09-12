@@ -72,7 +72,7 @@ mod tests {
             |a, b| if a >= b { Some(a) } else { None },
             "MaxOf",
         );
-        let args = args_from("REQUEST(MaxOf(?X, 3, 7))");
+        let args = args_from("REQUEST(MaxOf(X, 3, 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
@@ -128,8 +128,8 @@ mod tests {
             |a, b| if a >= b { Some(a) } else { None },
             "MaxOf",
         );
-        // MaxOf(7, ?B, 3): max(B, 3) = 7, so B = 7
-        let args = args_from("REQUEST(MaxOf(7, ?B, 3))");
+        // MaxOf(7, B, 3): max(B, 3) = 7, so B = 7
+        let args = args_from("REQUEST(MaxOf(7, B, 3))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
@@ -149,8 +149,8 @@ mod tests {
             |a, b| if a >= b { Some(a) } else { None },
             "MaxOf",
         );
-        // MaxOf(7, 3, ?C): max(3, C) = 7, so C = 7
-        let args = args_from("REQUEST(MaxOf(7, 3, ?C))");
+        // MaxOf(7, 3, C): max(3, C) = 7, so C = 7
+        let args = args_from("REQUEST(MaxOf(7, 3, C))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
@@ -170,8 +170,8 @@ mod tests {
             |a, b| if a >= b { Some(a) } else { None },
             "MaxOf",
         );
-        // MaxOf(3, ?B, 7): max(B, 7) = 3, impossible since max must be >= 7
-        let args = args_from("REQUEST(MaxOf(3, ?B, 7))");
+        // MaxOf(3, B, 7): max(B, 7) = 3, impossible since max must be >= 7
+        let args = args_from("REQUEST(MaxOf(3, B, 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Contradiction => {}
@@ -189,8 +189,8 @@ mod tests {
             |a, b| if a >= b { Some(a) } else { None },
             "MaxOf",
         );
-        // MaxOf(3, 7, ?C): max(7, C) = 3, impossible since max must be >= 7
-        let args = args_from("REQUEST(MaxOf(3, 7, ?C))");
+        // MaxOf(3, 7, C): max(7, C) = 3, impossible since max must be >= 7
+        let args = args_from("REQUEST(MaxOf(3, 7, C))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Contradiction => {}
@@ -207,7 +207,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = CopyMaxOfHandler;
         // Match first two, bind third
-        let args = args_from("REQUEST(MaxOf(7, 3, ?Z))");
+        let args = args_from("REQUEST(MaxOf(7, 3, Z))");
 
         let res = handler.propagate(&args, &mut store, &edb);
         match res {

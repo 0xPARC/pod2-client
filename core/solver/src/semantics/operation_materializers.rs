@@ -280,7 +280,7 @@ fn materialize_equal_from_entries_with_deduction(
     }
 
     let deduced_args = match (&args[0], &args[1]) {
-        // ?X == bound -> bind ?X
+        // X == bound -> bind X
         (None, Some(vr1)) => {
             if let ValueRef::Key(_) = vr1 {
                 // If the bound argument is an anchored key, we can set the
@@ -291,7 +291,7 @@ fn materialize_equal_from_entries_with_deduction(
                 Some(vec![vr1.clone(), vr1.clone()])
             }
         }
-        // bound == ?Y -> bind ?Y
+        // bound == Y -> bind Y
         (Some(vr0), None) => {
             if let ValueRef::Key(_) = vr0 {
                 db.value_ref_to_value(vr0)
@@ -633,7 +633,7 @@ fn materialize_sum_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
 
     // Try deduction with free args first
     let deduced_args = match (&args[0], &args[1], &args[2]) {
-        // SumOf(?x, 5, 10) -> x = 15
+        // SumOf(x, 5, 10) -> x = 15
         (None, Some(vr1), Some(vr2)) => {
             if let (Some(i1), Some(i2)) = (int(vr1), int(vr2)) {
                 Some(vec![ValueRef::from(i1 + i2), vr1.clone(), vr2.clone()])
@@ -641,7 +641,7 @@ fn materialize_sum_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                 None
             }
         }
-        // SumOf(15, ?y, 10) -> y = 5
+        // SumOf(15, y, 10) -> y = 5
         (Some(vr0), None, Some(vr2)) => {
             if let (Some(i0), Some(i2)) = (int(vr0), int(vr2)) {
                 Some(vec![vr0.clone(), ValueRef::from(i0 - i2), vr2.clone()])
@@ -649,7 +649,7 @@ fn materialize_sum_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                 None
             }
         }
-        // SumOf(15, 5, ?z) -> z = 10
+        // SumOf(15, 5, z) -> z = 10
         (Some(vr0), Some(vr1), None) => {
             if let (Some(i0), Some(i1)) = (int(vr0), int(vr1)) {
                 Some(vec![vr0.clone(), vr1.clone(), ValueRef::from(i0 - i1)])
@@ -694,7 +694,7 @@ fn materialize_product_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact
 
     // Try deduction with free args first
     let deduced_args = match (&args[0], &args[1], &args[2]) {
-        // ProductOf(?x, 5, 10) -> x = 50
+        // ProductOf(x, 5, 10) -> x = 50
         (None, Some(vr1), Some(vr2)) => {
             if let (Some(i1), Some(i2)) = (int(vr1), int(vr2)) {
                 Some(vec![ValueRef::from(i1 * i2), vr1.clone(), vr2.clone()])
@@ -702,7 +702,7 @@ fn materialize_product_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact
                 None
             }
         }
-        // ProductOf(50, ?y, 10) -> y = 5
+        // ProductOf(50, y, 10) -> y = 5
         (Some(vr0), None, Some(vr2)) => {
             if let (Some(i0), Some(i2)) = (int(vr0), int(vr2)) {
                 if i2 != 0 {
@@ -714,7 +714,7 @@ fn materialize_product_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact
                 None
             }
         }
-        // ProductOf(50, 5, ?z) -> z = 10
+        // ProductOf(50, 5, z) -> z = 10
         (Some(vr0), Some(vr1), None) => {
             if let (Some(i0), Some(i1)) = (int(vr0), int(vr1)) {
                 if i1 != 0 {
@@ -763,7 +763,7 @@ fn materialize_max_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
 
     // Try deduction with free args first
     let deduced_args = match (&args[0], &args[1], &args[2]) {
-        // MaxOf(?x, 5, 10) -> x = 10
+        // MaxOf(x, 5, 10) -> x = 10
         (None, Some(vr1), Some(vr2)) => {
             if let (Some(i1), Some(i2)) = (int(vr1), int(vr2)) {
                 Some(vec![ValueRef::from(i1.max(i2)), vr1.clone(), vr2.clone()])
@@ -771,7 +771,7 @@ fn materialize_max_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                 None
             }
         }
-        // MaxOf(10, ?y, 10) -> y could be anything <= 10, but we'll use the max value for consistency
+        // MaxOf(10, y, 10) -> y could be anything <= 10, but we'll use the max value for consistency
         (Some(vr0), None, Some(vr2)) => {
             if let (Some(i0), Some(i2)) = (int(vr0), int(vr2)) {
                 Some(vec![vr0.clone(), ValueRef::from(i0.max(i2)), vr2.clone()])
@@ -779,7 +779,7 @@ fn materialize_max_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                 None
             }
         }
-        // MaxOf(10, 10, ?z) -> z could be anything <= 10
+        // MaxOf(10, 10, z) -> z could be anything <= 10
         (Some(vr0), Some(vr1), None) => {
             if let (Some(i0), Some(i1)) = (int(vr0), int(vr1)) {
                 Some(vec![vr0.clone(), vr1.clone(), ValueRef::from(i0.max(i1))])
@@ -817,7 +817,7 @@ fn materialize_hash_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
 
     // Try deduction with free args first
     let deduced_args = match (&args[0], &args[1], &args[2]) {
-        // HashOf(?x, 5, 10) -> x = hash(5, 10)
+        // HashOf(x, 5, 10) -> x = hash(5, 10)
         (None, Some(vr1), Some(vr2)) => {
             if let (Some(val1), Some(val2)) =
                 (db.value_ref_to_value(vr1), db.value_ref_to_value(vr2))
@@ -831,12 +831,12 @@ fn materialize_hash_of(args: &[Option<ValueRef>], db: &FactDB) -> Option<Fact> {
                 None
             }
         }
-        // HashOf(hash_val, ?y, 10) -> y = ? (cannot easily reverse hash)
+        // HashOf(hash_val, y, 10) -> y = ? (cannot easily reverse hash)
         (Some(_vr0), None, Some(_vr2)) => {
             // Cannot easily reverse hash functions, so we don't support this deduction
             None
         }
-        // HashOf(hash_val, 5, ?z) -> z = ? (cannot easily reverse hash)
+        // HashOf(hash_val, 5, z) -> z = ? (cannot easily reverse hash)
         (Some(_vr0), Some(_vr1), None) => {
             // Cannot easily reverse hash functions, so we don't support this deduction
             None

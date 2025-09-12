@@ -446,20 +446,20 @@ mod tests {
         ).unwrap();
         let query = r#"
         identity_verified(username, identity_pod) = AND(
-            Equal(?identity_pod["username"], ?username)
+            Equal(identity_pod["username"], username)
         )
 
         upvote_verified(content_hash, upvote_pod) = AND(
-            Equal(?upvote_pod["content_hash"], ?content_hash)
-            Equal(?upvote_pod["request_type"], "upvote")
+            Equal(upvote_pod["content_hash"], content_hash)
+            Equal(upvote_pod["request_type"], "upvote")
         )
 
         upvote_verification(username, content_hash, identity_server_pk, private: identity_pod, upvote_pod, upvote_pod_signer) = AND(
-            identity_verified(?username, ?identity_pod)
-            upvote_verified(?content_hash, ?upvote_pod)
-            SignedBy(?identity_pod, ?identity_server_pk)
-            SignedBy(?upvote_pod, ?upvote_pod_signer)
-            Equal(?identity_pod["user_public_key"], ?upvote_pod_signer)
+            identity_verified(username, identity_pod)
+            upvote_verified(content_hash, upvote_pod)
+            SignedBy(identity_pod, identity_server_pk)
+            SignedBy(upvote_pod, upvote_pod_signer)
+            Equal(identity_pod["user_public_key"], upvote_pod_signer)
         )
         
 

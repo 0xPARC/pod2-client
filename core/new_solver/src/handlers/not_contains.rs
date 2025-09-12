@@ -194,7 +194,7 @@ mod tests {
             .build();
         let mut store = ConstraintStore::default();
         let handler = CopyNotContainsHandler;
-        let args = args_from("REQUEST(NotContains(?R, \"missing\"))");
+        let args = args_from("REQUEST(NotContains(R, \"missing\"))");
         match handler.propagate(&args, &mut store, &edb) {
             PropagatorResult::Choices { alternatives } => {
                 assert!(alternatives.iter().any(|ch| ch
@@ -219,7 +219,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(r));
         let handler = NotContainsFromEntriesHandler;
-        let args = args_from("REQUEST(NotContains(?R, \"missing\"))");
+        let args = args_from("REQUEST(NotContains(R, \"missing\"))");
         match handler.propagate(&args, &mut store, &edb) {
             PropagatorResult::Entailed { .. } => {}
             other => panic!("unexpected: {other:?}"),
@@ -239,7 +239,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(r));
         let handler = NotContainsFromEntriesHandler;
-        let args = args_from("REQUEST(NotContains(?R, \"y\"))");
+        let args = args_from("REQUEST(NotContains(R, \"y\"))");
         match handler.propagate(&args, &mut store, &edb) {
             PropagatorResult::Contradiction => {}
             other => panic!("unexpected: {other:?}"),
@@ -251,7 +251,7 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = NotContainsFromEntriesHandler;
-        let args = args_from("REQUEST(NotContains(?R, \"k\"))");
+        let args = args_from("REQUEST(NotContains(R, \"k\"))");
         match handler.propagate(&args, &mut store, &edb) {
             PropagatorResult::Suspend { on } => assert!(on.contains(&0)),
             other => panic!("unexpected: {other:?}"),

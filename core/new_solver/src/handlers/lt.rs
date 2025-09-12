@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn lt_from_entries_ak_lit_generated() {
-        // Lt(?R["k"], 10) with bound root and full dict k:7
+        // Lt(R["k"], 10) with bound root and full dict k:7
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -88,7 +88,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));
         let handler = BinaryComparisonHandler::new(|a, b| a < b, "Lt");
-        let args = args_from("REQUEST(Lt(?R[\"k\"], 10))");
+        let args = args_from("REQUEST(Lt(R[\"k\"], 10))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn lt_from_entries_ak_ak_both_bound() {
-        // Lt(?L["a"], ?R["b"]) with both bound and 3 < 5
+        // Lt(L["a"], R["b"]) with both bound and 3 < 5
         let params = Params::default();
         let dl = Dictionary::new(
             params.max_depth_mt_containers,
@@ -127,7 +127,7 @@ mod tests {
         store.bindings.insert(0, Value::from(rl));
         store.bindings.insert(1, Value::from(rr));
         let handler = BinaryComparisonHandler::new(|a, b| a < b, "Lt");
-        let args = args_from(r#"REQUEST(Lt(?L["a"], ?R["b"]))"#);
+        let args = args_from(r#"REQUEST(Lt(L["a"], R["b"]))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -140,11 +140,11 @@ mod tests {
 
     #[test]
     fn lt_from_entries_suspend_unbound() {
-        // Lt(?L["a"], 10) with unbound left root should suspend
+        // Lt(L["a"], 10) with unbound left root should suspend
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = BinaryComparisonHandler::new(|a, b| a < b, "Lt");
-        let args = args_from("REQUEST(Lt(?L[\"a\"], 10))");
+        let args = args_from("REQUEST(Lt(L[\"a\"], 10))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => assert!(on.contains(&0)),
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn copy_lt_binds_value_from_left_ak_when_root_bound() {
-        // Given Lt(R["k"], 10) in EDB, CopyLt should bind ?X when ?R bound
+        // Given Lt(R["k"], 10) in EDB, CopyLt should bind X when R bound
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -174,15 +174,15 @@ mod tests {
             .build();
 
         let mut store = ConstraintStore::default();
-        store.bindings.insert(0, Value::from(r)); // ?R
+        store.bindings.insert(0, Value::from(r)); // R
         let handler = CopyLtHandler;
-        let args = args_from(r#"REQUEST(Lt(?R["k"], ?X))"#);
+        let args = args_from(r#"REQUEST(Lt(R["k"], X))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
                 assert_eq!(alternatives.len(), 1);
                 let ch = &alternatives[0];
-                assert_eq!(ch.bindings[0].0, 1); // ?X index
+                assert_eq!(ch.bindings[0].0, 1); // X index
                 assert_eq!(ch.bindings[0].1, Value::from(10));
             }
             other => panic!("unexpected result: {other:?}"),
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn copy_lt_binds_root_from_right_ak_when_value_bound() {
-        // Given Lt(10, R["k"]) in EDB, CopyLt should bind ?R when ?X bound
+        // Given Lt(10, R["k"]) in EDB, CopyLt should bind R when X bound
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -211,9 +211,9 @@ mod tests {
             .build();
 
         let mut store = ConstraintStore::default();
-        store.bindings.insert(0, Value::from(10)); // ?X left
+        store.bindings.insert(0, Value::from(10)); // X left
         let handler = CopyLtHandler;
-        let args = args_from(r#"REQUEST(Lt(?X, ?R["k"]))"#);
+        let args = args_from(r#"REQUEST(Lt(X, R["k"]))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn copy_lt_binds_both_wildcards_from_vv_fact() {
-        // Lt(?X, ?Y) should bind both from Lt(3, 5) fact
+        // Lt(X, Y) should bind both from Lt(3, 5) fact
         let src = PodRef(test_helpers::root("s"));
         let edb = ImmutableEdbBuilder::new()
             .add_statement_for_test(Statement::Lt(3.into(), 5.into()), src.clone())
@@ -236,7 +236,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = CopyLtHandler;
-        let args = args_from("REQUEST(Lt(?X, ?Y))");
+        let args = args_from("REQUEST(Lt(X, Y))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn copy_lt_binds_one_wildcard_from_vv_partial() {
-        // Lt(?X, 5) binds ?X from Lt(3,5); Lt(3, ?Y) binds ?Y from Lt(3,5)
+        // Lt(X, 5) binds X from Lt(3,5); Lt(3, Y) binds Y from Lt(3,5)
         let src = PodRef(test_helpers::root("s"));
         let edb = ImmutableEdbBuilder::new()
             .add_statement_for_test(Statement::Lt(3.into(), 5.into()), src.clone())
@@ -263,7 +263,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = CopyLtHandler;
-        let args1 = args_from("REQUEST(Lt(?X, 5))");
+        let args1 = args_from("REQUEST(Lt(X, 5))");
         let res1 = handler.propagate(&args1, &mut store, &edb);
         match res1 {
             PropagatorResult::Choices { alternatives } => {
@@ -275,7 +275,7 @@ mod tests {
             other => panic!("unexpected result: {other:?}"),
         }
 
-        let args2 = args_from("REQUEST(Lt(3, ?Y))");
+        let args2 = args_from("REQUEST(Lt(3, Y))");
         let res2 = handler.propagate(&args2, &mut store, &edb);
         match res2 {
             PropagatorResult::Choices { alternatives } => {

@@ -26,20 +26,20 @@ use super::{MainPodError, MainPodResult};
 pub fn get_delete_verification_predicate() -> String {
     r#"
         identity_verified(username, identity_pod) = AND(
-            Equal(?identity_pod["username"], ?username)
+            Equal(identity_pod["username"], username)
         )
 
         document_verified(data, timestamp_pod, private: identity_pod, document_pod) = AND(
-            Equal(?document_pod["request_type"], "delete")
-            Equal(?document_pod["data"], ?data)
-            Equal(?document_pod["timestamp_pod"], ?timestamp_pod)
-            SignedBy(?document_pod, ?identity_pod["user_public_key"])
+            Equal(document_pod["request_type"], "delete")
+            Equal(document_pod["data"], data)
+            Equal(document_pod["timestamp_pod"], timestamp_pod)
+            SignedBy(document_pod, identity_pod["user_public_key"])
         )
 
         delete_verified(username, data, identity_server_pk, timestamp_pod, private: identity_pod, document_pod) = AND(
-            identity_verified(?username, ?identity_pod)
-            document_verified(?data, ?timestamp_pod)
-            SignedBy(?identity_pod, ?identity_server_pk)
+            identity_verified(username, identity_pod)
+            document_verified(data, timestamp_pod)
+            SignedBy(identity_pod, identity_server_pk)
         )
     "#.to_string()
 }

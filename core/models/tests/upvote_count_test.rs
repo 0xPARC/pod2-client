@@ -72,20 +72,20 @@ fn test_simple_upvote_count() {
     // Create a simple predicate that just does counting without verification
     let simple_predicate = r#"
     upvote_count_base(count, content_hash, private: data_pod) = AND(
-        Equal(?count, 0)
-        Equal(?data_pod["content_hash"], ?content_hash)
+        Equal(count, 0)
+        Equal(data_pod["content_hash"], content_hash)
     )
 
     upvote_count_ind(count, content_hash, private: data_pod, intermed) = AND(
-        upvote_count(?intermed, ?content_hash)
-        SumOf(?count, ?intermed, 1)
-        Equal(?data_pod["content_hash"], ?content_hash)
-        Lt(0, ?count)
+        upvote_count(intermed, content_hash)
+        SumOf(count, intermed, 1)
+        Equal(data_pod["content_hash"], content_hash)
+        Lt(0, count)
     )
 
     upvote_count(count, content_hash) = OR(
-        upvote_count_base(?count, ?content_hash)
-        upvote_count_ind(?count, ?content_hash)
+        upvote_count_base(count, content_hash)
+        upvote_count_ind(count, content_hash)
     )
     "#;
 

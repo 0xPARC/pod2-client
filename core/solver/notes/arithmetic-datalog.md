@@ -8,14 +8,14 @@ The POD2 solver encountered infinite loops when evaluating recursive predicates 
 
 ```
 upvote_count_ind(count, content_hash, private: data_pod, intermed) = AND(
-    upvote_count(?intermed, ?content_hash)
-    SumOf(?count, ?intermed, 1)
-    Equal(?data_pod["content_hash"], ?content_hash)
-    Lt(0, ?count)  // Should prevent recursion when count <= 0
+    upvote_count(intermed, content_hash)
+    SumOf(count, intermed, 1)
+    Equal(data_pod["content_hash"], content_hash)
+    Lt(0, count)  // Should prevent recursion when count <= 0
 )
 ```
 
-**Expected behavior**: Recursion should stop when `count <= 0` due to the `Lt(0, ?count)` constraint.
+**Expected behavior**: Recursion should stop when `count <= 0` due to the `Lt(0, count)` constraint.
 
 **Actual behavior**: Infinite recursion continues with negative count values: `1 → 0 → -1 → -2 → -3 → ...`
 
@@ -78,21 +78,21 @@ fn should_generate_magic_goal(
 
 #### 1. SumOf with Two Free Variables
 ```rust
-some_pred(?x, ?y) :- other_pred(?z), SumOf(?x, ?y, ?z), Lt(0, ?x)
+some_pred(x, y) :- other_pred(z), SumOf(x, y, z), Lt(0, x)
 ```
-**Handling**: Can't evaluate `SumOf(?x, ?y, ?z)` with multiple free variables → fall back to current behavior
+**Handling**: Can't evaluate `SumOf(x, y, z)` with multiple free variables → fall back to current behavior
 
 #### 2. Equal with Free Variables  
 ```rust
-some_pred(?x) :- other_pred(?y), Equal(?x, ?y), Lt(0, ?x)
+some_pred(x) :- other_pred(y), Equal(x, y), Lt(0, x)
 ```
-**Handling**: If `?y` is bound → can evaluate; if `?y` is free → fall back
+**Handling**: If `y` is bound → can evaluate; if `y` is free → fall back
 
 #### 3. Complex Constraint Chains
 ```rust
-some_pred(?a, ?b) :- other_pred(?c), SumOf(?a, ?c, 1), SumOf(?b, ?a, 2), Lt(0, ?b)
+some_pred(a, b) :- other_pred(c), SumOf(a, c, 1), SumOf(b, a, 2), Lt(0, b)
 ```
-**Handling**: If `?c` is bound → can evaluate entire chain; otherwise fall back
+**Handling**: If `c` is bound → can evaluate entire chain; otherwise fall back
 
 ### Limitations and Trade-offs
 
@@ -123,7 +123,7 @@ some_pred(?a, ?b) :- other_pred(?c), SumOf(?a, ?c, 1), SumOf(?b, ?a, 2), Lt(0, ?
 
 ### Testing Strategy
 
-Primary test case: `upvote_count` recursive predicate with `Lt(0, ?count)` constraint
+Primary test case: `upvote_count` recursive predicate with `Lt(0, count)` constraint
 - **Before fix**: Infinite loop with negative count values
 - **After fix**: Recursion terminates when count reaches 0
 

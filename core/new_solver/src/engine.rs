@@ -1601,11 +1601,11 @@ mod tests {
         register_lt_handlers(&mut reg);
         crate::handlers::lteq::register_lteq_handlers(&mut reg);
 
-        // Build goals via parser: Equal(?R["k"], 1) and Lt(?R["x"], 10)
+        // Build goals via parser: Equal(R["k"], 1) and Lt(R["x"], 10)
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
-                Lt(?R["x"], 10)
+                Equal(R["k"], 1)
+                Lt(R["x"], 10)
             )"#,
             &Params::default(),
             &[],
@@ -1633,7 +1633,7 @@ mod tests {
                 .map(|v| v.raw() == Value::from(root).raw())
                 .unwrap_or(false)
         });
-        assert!(any_matches, "no answer bound ?R to the expected root");
+        assert!(any_matches, "no answer bound R to the expected root");
 
         // Check that premises include Equal(R["k"],1) and Lt(R["x"],10)
         use pod2::middleware::{AnchoredKey, Statement, ValueRef};
@@ -1687,7 +1687,7 @@ mod tests {
 
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -1704,7 +1704,7 @@ mod tests {
 
     #[test]
     fn engine_fair_delivery_interleaves_with_independent_goal() {
-        // Many roots for k:1 to create a large table of answers, and a separate small goal Equal(?S["x"],3).
+        // Many roots for k:1 to create a large table of answers, and a separate small goal Equal(S["x"],3).
         let params = Params::default();
         let mut builder = ImmutableEdbBuilder::new();
         // Add 20 distinct roots with k:1 (make roots unique by adding a varying filler key)
@@ -1735,20 +1735,20 @@ mod tests {
         // Custom predicate enumerates all roots with k:1 via entries
         let program = r#"
             make_r(R) = AND(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )
 
             REQUEST(
-                make_r(?R)
+                make_r(R)
             )
         "#;
         let processed = parse(program, &Params::default(), &[]).expect("parse ok");
         let mut engine = Engine::new(&reg, &edb);
         engine.load_processed(&processed);
-        // Also enqueue an independent goal Equal(?S["x"], 3)
+        // Also enqueue an independent goal Equal(S["x"], 3)
         let processed2 = parse(
             r#"REQUEST(
-                Equal(?S["x"], 3)
+                Equal(S["x"], 3)
             )"#,
             &Params::default(),
             &[],
@@ -1790,7 +1790,7 @@ mod tests {
         }
         assert!(
             saw_equal_s,
-            "independent Equal(?S[\"x\"],3) should complete under fanout caps"
+            "independent Equal(S[\"x\"],3) should complete under fanout caps"
         );
     }
 
@@ -1864,7 +1864,7 @@ mod tests {
         let _ = fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .try_init();
-        // Build 5 roots each with k:1; query Equal(?R["k"], 1). Ordering should be stable across runs.
+        // Build 5 roots each with k:1; query Equal(R["k"], 1). Ordering should be stable across runs.
         let params = Params::default();
         let mut builder = ImmutableEdbBuilder::new();
         let mut roots = Vec::new();
@@ -1886,7 +1886,7 @@ mod tests {
 
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -1945,7 +1945,7 @@ mod tests {
 
     #[test]
     fn engine_propagates_calling_context_constraints_into_subcall() {
-        // Parent has Lt(?A, 20); subcall binds ?A via Equal from entries
+        // Parent has Lt(A, 20); subcall binds A via Equal from entries
         let params = Params::default();
         // Two dicts: one satisfies A=15 (<20), another violates A=25
         let d_ok = Dictionary::new(
@@ -1970,17 +1970,17 @@ mod tests {
         register_lt_handlers(&mut reg);
         register_lteq_handlers(&mut reg);
 
-        // Define helper AND that ties A to R["x"], then call it under top-level Lt(?A,20)
-        // and Equal(?R["x"], 15) to ground the subcall.
+        // Define helper AND that ties A to R["x"], then call it under top-level Lt(A,20)
+        // and Equal(R["x"], 15) to ground the subcall.
         let input = r#"
             helper(A, R) = AND(
-                Equal(?R["x"], ?A)
+                Equal(R["x"], A)
             )
 
             REQUEST(
-                Lt(?A, 20)
-                Equal(?R["x"], 15)
-                helper(?A, ?R)
+                Lt(A, 20)
+                Equal(R["x"], 15)
+                helper(A, R)
             )
         "#;
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2016,15 +2016,15 @@ mod tests {
         register_equal_handlers(&mut reg);
         register_lt_handlers(&mut reg);
 
-        // The Lt(?Z, 5) constraint mentions ?Z which is not in helper's head → must not be propagated
+        // The Lt(Z, 5) constraint mentions Z which is not in helper's head → must not be propagated
         let input = r#"
             helper(A, R) = AND(
-                Equal(?R["x"], ?A)
+                Equal(R["x"], A)
             )
 
             REQUEST(
-                Lt(?Z, 5)
-                helper(?A, ?R)
+                Lt(Z, 5)
+                helper(A, R)
             )
         "#;
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2051,9 +2051,9 @@ mod tests {
                 &rules[0],
             )
             .expect("frame");
-        // The first goal should be the body Equal, not the unrelated Lt(?Z,5)
+        // The first goal should be the body Equal, not the unrelated Lt(Z,5)
         let Frame { goals, .. } = frame;
-        // The propagated list should not include Lt(?Z,5) since Z is not in helper head
+        // The propagated list should not include Lt(Z,5) since Z is not in helper head
         use pod2::middleware::NativePredicate;
         if let Predicate::Native(NativePredicate::Lt) = goals[0].pred {
             panic!("unexpected propagation of private Lt");
@@ -2084,8 +2084,8 @@ mod tests {
         // Lt first (suspends), Equal second (binds root)
         let processed = parse(
             r#"REQUEST(
-                Lt(?R["x"], 10)
-                Equal(?R["k"], 1)
+                Lt(R["x"], 10)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -2114,7 +2114,7 @@ mod tests {
                 .map(|v| v.raw() == Value::from(root).raw())
                 .unwrap_or(false)
         });
-        assert!(any_matches, "no answer bound ?R to expected root");
+        assert!(any_matches, "no answer bound R to expected root");
 
         // Check that premises include both steps
         use pod2::middleware::{AnchoredKey, Statement, ValueRef};
@@ -2153,13 +2153,13 @@ mod tests {
 
     #[test]
     fn engine_single_frame_suspends_when_no_progress() {
-        // Single goal: Lt(?R["x"], 10) with no other goal to bind ?R → should park the frame
+        // Single goal: Lt(R["x"], 10) with no other goal to bind R → should park the frame
         let edb = ImmutableEdbBuilder::new().build();
         let mut reg = OpRegistry::default();
         register_lt_handlers(&mut reg);
         let processed = parse(
             r#"REQUEST(
-                Lt(?R["x"], 10)
+                Lt(R["x"], 10)
             )"#,
             &Params::default(),
             &[],
@@ -2182,7 +2182,7 @@ mod tests {
         assert_eq!(
             engine.sched.parked.len(),
             1,
-            "frame should be parked waiting on ?R"
+            "frame should be parked waiting on R"
         );
     }
 
@@ -2201,11 +2201,11 @@ mod tests {
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
 
-        // Single goal Equal(?R["k"], 1) should bind ?R to root. Two internal choices exist;
+        // Single goal Equal(R["k"], 1) should bind R to root. Two internal choices exist;
         // engine must dedup and prefer the GeneratedContains-based proof.
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -2289,14 +2289,14 @@ mod tests {
         // Alternative path: define predicate and request in a single Podlang program
         let input = r#"
             my_pred(A, R, C) = AND(
-                Lt(?A, 50)
-                Equal(?R["some_key"], ?A)
-                Equal(?C["other_key"], ?A)
-                SumOf(?R["some_key"], 19, 1)
+                Lt(A, 50)
+                Equal(R["some_key"], A)
+                Equal(C["other_key"], A)
+                SumOf(R["some_key"], 19, 1)
             )
 
             REQUEST(
-                my_pred(?A, ?R, ?C)
+                my_pred(A, R, C)
             )
         "#;
         let processed2 = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2366,12 +2366,12 @@ mod tests {
         // Define disjunctive predicate and request
         let input = r#"
             my_pred(R) = OR(
-                Equal(?R["a"], 1)
-                Equal(?R["a"], 2)
+                Equal(R["a"], 1)
+                Equal(R["a"], 2)
             )
 
             REQUEST(
-                my_pred(?R)
+                my_pred(R)
             )
         "#;
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2380,7 +2380,7 @@ mod tests {
         let cpr = CustomPredicateRef::new(processed.custom_batch.clone(), 0);
         engine.run().expect("run ok");
 
-        // Expect two answers binding ?R to r1 and r2
+        // Expect two answers binding R to r1 and r2
         let roots: std::collections::HashSet<_> = engine
             .answers
             .iter()
@@ -2420,20 +2420,20 @@ mod tests {
         let mut reg = OpRegistry::default();
         register_equal_handlers(&mut reg);
 
-        // helper(R) = AND(Equal(?R["x"], 7))
-        // my_pred(R) = OR(helper(?R), Equal(?R["x"], 8))
+        // helper(R) = AND(Equal(R["x"], 7))
+        // my_pred(R) = OR(helper(R), Equal(R["x"], 8))
         let input = r#"
             helper(R) = AND(
-                Equal(?R["x"], 7)
+                Equal(R["x"], 7)
             )
 
             my_pred(R) = OR(
-                helper(?R)
-                Equal(?R["x"], 8)
+                helper(R)
+                Equal(R["x"], 8)
             )
 
             REQUEST(
-                my_pred(?R)
+                my_pred(R)
             )
         "#;
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2451,7 +2451,7 @@ mod tests {
 
     #[test]
     fn engine_with_immutable_edb_equal_from_entries() {
-        // Build an immutable EDB with a full dictionary containing k:1 and prove Equal(?R["k"], 1)
+        // Build an immutable EDB with a full dictionary containing k:1 and prove Equal(R["k"], 1)
         use crate::edb::ImmutableEdbBuilder;
 
         let params = Params::default();
@@ -2468,7 +2468,7 @@ mod tests {
 
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -2488,7 +2488,7 @@ mod tests {
 
     #[test]
     fn engine_with_immutable_edb_equal_from_signed_dict() {
-        // Build an immutable EDB with a signed dictionary containing k:1 and prove Equal(?R["k"], 1)
+        // Build an immutable EDB with a signed dictionary containing k:1 and prove Equal(R["k"], 1)
         use crate::edb::ImmutableEdbBuilder;
 
         let params = Params::default();
@@ -2505,7 +2505,7 @@ mod tests {
 
         let processed = parse(
             r#"REQUEST(
-                Equal(?R["k"], 1)
+                Equal(R["k"], 1)
             )"#,
             &Params::default(),
             &[],
@@ -2530,7 +2530,7 @@ mod tests {
         // Define a predicate that we cannot deduce for A=10 via its rule, but exists in EDB as a custom row.
         let program = r#"
             my_pred(A) = AND(
-                Equal(?A, 9999) // prevents rule-based deduction for A=10
+                Equal(A, 9999) // prevents rule-based deduction for A=10
             )
 
             REQUEST(
@@ -2546,7 +2546,7 @@ mod tests {
             .add_statement_for_test(Statement::Custom(cpr.clone(), vec![V::from(10)]), fake_src)
             .build();
 
-        // No handlers needed for the failing Equal(?A,9999) since it won't match
+        // No handlers needed for the failing Equal(A,9999) since it won't match
         let reg = OpRegistry::default();
 
         let mut engine = Engine::new(&reg, &edb);
@@ -2583,7 +2583,7 @@ mod tests {
         // Predicate can be deduced (A bound by SumOf), and also exists in the EDB.
         let program = r#"
             my_pred(A) = AND(
-                SumOf(?A, 7, 3)
+                SumOf(A, 7, 3)
             )
 
             REQUEST(
@@ -2634,7 +2634,7 @@ mod tests {
 
     #[test]
     fn engine_custom_or_rejects_self_recursion() {
-        // Bad(R) = OR(Bad(?R), Equal(?R["y"], 1)) should reject the recursive branch and still solve via Equal
+        // Bad(R) = OR(Bad(R), Equal(R["y"], 1)) should reject the recursive branch and still solve via Equal
         let params = Params::default();
         let d = Dictionary::new(
             params.max_depth_mt_containers,
@@ -2649,12 +2649,12 @@ mod tests {
 
         let input = r#"
             Bad(R) = OR(
-                Bad(?R)
-                Equal(?R["y"], 1)
+                Bad(R)
+                Equal(R["y"], 1)
             )
 
             REQUEST(
-                Bad(?R)
+                Bad(R)
             )
         "#;
         let processed = parse(input, &Params::default(), &[]).expect("parse ok");
@@ -2686,7 +2686,7 @@ mod tests {
         // Define a self-recursive AND predicate and call it.
         let program = r#"
             bad(A) = AND(
-                bad(?A)
+                bad(A)
             )
 
             REQUEST(
@@ -2726,18 +2726,18 @@ mod tests {
 
         let program = r#"
             dec(A, B) = AND(
-                SumOf(?A, ?B, 1)
+                SumOf(A, B, 1)
             )
 
             step(N, private: M) = AND(
-                Lt(0, ?N)
-                dec(?N, ?M)
-                nat_down(?M)
+                Lt(0, N)
+                dec(N, M)
+                nat_down(M)
             )
 
             nat_down(N) = OR(
-                Equal(?N, 0)
-                step(?N)
+                Equal(N, 0)
+                step(N)
             )
 
             REQUEST(
@@ -2786,24 +2786,24 @@ mod tests {
 
         let program = r#"
             dec(A, B) = AND(
-                SumOf(?A, ?B, 1)
+                SumOf(A, B, 1)
             )
 
             even_step(N, private: M) = AND(
-                Lt(0, ?N)
-                dec(?N, ?M)
-                odd(?M)
+                Lt(0, N)
+                dec(N, M)
+                odd(M)
             )
 
             even(N) = OR(
-                Equal(?N, 0)
-                even_step(?N)
+                Equal(N, 0)
+                even_step(N)
             )
 
             odd(N, private: M) = AND(
-                Lt(0, ?N)
-                dec(?N, ?M)
-                even(?M)
+                Lt(0, N)
+                dec(N, M)
+                even(M)
             )
 
             REQUEST(

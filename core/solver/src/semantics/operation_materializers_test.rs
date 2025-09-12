@@ -330,7 +330,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::SumOf;
 
-        // SumOf(?x, 5, 10) -> x = 15
+        // SumOf(x, 5, 10) -> x = 15
         let args = vec![None, Some(val_ref_int(5)), Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::SumOf);
 
@@ -346,7 +346,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::SumOf;
 
-        // SumOf(15, ?y, 10) -> y = 5
+        // SumOf(15, y, 10) -> y = 5
         let args = vec![Some(val_ref_int(15)), None, Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::SumOf);
 
@@ -362,7 +362,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::SumOf;
 
-        // SumOf(15, 5, ?z) -> z = 10
+        // SumOf(15, 5, z) -> z = 10
         let args = vec![Some(val_ref_int(15)), Some(val_ref_int(5)), None];
         let result = materializer.materialize(&args, &db, NativePredicate::SumOf);
 
@@ -410,7 +410,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::ProductOf;
 
-        // ProductOf(?x, 5, 10) -> x = 50
+        // ProductOf(x, 5, 10) -> x = 50
         let args = vec![None, Some(val_ref_int(5)), Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::ProductOf);
 
@@ -426,7 +426,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::ProductOf;
 
-        // ProductOf(50, ?y, 10) -> y = 5
+        // ProductOf(50, y, 10) -> y = 5
         let args = vec![Some(val_ref_int(50)), None, Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::ProductOf);
 
@@ -442,7 +442,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::ProductOf;
 
-        // ProductOf(50, ?y, 0) -> division by zero, should fail
+        // ProductOf(50, y, 0) -> division by zero, should fail
         let args = vec![Some(val_ref_int(50)), None, Some(val_ref_int(0))];
         let result = materializer.materialize(&args, &db, NativePredicate::ProductOf);
 
@@ -475,7 +475,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::MaxOf;
 
-        // MaxOf(?x, 5, 10) -> x = 10
+        // MaxOf(x, 5, 10) -> x = 10
         let args = vec![None, Some(val_ref_int(5)), Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::MaxOf);
 
@@ -509,7 +509,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::HashOf;
 
-        // HashOf(?x, 5, 10) -> x = hash(5, 10)
+        // HashOf(x, 5, 10) -> x = hash(5, 10)
         let args = vec![None, Some(val_ref_int(5)), Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::HashOf);
 
@@ -569,7 +569,7 @@ mod tests {
         let db = create_test_db();
         let materializer = OperationMaterializer::HashOf;
 
-        // HashOf(hash_val, ?y, 10) -> cannot deduce y from hash (not supported)
+        // HashOf(hash_val, y, 10) -> cannot deduce y from hash (not supported)
         let args = vec![Some(val_ref_str("some_hash")), None, Some(val_ref_int(10))];
         let result = materializer.materialize(&args, &db, NativePredicate::HashOf);
 

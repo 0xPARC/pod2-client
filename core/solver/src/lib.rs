@@ -168,7 +168,7 @@ mod tests {
       use _, _, _, eth_dos from 0x{}
 
       REQUEST(
-          eth_dos({}, {}, ?Distance)
+          eth_dos({}, {}, Distance)
       )
       "#,
             batch.id().encode_hex::<String>(),
@@ -215,7 +215,7 @@ mod tests {
       use _, _, _, eth_dos from 0x{}
 
       REQUEST(
-          eth_dos({}, {}, ?Distance)
+          eth_dos({}, {}, Distance)
       )
       "#,
             batch.id().encode_hex::<String>(),
@@ -286,11 +286,11 @@ mod tests {
         let zukyc_request = format!(
             r#"
         REQUEST(
-            NotContains({sanction_set}, ?gov["idNumber"])
-            Lt(?gov["dateOfBirth"], {const_18y})
-            Equal(?pay["startDate"], {const_1y})
-            Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
-            Equal(?self["watermark"], 0)
+            NotContains({sanction_set}, gov["idNumber"])
+            Lt(gov["dateOfBirth"], {const_18y})
+            Equal(pay["startDate"], {const_1y})
+            Equal(gov["socialSecurityNumber"], pay["socialSecurityNumber"])
+            Equal(self["watermark"], 0)
         )
         "#
         );
@@ -344,7 +344,7 @@ mod tests {
         let sk = SecretKey::new_rand();
         let pk = sk.public_key();
         let request = parse(
-            &format!("REQUEST(PublicKeyOf({}, ?b))", Value::from(pk)),
+            &format!("REQUEST(PublicKeyOf({}, b))", Value::from(pk)),
             &params,
             &[],
         )
@@ -385,12 +385,12 @@ mod tests {
             &format!(
                 r#"
 owned_public_key(pk, pod_id, private: sk) = AND(
-    PublicKeyOf(?pk, ?sk)
-    Equal(?pod_id, SELF)
+    PublicKeyOf(pk, sk)
+    Equal(pod_id, SELF)
 )
 
 REQUEST(
-    PublicKeyOf({pk}, ?sk)
+    PublicKeyOf({pk}, sk)
     owned_public_key({pk}, SELF)
 )
             "#
