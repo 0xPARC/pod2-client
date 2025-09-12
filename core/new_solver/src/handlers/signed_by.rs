@@ -206,7 +206,7 @@ mod tests {
         store.bindings.insert(1, Value::from(pk));
 
         let handler = SignedByHandler;
-        let args = args_from("REQUEST(SignedBy(?R, ?PK))");
+        let args = args_from("REQUEST(SignedBy(R, PK))");
 
         let res = handler.propagate(&args, &mut store, &edb);
         assert!(matches!(res, PropagatorResult::Entailed { .. }));
@@ -231,7 +231,7 @@ mod tests {
         store.bindings.insert(1, Value::from(pk2));
 
         let handler = SignedByHandler;
-        let args = args_from("REQUEST(SignedBy(?R, ?PK))");
+        let args = args_from("REQUEST(SignedBy(R, PK))");
 
         let res = handler.propagate(&args, &mut store, &edb);
         assert!(matches!(res, PropagatorResult::Contradiction));
@@ -254,13 +254,13 @@ mod tests {
         store.bindings.insert(0, Value::from(root));
 
         let handler = SignedByHandler;
-        let args = args_from("REQUEST(SignedBy(?R, ?PK))");
+        let args = args_from("REQUEST(SignedBy(R, PK))");
 
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, .. } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 1); // ?PK index
+                assert_eq!(bindings[0].0, 1); // PK index
                 assert_eq!(bindings[0].1, Value::from(pk));
             }
             other => panic!("Unexpected result: {other:?}"),
@@ -272,14 +272,14 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = SignedByHandler;
-        let args = args_from("REQUEST(SignedBy(?R, ?PK))");
+        let args = args_from("REQUEST(SignedBy(R, PK))");
 
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => {
                 assert_eq!(on.len(), 2);
-                assert!(on.contains(&0)); // ?R
-                assert!(on.contains(&1)); // ?PK
+                assert!(on.contains(&0)); // R
+                assert!(on.contains(&1)); // PK
             }
             other => panic!("Unexpected result: {other:?}"),
         }

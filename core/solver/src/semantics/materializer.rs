@@ -68,13 +68,13 @@ impl MaterializeKey {
 /// to find any valid statements compatible with those bindings, with the caveat that
 /// the bindings must typically provide enough information to find relevant statements.
 ///
-/// For example, Equal(?a, ?b) where ?a and ?b are free variables is compatible with
+/// For example, Equal(a, b) where a and b are free variables is compatible with
 /// *any* Equal statement. As such, we will not materialize any statements in response
 /// to this query.
 ///
-/// However, Equal(?a["foo"], ?b["bar"]), where ?a and ?b are free variables, is
+/// However, Equal(a["foo"], b["bar"]), where a and b are free variables, is
 /// constrained by the key part, and so in this case we would materialize and Equal
-/// statement where ?a["foo"] = ?b["bar"].
+/// statement where a["foo"] = b["bar"].
 ///
 /// Predicate-specific handlers are responsible for determining whether a statement
 /// is valid, and for deducing the values of free variables.

@@ -66,7 +66,7 @@ fn propagate_arithmetic_constraints(
 
     match predicate {
         NativePredicate::Equal => {
-            // Equal(?a, ?b): if one is bound, the other becomes bound
+            // Equal(a, b): if one is bound, the other becomes bound
             if args.len() == 2 {
                 if let (Some(w1), Some(w2)) = (&arg_wildcards[0], &arg_wildcards[1]) {
                     if bound_vars.contains(w1) && !bound_vars.contains(w2) {
@@ -79,7 +79,7 @@ fn propagate_arithmetic_constraints(
         }
 
         NativePredicate::SumOf => {
-            // SumOf(?sum, ?a, ?b): if any two are bound, the third becomes bound
+            // SumOf(sum, a, b): if any two are bound, the third becomes bound
             if args.len() == 3 {
                 // Count bound arguments (wildcards that are bound + literals)
                 let bound_count = args
@@ -127,7 +127,7 @@ fn propagate_arithmetic_constraints(
         }
 
         NativePredicate::ProductOf => {
-            // ProductOf(?product, ?a, ?b): if any two are bound, the third becomes bound
+            // ProductOf(product, a, b): if any two are bound, the third becomes bound
             if args.len() == 3 {
                 // Count bound arguments (wildcards that are bound + literals)
                 let bound_count = args
@@ -256,8 +256,8 @@ impl Planner {
 
     /// Checks if this is a simple equality guard (not involving anchored keys).
     fn is_simple_equality_guard(&self, literal: &ir::Atom, bound_vars: &HashSet<Wildcard>) -> bool {
-        // Simple equality: Equal(?var, literal) or Equal(?var1, ?var2)
-        // Not involving anchored keys like Equal(?pod["key"], ?value)
+        // Simple equality: Equal(var, literal) or Equal(var1, var2)
+        // Not involving anchored keys like Equal(pod["key"], value)
         let has_anchored_keys = literal
             .terms
             .iter()
@@ -1193,11 +1193,11 @@ mod tests {
     fn test_simple_magic_set_transform() -> Result<(), lang::LangError> {
         let podlog = r#"
             is_equal(A, B) = AND(
-                Equal(?A["key"], ?B["key"])
+                Equal(A["key"], B["key"])
             )
 
             REQUEST(
-                is_equal(?Pod1, ?Pod2)
+                is_equal(Pod1, Pod2)
             )
         "#;
 
@@ -1273,11 +1273,11 @@ mod tests {
     fn test_magic_set_with_bound_variable() -> Result<(), lang::LangError> {
         let podlog = r#"
             is_friend(A, B) = AND(
-                Equal(?A["id"], ?B["id"])
+                Equal(A["id"], B["id"])
             )
 
             REQUEST(
-                is_friend("alice_pod", ?AnyFriend)
+                is_friend("alice_pod", AnyFriend)
             )
         "#;
 
@@ -1351,20 +1351,20 @@ mod tests {
     #[test]
     fn test_recursive_predicate() -> Result<(), lang::LangError> {
         let podlog = r#"
-            edge(X, Y) = AND( Equal(?X["val"], ?Y["val"]) )
+            edge(X, Y) = AND( Equal(X["val"], Y["val"]) )
 
             path(X, Y) = OR(
-                edge(?X, ?Y)
-                path_rec(?X, ?Y)
+                edge(X, Y)
+                path_rec(X, Y)
             )
 
             path_rec(X, Y, private: Z) = AND(
-                path(?X, ?Z)
-                edge(?Z, ?Y)
+                path(X, Z)
+                edge(Z, Y)
             )
 
             REQUEST(
-                path("start_node", ?End)
+                path("start_node", End)
             )
         "#;
 
@@ -1376,7 +1376,7 @@ mod tests {
         let plan = planner.create_plan(request.templates()).unwrap();
 
         // Expected outcome analysis:
-        // - 1 seed rule for _request_goal(?End) -> magic__request_goal_f().
+        // - 1 seed rule for _request_goal(End) -> magic__request_goal_f().
         // - Propagation from _request_goal to path -> magic_path_bf("start_node") :- magic__request_goal_f().
         // - Propagation from path to edge: magic_edge_bf(X) :- magic_path_bf(X).
         // - Propagation from path to path_rec: magic_path_bf(X) :- magic_path_rec_bf(X).

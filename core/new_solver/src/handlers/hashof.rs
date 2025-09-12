@@ -190,7 +190,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
-        let args = args_from("REQUEST(HashOf(?X, \"hello\", \"world\"))");
+        let args = args_from("REQUEST(HashOf(X, \"hello\", \"world\"))");
         let result = handler.propagate(&args, &mut store, &edb);
 
         match result {
@@ -223,9 +223,9 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
-        let args = args_from("REQUEST(HashOf(\"some_hash\", ?Y, \"world\"))");
+        let args = args_from("REQUEST(HashOf(\"some_hash\", Y, \"world\"))");
         let result = handler.propagate(&args, &mut store, &edb);
-        // ?Y is the first wildcard, so it gets index 0
+        // Y is the first wildcard, so it gets index 0
         assert!(matches!(result, PropagatorResult::Suspend { on } if on == vec![0]));
     }
 
@@ -235,9 +235,9 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = HashOfFromEntriesHandler;
 
-        let args = args_from("REQUEST(HashOf(\"some_hash\", \"hello\", ?Z))");
+        let args = args_from("REQUEST(HashOf(\"some_hash\", \"hello\", Z))");
         let result = handler.propagate(&args, &mut store, &edb);
-        // ?Z is the first wildcard, so it gets index 0
+        // Z is the first wildcard, so it gets index 0
         assert!(matches!(result, PropagatorResult::Suspend { on } if on == vec![0]));
     }
 
@@ -290,7 +290,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = CopyHashOfHandler;
         // Match first two, bind third
-        let args = args_from("REQUEST(HashOf(?X, \"hello\", \"world\"))");
+        let args = args_from("REQUEST(HashOf(X, \"hello\", \"world\"))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
