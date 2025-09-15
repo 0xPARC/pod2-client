@@ -158,7 +158,9 @@ pub fn proof_cost(store: &ConstraintStore) -> (usize, usize) {
                     q.push_back(p);
                 }
             }
-            OpTag::GeneratedContains { .. } | OpTag::FromLiterals => {}
+            OpTag::GeneratedContains { .. }
+            | OpTag::GeneratedPublicKeyOf { .. }
+            | OpTag::FromLiterals => {}
         }
     }
     (seen_stmts.len(), seen_inputs.len())

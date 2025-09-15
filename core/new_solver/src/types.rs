@@ -42,6 +42,12 @@ pub enum OpTag {
         key: Key,
         value: Value,
     },
+    /// A PublicKeyOf premise that is justified because the solver has the keypair
+    /// and can generate the public key from the secret key.
+    GeneratedPublicKeyOf {
+        secret_key: pod2::middleware::SecretKey,
+        public_key: pod2::middleware::PublicKey,
+    },
 }
 
 /// Provenance reference to a POD for CopyStatement.

@@ -146,8 +146,40 @@ impl OpHandler for PublicKeyOfHandler {
                 }
             }
 
-            // Case 3: Neither secret key nor public key is known. Suspend.
+            // Case 3: Neither secret key nor public key is known.
             (None, None) => {
+                // Enumeration: when both are unbound wildcards, enumerate all keypairs from the EDB
+                if let (StatementTmplArg::Wildcard(wsk), StatementTmplArg::Wildcard(wpk)) =
+                    (a_secret_key, a_public_key)
+                {
+                    if !store.bindings.contains_key(&wsk.index)
+                        && !store.bindings.contains_key(&wpk.index)
+                    {
+                        let mut alts = Vec::new();
+                        for (pk_val, sk_val) in edb.enumerate_keypairs() {
+                            // Extract the actual keypair values for the OpTag
+                            if let (Ok(sk), Ok(pk)) = (
+                                pod2::middleware::SecretKey::try_from(sk_val.typed()),
+                                pod2::middleware::PublicKey::try_from(pk_val.typed()),
+                            ) {
+                                alts.push(crate::prop::Choice {
+                                    bindings: vec![(wsk.index, sk_val), (wpk.index, pk_val)],
+                                    op_tag: OpTag::GeneratedPublicKeyOf {
+                                        secret_key: sk,
+                                        public_key: pk,
+                                    },
+                                });
+                            }
+                        }
+                        tracing::trace!(candidates = alts.len(), "PublicKeyOf enum all keypairs");
+                        return if alts.is_empty() {
+                            PropagatorResult::Contradiction
+                        } else {
+                            PropagatorResult::Choices { alternatives: alts }
+                        };
+                    }
+                }
+
                 let waits = crate::prop::wildcards_in_args(args)
                     .into_iter()
                     .filter(|i| !store.bindings.contains_key(i))
