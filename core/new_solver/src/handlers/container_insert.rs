@@ -114,27 +114,24 @@ impl OpHandler for ContainerInsertFromEntriesHandler {
             _ => None,
         };
 
-        match (new_root_value, old_root_value) {
-            (Some(new_root_value), Some(old_root_value)) => {
-                match (new_root_value.typed(), old_root_value.typed()) {
-                    (TypedValue::Dictionary(new_dict), TypedValue::Dictionary(old_dict)) => {
-                        if let Some(key) = key_from_arg(a_key, store) {
-                            return check_dict_insert_for_known_dicts(
-                                new_dict, old_dict, &key, a_val, store,
-                            );
-                        }
+        if let (Some(new_root_value), Some(old_root_value)) = (new_root_value, old_root_value) {
+            match (new_root_value.typed(), old_root_value.typed()) {
+                (TypedValue::Dictionary(new_dict), TypedValue::Dictionary(old_dict)) => {
+                    if let Some(key) = key_from_arg(a_key, store) {
+                        return check_dict_insert_for_known_dicts(
+                            new_dict, old_dict, &key, a_val, store,
+                        );
                     }
-                    (TypedValue::Set(new_set), TypedValue::Set(old_set)) => {
-                        if let Some(result) =
-                            check_set_insert_for_known_set(new_set, old_set, a_key, a_val, store)
-                        {
-                            return result;
-                        };
-                    }
-                    _ => {}
                 }
+                (TypedValue::Set(new_set), TypedValue::Set(old_set)) => {
+                    if let Some(result) =
+                        check_set_insert_for_known_set(new_set, old_set, a_key, a_val, store)
+                    {
+                        return result;
+                    };
+                }
+                _ => {}
             }
-            _ => {}
         }
 
         // Enumeration: if both roots are unbound wildcards and key/value are known, enumerate candidate root pairs
@@ -235,7 +232,7 @@ fn check_dict_insert_for_known_dicts(
     store: &ConstraintStore,
 ) -> PropagatorResult {
     // get the value from the new_dict
-    let dict_value = new_dict.get(&key);
+    let dict_value = new_dict.get(key);
     if dict_value.is_err() {
         return PropagatorResult::Contradiction;
     }
@@ -243,7 +240,7 @@ fn check_dict_insert_for_known_dicts(
 
     // insert the value into the old dict and ensure equal to new_dict
     let mut old_dict = old_dict.clone();
-    if old_dict.insert(&key, &dict_value).is_err() || *new_dict != old_dict {
+    if old_dict.insert(key, dict_value).is_err() || *new_dict != old_dict {
         return PropagatorResult::Contradiction;
     }
 

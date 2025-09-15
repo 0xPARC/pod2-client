@@ -2,6 +2,8 @@ use pod2::middleware::{
     containers::Dictionary, Key, NativePredicate, StatementTmplArg, TypedValue,
 };
 
+// Import utilities from container_insert module
+use super::container_insert::{key_from_arg, root_from_arg};
 use super::util::{arg_to_selector, handle_copy_results};
 use crate::{
     edb::{EdbView, UpdateSource},
@@ -9,9 +11,6 @@ use crate::{
     prop::PropagatorResult,
     types::{ConstraintStore, OpTag},
 };
-
-// Import utilities from container_insert module
-use super::container_insert::{key_from_arg, root_from_arg};
 
 /// Copy existing ContainerUpdate(new_root, old_root, key, value) statements from EDB.
 pub struct CopyContainerUpdateHandler;
@@ -74,21 +73,16 @@ impl OpHandler for ContainerUpdateFromEntriesHandler {
             _ => None,
         };
 
-        match (new_root_value, old_root_value) {
-            (Some(new_root_value), Some(old_root_value)) => {
-                match (new_root_value.typed(), old_root_value.typed()) {
-                    (TypedValue::Dictionary(new_dict), TypedValue::Dictionary(old_dict)) => {
-                        if let Some(key) = key_from_arg(a_key, store) {
-                            return check_dict_update_for_known_dicts(
-                                new_dict, old_dict, &key, a_value, store,
-                            );
-                        }
-                    }
-                    // Sets don't support update operations directly (they only have insert/delete)
-                    _ => {}
+        if let (Some(new_root_value), Some(old_root_value)) = (new_root_value, old_root_value) {
+            if let (TypedValue::Dictionary(new_dict), TypedValue::Dictionary(old_dict)) =
+                (new_root_value.typed(), old_root_value.typed())
+            {
+                if let Some(key) = key_from_arg(a_key, store) {
+                    return check_dict_update_for_known_dicts(
+                        new_dict, old_dict, &key, a_value, store,
+                    );
                 }
             }
-            _ => {}
         }
 
         // Enumeration: if both roots are unbound wildcards and key/value are known, enumerate candidate root pairs
@@ -190,20 +184,20 @@ fn check_dict_update_for_known_dicts(
     store: &ConstraintStore,
 ) -> PropagatorResult {
     // Get the value from the new dictionary (this is the new value that was updated)
-    let new_dict_value = new_dict.get(&key);
+    let new_dict_value = new_dict.get(key);
     if new_dict_value.is_err() {
         return PropagatorResult::Contradiction;
     }
     let new_dict_value = new_dict_value.unwrap();
 
     // Ensure the old dictionary had the key (ContainerUpdate requires the key to exist in old_root)
-    if old_dict.get(&key).is_err() {
+    if old_dict.get(key).is_err() {
         return PropagatorResult::Contradiction;
     }
 
     // Update the old dict with new value and ensure it equals new_dict
     let mut updated_dict = old_dict.clone();
-    if updated_dict.update(&key, &new_dict_value).is_err() || *new_dict != updated_dict {
+    if updated_dict.update(key, new_dict_value).is_err() || *new_dict != updated_dict {
         return PropagatorResult::Contradiction;
     }
 
@@ -254,9 +248,10 @@ pub fn register_container_update_handlers(reg: &mut crate::op::OpRegistry) {
 
 #[cfg(test)]
 mod tests {
+    use pod2::middleware::{StatementTmplArg, Value};
+
     use super::*;
     use crate::{edb::ImmutableEdbBuilder, types::ConstraintStore};
-    use pod2::middleware::{StatementTmplArg, Value};
 
     #[test]
     fn test_copy_container_update_handler() {
@@ -300,4 +295,3 @@ mod tests {
         matches!(result, PropagatorResult::Contradiction);
     }
 }
-
