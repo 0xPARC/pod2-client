@@ -45,6 +45,17 @@ pub trait EdbView {
     /// ContainsFromEntries support: get a value only if it comes from a full dictionary (generation).
     fn contains_full_value(&self, _root: &Hash, _key: &Key) -> Option<Value>;
 
+    /// Enumerate roots that can justify Insert(new_root,old_root,key,val) along with their provenance.
+    fn enumerate_insert_sources(&self, _key: &Key, _val: &Value)
+        -> Vec<(Hash, Hash, InsertSource)>;
+
+    /// Enumerate roots that can justify Update(new_root,old_root,key,new_val) along with their provenance.
+    fn enumerate_update_sources(
+        &self,
+        _key: &Key,
+        _new_val: &Value,
+    ) -> Vec<(Hash, Hash, UpdateSource)>;
+
     /// Enumerate existing custom heads matching the literal mask.
     /// `filters[i] = Some(v)` requires head arg i == v; `None` matches any.
     fn custom_matches(
@@ -85,6 +96,19 @@ pub trait EdbView {
 pub enum ContainsSource {
     Copied { pod: PodRef },
     GeneratedFromFullDict { root: Hash },
+}
+
+/// Provenance of an Insert(root,root,key,value) fact.
+#[derive(Clone, Debug)]
+pub enum InsertSource {
+    Copied { pod: PodRef },
+    GeneratedFromFullDict { new_root: Hash, old_root: Hash },
+}
+/// Provenance of an Update(root,old_root,key,new_value,old_value) fact.
+#[derive(Clone, Debug)]
+pub enum UpdateSource {
+    Copied { pod: PodRef },
+    GeneratedFromFullDict { new_root: Hash, old_root: Hash },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -625,6 +649,111 @@ impl EdbView for ImmutableEdb {
             .values()
             .map(|sk| (sk.public_key().into(), sk.clone().into()))
             .collect()
+    }
+
+    fn enumerate_insert_sources(&self, key: &Key, val: &Value) -> Vec<(Hash, Hash, InsertSource)> {
+        let mut out = Vec::new();
+
+        // From copied statements
+        let results = self.query(
+            PredicateKey::Native(pod2::middleware::NativePredicate::ContainerInsert),
+            &[
+                ArgSel::Val,                               // new_root (any)
+                ArgSel::Val,                               // old_root (any)
+                ArgSel::Literal(&Value::from(key.name())), // key (specific)
+                ArgSel::Literal(val),                      // value (specific)
+            ],
+        );
+        for (stmt, pod_ref) in results {
+            if let Statement::ContainerInsert(new_root_ref, old_root_ref, _, _) = &stmt {
+                if let (ValueRef::Literal(new_root_val), ValueRef::Literal(old_root_val)) =
+                    (new_root_ref, old_root_ref)
+                {
+                    let new_root = Hash::from(new_root_val.raw());
+                    let old_root = Hash::from(old_root_val.raw());
+                    out.push((new_root, old_root, InsertSource::Copied { pod: pod_ref }));
+                }
+            }
+        }
+
+        // From full dictionaries - create hash set of all known commitment hashes
+        let known_commitments: std::collections::HashSet<Hash> =
+            self.full_dict_objs.keys().cloned().collect();
+
+        // For each dictionary, try inserting key=val and see if result exists in known commitments
+        for (old_root, old_dict) in self.full_dict_objs.iter() {
+            let mut new_dict = old_dict.clone();
+            if new_dict.insert(key, val).is_ok() {
+                let new_commitment = new_dict.commitment();
+                if known_commitments.contains(&new_commitment) {
+                    out.push((
+                        new_commitment,
+                        *old_root,
+                        InsertSource::GeneratedFromFullDict {
+                            new_root: new_commitment,
+                            old_root: *old_root,
+                        },
+                    ));
+                }
+            }
+        }
+        out
+    }
+
+    fn enumerate_update_sources(
+        &self,
+        key: &Key,
+        new_val: &Value,
+    ) -> Vec<(Hash, Hash, UpdateSource)> {
+        let mut out = Vec::new();
+
+        // From copied statements
+        let results = self.query(
+            PredicateKey::Native(pod2::middleware::NativePredicate::ContainerUpdate),
+            &[
+                ArgSel::Val,                               // new_root (any)
+                ArgSel::Val,                               // old_root (any)
+                ArgSel::Literal(&Value::from(key.name())), // key (specific)
+                ArgSel::Literal(new_val), // value (specific - this is the new value)
+            ],
+        );
+        for (stmt, pod_ref) in results {
+            if let Statement::ContainerUpdate(new_root_ref, old_root_ref, _, _) = &stmt {
+                if let (ValueRef::Literal(new_root_val), ValueRef::Literal(old_root_val)) =
+                    (new_root_ref, old_root_ref)
+                {
+                    let new_root = Hash::from(new_root_val.raw());
+                    let old_root = Hash::from(old_root_val.raw());
+                    out.push((new_root, old_root, UpdateSource::Copied { pod: pod_ref }));
+                }
+            }
+        }
+
+        // From full dictionaries - create hash set of all known commitment hashes
+        let known_commitments: std::collections::HashSet<Hash> =
+            self.full_dict_objs.keys().cloned().collect();
+
+        // For each dictionary, try updating key to new_val and see if result exists in known commitments
+        for (old_root, old_dict) in self.full_dict_objs.iter() {
+            // Check if old dictionary contains the key (with any value)
+            if old_dict.get(key).is_ok() {
+                let mut new_dict = old_dict.clone();
+                if new_dict.insert(key, new_val).is_ok() {
+                    let new_commitment = new_dict.commitment();
+                    if known_commitments.contains(&new_commitment) {
+                        out.push((
+                            new_commitment,
+                            *old_root,
+                            UpdateSource::GeneratedFromFullDict {
+                                new_root: new_commitment,
+                                old_root: *old_root,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        out
     }
 
     fn get_secret_key(&self, public_key: &PublicKey) -> Option<&SecretKey> {

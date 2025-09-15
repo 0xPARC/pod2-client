@@ -50,7 +50,9 @@ impl ProofDag {
                 }
                 OpTag::CopyStatement { .. }
                 | OpTag::FromLiterals
-                | OpTag::GeneratedContains { .. } => {
+                | OpTag::GeneratedContains { .. }
+                | OpTag::GeneratedContainerInsert { .. }
+                | OpTag::GeneratedContainerUpdate { .. } => {
                     // Leaf; no extra edges
                 }
             }
@@ -225,7 +227,9 @@ impl ProofDagWithOps {
                 }
                 OpTag::CopyStatement { .. }
                 | OpTag::FromLiterals
-                | OpTag::GeneratedContains { .. } => {
+                | OpTag::GeneratedContains { .. }
+                | OpTag::GeneratedContainerInsert { .. }
+                | OpTag::GeneratedContainerUpdate { .. } => {
                     // Leaves: no premise statements to attach
                 }
             }
@@ -376,6 +380,30 @@ fn short_op_key(tag: &OpTag) -> String {
             key.name(),
             value.raw().encode_hex::<String>()
         ),
+        OpTag::GeneratedContainerInsert {
+            new_root,
+            old_root,
+            key,
+            value,
+        } => format!(
+            "gen_insert:{}:{}:{}:{}",
+            new_root.encode_hex::<String>(),
+            old_root.encode_hex::<String>(),
+            key.name(),
+            value.raw().encode_hex::<String>()
+        ),
+        OpTag::GeneratedContainerUpdate {
+            new_root,
+            old_root,
+            key,
+            value,
+        } => format!(
+            "gen_update:{}:{}:{}:{}",
+            new_root.encode_hex::<String>(),
+            old_root.encode_hex::<String>(),
+            key.name(),
+            value.raw().encode_hex::<String>()
+        ),
         OpTag::Derived { .. } => "derived".to_string(),
         OpTag::CustomDeduction { rule_id, .. } => format!("custom:{rule_id:?}"),
     }
@@ -393,6 +421,30 @@ fn short_op_label(tag: &OpTag) -> String {
         OpTag::GeneratedContains { root, key, value } => format!(
             "GeneratedContains\nroot=0x{}\\nkey={}\\nvalue={}",
             root.encode_hex::<String>(),
+            key.name(),
+            value
+        ),
+        OpTag::GeneratedContainerInsert {
+            new_root,
+            old_root,
+            key,
+            value,
+        } => format!(
+            "GeneratedContainerInsert\nnew=0x{}\\nold=0x{}\\nkey={}\\nvalue={}",
+            new_root.encode_hex::<String>(),
+            old_root.encode_hex::<String>(),
+            key.name(),
+            value
+        ),
+        OpTag::GeneratedContainerUpdate {
+            new_root,
+            old_root,
+            key,
+            value,
+        } => format!(
+            "GeneratedContainerUpdate\nnew=0x{}\\nold=0x{}\\nkey={}\\nvalue={}",
+            new_root.encode_hex::<String>(),
+            old_root.encode_hex::<String>(),
             key.name(),
             value
         ),
