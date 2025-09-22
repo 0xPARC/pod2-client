@@ -4,21 +4,7 @@ import { FrogStats } from "./FrogStats";
 import { RarityType } from "./RarityBadge";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-
-interface Frog {
-  id: string;
-  derived?: {
-    name?: string;
-    jump?: number;
-    temperament?: number;
-    speed?: number;
-    intelligence?: number;
-    beauty?: number;
-    image_url?: string;
-    description?: string;
-  };
-  offer_level_up?: boolean;
-}
+import { Frog } from "@/lib/rpc";
 
 interface FrogCardProps {
   frog: Frog;
@@ -48,7 +34,7 @@ function vibeEntry(index: number | undefined): string {
 
 export function FrogCard({ frog, rarity, index, onClick, className }: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const haveDesc = frog.derived != null;
+  const haveDesc = frog.derived !== null;
 
   return (
     <div 
@@ -63,10 +49,10 @@ export function FrogCard({ frog, rarity, index, onClick, className }: FrogCardPr
       }}
     >
       {/* Header */}
-      <FrogCardHeader 
+      <FrogCardHeader
         rarity={rarity}
         frogNumber={String(index + 1).padStart(2, '0')}
-        showProofText={true}
+        frogName={frog.derived?.name}
       />
 
       {/* Frog Image */}

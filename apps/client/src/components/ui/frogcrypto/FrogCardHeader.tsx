@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 interface FrogCardHeaderProps {
   rarity: RarityType;
   frogNumber: string;
-  showProofText?: boolean;
+  frogName?: string;
   className?: string;
 }
 
@@ -20,11 +20,11 @@ const RARITY_COLORS = {
   JUNK: "bg-amber-800"       // #8B4513
 } as const;
 
-export function FrogCardHeader({ 
-  rarity, 
-  frogNumber, 
-  showProofText = true, 
-  className 
+export function FrogCardHeader({
+  rarity,
+  frogNumber,
+  frogName,
+  className
 }: FrogCardHeaderProps) {
   const colorClass = RARITY_COLORS[rarity];
   
@@ -45,7 +45,7 @@ export function FrogCardHeader({
             letterSpacing: '1px'
           }}
         >
-          #{frogNumber} {rarity} FROG
+          #{frogNumber} {frogName ? frogName.toUpperCase() : `${rarity} FROG`}
         </div>
       </div>
       

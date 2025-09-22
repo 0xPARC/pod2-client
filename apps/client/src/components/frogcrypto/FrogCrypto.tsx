@@ -209,7 +209,7 @@ export function FrogCrypto() {
       </header>
 
       {/* Content Area - Scrollable */}
-      <main className="flex-1 relative z-10 pt-2 px-8 pb-8 overflow-auto">
+      <main className="flex-1 relative z-10 pt-2 px-8 pb-2 overflow-auto">
         {frogView && <FrogViewer />}
         {frogedexView && <Frogedex />}
         {leaderboardView && <Leaderboard />}

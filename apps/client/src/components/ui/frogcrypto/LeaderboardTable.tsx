@@ -40,11 +40,11 @@ export function LeaderboardTable({
       <div className="overflow-y-auto max-h-96">
         <div className="max-w-md mx-auto">
           {entries.map((entry) => (
-            <div 
-              key={entry.rank} 
+            <div
+              key={entry.rank}
               className={cn(
                 "flex items-center py-2",
-                entry.isCurrentUser && "bg-green-600/20"
+                (entry.isCurrentUser || entry.username === currentUser) && "bg-green-600/20"
               )}
             >
               <span 
