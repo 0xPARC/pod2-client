@@ -33,7 +33,7 @@ export function FrogCardHeader({
       {/* Main header */}
       <div
         className={cn(
-          "h-12 rounded-t-xl flex items-center justify-center",
+          "h-12 rounded-t-xl p-2 flex items-center justify-center",
           colorClass
         )}
       >
