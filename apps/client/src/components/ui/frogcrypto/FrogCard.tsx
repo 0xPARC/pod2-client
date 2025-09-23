@@ -45,7 +45,7 @@ export function FrogCard({
   return (
     <div
       className={cn(
-        "relative bg-white rounded-xl border-2 border-white shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl",
+        "relative bg-white rounded-xl border-2 border-white shadow-lg cursor-default transition-all duration-300 hover:shadow-xl",
         className
       )}
       onClick={onClick}
@@ -86,7 +86,7 @@ export function FrogCard({
       {/* See more link */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
         <button
-          className="text-teal-600 text-sm font-medium hover:text-teal-700 transition-colors"
+          className="text-teal-600 text-sm font-medium hover:text-teal-700 transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             setExpanded(!expanded);
