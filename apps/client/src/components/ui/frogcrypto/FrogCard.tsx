@@ -32,26 +32,32 @@ function vibeEntry(index: number | undefined): string {
   return temperaments.get(index as number) ?? "???";
 }
 
-export function FrogCard({ frog, rarity, index, onClick, className }: FrogCardProps) {
+export function FrogCard({
+  frog,
+  rarity,
+  index,
+  onClick,
+  className
+}: FrogCardProps) {
   const [expanded, setExpanded] = useState(false);
   const haveDesc = frog.derived !== null;
 
   return (
-    <div 
+    <div
       className={cn(
         "relative bg-white rounded-xl border-2 border-white shadow-lg cursor-pointer transition-all duration-300 hover:shadow-xl",
         className
       )}
       onClick={onClick}
       style={{
-        width: '280px',
-        height: '400px'
+        width: "280px",
+        height: "400px"
       }}
     >
       {/* Header */}
       <FrogCardHeader
         rarity={rarity}
-        frogNumber={String(index + 1).padStart(2, '0')}
+        frogNumber={String(index + 1).padStart(2, "0")}
         frogName={frog.derived?.name}
       />
 
@@ -79,7 +85,7 @@ export function FrogCard({ frog, rarity, index, onClick, className }: FrogCardPr
 
       {/* See more link */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
-        <button 
+        <button
           className="text-teal-600 text-sm font-medium hover:text-teal-700 transition-colors"
           onClick={(e) => {
             e.stopPropagation();
@@ -109,17 +115,17 @@ export function FrogCard({ frog, rarity, index, onClick, className }: FrogCardPr
       {expanded && haveDesc && frog.derived?.description && (
         <div className="absolute inset-0 bg-white rounded-xl p-4 z-10">
           <div className="h-full overflow-y-auto">
-            <div 
+            <div
               className="text-gray-800 text-sm"
               style={{
-                fontFamily: 'SF Pro Display',
-                fontSize: '14px',
-                color: '#293231'
+                fontFamily: "SF Pro Display",
+                fontSize: "14px",
+                color: "#293231"
               }}
             >
               {frog.derived.description}
             </div>
-            <button 
+            <button
               className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
               onClick={(e) => {
                 e.stopPropagation();

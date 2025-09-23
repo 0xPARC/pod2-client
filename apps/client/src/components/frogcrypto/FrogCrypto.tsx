@@ -1,13 +1,18 @@
 import { FrogViewer } from "./FrogViewer";
 import { Frogedex } from "./Frogedex";
 import { Leaderboard } from "./Leaderboard";
-import { 
-  FrogCryptoLogo, 
-  NavigationTabs, 
-  SearchSwampButton, 
-  MiningToggle 
+import {
+  FrogCryptoLogo,
+  NavigationTabs,
+  SearchSwampButton,
+  MiningToggle
 } from "@/components/ui/frogcrypto";
-import { requestScore, requestFrog, fixFrogDescriptions, reregisterFrogs } from "@/lib/rpc";
+import {
+  requestScore,
+  requestFrog,
+  fixFrogDescriptions,
+  reregisterFrogs
+} from "@/lib/rpc";
 import { useEffect, useState } from "react";
 import { useFrogCrypto } from "@/lib/store";
 import { toast } from "sonner";
@@ -56,16 +61,26 @@ export const RARITY_BG_COLORS = [
 ];
 
 export function FrogCrypto() {
-  const { currentScreen, navigateToScreen, score, setScore, mining, setMining, frogTimeout, setFrogTimeout, hashesChecked, setHashesChecked } = useFrogCrypto();
+  const {
+    currentScreen,
+    navigateToScreen,
+    score,
+    setScore,
+    mining,
+    setMining,
+    frogTimeout,
+    setFrogTimeout,
+    hashesChecked,
+    setHashesChecked
+  } = useFrogCrypto();
   const frogView = currentScreen == "game";
   const frogedexView = currentScreen == "frogedex";
   const leaderboardView = currentScreen == "leaderboard";
   const gymView = currentScreen == "gym";
   const breedingView = currentScreen == "breeding";
-  
+
   const [time, setTime] = useState(new Date().getTime());
 
-  
   useEffect(() => {
     async function updateScore() {
       try {
@@ -110,11 +125,12 @@ export function FrogCrypto() {
   };
 
   // Calculate remaining time and wait text
-  const timeRemaining = frogTimeout === null || time >= frogTimeout
-    ? 0
-    : Math.ceil(0.001 * (frogTimeout - time));
+  const timeRemaining =
+    frogTimeout === null || time >= frogTimeout
+      ? 0
+      : Math.ceil(0.001 * (frogTimeout - time));
   const searchDisabled = timeRemaining > 0;
-  
+
   function waitText(timeRemaining: number) {
     const mins = Math.floor(timeRemaining / 60);
     const secs = timeRemaining % 60;
@@ -122,15 +138,15 @@ export function FrogCrypto() {
     const secsText = secs == 0 ? "" : ` ${secs}s`;
     return ` (wait ${minsText}${secsText})`;
   }
-  
+
   const searchButtonWaitText = searchDisabled ? waitText(timeRemaining) : "";
 
   return (
-        <div
+    <div
       className="flex flex-col h-full relative frogcrypto-container"
       style={{
-        background: '#293231',
-        boxShadow: '0 4px 4px 0 rgba(0, 0, 0, 0.25)'
+        background: "#293231",
+        boxShadow: "0 4px 4px 0 rgba(0, 0, 0, 0.25)"
       }}
     >
       {/* Header Section */}
@@ -138,11 +154,11 @@ export function FrogCrypto() {
         {/* Logo and Score */}
         <div className="text-center mb-4">
           <FrogCryptoLogo className="mb-1" />
-          <p 
+          <p
             className="text-white text-base"
             style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: '16px',
+              fontFamily: "var(--font-sans)",
+              fontSize: "16px",
               fontWeight: 400
             }}
           >
@@ -152,45 +168,45 @@ export function FrogCrypto() {
 
         {/* Navigation Tabs */}
         <div className="mb-4">
-          <NavigationTabs 
+          <NavigationTabs
             activeTab={currentScreen}
             onTabChange={(tab) => navigateToScreen(tab as any)}
           />
         </div>
 
-                 {/* Utility Buttons - Second Row */}
-         <div className="flex justify-center gap-2 mb-4">
-           <button
-             onClick={() => fixFrogDescriptions()}
-             className="px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-500 rounded transition-colors duration-200"
-             style={{
-               fontFamily: 'var(--font-sans)',
-               fontSize: '12px',
-               fontWeight: 500,
-               letterSpacing: '0.1px',
-               backgroundColor: '#325F58'
-             }}
-           >
-             reload descriptions
-           </button>
-           <button
-             onClick={() => reregisterFrogs()}
-             className="px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-500 rounded transition-colors duration-200"
-             style={{
-               fontFamily: 'var(--font-sans)',
-               fontSize: '12px',
-               fontWeight: 500,
-               letterSpacing: '0.1px',
-               backgroundColor: '#325F58'
-             }}
-           >
-             reupload frogs
-           </button>
-         </div>
+        {/* Utility Buttons - Second Row */}
+        <div className="flex justify-center gap-2 mb-4">
+          <button
+            onClick={() => fixFrogDescriptions()}
+            className="px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-500 rounded transition-colors duration-200"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "12px",
+              fontWeight: 500,
+              letterSpacing: "0.1px",
+              backgroundColor: "#325F58"
+            }}
+          >
+            reload descriptions
+          </button>
+          <button
+            onClick={() => reregisterFrogs()}
+            className="px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-500 rounded transition-colors duration-200"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "12px",
+              fontWeight: 500,
+              letterSpacing: "0.1px",
+              backgroundColor: "#325F58"
+            }}
+          >
+            reupload frogs
+          </button>
+        </div>
 
         {/* Search Swamp Button */}
         <div className="flex justify-center mb-3">
-          <SearchSwampButton 
+          <SearchSwampButton
             onClick={handleSearchSwamp}
             disabled={searchDisabled}
             loading={false}
@@ -200,7 +216,7 @@ export function FrogCrypto() {
 
         {/* Mining Toggle */}
         <div className="flex justify-center">
-          <MiningToggle 
+          <MiningToggle
             enabled={mining}
             onToggle={setMining}
             hashCount={hashesChecked}
@@ -224,28 +240,28 @@ export function FrogCrypto() {
 function ComingSoon({ title }: { title: string }) {
   return (
     <div className="h-full flex items-center justify-center">
-      <div 
+      <div
         className="text-white text-center coming-soon-container"
         style={{
-          color: '#FFF',
-          fontFamily: 'var(--font-sans)',
-          fontSize: '32px',
-          fontStyle: 'normal',
+          color: "#FFF",
+          fontFamily: "var(--font-sans)",
+          fontSize: "32px",
+          fontStyle: "normal",
           fontWeight: 600,
-          lineHeight: '40px',
-          letterSpacing: '1px',
-          transform: 'rotate(-3deg)',
-          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.3)'
+          lineHeight: "40px",
+          letterSpacing: "1px",
+          transform: "rotate(-3deg)",
+          textShadow: "2px 2px 4px rgba(0, 0, 0, 0.3)"
         }}
       >
         {title}
         <br />
-        <span 
+        <span
           className="coming-soon-subtitle"
           style={{
-            fontSize: '18px',
+            fontSize: "18px",
             fontWeight: 400,
-            letterSpacing: '0.5px',
+            letterSpacing: "0.5px",
             opacity: 0.8
           }}
         >

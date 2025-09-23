@@ -168,7 +168,6 @@ export async function reregisterFrogs(): RpcResult<void> {
   return invokeCommand<void>("reregister_all_frogs");
 }
 
-
 // =============================================================================
 // Exports for backward compatibility
 // =============================================================================

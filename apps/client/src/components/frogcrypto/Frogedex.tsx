@@ -5,7 +5,19 @@ import { listen } from "@tauri-apps/api/event";
 import { Grid3x3Icon, ListIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const RARITY_NAMES: RarityType[] = ["NORM", "RARE", "EPIC", "LGND", "MYTH", "MYTH", "GOD", "GOD", "????", "ART", "JUNK"];
+const RARITY_NAMES: RarityType[] = [
+  "NORM",
+  "RARE",
+  "EPIC",
+  "LGND",
+  "MYTH",
+  "MYTH",
+  "GOD",
+  "GOD",
+  "????",
+  "ART",
+  "JUNK"
+];
 
 export function Frogedex() {
   const [frogedex, setFrogedex] = useState<FrogedexEntry[]>([]);
@@ -39,13 +51,13 @@ export function Frogedex() {
         <div className="flex gap-3 mb-6 justify-center">
           <Button
             className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-              !iconView 
-                ? "bg-green-600 hover:bg-green-700 text-white shadow-lg" 
+              !iconView
+                ? "bg-green-600 hover:bg-green-700 text-white shadow-lg"
                 : "hover:bg-white/30 text-white border border-white/30"
             }`}
             onClick={() => setIconView(false)}
             style={{
-              backgroundColor: !iconView ? undefined : '#325F58'
+              backgroundColor: !iconView ? undefined : "#325F58"
             }}
           >
             <ListIcon className="w-4 h-4 mr-2" />
@@ -53,13 +65,13 @@ export function Frogedex() {
           </Button>
           <Button
             className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-              iconView 
-                ? "bg-green-600 hover:bg-green-700 text-white shadow-lg" 
+              iconView
+                ? "bg-green-600 hover:bg-green-700 text-white shadow-lg"
                 : "hover:bg-white/30 text-white border border-white/30"
             }`}
             onClick={() => setIconView(true)}
             style={{
-              backgroundColor: iconView ? undefined : '#325F58'
+              backgroundColor: iconView ? undefined : "#325F58"
             }}
           >
             <Grid3x3Icon className="w-4 h-4 mr-2" />
@@ -93,7 +105,10 @@ export function Frogedex() {
         {iconView && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {frogedex.map((entry) => (
-              <div key={entry.frog_id} className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:bg-white/20 transition-all duration-300 group">
+              <div
+                key={entry.frog_id}
+                className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:bg-white/20 transition-all duration-300 group"
+              >
                 <div className="text-center">
                   <div className="mb-4">
                     <img

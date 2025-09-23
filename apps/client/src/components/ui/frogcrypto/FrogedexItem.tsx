@@ -10,21 +10,16 @@ interface FrogedexItemProps {
   className?: string;
 }
 
-export function FrogedexItem({ 
-  frogId, 
-  name, 
-  rarity, 
-  seen, 
-  imageUrl, 
-  className 
+export function FrogedexItem({
+  frogId,
+  name,
+  rarity,
+  seen,
+  imageUrl,
+  className
 }: FrogedexItemProps) {
   return (
-    <div
-      className={cn(
-        "flex items-center gap-4 p-4",
-        className
-      )}
-    >
+    <div className={cn("flex items-center gap-4 p-4", className)}>
       {/* Frog Image */}
       <div className="w-16 h-16 flex-shrink-0">
         {seen && imageUrl ? (

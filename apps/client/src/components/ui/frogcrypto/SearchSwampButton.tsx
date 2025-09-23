@@ -9,12 +9,12 @@ interface SearchSwampButtonProps {
   className?: string;
 }
 
-export function SearchSwampButton({ 
-  onClick, 
-  disabled = false, 
-  loading = false, 
+export function SearchSwampButton({
+  onClick,
+  disabled = false,
+  loading = false,
   waitText = "",
-  className 
+  className
 }: SearchSwampButtonProps) {
   return (
     <Button
@@ -27,14 +27,14 @@ export function SearchSwampButton({
       onClick={onClick}
       disabled={disabled || loading}
       style={{
-        fontFamily: 'var(--font-sans)',
-        fontSize: '16px',
+        fontFamily: "var(--font-sans)",
+        fontSize: "16px",
         fontWeight: 500,
-        letterSpacing: '0.32px',
-        width: '350px',
-        height: '28px',
-        marginTop: '25px',
-        backgroundColor: '#325F58'
+        letterSpacing: "0.32px",
+        width: "350px",
+        height: "28px",
+        marginTop: "25px",
+        backgroundColor: "#325F58"
       }}
     >
       {loading ? "SEARCHING..." : `SEARCH SWAMP${waitText}`}

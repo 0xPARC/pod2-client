@@ -150,7 +150,9 @@ export interface PodEditorActions {
 }
 
 export interface FrogCryptoActions {
-  navigateToScreen: (screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding") => void;
+  navigateToScreen: (
+    screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding"
+  ) => void;
   setFrogTimeout: (timeout: number | null) => void;
   setScore: (score: number) => void;
   setMining: (mining: boolean) => void;
@@ -270,7 +272,7 @@ export const useAppStore = create<AppStoreState>()(
       score: 0,
       mining: false,
       levelUpId: null,
-      hashesChecked: "",
+      hashesChecked: ""
     },
 
     initialize: async () => {
@@ -905,7 +907,9 @@ export const useAppStore = create<AppStoreState>()(
     },
 
     frogCryptoActions: {
-      navigateToScreen: (screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding") => {
+      navigateToScreen: (
+        screen: "game" | "leaderboard" | "frogedex" | "gym" | "breeding"
+      ) => {
         set((state) => {
           state.frogCrypto.currentScreen = screen;
         });
@@ -922,7 +926,7 @@ export const useAppStore = create<AppStoreState>()(
           state.frogCrypto.score = score;
         });
       },
-      
+
       setMining: (mining: boolean) => {
         set((state) => {
           const changed = state.frogCrypto.mining != mining;
@@ -932,7 +936,7 @@ export const useAppStore = create<AppStoreState>()(
           }
         });
       },
-      
+
       setHashesChecked: (hashesChecked: string) => {
         set((state) => {
           state.frogCrypto.hashesChecked = hashesChecked;
@@ -947,9 +951,7 @@ export const useAppStore = create<AppStoreState>()(
             emit("set-level-up", levelUpId ?? "").catch((e) => console.log(e));
           }
         });
-      },
-      
-      
+      }
     },
 
     getPodsInFolder: (folder: string) => {
@@ -1082,7 +1084,7 @@ export const useFrogCrypto = () => {
     setMining: frogCryptoActions.setMining,
     setScore: frogCryptoActions.setScore,
     setLevelUpId: frogCryptoActions.setLevelUpId,
-    setHashesChecked: frogCryptoActions.setHashesChecked,
+    setHashesChecked: frogCryptoActions.setHashesChecked
   };
 };
 

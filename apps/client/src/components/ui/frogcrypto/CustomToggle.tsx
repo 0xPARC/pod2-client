@@ -6,7 +6,11 @@ interface CustomToggleProps {
   className?: string;
 }
 
-export function CustomToggle({ enabled, onToggle, className }: CustomToggleProps) {
+export function CustomToggle({
+  enabled,
+  onToggle,
+  className
+}: CustomToggleProps) {
   return (
     <button
       className={cn(
@@ -16,10 +20,10 @@ export function CustomToggle({ enabled, onToggle, className }: CustomToggleProps
       )}
       onClick={() => onToggle(!enabled)}
       style={{
-        width: '66px',
-        height: '32px',
+        width: "66px",
+        height: "32px",
         flexShrink: 0,
-        borderRadius: '16px'
+        borderRadius: "16px"
       }}
     >
       <span
@@ -28,11 +32,10 @@ export function CustomToggle({ enabled, onToggle, className }: CustomToggleProps
           enabled ? "translate-x-8" : "translate-x-1"
         )}
         style={{
-          width: '24px',
-          height: '24px'
+          width: "24px",
+          height: "24px"
         }}
       />
     </button>
   );
 }
-
