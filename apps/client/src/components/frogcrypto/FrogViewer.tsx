@@ -1,49 +1,28 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
-import {
-  requestFrog,
-  requestScore,
-  listFrogs,
-  Frog,
-  FrogDerived
-} from "@/lib/rpc";
-import { useFrogCrypto } from "@/lib/store";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from "@radix-ui/react-collapsible";
+import { FrogCard, RarityType } from "@/components/ui/frogcrypto";
+import { listFrogs, Frog } from "@/lib/rpc";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { RARITY_SHADOW_COLORS } from "./FrogCrypto";
+import { toast } from "sonner";
 
-function waitText(timeRemaining: number) {
-  const mins = Math.floor(timeRemaining / 60);
-  const secs = timeRemaining % 60;
-  const minsText = mins == 0 ? "" : ` ${mins}m`;
-  const secsText = secs == 0 ? "" : ` ${secs}s`;
-  return ` (wait ${minsText}${secsText})`;
-}
+type FrogPod = Frog;
 
-const temperaments = new Map<number, string>([
-  [1, "N/A"],
-  [2, "ANGY"],
-  [3, "BORD"],
-  [4, "CALM"],
-  [7, "DARK"],
-  [10, "HNGY"],
-  [16, "SADG"],
-  [18, "SLPY"]
-]);
+// Map rarity indices to rarity types
+const RARITY_MAP: RarityType[] = [
+  "NORM",
+  "RARE",
+  "EPIC",
+  "LGND",
+  "MYTH",
+  "MYTH",
+  "GOD",
+  "GOD",
+  "????",
+  "ART",
+  "JUNK"
+];
 
 export function FrogViewer() {
-  const { frogTimeout, setFrogTimeout, setScore, mining, setMining } = useFrogCrypto();
-
-  const [time, setTime] = useState(new Date().getTime());
   const [frogs, setFrogs] = useState<FrogPod[]>([]);
-  const [hashesChecked, setHashesChecked] = useState("");
 
   async function updateFrogs() {
     try {
@@ -53,52 +32,12 @@ export function FrogViewer() {
   }
 
   useEffect(() => {
-    const interval = setInterval(() => setTime(new Date().getTime()), 1000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
     updateFrogs();
-  }, []);
-
-  const requestFrogAndUpdateTimeout = async () => {
-    try {
-      setScore(await requestFrog());
-      setFrogTimeout(new Date().getTime() + 900000);
-    } catch (e) {
-      if (e instanceof Error) {
-        toast.error(e.toString());
-      }
-    }
-  };
-
-  useEffect(() => {
-    async function updateTimeout() {
-      try {
-        const scoreResponse = await requestScore();
-        if (scoreResponse.timeout > 0) {
-          setFrogTimeout(new Date().getTime() + 1000 * scoreResponse.timeout);
-        }
-      } catch (e) {}
-    }
-    updateTimeout();
   }, []);
 
   useEffect(() => {
     const unlisten = listen("frog-alert", (event) => {
       toast(event.payload as string);
-    });
-
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlisten = listen("frog-background", (event) => {
-      setHashesChecked(`${event.payload}K hashes checked`);
     });
 
     return () => {
@@ -116,136 +55,266 @@ export function FrogViewer() {
     };
   }, []);
 
-  const timeRemaining =
-    frogTimeout === null || time >= frogTimeout
-      ? 0
-      : Math.ceil(0.001 * (frogTimeout - time));
-  const searchDisabled = timeRemaining > 0;
-  const searchButtonWaitText = searchDisabled ? waitText(timeRemaining) : "";
+  // Get rarity type from frog data
+  const getRarityType = (frog: Frog): RarityType => {
+    if (frog.derived && "rarity" in frog.derived) {
+      const rarityIndex = (frog.derived as any).rarity;
+      return RARITY_MAP[rarityIndex] || "NORM";
+    }
+    return "NORM";
+  };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-border flex flex-col">
-        <Button
-          variant="outline"
-          className="w-fit"
-          onClick={() => requestFrogAndUpdateTimeout()}
-          disabled={searchDisabled}
-        >
-          Search SWAMP {searchButtonWaitText}
-        </Button>
-        <div className="py-4">
-          <label htmlFor="mining">Mining enabled</label>
-          <Switch id="mining" checked={mining} onCheckedChange={setMining} />
-          {hashesChecked}
-        </div>
-      </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div>
-            {frogs.map((pod) => (
-              <FrogCard pod={pod} key={pod.id} />
+    <div className="h-full flex flex-col">
+      {/* Frogs Grid - accounting for sidebar width (16rem = 256px) */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex justify-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 p-4 sm:p-6 max-w-fit">
+            {frogs.map((frog, index) => (
+              <FrogCard
+                key={frog.id}
+                frog={frog}
+                rarity={getRarityType(frog)}
+                index={index}
+              />
             ))}
+            {/* Add placeholder cards for empty slots */}
+            {Array.from({ length: Math.max(0, 6 - frogs.length) }).map(
+              (_, index) => (
+                <EmptyFrogCard key={`empty-${index}`} />
+              )
+            )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   );
 }
 
-function vibeEntry(index: number | undefined): string {
-  if (index == null) {
-    return "???";
-  } else {
-    return temperaments.get(index as number) ?? "???";
-  }
-}
-
-interface FrogCardProps {
-  pod: Frog;
-}
-
-function FrogCard({ pod }: FrogCardProps) {
-  const [expanded, setExpanded] = useState(false);
-
-  const haveDesc = pod.derived != null;
-  const { levelUpId, setLevelUpId } = useFrogCrypto();
-  const [levelProgress, setLevelProgress] = useState("");
-
-  useEffect(() => {
-      const unlisten = listen("level-up-status", (event) => {
-        setLevelProgress(event.payload);
-      });
-
-      return () => {
-        unlisten.then((f) => f());
-      };
-    }, []);
-
-
+// Empty placeholder card for unfilled slots
+function EmptyFrogCard() {
   return (
-    <Card className="py-0 cursor-pointer transition-colors hover:bg-accent/50 max-w-sm">
-      <CardContent className="p-3 flex flex-col text-center justify-center items-center">
-        <div className="space-y-2">
-          {haveDesc && (
-            <img
-              src={(pod.derived as FrogDerived).image_url}
-              className={`mx-auto max-w-xs ${RARITY_SHADOW_COLORS[(pod.derived as FrogData).rarity]}`}
-            ></img>
-          )}
-          <h2>{(pod.derived?.name ?? "???").toUpperCase()}</h2>
+    <div
+      className="relative bg-white rounded-xl border-2 border-white shadow-lg"
+      style={{
+        width: "280px",
+        height: "400px"
+      }}
+    >
+      {/* Green Header */}
+      <div className="absolute top-0 left-0 right-0 h-12 bg-green-600 rounded-t-xl flex items-center justify-center">
+        <div
+          className="text-white font-semibold text-base tracking-wide"
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "16px",
+            fontWeight: 600,
+            lineHeight: "20px",
+            letterSpacing: "1px"
+          }}
+        >
+          #?? UNKNOWN FROG
         </div>
-        <div>
-          <table className="[&_th]:px-4 text-center">
-            <thead>
-              <tr>
-                <th>JMP</th>
-                <th>VIB</th>
-                <th>SPD</th>
-                <th>INT</th>
-                <th>BTY</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{pod.derived?.jump ?? "???"}</td>
-                <td>{vibeEntry(pod.derived?.temperament)}</td>
-                <td>{pod.derived?.speed ?? "???"}</td>
-                <td>{pod.derived?.intelligence ?? "???"}</td>
-                <td>{pod.derived?.beauty ?? "???"}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        {pod.offer_level_up &&
-          <div>
-          <Button
-            disabled={levelUpId !== null}
-            onClick={() => setLevelUpId(pod.id)}>
-            Level up
-          </Button>
-          {levelUpId == pod.id &&
-            <Button
-              onClick={() => setLevelUpId(null)}>
-              Cancel
-            </Button>
-          }
-          <span>
-            {levelProgress}
-          </span>
+      </div>
+
+      {/* Small question mark placeholder */}
+      <div className="absolute top-20 left-4 right-4 flex items-center justify-center">
+        <div className="w-16 h-16 bg-blue-100 rounded flex items-center justify-center">
+          <div
+            className="text-2xl text-blue-600 font-bold"
+            style={{
+              fontFamily: "SF Pro Display"
+            }}
+          >
+            ?
           </div>
-        }
-        {haveDesc && (
-          <Collapsible open={expanded} onOpenChange={setExpanded}>
-            <CollapsibleTrigger asChild>
-              {expanded ? <span>Collapse</span> : <span>See more</span>}
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              {(pod.derived as FrogDerived).description}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+
+      {/* Stats Section */}
+      <div className="absolute bottom-16 left-0 right-0 px-4">
+        <div className="space-y-3 px-8">
+          {/* First row: JUMP, VIBE */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="text-center">
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 600,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px",
+                  textTransform: "uppercase"
+                }}
+              >
+                JUMP
+              </div>
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px"
+                }}
+              >
+                ??
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 600,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px",
+                  textTransform: "uppercase"
+                }}
+              >
+                VIBE
+              </div>
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px"
+                }}
+              >
+                ??
+              </div>
+            </div>
+          </div>
+
+          {/* Second row: SPED, INTL, BUTY */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 600,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px",
+                  textTransform: "uppercase"
+                }}
+              >
+                SPED
+              </div>
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px"
+                }}
+              >
+                ??
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 600,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px",
+                  textTransform: "uppercase"
+                }}
+              >
+                INTL
+              </div>
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px"
+                }}
+              >
+                ??
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 600,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px",
+                  textTransform: "uppercase"
+                }}
+              >
+                BUTY
+              </div>
+              <div
+                style={{
+                  color: "#293231",
+                  textAlign: "center",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "normal",
+                  letterSpacing: "0.28px"
+                }}
+              >
+                ??
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* See more link */}
+      <div className="absolute bottom-4 left-0 right-0 text-center">
+        <div
+          className="text-teal-600 text-sm font-medium hover:text-teal-700 transition-colors"
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "14px",
+            fontWeight: 500
+          }}
+        >
+          See more
+        </div>
+      </div>
+    </div>
   );
 }

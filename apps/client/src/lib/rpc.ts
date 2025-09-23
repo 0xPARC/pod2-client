@@ -100,7 +100,7 @@ export async function requestFrog(): RpcResult<number> {
 
 export interface Frog {
   id: string;
-  derived: FrogData | null;
+  derived: FrogDerived | null;
   offer_level_up: boolean;
 }
 
@@ -133,8 +133,8 @@ export async function getFrogedex(): RpcResult<FrogedexEntry[]> {
   return invokeCommand<FrogedexEntry[]>("get_frogedex");
 }
 
-export async function fixFrogDescriptions(): RpcResult<FrogPod[]> {
-  return invokeCommand<FrogPod[]>("fix_frog_descriptions");
+export async function fixFrogDescriptions(): RpcResult<void> {
+  return invokeCommand<void>("fix_frog_descriptions");
 }
 
 export interface ScoreResponse {
@@ -166,7 +166,6 @@ export async function requestLeaderboard(): RpcResult<LeaderboardItem[]> {
 export async function reregisterFrogs(): RpcResult<void> {
   return invokeCommand<void>("reregister_all_frogs");
 }
-
 
 // =============================================================================
 // Exports for backward compatibility
