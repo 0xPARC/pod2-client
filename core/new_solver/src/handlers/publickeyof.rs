@@ -54,8 +54,8 @@ impl OpHandler for PublicKeyOfHandler {
             return PropagatorResult::Contradiction;
         }
 
-        let a_secret_key = &args[0];
-        let a_public_key = &args[1];
+        let a_public_key = &args[0];
+        let a_secret_key = &args[1];
 
         // Extract secret key if available
         let sk_opt: Option<SecretKey> = match a_secret_key {
@@ -146,8 +146,40 @@ impl OpHandler for PublicKeyOfHandler {
                 }
             }
 
-            // Case 3: Neither secret key nor public key is known. Suspend.
+            // Case 3: Neither secret key nor public key is known.
             (None, None) => {
+                // Enumeration: when both are unbound wildcards, enumerate all keypairs from the EDB
+                if let (StatementTmplArg::Wildcard(wsk), StatementTmplArg::Wildcard(wpk)) =
+                    (a_secret_key, a_public_key)
+                {
+                    if !store.bindings.contains_key(&wsk.index)
+                        && !store.bindings.contains_key(&wpk.index)
+                    {
+                        let mut alts = Vec::new();
+                        for (pk_val, sk_val) in edb.enumerate_keypairs() {
+                            // Extract the actual keypair values for the OpTag
+                            if let (Ok(sk), Ok(pk)) = (
+                                pod2::middleware::SecretKey::try_from(sk_val.typed()),
+                                pod2::middleware::PublicKey::try_from(pk_val.typed()),
+                            ) {
+                                alts.push(crate::prop::Choice {
+                                    bindings: vec![(wsk.index, sk_val), (wpk.index, pk_val)],
+                                    op_tag: OpTag::GeneratedPublicKeyOf {
+                                        secret_key: sk,
+                                        public_key: pk,
+                                    },
+                                });
+                            }
+                        }
+                        tracing::trace!(candidates = alts.len(), "PublicKeyOf enum all keypairs");
+                        return if alts.is_empty() {
+                            PropagatorResult::Contradiction
+                        } else {
+                            PropagatorResult::Choices { alternatives: alts }
+                        };
+                    }
+                }
+
                 let waits = crate::prop::wildcards_in_args(args)
                     .into_iter()
                     .filter(|i| !store.bindings.contains_key(i))
@@ -188,16 +220,16 @@ mod tests {
         let mut store = ConstraintStore::default();
         let sk = SecretKey::new_rand();
         let pk_val = Value::from(sk.public_key());
-        store.bindings.insert(0, Value::from(sk));
+        store.bindings.insert(1, Value::from(sk));
 
         let handler = PublicKeyOfHandler;
-        let args = args_from("REQUEST(PublicKeyOf(SK, PK))");
+        let args = args_from("REQUEST(PublicKeyOf(PK, SK))");
         let res = handler.propagate(&args, &mut store, &edb);
 
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 1); // PK index
+                assert_eq!(bindings[0].0, 0); // PK index
                 assert_eq!(bindings[0].1, pk_val);
                 assert!(matches!(op_tag, OpTag::FromLiterals));
             }
@@ -214,16 +246,16 @@ mod tests {
 
         let edb = ImmutableEdbBuilder::new().add_keypair(pk, sk).build();
         let mut store = ConstraintStore::default();
-        store.bindings.insert(1, pk_val.clone());
+        store.bindings.insert(0, pk_val.clone());
 
         let handler = PublicKeyOfHandler;
-        let args = args_from("REQUEST(PublicKeyOf(SK, PK))");
+        let args = args_from("REQUEST(PublicKeyOf(PK, SK))");
         let res = handler.propagate(&args, &mut store, &edb);
 
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
                 assert_eq!(bindings.len(), 1);
-                assert_eq!(bindings[0].0, 0); // SK index
+                assert_eq!(bindings[0].0, 1); // SK index
                 assert_eq!(bindings[0].1, sk_val);
                 assert!(matches!(op_tag, OpTag::FromLiterals));
             }

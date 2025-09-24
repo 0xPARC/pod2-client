@@ -50,7 +50,8 @@ impl ProofDag {
                 }
                 OpTag::CopyStatement { .. }
                 | OpTag::FromLiterals
-                | OpTag::GeneratedContains { .. } => {
+                | OpTag::GeneratedContains { .. }
+                | OpTag::GeneratedPublicKeyOf { .. } => {
                     // Leaf; no extra edges
                 }
             }
@@ -225,7 +226,8 @@ impl ProofDagWithOps {
                 }
                 OpTag::CopyStatement { .. }
                 | OpTag::FromLiterals
-                | OpTag::GeneratedContains { .. } => {
+                | OpTag::GeneratedContains { .. }
+                | OpTag::GeneratedPublicKeyOf { .. } => {
                     // Leaves: no premise statements to attach
                 }
             }
@@ -376,6 +378,10 @@ fn short_op_key(tag: &OpTag) -> String {
             key.name(),
             value.raw().encode_hex::<String>()
         ),
+        OpTag::GeneratedPublicKeyOf {
+            secret_key,
+            public_key,
+        } => format!("gen_publickeyof:{}:{}", secret_key, &public_key),
         OpTag::Derived { .. } => "derived".to_string(),
         OpTag::CustomDeduction { rule_id, .. } => format!("custom:{rule_id:?}"),
     }
@@ -395,6 +401,14 @@ fn short_op_label(tag: &OpTag) -> String {
             root.encode_hex::<String>(),
             key.name(),
             value
+        ),
+        OpTag::GeneratedPublicKeyOf {
+            secret_key,
+            public_key,
+        } => format!(
+            "GeneratedPublicKeyOf\nsk=0x{}\\npk=0x{}",
+            hex::ToHex::encode_hex::<String>(&secret_key.as_bytes()),
+            public_key,
         ),
         OpTag::Derived { .. } => "Derived".to_string(),
         OpTag::CustomDeduction { rule_id, .. } => {
