@@ -508,15 +508,15 @@ pub struct UpvoteRequest {
 pub fn get_publish_verification_predicate() -> String {
     r#"
         identity_verified(username, identity_pod) = AND(
-            Equal(?identity_pod["username"], ?username)
+            Equal(identity_pod["username"], username)
         )
 
         publish_verified(username, data, identity_server_pk, private: identity_pod, document_pod) = AND(
-            identity_verified(?username, ?identity_pod)
-            Equal(?document_pod["request_type"], "publish")
-            Equal(?document_pod["data"], ?data)
-            SignedBy(?document_pod, ?identity_pod["user_public_key"])
-            SignedBy(?identity_pod, ?identity_server_pk)
+            identity_verified(username, identity_pod)
+            Equal(document_pod["request_type"], "publish")
+            Equal(document_pod["data"], data)
+            SignedBy(document_pod, identity_pod["user_public_key"])
+            SignedBy(identity_pod, identity_server_pk)
         )
         "#.to_string()
 }
@@ -525,20 +525,20 @@ pub fn get_publish_verification_predicate() -> String {
 pub fn get_upvote_verification_predicate() -> String {
     r#"
         identity_verified(username, identity_pod) = AND(
-            Equal(?identity_pod["username"], ?username)
+            Equal(identity_pod["username"], username)
         )
 
         upvote_verified(content_hash, upvote_pod) = AND(
-            Equal(?upvote_pod["content_hash"], ?content_hash)
-            Equal(?upvote_pod["request_type"], "upvote")
+            Equal(upvote_pod["content_hash"], content_hash)
+            Equal(upvote_pod["request_type"], "upvote")
         )
 
         upvote_verification(username, content_hash, identity_server_pk, private: identity_pod, upvote_pod, upvote_pod_signer) = AND(
-            identity_verified(?username, ?identity_pod)
-            upvote_verified(?content_hash, ?upvote_pod)
-            SignedBy(?identity_pod, ?identity_server_pk)
-            SignedBy(?upvote_pod, ?upvote_pod_signer)
-            Equal(?identity_pod["user_public_key"], ?upvote_pod_signer)
+            identity_verified(username, identity_pod)
+            upvote_verified(content_hash, upvote_pod)
+            SignedBy(identity_pod, identity_server_pk)
+            SignedBy(upvote_pod, upvote_pod_signer)
+            Equal(identity_pod["user_public_key"], upvote_pod_signer)
         )
         "#.to_string()
 }
@@ -550,20 +550,20 @@ pub fn get_upvote_count_predicate(upvote_batch_id: Hash) -> String {
         use _, _, upvote_verification from 0x{id}
 
         upvote_count_base(count, content_hash, private: data_pod) = AND(
-            Equal(?count, 0)
-            Equal(?data_pod["content_hash"], ?content_hash)
+            Equal(count, 0)
+            Equal(data_pod["content_hash"], content_hash)
         )
 
         upvote_count_ind(count, content_hash, private: intermed, username, identity_server_pk) = AND(
-            upvote_count(?intermed, ?content_hash)
-            SumOf(?count, ?intermed, 1)
-            upvote_verification(?username, ?content_hash, ?identity_server_pk)
-            Lt(0, ?count)
+            upvote_count(intermed, content_hash)
+            SumOf(count, intermed, 1)
+            upvote_verification(username, content_hash, identity_server_pk)
+            Lt(0, count)
         )
 
         upvote_count(count, content_hash) = OR(
-            upvote_count_base(?count, ?content_hash)
-            upvote_count_ind(?count, ?content_hash)
+            upvote_count_base(count, content_hash)
+            upvote_count_ind(count, content_hash)
         )
         "#,
         id = upvote_batch_id.encode_hex::<String>(),

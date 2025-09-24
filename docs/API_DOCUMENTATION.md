@@ -79,16 +79,16 @@ Note: The ultimate source of truth on the objects each route requests is in
 
 ```
 identity_verified(username, private: identity_pod) = AND(
-    Equal(?identity_pod["_type"], SIGNED_POD)
-    Equal(?identity_pod["username"], ?username)
+    Equal(identity_pod["_type"], SIGNED_POD)
+    Equal(identity_pod["username"], username)
 )
 
 publish_verified(username, data, identity_server_pk, private: identity_pod, document_pod) = AND(
-    identity_verified(?username)
-    Equal(?document_pod["request_type"], "publish")
-    Equal(?document_pod["data"], ?data)
-    Equal(?document_pod["_signer"], ?identity_pod["user_public_key"])
-    Equal(?identity_pod["_signer"], ?identity_server_pk)
+    identity_verified(username)
+    Equal(document_pod["request_type"], "publish")
+    Equal(document_pod["data"], data)
+    Equal(document_pod["_signer"], identity_pod["user_public_key"])
+    Equal(identity_pod["_signer"], identity_server_pk)
 )
 ```
 
@@ -286,21 +286,21 @@ This ensures the main server controls challenge generation and the identity serv
 
 ```
 identity_verified(username, private: identity_pod) = AND(
-    Equal(?identity_pod["_type"], SIGNED_POD)
-    Equal(?identity_pod["username"], ?username)
+    Equal(identity_pod["_type"], SIGNED_POD)
+    Equal(identity_pod["username"], username)
 )
 
 upvote_verified(content_hash, private: upvote_pod) = AND(
-    Equal(?upvote_pod["_type"], SIGNED_POD)
-    Equal(?upvote_pod["content_hash"], ?content_hash)
-    Equal(?upvote_pod["request_type"], "upvote")
+    Equal(upvote_pod["_type"], SIGNED_POD)
+    Equal(upvote_pod["content_hash"], content_hash)
+    Equal(upvote_pod["request_type"], "upvote")
 )
 
 upvote_verification(username, content_hash, identity_server_pk, private: identity_pod, upvote_pod) = AND(
-    identity_verified(?username)
-    upvote_verified(?content_hash)
-    Equal(?identity_pod["_signer"], ?identity_server_pk)
-    Equal(?identity_pod["user_public_key"], ?upvote_pod["_signer"])
+    identity_verified(username)
+    upvote_verified(content_hash)
+    Equal(identity_pod["_signer"], identity_server_pk)
+    Equal(identity_pod["user_public_key"], upvote_pod["_signer"])
 )
 ```
 
@@ -357,19 +357,19 @@ upvote_verification(username, content_hash, identity_server_pk, private: identit
 use _, _, upvote_verification from [upvote_batch_id]
 
 upvote_count_base(count, content_hash, private: data_pod) = AND(
-    Equal(?count, 0)
-    Equal(?data_pod["content_hash"], ?content_hash)
+    Equal(count, 0)
+    Equal(data_pod["content_hash"], content_hash)
 )
 
 upvote_count_ind(count, content_hash, private: intermed, username, identity_server_pk) = AND(
-    upvote_count(?intermed, ?content_hash)
-    SumOf(?count, ?intermed, 1)
-    upvote_verification(?username, ?content_hash, ?identity_server_pk)
+    upvote_count(intermed, content_hash)
+    SumOf(count, intermed, 1)
+    upvote_verification(username, content_hash, identity_server_pk)
 )
 
 upvote_count(count, content_hash) = OR(
-    upvote_count_base(?count, ?content_hash)
-    upvote_count_ind(?count, ?content_hash)
+    upvote_count_base(count, content_hash)
+    upvote_count_ind(count, content_hash)
 )
 ```
 

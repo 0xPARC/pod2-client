@@ -88,7 +88,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         store.bindings.insert(0, Value::from(root));
         let handler = BinaryComparisonHandler::new(|a, b| a <= b, "LtEq");
-        let args = args_from("REQUEST(LtEq(?R[\"k\"], 7))");
+        let args = args_from("REQUEST(LtEq(R[\"k\"], 7))");
         let res = handler.propagate(&args, &mut store, &edb);
         assert!(matches!(
             res,
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn lteq_from_entries_ak_ak_both_bound() {
-        // LtEq(?L["a"], ?R["b"]) with both AK roots bound; 3 <= 5 should entail with two premises
+        // LtEq(L["a"], R["b"]) with both AK roots bound; 3 <= 5 should entail with two premises
         let params = Params::default();
         let dl = Dictionary::new(
             params.max_depth_mt_containers,
@@ -125,7 +125,7 @@ mod tests {
         store.bindings.insert(1, Value::from(rr));
 
         let handler = BinaryComparisonHandler::new(|a, b| a <= b, "LtEq");
-        let args = args_from("REQUEST(LtEq(?L[\"a\"], ?R[\"b\"]))");
+        let args = args_from("REQUEST(LtEq(L[\"a\"], R[\"b\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -138,11 +138,11 @@ mod tests {
 
     #[test]
     fn lteq_from_entries_suspend_unbound() {
-        // LtEq(?R["k"], 7) with unbound root should suspend
+        // LtEq(R["k"], 7) with unbound root should suspend
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = BinaryComparisonHandler::new(|a, b| a <= b, "LtEq");
-        let args = args_from(r#"REQUEST(LtEq(?R["k"], 7))"#);
+        let args = args_from(r#"REQUEST(LtEq(R["k"], 7))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => assert!(on.contains(&0)),
@@ -170,7 +170,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = CopyLtEqHandler;
-        let args = args_from("REQUEST(LtEq(?X, ?Y))");
+        let args = args_from("REQUEST(LtEq(X, Y))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -197,7 +197,7 @@ mod tests {
         let mut store = ConstraintStore::default();
         let handler = CopyLtEqHandler;
         // Bind right from left literal
-        let args1 = args_from("REQUEST(LtEq(3, ?Y))");
+        let args1 = args_from("REQUEST(LtEq(3, Y))");
         let res1 = handler.propagate(&args1, &mut store, &edb);
         match res1 {
             PropagatorResult::Choices { alternatives } => {
@@ -210,7 +210,7 @@ mod tests {
         }
 
         // Bind left from right literal
-        let args2 = args_from("REQUEST(LtEq(?X, 5))");
+        let args2 = args_from("REQUEST(LtEq(X, 5))");
         let res2 = handler.propagate(&args2, &mut store, &edb);
         match res2 {
             PropagatorResult::Choices { alternatives } => {
@@ -245,7 +245,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = CopyLtEqHandler;
-        let args = args_from("REQUEST(LtEq(?R[\"k\"], 10))");
+        let args = args_from("REQUEST(LtEq(R[\"k\"], 10))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -277,7 +277,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = CopyLtEqHandler;
-        let args = args_from("REQUEST(LtEq(5, ?R[\"k\"]))");
+        let args = args_from("REQUEST(LtEq(5, R[\"k\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {

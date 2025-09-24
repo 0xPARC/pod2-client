@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_v_generated_bound() {
-        // Equal(?R["k"], 1) with bound R and full dict containing (k -> 1)
+        // Equal(R["k"], 1) with bound R and full dict containing (k -> 1)
         // Build a real dictionary with {k:1}
         let params = Params::default();
         let dict = Dictionary::new(
@@ -297,11 +297,11 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
-        // wildcard index is 0 for first ?R variable in a simple REQUEST
+        // wildcard index is 0 for first R variable in a simple REQUEST
         store.bindings.insert(0, Value::from(r));
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], 1))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], 1))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -337,7 +337,7 @@ mod tests {
         store.bindings.insert(0, Value::from(dict));
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], 1))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], 1))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn copy_equal_binds_wildcard_from_left_ak() {
-        // CopyEqual should bind ?X when ?R is bound and Equal(R["k"], 1) exists to copy
+        // CopyEqual should bind X when R is bound and Equal(R["k"], 1) exists to copy
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -373,16 +373,16 @@ mod tests {
             .build();
 
         let mut store = ConstraintStore::default();
-        store.bindings.insert(0, Value::from(r)); // bind ?R
+        store.bindings.insert(0, Value::from(r)); // bind R
 
         let handler = CopyEqualHandler;
-        let args = args_from(r#"REQUEST(Equal(?R["k"], ?X))"#);
+        let args = args_from(r#"REQUEST(Equal(R["k"], X))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
                 assert_eq!(alternatives.len(), 1);
                 let ch = &alternatives[0];
-                assert_eq!(ch.bindings[0].0, 1); // ?X index
+                assert_eq!(ch.bindings[0].0, 1); // X index
                 assert_eq!(ch.bindings[0].1, Value::from(1));
                 match &ch.op_tag {
                     OpTag::CopyStatement { source } => assert_eq!(*source, src),
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn copy_equal_binds_wildcard_from_right_ak() {
-        // CopyEqual should bind ?X when ?R is bound and Equal(1, R["k"]) exists to copy
+        // CopyEqual should bind X when R is bound and Equal(1, R["k"]) exists to copy
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -411,16 +411,16 @@ mod tests {
             .build();
 
         let mut store = ConstraintStore::default();
-        store.bindings.insert(1, Value::from(r)); // bind ?R (second wildcard)
+        store.bindings.insert(1, Value::from(r)); // bind R (second wildcard)
 
         let handler = CopyEqualHandler;
-        let args = args_from(r#"REQUEST(Equal(?X, ?R["k"]))"#);
+        let args = args_from(r#"REQUEST(Equal(X, R["k"]))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
                 assert_eq!(alternatives.len(), 1);
                 let ch = &alternatives[0];
-                assert_eq!(ch.bindings[0].0, 0); // ?X index
+                assert_eq!(ch.bindings[0].0, 0); // X index
                 assert_eq!(ch.bindings[0].1, Value::from(1));
                 match &ch.op_tag {
                     OpTag::CopyStatement { source } => assert_eq!(*source, src),
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_v_copied_unbound() {
-        // Equal(?R["k"], 1) with unbound R and only a copied Contains fact
+        // Equal(R["k"], 1) with unbound R and only a copied Contains fact
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -451,7 +451,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], 1))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], 1))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_v_ak_generated_unbound() {
-        // Equal(1, ?R["k"]) unbound R, full dict
+        // Equal(1, R["k"]) unbound R, full dict
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -485,7 +485,7 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(1, ?R[\"k\"]))");
+        let args = args_from("REQUEST(Equal(1, R[\"k\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_v_ak_copied_unbound() {
-        // Equal(1, ?R["k"]) unbound R, only copied Contains
+        // Equal(1, R["k"]) unbound R, only copied Contains
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -522,7 +522,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(1, ?R[\"k\"]))");
+        let args = args_from("REQUEST(Equal(1, R[\"k\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_ak_one_bound_enumerate_generated() {
-        // Equal(?L["a"], ?R["b"]) with left bound (value 7), right unbound; enumerate right from full dict
+        // Equal(L["a"], R["b"]) with left bound (value 7), right unbound; enumerate right from full dict
         let params = Params::default();
         // Left dict has a:7 (can be copied or full; contains_value prefers copied if both)
         let dict_l = Dictionary::new(
@@ -568,7 +568,7 @@ mod tests {
         store.bindings.insert(0, Value::from(rl)); // bind left
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?L[\"a\"], ?R[\"b\"]))");
+        let args = args_from("REQUEST(Equal(L[\"a\"], R[\"b\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_ak_one_bound_enumerate_copied() {
-        // Equal(?L["a"], ?R["b"]) with left bound (value 7), right unbound; enumerate right from copied Contains
+        // Equal(L["a"], R["b"]) with left bound (value 7), right unbound; enumerate right from copied Contains
         let params = Params::default();
         // Left dict has a:7
         let dict_l = Dictionary::new(
@@ -633,7 +633,7 @@ mod tests {
         store.bindings.insert(0, Value::from(rl)); // bind left
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?L[\"a\"], ?R[\"b\"]))");
+        let args = args_from("REQUEST(Equal(L[\"a\"], R[\"b\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {
@@ -669,7 +669,7 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from(r#"REQUEST(Equal(?L["a"], ?R["b"]))"#);
+        let args = args_from(r#"REQUEST(Equal(L["a"], R["b"]))"#);
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => {
@@ -682,7 +682,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_negative_no_match() {
-        // AK–V: query Equal(?R["k"], 1) but only have k:2 in full dict → no choices
+        // AK–V: query Equal(R["k"], 1) but only have k:2 in full dict → no choices
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -693,7 +693,7 @@ mod tests {
 
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], 1))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], 1))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             // Under-constrained: unbound root, no matches → Suspend on root wildcard
@@ -722,7 +722,7 @@ mod tests {
         let mut store2 = ConstraintStore::default();
         store2.bindings.insert(0, Value::from(rl));
         store2.bindings.insert(1, Value::from(rr));
-        let args2 = args_from("REQUEST(Equal(?L[\"a\"], ?R[\"b\"]))");
+        let args2 = args_from("REQUEST(Equal(L[\"a\"], R[\"b\"]))");
         let res2 = handler.propagate(&args2, &mut store2, &edb2);
         match res2 {
             PropagatorResult::Contradiction => {}
@@ -732,7 +732,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_ak_both_bound_equal_mixed_sources() {
-        // Equal(?L["a"], ?R["b"]) with both roots bound, values equal; left copied, right generated
+        // Equal(L["a"], R["b"]) with both roots bound, values equal; left copied, right generated
         let params = Params::default();
         let dict_l = Dictionary::new(
             params.max_depth_mt_containers,
@@ -757,7 +757,7 @@ mod tests {
         store.bindings.insert(1, Value::from(rr));
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?L[\"a\"], ?R[\"b\"]))");
+        let args = args_from("REQUEST(Equal(L[\"a\"], R[\"b\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { op_tag, .. } => match op_tag {
@@ -780,7 +780,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_wildcard_bind_value_when_root_bound() {
-        // Equal(?R["k"], ?X) with bound R and full dict containing (k -> 1) binds ?X=1
+        // Equal(R["k"], X) with bound R and full dict containing (k -> 1) binds ?X=1
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -791,11 +791,11 @@ mod tests {
         let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
 
         let mut store = ConstraintStore::default();
-        // wildcard index 0 for ?R, 1 for ?X in this template order
+        // wildcard index 0 for R, 1 for X in this template order
         store.bindings.insert(0, Value::from(r));
 
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], ?X))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], X))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Entailed { bindings, op_tag } => {
@@ -816,11 +816,11 @@ mod tests {
 
     #[test]
     fn equal_from_entries_ak_wildcard_unbound_suspends() {
-        // Equal(?R["k"], ?X) with both unbound should suspend (no guessing)
+        // Equal(R["k"], X) with both unbound should suspend (no guessing)
         let edb = ImmutableEdbBuilder::new().build();
         let mut store = ConstraintStore::default();
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?R[\"k\"], ?X))");
+        let args = args_from("REQUEST(Equal(R[\"k\"], X))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Suspend { on } => {
@@ -833,7 +833,7 @@ mod tests {
 
     #[test]
     fn equal_from_entries_wildcard_ak_bound_value_enumerates() {
-        // Equal(?X, ?R["k"]) with ?X bound to 1 enumerates roots with k->1
+        // Equal(X, R["k"]) with X bound to 1 enumerates roots with k->1
         let params = Params::default();
         let dict = Dictionary::new(
             params.max_depth_mt_containers,
@@ -843,10 +843,10 @@ mod tests {
         let r = dict.commitment();
         let edb = ImmutableEdbBuilder::new().add_full_dict(dict).build();
         let mut store = ConstraintStore::default();
-        // ?X is first wildcard (index 0), ?R is index 1
+        // X is first wildcard (index 0), R is index 1
         store.bindings.insert(0, Value::from(1));
         let handler = EqualFromEntriesHandler;
-        let args = args_from("REQUEST(Equal(?X, ?R[\"k\"]))");
+        let args = args_from("REQUEST(Equal(X, R[\"k\"]))");
         let res = handler.propagate(&args, &mut store, &edb);
         match res {
             PropagatorResult::Choices { alternatives } => {

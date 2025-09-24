@@ -967,10 +967,10 @@ mod tests {
         // 3. Define podlog and create plan
         let podlog = r#"
             is_large(P) = AND(
-                Lt(10, ?P["foo"])
+                Lt(10, P["foo"])
             )
             REQUEST(
-                is_large(?SomePod)
+                is_large(SomePod)
             )
         "#;
         let params = Params::default();
@@ -1052,12 +1052,12 @@ mod tests {
         let podlog = format!(
             r#"
             are_friends(A, B) = AND(
-                Equal(?A["id"], ?B["friend_id"])
-                NotEqual(?A, Raw(0x{self_hex}))
-                NotEqual(?B, Raw(0x{self_hex}))
+                Equal(A["id"], B["friend_id"])
+                NotEqual(A, Raw(0x{self_hex}))
+                NotEqual(B, Raw(0x{self_hex}))
             )
             REQUEST(
-                are_friends(?P1, ?P2)
+                are_friends(P1, P2)
             )
         "#
         );
@@ -1155,21 +1155,21 @@ mod tests {
         let podlog = format!(
             r#"
             edge(A, B) = AND(
-                Equal(?A["next"], ?B["id"])
+                Equal(A["next"], B["id"])
             )
 
             path(X, Y) = OR(
-                edge(?X, ?Y)
-                path_rec(?X, ?Y)
+                edge(X, Y)
+                path_rec(X, Y)
             )
 
             path_rec(X, Y, private: Z) = AND(
-                path(?X, ?Z)
-                edge(?Z, ?Y)
+                path(X, Z)
+                edge(Z, Y)
             )
 
             REQUEST(
-                path(0x{pod_a_id_hex}, ?End)
+                path(0x{pod_a_id_hex}, End)
             )
         "#
         );
@@ -1280,7 +1280,7 @@ mod tests {
 
         let program = r#"
         REQUEST(
-            Equal(?A["k1"], ?P["k4"])
+            Equal(A["k1"], P["k4"])
         )
         "#;
 
@@ -1338,7 +1338,7 @@ mod tests {
         // 3. Define podlog and create plan for a NATIVE predicate request
         let podlog = r#"
             REQUEST(
-                Lt(10, ?P["foo"])
+                Lt(10, P["foo"])
             )
         "#;
         let params = Params::default();
@@ -1390,7 +1390,7 @@ mod tests {
             r#"
         use _, _, _, eth_dos from 0x{}
         REQUEST(
-            eth_dos(0x{}, 0x{}, ?Distance)
+            eth_dos(0x{}, 0x{}, Distance)
         )
         "#,
             batch.id().encode_hex::<String>(),
@@ -1550,21 +1550,21 @@ mod tests {
         let podlog = format!(
             r#"
         edge(A, B) = AND(
-            Equal(?A["next"], ?B["id"])
+            Equal(A["next"], B["id"])
         )
 
         path_rec(X, Y, private: Z) =  AND(
-            path(?X, ?Z)
-            edge(?Z, ?Y)
+            path(X, Z)
+            edge(Z, Y)
         )
 
         path(X, Y) = OR(
-            edge(?X, ?Y)
-            path_rec(?X, ?Y)
+            edge(X, Y)
+            path_rec(X, Y)
         )
 
         REQUEST(
-            path(0x{pod_a_id_hex}, ?End)
+            path(0x{pod_a_id_hex}, End)
         )
     "#
         );
@@ -1648,29 +1648,29 @@ mod tests {
 
     //         let program = r#"
     //  sum_from_base(A, I, S) = AND(
-    //     NotContains(?A, ?I)        // I is past the end
-    //     SumOf(?S, 0, 0)            // therefore S = 0
+    //     NotContains(A, I)        // I is past the end
+    //     SumOf(S, 0, 0)            // therefore S = 0
     // )
 
     // sum_from_step(A, I, S, private: J, Rest, V) = AND(
-    //     Contains(?A, ?I, ?V)       // element V exists at index I
-    //     SumOf(?J, ?I, 1)           // J = I + 1
-    //     sum_from(?A, ?J, ?Rest)    // recursive call
-    //     SumOf(?S, ?V, ?Rest)       // S = V + Rest
+    //     Contains(A, I, V)       // element V exists at index I
+    //     SumOf(J, I, 1)           // J = I + 1
+    //     sum_from(A, J, Rest)    // recursive call
+    //     SumOf(S, V, Rest)       // S = V + Rest
     // )
 
     // // ------------ single public definition --------------------------
     // sum_from(A, I, S) = OR(
-    //     sum_from_base(?A, ?I, ?S)
-    //     sum_from_step(?A, ?I, ?S)
+    //     sum_from_base(A, I, S)
+    //     sum_from_step(A, I, S)
     // )
 
     // array_sum(A, S) = AND(
-    //     sum_from(?A, 0, ?S)
+    //     sum_from(A, 0, S)
     // )
     // // --- What a client would request ---------------------------------
     // REQUEST(
-    //     array_sum([1, 2, 3], ?Total)
+    //     array_sum([1, 2, 3], Total)
     // )
     //         "#;
 

@@ -106,7 +106,7 @@ export const PodlangMonarchLanguage: languages.IMonarchLanguage = {
         }
       ],
 
-      // Anchored Keys: ?var["key"]
+      // Anchored Keys: var["key"]
       [/\\?[a-zA-Z_][a-zA-Z0-9_]*\\["[^"]*"\\]/, "variable.anchored.Podlang"],
 
       // Variables: start with '?', use explicit char class
@@ -282,8 +282,8 @@ export function getDefaultEditorContent(): string {
 //
 // Example:
 // REQUEST(
-//     Equal(?pod1["field1"], ?pod2["field1"])
-//     Lt(?pod1["timestamp"], 1234567890)
+//     Equal(pod1["field1"], pod2["field1"])
+//     Lt(pod1["timestamp"], 1234567890)
 // )
 
 `;

@@ -109,7 +109,7 @@ pub async fn create_space(db: &Db, id: &str) -> Result<()> {
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for create_space")??;
 
     Ok(())
@@ -134,7 +134,7 @@ pub async fn list_spaces(db: &Db) -> Result<Vec<SpaceInfo>> {
             space_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for list_spaces")??;
 
     Ok(spaces)
@@ -153,7 +153,7 @@ pub async fn space_exists(db: &Db, id: &str) -> Result<bool> {
             stmt.exists([id_clone])
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for space existence check")??;
     Ok(exists)
 }
@@ -169,7 +169,7 @@ pub async fn delete_space(db: &Db, id: &str) -> Result<usize> {
     let rows_deleted = conn
         .interact(move |conn| conn.execute("DELETE FROM spaces WHERE id = ?1", [&id_clone]))
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for delete_space")??;
 
     Ok(rows_deleted)
@@ -212,7 +212,7 @@ pub async fn import_pod(
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for import_pod")??;
 
     Ok(())
@@ -259,7 +259,7 @@ pub async fn get_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<Option<Pod
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_pod")??;
 
     Ok(pod_info_result)
@@ -340,7 +340,7 @@ async fn list_pods_filtered(
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for list_pods_filtered")??;
     Ok(pods)
 }
@@ -386,7 +386,7 @@ pub async fn delete_pod(db: &Db, space_id: &str, pod_id: &str) -> Result<usize> 
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for delete_pod")??;
     Ok(rows_deleted)
 }
@@ -403,7 +403,7 @@ pub async fn count_all_pods(db: &Db) -> Result<u32> {
         Ok(count as u32)
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for count_all_pods")?
 }
 
@@ -429,7 +429,7 @@ pub async fn count_pods_by_type(db: &Db) -> Result<(u32, u32)> {
             Ok::<_, rusqlite::Error>((signed_count as u32, main_count as u32))
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for count_pods_by_type")??;
 
     Ok(counts)
@@ -477,7 +477,7 @@ pub async fn add_inbox_message(
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for add_inbox_message")??;
 
     Ok(message_id)
@@ -514,7 +514,7 @@ pub async fn get_inbox_messages(db: &Db) -> Result<Vec<serde_json::Value>> {
             message_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_inbox_messages")??;
 
     Ok(messages)
@@ -598,7 +598,7 @@ pub async fn accept_inbox_message(
             Ok(chat_id)
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for accept_inbox_message")??;
 
     Ok(chat_id)
@@ -655,7 +655,7 @@ pub async fn regenerate_public_keys_if_needed(db: &Db) -> Result<()> {
             Ok::<i32, rusqlite::Error>(count)
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for regenerate_public_keys_if_needed")??;
 
     if updated_count > 0 {
@@ -691,11 +691,11 @@ pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
                 Err(rusqlite::Error::QueryReturnedNoRows) => Err(anyhow::anyhow!(
                     "No default private key found after ensuring one exists"
                 )),
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_default_private_key")??;
 
     let bytes = hex::decode(key_hex).context("Failed to decode private key hex")?;
@@ -738,11 +738,11 @@ pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> 
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
                     Err(anyhow::anyhow!("No default private key found after ensuring one exists"))
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_default_private_key_info")??;
 
     Ok(key_info)
@@ -779,7 +779,7 @@ pub async fn get_chats(db: &Db) -> Result<Vec<serde_json::Value>> {
             chat_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_chats")??;
 
     Ok(chats)
@@ -817,7 +817,7 @@ pub async fn get_chat_messages(db: &Db, chat_id: &str) -> Result<Vec<serde_json:
             message_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_chat_messages")??;
 
     Ok(messages)
@@ -888,7 +888,7 @@ pub async fn add_sent_message_to_chat(
             Ok(message_id)
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for add_sent_message_to_chat")??;
 
     Ok(message_id)
@@ -953,7 +953,7 @@ pub async fn import_pod_and_add_to_inbox(
         Ok(message_id_clone)
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for import_pod_and_add_to_inbox")??;
 
     Ok(message_id)
@@ -993,7 +993,7 @@ pub async fn list_all_pods(db: &Db) -> Result<Vec<PodInfo>> {
             pod_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for list_all_pods")??;
 
     Ok(pods)
@@ -1030,11 +1030,11 @@ pub async fn is_setup_completed(db: &Db) -> Result<bool> {
             match result {
                 Ok(completed) => Ok(completed),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // No setup record means not completed
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for is_setup_completed")??;
 
     Ok(setup_completed)
@@ -1081,11 +1081,11 @@ pub async fn get_app_setup_state(db: &Db) -> Result<AppSetupState> {
                         created_at: Utc::now().to_rfc3339(),
                     })
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_app_setup_state")??;
 
     Ok(setup_state)
@@ -1115,7 +1115,7 @@ pub async fn update_identity_server_info(
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for update_identity_server_info")??;
 
     Ok(())
@@ -1139,7 +1139,7 @@ pub async fn update_identity_info(db: &Db, username: &str, identity_pod_id: &str
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for update_identity_info")??;
 
     Ok(())
@@ -1161,7 +1161,7 @@ pub async fn complete_app_setup(db: &Db) -> Result<()> {
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for complete_app_setup")??;
 
     Ok(())
@@ -1199,7 +1199,7 @@ pub async fn store_identity_pod(
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for store_identity_pod")??;
 
     Ok(())
@@ -1224,11 +1224,11 @@ pub async fn get_default_private_key_raw(db: &Db) -> Result<SecretKey> {
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
                     Err(anyhow::anyhow!("No default private key found"))
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_default_private_key_raw")??;
 
     let bytes = hex::decode(key_hex).context("Failed to decode private key hex")?;
@@ -1270,7 +1270,7 @@ pub async fn create_default_private_key(db: &Db) -> Result<SecretKey> {
         )
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for create_default_private_key")??;
 
     log::info!("Created default private key during setup");
@@ -1364,7 +1364,7 @@ pub async fn create_draft(db: &Db, request: CreateDraftRequest) -> Result<String
         Ok(())
     })
     .await
-    .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+    .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
     .context("DB interaction failed for create_draft")??;
 
     log::info!("Created new draft with UUID: {draft_id}");
@@ -1425,7 +1425,7 @@ pub async fn list_drafts(db: &Db) -> Result<Vec<DraftInfo>> {
             draft_iter.collect::<Result<Vec<_>, _>>()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for list_drafts")??;
 
     Ok(drafts)
@@ -1489,7 +1489,7 @@ pub async fn get_draft(db: &Db, draft_id: &str) -> Result<Option<DraftInfo>> {
             }
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for get_draft")??;
 
     Ok(draft)
@@ -1532,7 +1532,7 @@ pub async fn update_draft(db: &Db, draft_id: &str, request: UpdateDraftRequest) 
             )
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for update_draft")??;
 
     Ok(rows_affected > 0)
@@ -1555,7 +1555,7 @@ pub async fn delete_draft(db: &Db, draft_id: &str) -> Result<bool> {
             )
         })
         .await
-        .map_err(|e| anyhow::anyhow!("InteractError: {}", e))
+        .map_err(|e| anyhow::anyhow!("InteractError: {e}"))
         .context("DB interaction failed for delete_draft")??;
 
     Ok(rows_affected > 0)

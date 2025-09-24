@@ -12,10 +12,10 @@ export default function Home() {
 
   const request = `
     REQUEST(
-      NotContains(?sanctions["sanctionList"], ?gov["idNumber"])
-      Lt(?gov["dateOfBirth"], 1169909388)
-      Equal(?pay["startDate"], 1706367566)
-      Equal(?gov["socialSecurityNumber"], ?pay["socialSecurityNumber"])
+      NotContains(sanctions["sanctionList"], gov["idNumber"])
+      Lt(gov["dateOfBirth"], 1169909388)
+      Equal(pay["startDate"], 1706367566)
+      Equal(gov["socialSecurityNumber"], pay["socialSecurityNumber"])
     )
     `;
 
