@@ -691,7 +691,7 @@ pub async fn get_default_private_key(db: &Db) -> Result<SecretKey> {
                 Err(rusqlite::Error::QueryReturnedNoRows) => Err(anyhow::anyhow!(
                     "No default private key found after ensuring one exists"
                 )),
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
@@ -738,7 +738,7 @@ pub async fn get_default_private_key_info(db: &Db) -> Result<serde_json::Value> 
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
                     Err(anyhow::anyhow!("No default private key found after ensuring one exists"))
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
@@ -1030,7 +1030,7 @@ pub async fn is_setup_completed(db: &Db) -> Result<bool> {
             match result {
                 Ok(completed) => Ok(completed),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false), // No setup record means not completed
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
@@ -1081,7 +1081,7 @@ pub async fn get_app_setup_state(db: &Db) -> Result<AppSetupState> {
                         created_at: Utc::now().to_rfc3339(),
                     })
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
@@ -1224,7 +1224,7 @@ pub async fn get_default_private_key_raw(db: &Db) -> Result<SecretKey> {
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
                     Err(anyhow::anyhow!("No default private key found"))
                 }
-                Err(e) => Err(anyhow::anyhow!("Database error: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("Database error: {e}")),
             }
         })
         .await
