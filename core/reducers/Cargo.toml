@@ -1,0 +1,23 @@
+[package]
+name = "pod2_reducers"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "pod2_reducers"
+path = "src/lib.rs"
+
+[dependencies]
+pod2 = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+itertools = { workspace = true }
+hex = { workspace = true }
+tracing = "0.1"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+pod2 = { workspace = true, features = ["examples"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }

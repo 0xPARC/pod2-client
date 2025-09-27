@@ -10,7 +10,8 @@ members = [
     "podnet/identity-strawman", 
     "pod2-client/db", 
     "apps/client/src-tauri",
-    "packages/pod2-node"
+    "packages/pod2-node",
+    "core/reducers"
 , "podnet/identity-github"]
 
 [workspace.dependencies]
