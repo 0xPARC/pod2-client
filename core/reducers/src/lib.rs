@@ -9,7 +9,7 @@ mod ast;
 pub use crate::ast::{Expr, VarKind};
 
 mod builder;
-pub use crate::builder::{Obj, UpdateBuilder};
+pub use crate::builder::Obj;
 
 mod guards;
 pub use crate::guards::{Ctx, Guard};
@@ -20,15 +20,14 @@ pub use crate::lowering::{build_predicate, LoweredPredicate};
 mod util;
 
 mod planner;
-pub use crate::planner::plan_operations;
+pub use crate::planner::{attach_signature_to_ops, plan_operations};
 
 mod interpreter;
-pub use crate::interpreter::exec_reducer;
+pub use crate::interpreter::{exec_reducer, exec_reducer_with_aux, ExecAux};
 
 mod macros;
 
-mod router;
-pub use crate::router::{Router, RouterBuilder};
+// router module removed; prefer reducer_router! macro
 
 #[cfg(test)]
 mod tests;

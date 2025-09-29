@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use pod2::middleware::{
-    containers::{Dictionary as MwDict, Set as MwSet},
-    Key, NativePredicate, Params, TypedValue, Value,
+use pod2::{
+    frontend::SignedDict,
+    middleware::{
+        containers::{Dictionary as MwDict, Set as MwSet},
+        Key, NativePredicate, Params, TypedValue, Value,
+    },
 };
 
 use crate::{
@@ -17,6 +20,11 @@ struct EvalEnv<'a> {
     prev: &'a MwDict,
     action: &'a MwDict,
     bindings: HashMap<String, Value>,
+}
+
+#[derive(Default)]
+pub struct ExecAux {
+    pub signed_action: Option<SignedDict>,
 }
 
 fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
@@ -253,6 +261,54 @@ pub fn exec_reducer(
     for g in guards {
         let Guard::Native(pred, args) = g;
         if !check_guard(*pred, args, &mut env)? {
+            return Err(Error::Msg(format!("Guard failed: {pred:?}")));
+        }
+    }
+    let out = eval_expr(expr, &env)?;
+    match out.typed() {
+        TypedValue::Dictionary(d) => Ok(d.clone()),
+        other => Err(Error::Type(format!(
+            "Reducer did not return a dictionary: {other}"
+        ))),
+    }
+}
+
+pub fn exec_reducer_with_aux(
+    prev: &MwDict,
+    action: &MwDict,
+    expr: &Expr,
+    guards: &[Guard],
+    aux: &ExecAux,
+) -> Result<MwDict> {
+    let mut env = EvalEnv {
+        prev,
+        action,
+        bindings: HashMap::new(),
+    };
+    for g in guards {
+        let Guard::Native(pred, args) = g;
+        if *pred == NativePredicate::SignedBy {
+            // Expect (dict, public_key) and a matching SignedDict in aux
+            if let Some(sd) = &aux.signed_action {
+                let dict_v = eval_expr(args[0].expr(), &env)?;
+                let pk_v = eval_expr(args[1].expr(), &env)?;
+                let ok_pk = match pk_v.typed() {
+                    TypedValue::PublicKey(pk) => *pk == sd.public_key,
+                    _ => false,
+                };
+                let ok_dict = match dict_v.typed() {
+                    TypedValue::Dictionary(d) => d.commitment() == sd.dict.commitment(),
+                    _ => false,
+                };
+                if !(ok_pk && ok_dict && sd.verify().is_ok()) {
+                    return Err(Error::Msg("Guard failed: SignedBy".into()));
+                }
+            } else {
+                return Err(Error::Msg(
+                    "Guard failed: SignedBy (no signed action)".into(),
+                ));
+            }
+        } else if !check_guard(*pred, args, &mut env)? {
             return Err(Error::Msg(format!("Guard failed: {pred:?}")));
         }
     }

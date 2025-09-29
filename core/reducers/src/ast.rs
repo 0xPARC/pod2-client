@@ -30,7 +30,6 @@ pub enum Expr {
     Mul(Rc<Expr>, Rc<Expr>),
     /// Integer maximum: lowers to MaxOf(out, a, b)
     Max(Rc<Expr>, Rc<Expr>),
-    // Set operations
     SetInsert {
         set: Rc<Expr>,
         elem: Rc<Expr>,
@@ -39,7 +38,6 @@ pub enum Expr {
         set: Rc<Expr>,
         elem: Rc<Expr>,
     },
-    // Dict operations
     DictInsert {
         dict: Rc<Expr>,
         key: String,
@@ -54,7 +52,6 @@ pub enum Expr {
         dict: Rc<Expr>,
         key: String,
     },
-    // Dynamic-key container ops (dictionary)
     ContainerLookup {
         dict: Rc<Expr>,
         key: Rc<Expr>,
@@ -78,7 +75,6 @@ pub enum Expr {
         base: Rc<Expr>,
         sets: Vec<(String, Rc<Expr>)>,
     },
-    // Array operation
     ArrayUpdate {
         array: Rc<Expr>,
         index: Rc<Expr>,

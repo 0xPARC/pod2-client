@@ -11,13 +11,13 @@ crate::reducer!(r_one, "Tag.One", |ctx| {
     let s = ctx.state();
     let a = ctx.action();
     ctx.require_eq(a.get("id"), 1);
-    s.update().set("x", 1).build()
+    s.set("x", 1)
 });
 crate::reducer!(r_two, "Tag.Two", |ctx| {
     let s = ctx.state();
     let a = ctx.action();
     ctx.require_eq(a.get("id"), 2);
-    s.update().set("y", 2).build()
+    s.set("y", 2)
 });
 crate::reducer_router!(router_mod, [
     "Tag.One" => r_one,
@@ -35,10 +35,8 @@ fn lowers_upvote() {
         let action = ctx.action();
         ctx.require_eq(state.get("post_id"), action.get("post_id"));
         state
-            .update()
             .set("upvotes", state.get("upvotes") + 1)
             .set("voters", state.get("voters").insert(action.get("user")))
-            .build()
     });
     let podlang = predicate.to_podlang_string();
     assert!(podlang.contains("SumOf"));
@@ -56,7 +54,7 @@ fn guard_sum_equal() {
     let LoweredPredicate { predicate, .. } = build_predicate(&params, "Post.Check", |ctx| {
         let state = ctx.state();
         ctx.require_eq(state.get("foo").add(10), state.get("bar"));
-        state.update().set("noop", state.get("noop")).build()
+        state.set("noop", state.get("noop"))
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("SumOf"));
@@ -72,7 +70,7 @@ fn guard_lt() {
         let st = ctx.state();
         let ac = ctx.action();
         ctx.require_lt(st.get("a"), ac.get("b"));
-        st.update().set("x", st.get("x")).build()
+        st.set("x", st.get("x"))
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("Lt("));
@@ -84,13 +82,10 @@ fn dict_update_chain_multiple() {
     let LoweredPredicate { predicate, .. } = build_predicate(&params, "Dict.Update", |ctx| {
         let st = ctx.state();
         let ac = ctx.action();
-        st.update()
-            .set("k1", ac.get("v1"))
-            .set("k2", st.get("k2").add(1))
-            .build()
+        st.set("k1", ac.get("v1")).set("k2", st.get("k2").add(1))
     });
     let s = predicate.to_podlang_string();
-    assert!(s.matches("DictUpdate(").count() >= 2);
+    assert!(s.matches("ContainerUpdate(").count() >= 2);
     assert!(s.contains("SumOf"));
 }
 
@@ -101,11 +96,11 @@ fn set_delete_and_update_parent() {
         let st = ctx.state();
         let ac = ctx.action();
         let new_set = st.get("voters").delete(ac.get("user"));
-        st.update().set("voters", new_set).build()
+        st.set("voters", new_set)
     });
     let s = predicate.to_podlang_string();
-    assert!(s.contains("SetDelete("));
-    assert!(s.contains("DictUpdate("));
+    assert!(s.contains("ContainerDelete("));
+    assert!(s.contains("ContainerUpdate("));
 }
 
 #[test]
@@ -116,11 +111,11 @@ fn dict_insert_and_delete() {
         let ac = ctx.action();
         let meta_ins = st.get("meta").dict_insert("flag", ac.get("flag"));
         let meta_del = meta_ins.dict_delete("old");
-        st.update().set("meta", meta_del).build()
+        st.set("meta", meta_del)
     });
     let s = predicate.to_podlang_string();
-    assert!(s.contains("DictInsert("));
-    assert!(s.contains("DictDelete("));
+    assert!(s.contains("ContainerInsert("));
+    assert!(s.contains("ContainerDelete("));
 }
 
 #[test]
@@ -130,11 +125,11 @@ fn array_update_and_writeback() {
         let st = ctx.state();
         let ac = ctx.action();
         let new_arr = st.get("items").array_update(3, ac.get("value"));
-        st.update().set("items", new_arr).build()
+        st.set("items", new_arr)
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("ArrayUpdate("));
-    assert!(s.contains("DictUpdate("));
+    assert!(s.contains("ContainerUpdate("));
 }
 
 #[test]
@@ -144,10 +139,7 @@ fn product_and_max() {
         let st = ctx.state();
         let a = st.get("a");
         let b = st.get("b");
-        st.update()
-            .set("c", a.clone() * b.clone())
-            .set("d", a.max(b))
-            .build()
+        st.set("c", a.clone() * b.clone()).set("d", a.max(b))
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("ProductOf("));
@@ -159,10 +151,7 @@ fn operator_add_mul() {
     let params = Params::default();
     let LoweredPredicate { predicate, .. } = build_predicate(&params, "Arith.AddMul", |ctx| {
         let st = ctx.state();
-        st.update()
-            .set("e", st.get("a") + 2)
-            .set("f", st.get("b") * 3)
-            .build()
+        st.set("e", st.get("a") + 2).set("f", st.get("b") * 3)
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("SumOf("));
@@ -176,10 +165,10 @@ fn dict_contains_guard() {
         let st = ctx.state();
         let ac = ctx.action();
         ctx.require_dict_contains(st.clone(), "k", ac.get("v"));
-        st.update().set("x", st.get("x")).build()
+        st.set("x", st.get("x"))
     });
     let s = predicate.to_podlang_string();
-    assert!(s.contains("DictContains("));
+    assert!(s.contains("Contains("));
 }
 
 #[test]
@@ -189,7 +178,7 @@ fn signed_by_guard() {
         let ac = ctx.action();
         ctx.require_signed_by(ac.get("msg"), ac.get("pubkey"));
         let st = ctx.state();
-        st.update().set("ok", 1).build()
+        st.set("ok", 1)
     });
     let s = predicate.to_podlang_string();
     assert!(s.contains("SignedBy("));
@@ -206,10 +195,8 @@ fn plan_ops_upvote() -> crate::error::Result<()> {
         let action = ctx.action();
         ctx.require_eq(state.get("post_id"), action.get("post_id"));
         state
-            .update()
             .set("upvotes", state.get("upvotes").add(1))
             .set("voters", state.get("voters").insert(action.get("user")))
-            .build()
     });
 
     let voters_set = Set::new(params.max_depth_mt_containers, Default::default()).unwrap();
@@ -271,10 +258,8 @@ fn macro_exec_and_plan() -> crate::error::Result<()> {
         let s = ctx.state();
         let a = ctx.action();
         ctx.require_eq(s.get("post_id"), a.get("post_id"));
-        s.update()
-            .set("upvotes", s.get("upvotes") + 1)
+        s.set("upvotes", s.get("upvotes") + 1)
             .set("voters", s.get("voters").insert(a.get("user")))
-            .build()
     });
 
     let params = Params {
@@ -339,20 +324,19 @@ fn router_dispatch() -> crate::error::Result<()> {
 
 #[test]
 fn router_builder_local() -> crate::error::Result<()> {
-    use crate::RouterBuilder;
     let params = Params::default();
 
-    let mut rb = RouterBuilder::new();
-    rb.add("Tag.One", r_one::exec, r_one::plan)
-        .add("Tag.Two", r_two::exec, r_two::plan);
-    let router = rb.build();
+    crate::reducer_router!(local_router, [
+        "Tag.One" => r_one,
+        "Tag.Two" => r_two,
+    ]);
 
     // Exec via builder router
     let prev = pod2::dict!(params.max_depth_mt_containers, {"x" => 0}).unwrap();
     let action_one =
         pod2::dict!(params.max_depth_mt_containers, {"action_type" => "Tag.One", "id" => 1})
             .unwrap();
-    let next_one = router.exec(&prev, &action_one)?;
+    let next_one = local_router::exec(&prev, &action_one)?;
     let x = if let TypedValue::Int(i) = next_one.get(&"x".into()).unwrap().typed() {
         *i
     } else {
@@ -361,6 +345,76 @@ fn router_builder_local() -> crate::error::Result<()> {
     assert_eq!(x, 1);
 
     Ok(())
+}
+
+// End-to-end POD build via router with signed action; only router predicate is public
+mod router_pod_signed_test {
+    use pod2::{
+        backends::plonky2::{
+            mock::mainpod::MockProver, primitives::ec::schnorr::SecretKey, signer::Signer,
+        },
+        examples::MOCK_VD_SET,
+        frontend::SignedDict,
+        middleware::{containers::Dictionary, Signer as _, TypedValue},
+    };
+
+    use super::*;
+
+    crate::reducer!(r_inc, "Tag.Inc", |ctx| {
+        let s = ctx.state();
+        let a = ctx.action();
+        ctx.require_signed_by(&a, a.get("user"));
+        s.set("x", s.get("x") + 1)
+    });
+    crate::reducer_router!(router_signed_only, [
+        "Tag.Inc" => r_inc,
+    ]);
+
+    #[test]
+    fn build_router_pod_signed_public_only() -> crate::error::Result<()> {
+        let params = Params::default();
+
+        // Build prev and next via exec_signed for correctness
+        let prev: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"x" => 0})?;
+        let sk = SecretKey::new_rand();
+        let signer = Signer(sk);
+        let pk = signer.public_key();
+        let action: SignedDict = crate::signed_action!(
+            params,
+            signer,
+            "Tag.Inc",
+            {"user" => pk}
+        );
+        let next = router_signed_only::exec_signed(&prev, &action)?;
+
+        // Prove POD with only router OR predicate public
+        let prover = MockProver {};
+        let pod = router_signed_only::build_pod_signed(
+            &params,
+            &MOCK_VD_SET,
+            &prev,
+            &action,
+            &next,
+            &prover,
+        )?;
+
+        // Assert exactly one public statement: the router OR custom predicate
+        assert_eq!(pod.public_statements.len(), 1);
+        match &pod.public_statements[0] {
+            pod2::middleware::Statement::Custom(cpr, _args) => {
+                // Router OR predicate is the last in the batch built by predicate_batch
+                assert_eq!(cpr.index, router_signed_only::TAGS.len());
+                assert_eq!(cpr.batch.name, "router_signed_only");
+            }
+            other => panic!("Unexpected public statement: {other:?}"),
+        }
+
+        // Sanity: next.x == 1
+        let xv = next.get(&"x".into()).unwrap();
+        assert!(matches!(xv.typed(), TypedValue::Int(1)));
+
+        Ok(())
+    }
 }
 
 // Top-level-only API sketch test: Forum.UpvotePost and Forum.DeletePost

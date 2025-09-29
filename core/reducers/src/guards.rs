@@ -12,15 +12,11 @@ pub enum Guard {
 /// Construction context exposed to reducer author functions.
 pub struct Ctx {
     pub(crate) guards: Vec<Guard>,
-    next_witness: usize,
 }
 
 impl Ctx {
     pub fn new() -> Self {
-        Self {
-            guards: Vec::new(),
-            next_witness: 0,
-        }
+        Self { guards: Vec::new() }
     }
     /// A fresh empty dictionary literal.
     pub fn empty_dict(&self) -> Obj {
@@ -101,9 +97,9 @@ impl Ctx {
     require_impl_oa!(require_lte, LtEq, 2);
     require_impl_oa!(require_gt, Gt, 2);
     require_impl_oa!(require_gte, GtEq, 2);
-    // Membership/containment
-    require_impl_oa!(require_contains, Contains, 3);
-    require_impl_oa!(require_not_contains, NotContains, 2);
+    // Membership/containment (generic Contains/NotContains removed from surface)
+    // require_impl_oa!(require_contains, Contains, 3);
+    // require_impl_oa!(require_not_contains, NotContains, 2);
     require_impl_oa!(require_dict_contains, DictContains, 3);
     require_impl_oa!(require_dict_not_contains, DictNotContains, 2);
     require_impl_oa!(require_set_contains, SetContains, 2);
@@ -124,16 +120,6 @@ impl Ctx {
     require_impl_oa!(require_set_insert, SetInsert, 3);
     require_impl_oa!(require_set_delete, SetDelete, 3);
     require_impl_oa!(require_array_update, ArrayUpdate, 4);
-
-    /// Lookup a value in a dictionary by a (possibly dynamic) key and return a
-    /// symbolic witness bound by a DictContains guard.
-    pub fn lookup(&mut self, dict: Obj, key: Obj) -> Obj {
-        self.next_witness += 1;
-        let name = format!("lk_{}", self.next_witness);
-        let w = Obj::var(VarKind::Witness(name));
-        self.require_dict_contains(dict, key, w.clone());
-        w
-    }
 
     // Custom predicate calls removed in simplified API
 }

@@ -90,7 +90,7 @@ fn repr_expr(e: &Expr) -> String {
         Expr::Var(VarKind::Prev) => "Prev".to_string(),
         Expr::Var(VarKind::Action) => "Action".to_string(),
         Expr::Var(VarKind::Next) => "Next".to_string(),
-        Expr::Var(VarKind::Witness(n)) => format!("W({})", n),
+        Expr::Var(VarKind::Witness(n)) => format!("W({n})"),
         Expr::Const(v) => format!("Lit({v:?})"),
         Expr::Field(base, key) => format!("{}.{}", repr_expr(base), key),
         Expr::EmptyDict => "{}".to_string(),
@@ -180,7 +180,7 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             Arg::Ak(wc, Key::from(key.clone()))
         }
         Expr::ContainerLookup { dict, key } => {
-            // Dynamic read: bind a witness via DictContains(dict, key, out)
+            // Dynamic read: bind a witness via Contains(dict, key, out)
             // De-duplicate identical lookups to reduce witnesses and statements.
             let k = (repr_expr(dict), repr_expr(key));
             if let Some(w) = ctx.lookup_cache.get(&k) {
@@ -190,7 +190,7 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             let dict_arg: StatementTmplArg = lower_as_arg(ctx, dict).into();
             let key_arg: StatementTmplArg = lower_as_arg(ctx, key).into();
             ctx.add_stmt(
-                NativePredicate::DictContains,
+                NativePredicate::Contains,
                 vec![dict_arg, key_arg, StatementTmplArg::Wildcard(out.clone())],
             );
             ctx.lookup_cache.insert(k, out.clone());
@@ -228,21 +228,28 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             Arg::Wc(out)
         }
         Expr::SetInsert { set, elem } => {
+            // Normalize set insert into container insert with key == value
             let out = ctx.ensure_witness("set");
             let set_arg: StatementTmplArg = lower_as_arg(ctx, set).into();
             let elem_arg: StatementTmplArg = lower_as_arg(ctx, elem).into();
             ctx.add_stmt(
-                NativePredicate::SetInsert,
-                vec![StatementTmplArg::Wildcard(out.clone()), set_arg, elem_arg],
+                NativePredicate::ContainerInsert,
+                vec![
+                    StatementTmplArg::Wildcard(out.clone()),
+                    set_arg,
+                    elem_arg.clone(),
+                    elem_arg,
+                ],
             );
             Arg::Wc(out)
         }
         Expr::SetDelete { set, elem } => {
+            // Normalize set delete into container delete
             let out = ctx.ensure_witness("set");
             let set_arg: StatementTmplArg = lower_as_arg(ctx, set).into();
             let elem_arg: StatementTmplArg = lower_as_arg(ctx, elem).into();
             ctx.add_stmt(
-                NativePredicate::SetDelete,
+                NativePredicate::ContainerDelete,
                 vec![StatementTmplArg::Wildcard(out.clone()), set_arg, elem_arg],
             );
             Arg::Wc(out)
@@ -252,7 +259,7 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             let dict_arg: StatementTmplArg = lower_as_arg(ctx, dict).into();
             let val_arg: StatementTmplArg = lower_as_arg(ctx, val).into();
             ctx.add_stmt(
-                NativePredicate::DictInsert,
+                NativePredicate::ContainerInsert,
                 vec![
                     StatementTmplArg::Wildcard(out.clone()),
                     dict_arg,
@@ -267,7 +274,7 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             let dict_arg: StatementTmplArg = lower_as_arg(ctx, dict).into();
             let val_arg: StatementTmplArg = lower_as_arg(ctx, val).into();
             ctx.add_stmt(
-                NativePredicate::DictUpdate,
+                NativePredicate::ContainerUpdate,
                 vec![
                     StatementTmplArg::Wildcard(out.clone()),
                     dict_arg,
@@ -281,7 +288,7 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
             let out = ctx.ensure_witness("upd");
             let dict_arg: StatementTmplArg = lower_as_arg(ctx, dict).into();
             ctx.add_stmt(
-                NativePredicate::DictDelete,
+                NativePredicate::ContainerDelete,
                 vec![
                     StatementTmplArg::Wildcard(out.clone()),
                     dict_arg,
@@ -358,9 +365,9 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
                 let val_arg: StatementTmplArg = lower_as_arg(ctx, val_expr).into();
                 let out = ctx.ensure_witness("upd");
                 let pred = if base_is_empty {
-                    NativePredicate::DictInsert
+                    NativePredicate::ContainerInsert
                 } else {
-                    NativePredicate::DictUpdate
+                    NativePredicate::ContainerUpdate
                 };
                 ctx.add_stmt(
                     pred,
@@ -381,14 +388,46 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
 }
 
 fn lower_guards(ctx: &mut LowerCtx, guards: &[Guard]) {
+    use NativePredicate as NP;
     for g in guards {
         match g {
             Guard::Native(pred, args) => {
-                let lowered: Vec<StatementTmplArg> = args
-                    .iter()
-                    .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
-                    .collect();
-                ctx.add_stmt(*pred, lowered);
+                match pred {
+                    // Normalize container-specific Contains/NotContains into generic Contains/NotContains
+                    NP::SetContains => {
+                        // SetContains(set, value) -> Contains(set, value, value)
+                        let set_arg = StatementTmplArg::from(lower_as_arg(ctx, args[0].expr()));
+                        let val_arg = StatementTmplArg::from(lower_as_arg(ctx, args[1].expr()));
+                        ctx.add_stmt(NP::Contains, vec![set_arg, val_arg.clone(), val_arg]);
+                    }
+                    NP::SetNotContains => {
+                        // SetNotContains(set, value) -> NotContains(set, value)
+                        let set_arg = StatementTmplArg::from(lower_as_arg(ctx, args[0].expr()));
+                        let val_arg = StatementTmplArg::from(lower_as_arg(ctx, args[1].expr()));
+                        ctx.add_stmt(NP::NotContains, vec![set_arg, val_arg]);
+                    }
+                    NP::DictContains | NP::ArrayContains => {
+                        let lowered: Vec<StatementTmplArg> = args
+                            .iter()
+                            .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
+                            .collect();
+                        ctx.add_stmt(NP::Contains, lowered);
+                    }
+                    NP::DictNotContains => {
+                        let lowered: Vec<StatementTmplArg> = args
+                            .iter()
+                            .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
+                            .collect();
+                        ctx.add_stmt(NP::NotContains, lowered);
+                    }
+                    _ => {
+                        let lowered: Vec<StatementTmplArg> = args
+                            .iter()
+                            .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
+                            .collect();
+                        ctx.add_stmt(*pred, lowered);
+                    }
+                }
             }
         }
     }
@@ -428,5 +467,3 @@ where
         wildcard_names: lctx.names,
     }
 }
-
-// build_predicate_in_batch removed in simplified API

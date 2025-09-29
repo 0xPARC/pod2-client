@@ -111,12 +111,6 @@ impl Obj {
             elem: elem.0,
         }))
     }
-    pub fn update(&self) -> UpdateBuilder {
-        UpdateBuilder {
-            base: self.0.clone(),
-            sets: Vec::new(),
-        }
-    }
     /// Set operation: deletion (returns new set root)
     pub fn delete(&self, elem: impl Into<Obj>) -> Self {
         let elem = elem.into();
@@ -150,45 +144,7 @@ impl Obj {
             key: key.into(),
         }))
     }
-    /// Dynamic dict insert with expression key (returns new dict root)
-    pub fn dict_insert_expr(&self, key: impl Into<Obj>, val: impl Into<Obj>) -> Self {
-        let key = key.into();
-        let val = val.into();
-        Obj(Rc::new(Expr::ContainerInsert {
-            dict: self.0.clone(),
-            key: key.0,
-            val: val.0,
-        }))
-    }
-    /// Dynamic dict update with expression key (returns new dict root)
-    pub fn dict_update_expr(&self, key: impl Into<Obj>, val: impl Into<Obj>) -> Self {
-        let key = key.into();
-        let val = val.into();
-        Obj(Rc::new(Expr::ContainerUpdate {
-            dict: self.0.clone(),
-            key: key.0,
-            val: val.0,
-        }))
-    }
-    /// Dynamic dict delete with expression key (returns new dict root)
-    pub fn dict_delete_expr(&self, key: impl Into<Obj>) -> Self {
-        let key = key.into();
-        Obj(Rc::new(Expr::ContainerDelete {
-            dict: self.0.clone(),
-            key: key.0,
-        }))
-    }
-
-    // Ergonomic aliases: at-style container edits
-    pub fn insert_at(&self, key: impl Into<Obj>, val: impl Into<Obj>) -> Self {
-        self.dict_insert_expr(key, val)
-    }
-    pub fn update_at(&self, key: impl Into<Obj>, val: impl Into<Obj>) -> Self {
-        self.dict_update_expr(key, val)
-    }
-    pub fn delete_at(&self, key: impl Into<Obj>) -> Self {
-        self.dict_delete_expr(key)
-    }
+    // Removed dict_* and *_at sugar in favor of unified set/put/remove
     /// Unified remove for dictionary entries: accepts static or dynamic key
     pub fn remove(&self, key: impl Into<KeyArg>) -> Self {
         match key.into() {
@@ -272,28 +228,5 @@ where
     fn mul(self, rhs: T) -> Self::Output {
         let r: Obj = rhs.into();
         Obj(Rc::new(Expr::Mul(self.0, r.0)))
-    }
-}
-
-/// Builder for immutable dictionary updates; corresponds to a chain of Podlang
-/// `DictUpdate(out, dict, key, val)` statements.
-#[derive(Clone, Debug)]
-pub struct UpdateBuilder {
-    pub(crate) base: Rc<Expr>,
-    pub(crate) sets: Vec<(String, Rc<Expr>)>,
-}
-
-impl UpdateBuilder {
-    pub fn set(mut self, key: impl Into<String>, val: impl Into<Obj>) -> Self {
-        let key = key.into();
-        let val = val.into();
-        self.sets.push((key, val.0));
-        self
-    }
-    pub fn build(self) -> Obj {
-        Obj(Rc::new(Expr::DictUpdateChain {
-            base: self.base,
-            sets: self.sets,
-        }))
     }
 }
