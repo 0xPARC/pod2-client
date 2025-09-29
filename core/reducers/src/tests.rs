@@ -4,7 +4,7 @@ use pod2::{
     middleware::{containers::Set, NativeOperation, OperationType, Params, TypedValue},
 };
 
-use crate::{build_predicate, util::as_set, BatchBuilder, LoweredPredicate};
+use crate::{build_predicate, util::as_set, LoweredPredicate};
 
 // Test-only reducers and router for dispatch tests
 crate::reducer!(r_one, "Tag.One", |ctx| {
@@ -49,7 +49,10 @@ fn lowers_upvote() {
 
 #[test]
 fn guard_sum_equal() {
-    let params = Params::default();
+    let params = Params {
+        max_custom_predicate_arity: 16,
+        ..Default::default()
+    };
     let LoweredPredicate { predicate, .. } = build_predicate(&params, "Post.Check", |ctx| {
         let state = ctx.state();
         ctx.require_eq(state.get("foo").add(10), state.get("bar"));
@@ -262,135 +265,6 @@ fn plan_ops_upvote() -> crate::error::Result<()> {
     Ok(())
 }
 
-// Same flow as above but using higher-level wrappers for Posts and Forum
-#[test]
-fn forum_posts_wrappers_flow() -> crate::error::Result<()> {
-    use pod2::middleware::{
-        containers::Dictionary, CustomPredicateBatch, CustomPredicateRef, Value,
-    };
-
-    crate::reducer!(post_create2, "Post.Create2", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        let p1 = st.dict_insert("title", ac.get("title"));
-        let p2 = p1.dict_insert("body", ac.get("body"));
-        let p3 = p2.dict_update("upvotes", 0);
-        let p4 = p3.dict_update("voters", st.get("voters"));
-        p4
-    });
-    crate::reducer!(post_upvote2, "Post.Upvote2", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        st.update()
-            .set("upvotes", st.get("upvotes") + 1)
-            .set("voters", st.get("voters").insert(ac.get("user")))
-            .build()
-    });
-    crate::reducer!(post_delete2, "Post.Delete2", |ctx| {
-        let st = ctx.state();
-        st.dict_insert("__no_effect__", 0)
-    });
-
-    let params = Params::default();
-    let pred_c = post_create2::predicate(&params);
-    let pred_u = post_upvote2::predicate(&params);
-    let pred_d = post_delete2::predicate(&params);
-    let batch = CustomPredicateBatch::new(
-        &params,
-        "PostLeafBatch2".to_string(),
-        vec![pred_c.clone(), pred_u.clone(), pred_d.clone()],
-    );
-    let cpr_c = CustomPredicateRef::new(batch.clone(), 0);
-    let cpr_u = CustomPredicateRef::new(batch.clone(), 1);
-    let cpr_d = CustomPredicateRef::new(batch.clone(), 2);
-
-    // Forum with empty posts
-    let empty_posts: Dictionary = pod2::dict!(params.max_depth_mt_containers, {})?;
-    let forum_prev: Dictionary =
-        pod2::dict!(params.max_depth_mt_containers, {"posts" => empty_posts.clone()})?;
-
-    // Leaf prev
-    let voters_empty =
-        pod2::middleware::containers::Set::new(params.max_depth_mt_containers, Default::default())
-            .unwrap();
-    let prev_post_empty: Dictionary =
-        pod2::dict!(params.max_depth_mt_containers, {"voters" => voters_empty, "upvotes" => 0})?;
-
-    // Create
-    let a_create: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"post_id" => "p1", "title" => "Hello", "body" => "World"})?;
-    let next_post_c = post_create2::exec(&prev_post_empty, &a_create)?;
-    let mut b_c = std::collections::HashMap::new();
-    b_c.insert("Prev".to_string(), Value::from(prev_post_empty.clone()));
-    b_c.insert("Action".to_string(), Value::from(a_create.clone()));
-    b_c.insert("Next".to_string(), Value::from(next_post_c.clone()));
-    let ops_c = crate::plan_operations(&pred_c, &params, &b_c)?;
-    let rec_c = crate::LeafReceipt {
-        rule_ref: cpr_c,
-        key: "p1".into(),
-        effect: crate::ChildEffect::Insert,
-        next: next_post_c.clone(),
-        ops: ops_c,
-    };
-
-    let posts_after_c = crate::posts_apply_change(&empty_posts, rec_c)?;
-    let forum_after_c = crate::forum_apply_posts_change(&forum_prev, &posts_after_c)?;
-
-    // Upvote
-    let a_up: Dictionary =
-        pod2::dict!(params.max_depth_mt_containers, {"post_id" => "p1", "user" => "alice"})?;
-    let next_post_u = post_upvote2::exec(&next_post_c, &a_up)?;
-    let mut b_u = std::collections::HashMap::new();
-    b_u.insert("Prev".to_string(), Value::from(next_post_c.clone()));
-    b_u.insert("Action".to_string(), Value::from(a_up.clone()));
-    b_u.insert("Next".to_string(), Value::from(next_post_u.clone()));
-    let ops_u = crate::plan_operations(&pred_u, &params, &b_u)?;
-    let rec_u = crate::LeafReceipt {
-        rule_ref: cpr_u,
-        key: "p1".into(),
-        effect: crate::ChildEffect::Update,
-        next: next_post_u.clone(),
-        ops: ops_u,
-    };
-
-    let posts_after_u = crate::posts_apply_change(&posts_after_c, rec_u)?;
-    let forum_after_u = crate::forum_apply_posts_change(&forum_after_c, &posts_after_u)?;
-
-    // Delete
-    let a_del: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"post_id" => "p1"})?;
-    let _next_post_d = post_delete2::exec(&next_post_u, &a_del)?;
-    let mut b_d = std::collections::HashMap::new();
-    b_d.insert("Prev".to_string(), Value::from(next_post_u.clone()));
-    b_d.insert("Action".to_string(), Value::from(a_del.clone()));
-    b_d.insert("Next".to_string(), Value::from(next_post_u.clone()));
-    let ops_d = crate::plan_operations(&pred_d, &params, &b_d)?;
-    let rec_d = crate::LeafReceipt {
-        rule_ref: cpr_d,
-        key: "p1".into(),
-        effect: crate::ChildEffect::Delete,
-        next: next_post_u.clone(),
-        ops: ops_d,
-    };
-
-    let posts_after_d = crate::posts_apply_change(&posts_after_u, rec_d)?;
-    let forum_after_d = crate::forum_apply_posts_change(&forum_after_u, &posts_after_d)?;
-
-    // Assertions
-    assert!(posts_after_d.get(&"p1".into()).is_err());
-    assert_eq!(
-        forum_after_c.get(&"posts".into())?.clone(),
-        Value::from(posts_after_c)
-    );
-    assert_eq!(
-        forum_after_u.get(&"posts".into())?.clone(),
-        Value::from(posts_after_u)
-    );
-    assert_eq!(
-        forum_after_d.get(&"posts".into())?.clone(),
-        Value::from(posts_after_d)
-    );
-    Ok(())
-}
-
 #[test]
 fn macro_exec_and_plan() -> crate::error::Result<()> {
     crate::reducer!(macro_post_upvote, "Post.Upvote", |ctx| {
@@ -432,31 +306,7 @@ fn macro_exec_and_plan() -> crate::error::Result<()> {
 }
 
 #[test]
-fn batch_composition_with_custom_call() {
-    let params = Params::default();
-    let mut bb = BatchBuilder::new(&params);
-    bb.add("Child", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        st.update().set("x", ac.get("a") + ac.get("b")).build()
-    });
-    bb.add("Parent", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        ctx.call("Child", st.get("child"), ac.clone(), st.get("child"));
-        st.update().set("p", 1).build()
-    });
-    let (batch, refs) = bb.build("ReducersBatch");
-    assert_eq!(batch.predicates().len(), 2);
-    assert!(refs.contains_key("Child"));
-    assert!(refs.contains_key("Parent"));
-    let parent = &batch.predicates()[1];
-    let podlang = parent.to_podlang_string();
-    assert!(podlang.contains("Equal("));
-}
-
-#[test]
-fn router_dispatch_and_batch() -> crate::error::Result<()> {
+fn router_dispatch() -> crate::error::Result<()> {
     let params = Params::default();
     // Exec dispatch for Tag.One
     let prev = pod2::dict!(params.max_depth_mt_containers, {"x" => 0}).unwrap();
@@ -484,10 +334,6 @@ fn router_dispatch_and_batch() -> crate::error::Result<()> {
     };
     assert_eq!(y, 2);
 
-    // Batch contains both predicates with tag-index mapping
-    let (_batch, refs) = router_mod::batch(&params);
-    assert!(refs.contains_key("Tag.One"));
-    assert!(refs.contains_key("Tag.Two"));
     Ok(())
 }
 
@@ -497,8 +343,8 @@ fn router_builder_local() -> crate::error::Result<()> {
     let params = Params::default();
 
     let mut rb = RouterBuilder::new();
-    rb.add("Tag.One", r_one::predicate, r_one::exec, r_one::plan)
-        .add("Tag.Two", r_two::predicate, r_two::exec, r_two::plan);
+    rb.add("Tag.One", r_one::exec, r_one::plan)
+        .add("Tag.Two", r_two::exec, r_two::plan);
     let router = rb.build();
 
     // Exec via builder router
@@ -514,357 +360,164 @@ fn router_builder_local() -> crate::error::Result<()> {
     };
     assert_eq!(x, 1);
 
-    // Batch
-    let (_batch, refs) = router.batch(&params);
-    assert!(refs.contains_key("Tag.One"));
-    assert!(refs.contains_key("Tag.Two"));
     Ok(())
 }
 
+// Top-level-only API sketch test: Forum.UpvotePost and Forum.DeletePost
 #[test]
-fn plan_with_custom_call_in_batch() -> crate::error::Result<()> {
-    use pod2::{
-        frontend::Operation as FOperation,
-        middleware::{containers::Dictionary, OperationType, Value},
-    };
+fn top_level_forum_actions() -> crate::error::Result<()> {
+    use pod2::middleware::{containers::Dictionary, Value};
 
-    use crate::planner::plan_operations_in_batch;
+    // Reducers resembling the API sketch
+    crate::reducer!(forum_upvote_post, "Forum.UpvotePost", |ctx| {
+        let s = ctx.state();
+        let a = ctx.action();
+        // Patch
+        let posts = s.get("posts");
+        let pid = a.get("post_id");
+        // Dynamic lookup of the post entry
+        let post = posts.get(&pid);
+        let post1 = post
+            .set("upvotes", post.get("upvotes") + 1)
+            .set("voters", post.get("voters").insert(a.get("user")));
+        let posts1 = posts.set(&pid, post1);
+        s.set("posts", posts1)
+    });
+
+    crate::reducer!(forum_delete_post, "Forum.DeletePost", |ctx| {
+        let s = ctx.state();
+        let a = ctx.action();
+        let posts1 = s.get("posts").remove(a.get("post_id"));
+        s.set("posts", posts1)
+    });
 
     let params = Params::default();
-    let mut bb = BatchBuilder::new(&params);
-    bb.add("Child", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        st.update().set("x", ac.get("a") + ac.get("b")).build()
-    });
-    bb.add("Parent", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        ctx.call("Child", st.get("child"), ac.clone(), st.get("child"));
-        st.update().set("p", 1).build()
-    });
-    let (batch, _refs) = bb.build("ReducersBatch");
 
-    let parent = &batch.predicates()[1];
-
-    // Build bindings for Prev/Action/Next
-    let prev: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"p" => 0, "child" => pod2::dict!(params.max_depth_mt_containers, {})?})?;
-    let action: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"a" => 1, "b" => 2})?;
-    let next: Dictionary = {
-        let mut d = prev.clone();
-        let _ = d.update(&"p".into(), &Value::from(1))?;
+    // Build Prev forum with users and one post p1
+    let users = {
+        let s = Set::new(params.max_depth_mt_containers, Default::default()).unwrap();
+        let mut s2 = s;
+        let _ = s2.insert(&pod2::middleware::Value::from("alice"));
+        s2
+    };
+    let voters = Set::new(params.max_depth_mt_containers, Default::default()).unwrap();
+    let post_p1: Dictionary = pod2::dict!(
+        params.max_depth_mt_containers,
+        {"title" => "Hello", "body" => "World", "upvotes" => 0, "voters" => voters}
+    )?;
+    let posts: Dictionary = {
+        let mut d = pod2::dict!(params.max_depth_mt_containers, {})?;
+        let _ = d.insert(&"p1".into(), &Value::from(post_p1.clone()))?;
         d
     };
-
-    let mut bindings: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    bindings.insert("Prev".to_string(), Value::from(prev));
-    bindings.insert("Action".to_string(), Value::from(action));
-    bindings.insert("Next".to_string(), Value::from(next));
-
-    let ops = plan_operations_in_batch(parent, &params, &bindings, &batch)?;
-    // Expect at least one custom operation corresponding to the Child call
-    assert!(ops
-        .iter()
-        .any(|op| matches!(op.0, OperationType::Custom(_))));
-    Ok(())
-}
-
-#[test]
-fn plan_with_external_custom_ref() -> crate::error::Result<()> {
-    use pod2::middleware::{
-        containers::Dictionary, CustomPredicate, NativePredicate, Predicate, StatementTmpl,
-        StatementTmplArg, Value, Wildcard,
-    };
-
-    let params = Params::default();
-
-    // Build an external custom predicate directly (not via our reducer EDSL)
-    // ext(Prev, Action, Next) = AND(Equal(Prev, Prev)) as a trivial predicate
-    let names = vec!["Prev".to_string(), "Action".to_string(), "Next".to_string()];
-    let stmt = StatementTmpl {
-        pred: Predicate::Native(NativePredicate::Equal),
-        args: vec![
-            StatementTmplArg::Wildcard(Wildcard::new("Prev".to_string(), 0)),
-            StatementTmplArg::Wildcard(Wildcard::new("Prev".to_string(), 0)),
-        ],
-    };
-    let ext_pred =
-        CustomPredicate::and(&params, "Ext.Trivial".to_string(), vec![stmt], 3, names).unwrap();
-    let ext_batch = pod2::middleware::CustomPredicateBatch::new(
-        &params,
-        "ExtBatch".to_string(),
-        vec![ext_pred],
-    );
-    let ext_ref = pod2::middleware::CustomPredicateRef::new(ext_batch.clone().into(), 0);
-
-    // Build a reducer that references the external custom ref as a guard
-    let LoweredPredicate { predicate, .. } = build_predicate(&params, "Parent.UsesExt", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        ctx.require_custom_ref(ext_ref.clone(), vec![st.clone(), ac.clone(), st.clone()]);
-        st.update().set("p", 1).build()
-    });
-
-    // Plan using the standalone planner (no batch needed for CustomRef)
-    let prev: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"p" => 0})?;
-    let action: Dictionary = pod2::dict!(params.max_depth_mt_containers, {})?;
-    let next: Dictionary = {
-        let mut d = prev.clone();
-        let _ = d.update(&"p".into(), &Value::from(1))?;
-        d
-    };
-    let mut bindings: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    bindings.insert("Prev".to_string(), Value::from(prev));
-    bindings.insert("Action".to_string(), Value::from(action));
-    bindings.insert("Next".to_string(), Value::from(next));
-
-    let ops = crate::plan_operations(&predicate, &params, &bindings)?;
-    assert!(ops
-        .iter()
-        .any(|op| matches!(op.0, pod2::middleware::OperationType::Custom(_))));
-    Ok(())
-}
-
-// Bottom-up execution demo: leaf with private action emits a receipt; parent applies it.
-#[test]
-fn bottom_up_leaf_receipt_and_parent_apply() -> crate::error::Result<()> {
-    use pod2::middleware::{
-        containers::Dictionary, CustomPredicateBatch, CustomPredicateRef, Value,
-    };
-
-    // Define a simple leaf reducer via macro for determinism and reuse
-    crate::reducer!(leaf_inc, "Leaf.Inc", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        // NextLeaf.x = PrevLeaf.x + Action.inc
-        st.update().set("x", st.get("x") + ac.get("inc")).build()
-    });
-
-    let params = Params {
-        max_custom_predicate_arity: 10,
-        ..Default::default()
-    };
-
-    // Build a batch solely to obtain a concrete CustomPredicateRef for the leaf rule
-    let pred = leaf_inc::predicate(&params);
-    let batch = CustomPredicateBatch::new(&params, "LeafBatch".to_string(), vec![pred.clone()]);
-    let leaf_ref = CustomPredicateRef::new(batch.clone(), 0);
-
-    // Prepare leaf Prev/Action and compute Next via exec (private action)
-    let prev_leaf: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"x" => 1})?;
-    let action: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"inc" => 2})?;
-    let next_leaf = leaf_inc::exec(&prev_leaf, &action)?; // x = 3
-
-    // Materialize leaf operations by planning with bindings (acts as witness computation too)
-    let mut bindings: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    bindings.insert("Prev".to_string(), Value::from(prev_leaf.clone()));
-    bindings.insert("Action".to_string(), Value::from(action.clone()));
-    bindings.insert("Next".to_string(), Value::from(next_leaf.clone()));
-    let leaf_ops = crate::plan_operations(&pred, &params, &bindings)?;
-
-    // Package a bottom-up receipt (no action included)
-    let receipt = crate::LeafReceipt {
-        rule_ref: leaf_ref,
-        key: "child".to_string(),
-        effect: crate::ChildEffect::Update,
-        next: next_leaf.clone(),
-        ops: leaf_ops,
-    };
-
-    // Parent embeds child.Next into its own dictionary under key "child"
-    let prev_parent: Dictionary = pod2::dict!(
+    let prev_forum: Dictionary = pod2::dict!(
         params.max_depth_mt_containers,
-        {"child" => prev_leaf.clone(), "p" => 0}
+        {"users" => users, "posts" => posts}
     )?;
-    let next_parent = crate::apply_child_receipts(&prev_parent, &[receipt])?;
 
-    // Assert parent.child == next_leaf and 'p' unchanged
-    let child_after = next_parent.get(&"child".into())?.clone();
-    assert_eq!(child_after, Value::from(next_leaf));
-    match next_parent.get(&"p".into())?.typed() {
-        TypedValue::Int(i) => assert_eq!(*i, 0),
-        _ => panic!("p not int"),
-    }
-    Ok(())
-}
-
-// Forum -> Posts example: Create, Upvote, Delete ripple-up
-#[test]
-fn forum_posts_post_bottom_up_flow() -> crate::error::Result<()> {
-    use pod2::middleware::{
-        containers::{Dictionary, Set as MwSet},
-        CustomPredicateBatch, CustomPredicateRef, Value,
+    // Upvote p1 by alice
+    let action_up: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"action_type" => "Forum.UpvotePost", "post_id" => "p1", "user" => "alice"})?;
+    let next_forum = forum_upvote_post::exec(&prev_forum, &action_up)?;
+    // Assert upvotes became 1 and voters contain alice
+    let p1_after = match next_forum.get(&"posts".into())?.typed() {
+        TypedValue::Dictionary(d) => d.get(&"p1".into())?.clone(),
+        _ => panic!("posts not dict"),
     };
-
-    crate::reducer!(post_create, "Post.Create", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        // Use dict_insert for new keys, dict_update for existing defaults
-        let p1 = st.dict_insert("title", ac.get("title"));
-        let p2 = p1.dict_insert("body", ac.get("body"));
-        let p3 = p2.dict_update("upvotes", 0);
-        let p4 = p3.dict_update("voters", st.get("voters"));
-        p4
-    });
-    crate::reducer!(post_upvote, "Post.Upvote", |ctx| {
-        let st = ctx.state();
-        let ac = ctx.action();
-        st.update()
-            .set("upvotes", st.get("upvotes") + 1)
-            .set("voters", st.get("voters").insert(ac.get("user")))
-            .build()
-    });
-    crate::reducer!(post_delete, "Post.Delete", |ctx| {
-        let st = ctx.state();
-        // No-op on the leaf; parent will perform DictDelete. Use insert to avoid missing-key update.
-        st.dict_insert("__no_effect__", 0)
-    });
-
-    let params = Params::default();
-
-    // Build a batch to get refs for leaf rules
-    let pred_create = post_create::predicate(&params);
-    let pred_upvote = post_upvote::predicate(&params);
-    let pred_delete = post_delete::predicate(&params);
-    let batch = CustomPredicateBatch::new(
-        &params,
-        "PostLeafBatch".to_string(),
-        vec![
-            pred_create.clone(),
-            pred_upvote.clone(),
-            pred_delete.clone(),
-        ],
-    );
-    let cpr_create = CustomPredicateRef::new(batch.clone(), 0);
-    let cpr_upvote = CustomPredicateRef::new(batch.clone(), 1);
-    let cpr_delete = CustomPredicateRef::new(batch.clone(), 2);
-
-    // Start with empty forum: { posts: {} }
-    let empty_posts: Dictionary = pod2::dict!(params.max_depth_mt_containers, {})?;
-    let forum_prev: Dictionary =
-        pod2::dict!(params.max_depth_mt_containers, {"posts" => empty_posts.clone()})?;
-
-    // 1) Create a post id "p1"
-    // Seed prev post with default containers for smooth creation
-    let voters_empty =
-        pod2::middleware::containers::Set::new(params.max_depth_mt_containers, Default::default())
-            .unwrap();
-    let prev_post_empty: Dictionary = pod2::dict!(
-        params.max_depth_mt_containers,
-        {"voters" => voters_empty, "upvotes" => 0}
-    )?;
-    let action_create: Dictionary = pod2::dict!(
-        params.max_depth_mt_containers,
-        {"post_id" => "p1", "title" => "Hello", "body" => "World"}
-    )?;
-    let next_post_created = post_create::exec(&prev_post_empty, &action_create)?;
-    let mut bindings_create = std::collections::HashMap::new();
-    bindings_create.insert("Prev".to_string(), Value::from(prev_post_empty.clone()));
-    bindings_create.insert("Action".to_string(), Value::from(action_create.clone()));
-    bindings_create.insert("Next".to_string(), Value::from(next_post_created.clone()));
-    let ops_create = crate::plan_operations(&pred_create, &params, &bindings_create)?;
-    let receipt_create = crate::LeafReceipt {
-        rule_ref: cpr_create,
-        key: "p1".to_string(),
-        effect: crate::ChildEffect::Insert,
-        next: next_post_created.clone(),
-        ops: ops_create,
-    };
-    let posts_after_create = crate::apply_child_receipts(&empty_posts, &[receipt_create.clone()])?;
-    let forum_after_create: Dictionary = {
-        let mut f = forum_prev.clone();
-        let _ = f.update(&"posts".into(), &Value::from(posts_after_create.clone()))?;
-        f
-    };
-
-    // 2) Upvote p1
-    let prev_post_for_upvote_dict = next_post_created.clone();
-    let action_upvote: Dictionary =
-        pod2::dict!(params.max_depth_mt_containers, {"post_id" => "p1", "user" => "alice"})?;
-    let next_post_upvoted = post_upvote::exec(&prev_post_for_upvote_dict, &action_upvote)?;
-    let mut bindings_upvote = std::collections::HashMap::new();
-    bindings_upvote.insert(
-        "Prev".to_string(),
-        Value::from(prev_post_for_upvote_dict.clone()),
-    );
-    bindings_upvote.insert("Action".to_string(), Value::from(action_upvote.clone()));
-    bindings_upvote.insert("Next".to_string(), Value::from(next_post_upvoted.clone()));
-    let ops_upvote = crate::plan_operations(&pred_upvote, &params, &bindings_upvote)?;
-    let receipt_upvote = crate::LeafReceipt {
-        rule_ref: cpr_upvote,
-        key: "p1".to_string(),
-        effect: crate::ChildEffect::Update,
-        next: next_post_upvoted.clone(),
-        ops: ops_upvote,
-    };
-    let posts_after_upvote = crate::apply_child_receipts(&posts_after_create, &[receipt_upvote])?;
-    let forum_after_upvote: Dictionary = {
-        let mut f = forum_after_create.clone();
-        let _ = f.update(&"posts".into(), &Value::from(posts_after_upvote.clone()))?;
-        f
-    };
-
-    // 3) Delete p1
-    let prev_post_for_delete_dict = next_post_upvoted.clone();
-    let action_delete: Dictionary = pod2::dict!(
-        params.max_depth_mt_containers,
-        {"post_id" => "p1", "reason" => "cleanup"}
-    )?;
-    let _next_post_deleted = post_delete::exec(&prev_post_for_delete_dict, &action_delete)?;
-    let mut bindings_delete = std::collections::HashMap::new();
-    bindings_delete.insert(
-        "Prev".to_string(),
-        Value::from(prev_post_for_delete_dict.clone()),
-    );
-    bindings_delete.insert("Action".to_string(), Value::from(action_delete.clone()));
-    // Next is irrelevant for delete at parent level; bind to empty dict for planning
-    let empty_post: Dictionary = pod2::dict!(params.max_depth_mt_containers, {})?;
-    bindings_delete.insert("Next".to_string(), Value::from(empty_post.clone()));
-    let ops_delete = crate::plan_operations(&pred_delete, &params, &bindings_delete)?;
-    let receipt_delete = crate::LeafReceipt {
-        rule_ref: cpr_delete,
-        key: "p1".to_string(),
-        effect: crate::ChildEffect::Delete,
-        next: empty_post,
-        ops: ops_delete,
-    };
-    let posts_after_delete = crate::apply_child_receipts(&posts_after_upvote, &[receipt_delete])?;
-    let forum_after_delete: Dictionary = {
-        let mut f = forum_after_upvote.clone();
-        let _ = f.update(&"posts".into(), &Value::from(posts_after_delete.clone()))?;
-        f
-    };
-
-    // Assertions
-    // After create: post upvotes=0 (from next_post_created)
-    match next_post_created.get(&"upvotes".into())?.typed() {
-        TypedValue::Int(i) => assert_eq!(*i, 0),
-        _ => panic!("upvotes not int"),
-    }
-    // After upvote: post upvotes=1 and voters contains alice (from next_post_upvoted)
-    match next_post_upvoted.get(&"upvotes".into())?.typed() {
+    let p1_dict = crate::util::as_dict(&p1_after)?;
+    match p1_dict.get(&"upvotes".into())?.typed() {
         TypedValue::Int(i) => assert_eq!(*i, 1),
         _ => panic!("upvotes not int"),
     }
-    let voters_v = next_post_upvoted.get(&"voters".into())?;
-    let s = crate::util::as_set(&voters_v)?;
-    assert!(s.set().contains(&Value::from("alice")));
-    // After delete: posts dict no longer contains p1
-    let has_p1 = posts_after_delete.get(&"p1".into()).is_ok();
-    assert!(!has_p1);
-    // Forum reflects posts after each step
-    assert_eq!(
-        forum_after_create.get(&"posts".into())?.clone(),
-        Value::from(posts_after_create)
-    );
-    assert_eq!(
-        forum_after_upvote.get(&"posts".into())?.clone(),
-        Value::from(posts_after_upvote)
-    );
-    assert_eq!(
-        forum_after_delete.get(&"posts".into())?.clone(),
-        Value::from(posts_after_delete)
-    );
+    let voters_v = p1_dict.get(&"voters".into())?.clone();
+    let voters_set = as_set(&voters_v)?;
+    assert!(voters_set.set().contains(&Value::from("alice")));
+
+    // Delete p1
+    let action_del: Dictionary = pod2::dict!(params.max_depth_mt_containers, {"action_type" => "Forum.DeletePost", "post_id" => "p1"})?;
+    let next_forum2 = forum_delete_post::exec(&next_forum, &action_del)?;
+    let posts_after = match next_forum2.get(&"posts".into())?.typed() {
+        TypedValue::Dictionary(d) => d,
+        _ => panic!("posts not dict"),
+    };
+    assert!(posts_after.get(&"p1".into()).is_err());
+
+    Ok(())
+}
+
+// Define reducers and router at module scope for use in test below
+mod forum_router_defs {
+    crate::reducer!(forum_upvote_post, "Forum.UpvotePost", |ctx| {
+        let s = ctx.state();
+        let a = ctx.action();
+        let posts = s.get("posts");
+        let pid = a.get("post_id");
+        let post = posts.get(pid.clone());
+        let post1 = post
+            .set("upvotes", post.get("upvotes") + 1)
+            .set("voters", post.get("voters").insert(a.get("user")));
+        let posts1 = posts.set(pid, post1);
+        s.set("posts", posts1)
+    });
+
+    crate::reducer!(forum_delete_post, "Forum.DeletePost", |ctx| {
+        let s = ctx.state();
+        let a = ctx.action();
+        let posts1 = s.get("posts").remove(a.get("post_id"));
+        s.set("posts", posts1)
+    });
+
+    crate::reducer_router!(forum_router, [
+        "Forum.UpvotePost" => forum_upvote_post,
+        "Forum.DeletePost" => forum_delete_post,
+    ]);
+}
+
+// Router exercising top-level reducers (Upvote, Delete) via action_type dispatch
+#[test]
+fn top_level_forum_router() -> crate::error::Result<()> {
+    use pod2::middleware::{containers::Dictionary, Value};
+
+    // Seed state with one post p1 and user alice
+    let params = Params::default();
+    let mut users = Set::new(params.max_depth_mt_containers, Default::default()).unwrap();
+    let _ = users.insert(&Value::from("alice"));
+    let voters = Set::new(params.max_depth_mt_containers, Default::default()).unwrap();
+    let post_p1: Dictionary = pod2::dict!(
+        params.max_depth_mt_containers,
+        {"title" => "Hello", "body" => "World", "upvotes" => 0, "voters" => voters}
+    )?;
+    let posts: Dictionary = {
+        let mut d = pod2::dict!(params.max_depth_mt_containers, {})?;
+        let _ = d.insert(&"p1".into(), &Value::from(post_p1.clone()))?;
+        d
+    };
+    let mut forum: Dictionary = pod2::dict!(
+        params.max_depth_mt_containers,
+        {"users" => users, "posts" => posts}
+    )?;
+
+    // Upvote p1
+    let action_up = pod2::dict!(params.max_depth_mt_containers, {"action_type" => "Forum.UpvotePost", "post_id" => "p1", "user" => "alice"})?;
+    forum = forum_router_defs::forum_router::exec(&forum, &action_up)?;
+    // ensure upvotes incremented
+    let p1_after = match forum.get(&"posts".into())?.typed() {
+        TypedValue::Dictionary(d) => d.get(&"p1".into())?.clone(),
+        _ => unreachable!(),
+    };
+    let p1d = crate::util::as_dict(&p1_after)?;
+    assert!(matches!(
+        p1d.get(&"upvotes".into())?.typed(),
+        TypedValue::Int(1)
+    ));
+
+    // Delete p1
+    let action_del = pod2::dict!(params.max_depth_mt_containers, {"action_type" => "Forum.DeletePost", "post_id" => "p1"})?;
+    forum = forum_router_defs::forum_router::exec(&forum, &action_del)?;
+    let posts_after = match forum.get(&"posts".into())?.typed() {
+        TypedValue::Dictionary(d) => d,
+        _ => unreachable!(),
+    };
+    assert!(posts_after.get(&"p1".into()).is_err());
 
     Ok(())
 }

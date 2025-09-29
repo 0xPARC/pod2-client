@@ -330,16 +330,101 @@ pub fn plan_operations(
                         ops.push(FOperation::array_update(out_val, arr_v, idx_v, val));
                     }
                     NativePredicate::None | NativePredicate::False => {}
-                    NativePredicate::ContainerInsert
-                    | NativePredicate::ContainerUpdate
-                    | NativePredicate::ContainerDelete => {}
+                    NativePredicate::ContainerInsert => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerInsert first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let val = value_of_arg(&st.args[3], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.insert(&key, &val).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_insert(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                            val,
+                        ));
+                    }
+                    NativePredicate::ContainerUpdate => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerUpdate first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let val = value_of_arg(&st.args[3], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.update(&key, &val).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_update(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                            val,
+                        ));
+                    }
+                    NativePredicate::ContainerDelete => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerDelete first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.delete(&key).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_delete(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                        ));
+                    }
                 }
             }
             Predicate::Custom(cpr) => {
                 let arity = cpr.predicate().statements().len();
                 ops.push(FOperation::custom(
                     cpr.clone(),
-                    std::iter::repeat(pod2::middleware::Statement::None).take(arity),
+                    std::iter::repeat_n(pod2::middleware::Statement::None, arity),
                 ));
             }
             Predicate::BatchSelf(_) | Predicate::Intro(_) => {
@@ -646,22 +731,107 @@ pub fn plan_operations_in_batch(
                         ops.push(FOperation::array_update(out_val, arr_v, idx_v, val));
                     }
                     NativePredicate::None | NativePredicate::False => {}
-                    NativePredicate::ContainerInsert
-                    | NativePredicate::ContainerUpdate
-                    | NativePredicate::ContainerDelete => {}
+                    NativePredicate::ContainerInsert => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerInsert first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let val = value_of_arg(&st.args[3], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.insert(&key, &val).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_insert(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                            val,
+                        ));
+                    }
+                    NativePredicate::ContainerUpdate => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerUpdate first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let val = value_of_arg(&st.args[3], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.update(&key, &val).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_update(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                            val,
+                        ));
+                    }
+                    NativePredicate::ContainerDelete => {
+                        let out_wc = match &st.args[0] {
+                            StatementTmplArg::Wildcard(w) => w.name.clone(),
+                            _ => {
+                                return Err(Error::Msg(
+                                    "ContainerDelete first arg must be Wildcard".into(),
+                                ))
+                            }
+                        };
+                        let dict = value_of_arg(&st.args[1], &env)?;
+                        let key_v = value_of_arg(&st.args[2], &env)?;
+                        let mut d = as_dict(&dict)?;
+                        let key_name = match key_v.typed() {
+                            TypedValue::String(s) => s.clone(),
+                            other => {
+                                return Err(Error::Type(format!("Key must be string, got {other}")))
+                            }
+                        };
+                        let key = Key::from(key_name.clone());
+                        let _ = d.delete(&key).map_err(Error::from)?;
+                        let out_val = Value::from(d);
+                        env.insert(out_wc.clone(), out_val.clone());
+                        ops.push(FOperation::dict_delete(
+                            out_val,
+                            dict,
+                            Value::from(key_name),
+                        ));
+                    }
                     NativePredicate::Gt | NativePredicate::GtEq => {}
                 }
             }
             Predicate::BatchSelf(i) => {
                 let cpr = CustomPredicateRef::new(batch.clone(), *i);
                 let arity = batch.predicates()[*i].statements().len();
-                let op = FOperation::custom(cpr, std::iter::repeat(Statement::None).take(arity));
+                let op = FOperation::custom(cpr, std::iter::repeat_n(Statement::None, arity));
                 ops.push(op);
             }
             Predicate::Custom(cpr) => {
                 let arity = cpr.predicate().statements().len();
                 let op =
-                    FOperation::custom(cpr.clone(), std::iter::repeat(Statement::None).take(arity));
+                    FOperation::custom(cpr.clone(), std::iter::repeat_n(Statement::None, arity));
                 ops.push(op);
             }
             Predicate::Intro(_ir) => {

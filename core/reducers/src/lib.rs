@@ -27,17 +27,8 @@ pub use crate::interpreter::exec_reducer;
 
 mod macros;
 
-mod batch;
-pub use crate::batch::BatchBuilder;
-
 mod router;
 pub use crate::router::{Router, RouterBuilder};
-
-mod bottom_up;
-pub use crate::bottom_up::{
-    apply_child_receipts, forum_apply_post_receipts, forum_apply_posts_change, posts_apply_change,
-    ChildEffect, LeafReceipt,
-};
 
 #[cfg(test)]
 mod tests;

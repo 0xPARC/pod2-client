@@ -21,6 +21,10 @@ pub enum Expr {
     Var(VarKind),
     Const(Value),
     Field(Rc<Expr>, String),
+    /// Construct a fresh empty dictionary (using default Params)
+    EmptyDict,
+    /// Construct a fresh empty set (using default Params)
+    EmptySet,
     Add(Rc<Expr>, Rc<Expr>),
     /// Integer multiplication: lowers to ProductOf(out, a, b)
     Mul(Rc<Expr>, Rc<Expr>),
@@ -49,6 +53,25 @@ pub enum Expr {
     DictDelete {
         dict: Rc<Expr>,
         key: String,
+    },
+    // Dynamic-key container ops (dictionary)
+    ContainerLookup {
+        dict: Rc<Expr>,
+        key: Rc<Expr>,
+    },
+    ContainerInsert {
+        dict: Rc<Expr>,
+        key: Rc<Expr>,
+        val: Rc<Expr>,
+    },
+    ContainerUpdate {
+        dict: Rc<Expr>,
+        key: Rc<Expr>,
+        val: Rc<Expr>,
+    },
+    ContainerDelete {
+        dict: Rc<Expr>,
+        key: Rc<Expr>,
     },
     // Helper to build multiple successive DictUpdate operations ergonomically
     DictUpdateChain {

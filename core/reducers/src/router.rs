@@ -1,22 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use pod2::{
     frontend::Operation,
-    middleware::{
-        containers::Dictionary, CustomPredicate, CustomPredicateBatch, CustomPredicateRef, Key,
-        Params, TypedValue,
-    },
+    middleware::{containers::Dictionary, Key, Params, TypedValue},
 };
 
 use crate::error::{Error, Result};
 
 type ExecFn = fn(&Dictionary, &Dictionary) -> Result<Dictionary>;
 type PlanFn = fn(&Params, &Dictionary, &Dictionary, &Dictionary) -> Result<Vec<Operation>>;
-type PredFn = fn(&Params) -> CustomPredicate;
-
 #[derive(Clone, Copy)]
 struct BranchFns {
-    pred: PredFn,
     exec: ExecFn,
     plan: PlanFn,
 }
@@ -30,21 +24,8 @@ impl RouterBuilder {
         Self { order: Vec::new() }
     }
 
-    pub fn add(
-        &mut self,
-        tag: impl Into<String>,
-        predicate: PredFn,
-        exec: ExecFn,
-        plan: PlanFn,
-    ) -> &mut Self {
-        self.order.push((
-            tag.into(),
-            BranchFns {
-                pred: predicate,
-                exec,
-                plan,
-            },
-        ));
+    pub fn add(&mut self, tag: impl Into<String>, exec: ExecFn, plan: PlanFn) -> &mut Self {
+        self.order.push((tag.into(), BranchFns { exec, plan }));
         self
     }
 
@@ -98,22 +79,5 @@ impl Router {
         (self.branches[i].1.plan)(params, prev, action, next)
     }
 
-    pub fn batch(
-        &self,
-        params: &Params,
-    ) -> (
-        Arc<CustomPredicateBatch>,
-        HashMap<String, CustomPredicateRef>,
-    ) {
-        let mut preds: Vec<CustomPredicate> = Vec::with_capacity(self.branches.len());
-        for (_, fns) in self.branches.iter() {
-            preds.push((fns.pred)(params));
-        }
-        let batch = CustomPredicateBatch::new(params, "RouterBatch".to_string(), preds);
-        let mut refs = HashMap::new();
-        for (i, (tag, _)) in self.branches.iter().enumerate() {
-            refs.insert(tag.clone(), CustomPredicateRef::new(batch.clone(), i));
-        }
-        (batch, refs)
-    }
+    // batch() removed in simplified API
 }

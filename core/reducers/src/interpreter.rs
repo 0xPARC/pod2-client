@@ -1,4 +1,9 @@
-use pod2::middleware::{containers::Dictionary as MwDict, Key, NativePredicate, TypedValue, Value};
+use std::collections::HashMap;
+
+use pod2::middleware::{
+    containers::{Dictionary as MwDict, Set as MwSet},
+    Key, NativePredicate, Params, TypedValue, Value,
+};
 
 use crate::{
     ast::{Expr, VarKind},
@@ -11,6 +16,7 @@ use crate::{
 struct EvalEnv<'a> {
     prev: &'a MwDict,
     action: &'a MwDict,
+    bindings: HashMap<String, Value>,
 }
 
 fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
@@ -18,8 +24,28 @@ fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
         Expr::Var(VarKind::Prev) => Ok(Value::from(env.prev.clone())),
         Expr::Var(VarKind::Action) => Ok(Value::from(env.action.clone())),
         Expr::Var(VarKind::Next) => Err(Error::Msg("Next is not evaluable in expression".into())),
-        Expr::Var(VarKind::Witness(n)) => Err(Error::Unbound(n.clone())),
+        Expr::Var(VarKind::Witness(n)) => env
+            .bindings
+            .get(n)
+            .cloned()
+            .ok_or_else(|| Error::Unbound(n.clone())),
         Expr::Const(v) => Ok(v.clone()),
+        Expr::EmptyDict => {
+            let d = MwDict::new(
+                Params::default().max_depth_mt_containers,
+                Default::default(),
+            )
+            .expect("empty dict creation should not fail");
+            Ok(Value::from(d))
+        }
+        Expr::EmptySet => {
+            let s = MwSet::new(
+                Params::default().max_depth_mt_containers,
+                Default::default(),
+            )
+            .expect("empty set creation should not fail");
+            Ok(Value::from(s))
+        }
         Expr::Field(base, key) => {
             let base_v = eval_expr(base, env)?;
             match base_v.typed() {
@@ -76,11 +102,53 @@ fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
             let _ = d.delete(&Key::from(key.clone()))?;
             Ok(Value::from(d))
         }
+        Expr::ContainerInsert { dict, key, val } => {
+            let vd = eval_expr(dict, env)?;
+            let vk = eval_expr(key, env)?;
+            let vv = eval_expr(val, env)?;
+            let mut d = as_dict(&vd)?;
+            let k =
+                Key::try_from(vk.typed()).map_err(|_| Error::Type("Key must be string".into()))?;
+            let _ = d.insert(&k, &vv)?;
+            Ok(Value::from(d))
+        }
+        Expr::ContainerLookup { dict, key } => {
+            let vd = eval_expr(dict, env)?;
+            let vk = eval_expr(key, env)?;
+            let d = as_dict(&vd)?;
+            let k =
+                Key::try_from(vk.typed()).map_err(|_| Error::Type("Key must be string".into()))?;
+            Ok(d.get(&k)?.clone())
+        }
+        Expr::ContainerUpdate { dict, key, val } => {
+            let vd = eval_expr(dict, env)?;
+            let vk = eval_expr(key, env)?;
+            let vv = eval_expr(val, env)?;
+            let mut d = as_dict(&vd)?;
+            let k =
+                Key::try_from(vk.typed()).map_err(|_| Error::Type("Key must be string".into()))?;
+            let _ = d.update(&k, &vv)?;
+            Ok(Value::from(d))
+        }
+        Expr::ContainerDelete { dict, key } => {
+            let vd = eval_expr(dict, env)?;
+            let vk = eval_expr(key, env)?;
+            let mut d = as_dict(&vd)?;
+            let k =
+                Key::try_from(vk.typed()).map_err(|_| Error::Type("Key must be string".into()))?;
+            let _ = d.delete(&k)?;
+            Ok(Value::from(d))
+        }
         Expr::DictUpdateChain { base, sets } => {
             let mut cur = as_dict(&eval_expr(base, env)?)?;
             for (k, ve) in sets {
                 let v = eval_expr(ve, env)?;
-                let _ = cur.update(&Key::from(k.clone()), &v)?;
+                let key = Key::from(k.clone());
+                if cur.get(&key).is_ok() {
+                    let _ = cur.update(&key, &v)?;
+                } else {
+                    let _ = cur.insert(&key, &v)?;
+                }
             }
             Ok(Value::from(cur))
         }
@@ -95,12 +163,18 @@ fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
     }
 }
 
-fn check_guard(pred: NativePredicate, args: &[Obj], env: &EvalEnv) -> Result<bool> {
-    let mut vals = Vec::with_capacity(args.len());
-    for o in args {
-        vals.push(eval_expr(o.expr(), env)?);
-    }
+fn check_guard(pred: NativePredicate, args: &[Obj], env: &mut EvalEnv) -> Result<bool> {
+    // For most predicates we evaluate all argument expressions up front.
+    // DictContains is special because the 3rd argument may be an unbound
+    // witness that we want to bind here, so we handle it in its match arm
+    // without pre-evaluating args to avoid an unbound error.
+    let mut vals: Vec<Value> = Vec::with_capacity(args.len());
     use NativePredicate as NP;
+    if pred != NP::DictContains {
+        for a in args {
+            vals.push(eval_expr(a.expr(), env)?);
+        }
+    }
     let ok = match pred {
         NP::Equal => vals[0].raw() == vals[1].raw(),
         NP::NotEqual => vals[0].raw() != vals[1].raw(),
@@ -109,14 +183,32 @@ fn check_guard(pred: NativePredicate, args: &[Obj], env: &EvalEnv) -> Result<boo
         NP::Gt => int_from_value(&vals[0])? > int_from_value(&vals[1])?,
         NP::GtEq => int_from_value(&vals[0])? >= int_from_value(&vals[1])?,
         NP::DictContains => {
-            let d = as_dict(&vals[0])?;
-            let key = Key::try_from(vals[1].typed())
+            // Special-case: if third arg is a witness, bind it from the dict
+            let dict_expr = args[0].expr();
+            let key_expr = args[1].expr();
+            let dict_v = eval_expr(dict_expr, env)?;
+            let key_v = eval_expr(key_expr, env)?;
+            let d = as_dict(&dict_v)?;
+            let key = Key::try_from(key_v.typed())
                 .map_err(|_| Error::Type("Key must be string".into()))?;
-            let v = d.get(&key).ok().cloned();
-            if let Some(v0) = v {
-                v0.raw() == vals[2].raw()
-            } else {
-                false
+            let found = d.get(&key).ok().cloned();
+            match args[2].expr() {
+                Expr::Var(VarKind::Witness(name)) => {
+                    if let Some(v) = found {
+                        env.bindings.insert(name.clone(), v.clone());
+                        true
+                    } else {
+                        false
+                    }
+                }
+                other => {
+                    let expect = eval_expr(other, env)?;
+                    if let Some(v0) = found {
+                        v0.raw() == expect.raw()
+                    } else {
+                        false
+                    }
+                }
             }
         }
         NP::DictNotContains => {
@@ -153,24 +245,15 @@ pub fn exec_reducer(
     expr: &Expr,
     guards: &[Guard],
 ) -> Result<MwDict> {
-    let env = EvalEnv { prev, action };
+    let mut env = EvalEnv {
+        prev,
+        action,
+        bindings: HashMap::new(),
+    };
     for g in guards {
-        match g {
-            Guard::Native(pred, args) => {
-                if !check_guard(*pred, args, &env)? {
-                    return Err(Error::Msg(format!("Guard failed: {pred:?}")));
-                }
-            }
-            Guard::CustomByName(name, _args) => {
-                return Err(Error::Msg(format!(
-                    "exec mode does not evaluate custom predicate calls: {name}"
-                )));
-            }
-            Guard::CustomRef(_cpr, _args) => {
-                return Err(Error::Msg(
-                    "exec mode does not evaluate external custom predicate calls".into(),
-                ));
-            }
+        let Guard::Native(pred, args) = g;
+        if !check_guard(*pred, args, &mut env)? {
+            return Err(Error::Msg(format!("Guard failed: {pred:?}")));
         }
     }
     let out = eval_expr(expr, &env)?;

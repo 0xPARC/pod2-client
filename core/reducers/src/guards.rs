@@ -1,4 +1,4 @@
-use pod2::middleware::{CustomPredicateRef, NativePredicate};
+use pod2::middleware::NativePredicate;
 
 use crate::{ast::VarKind, builder::Obj};
 
@@ -7,27 +7,38 @@ use crate::{ast::VarKind, builder::Obj};
 pub enum Guard {
     /// Generic native predicate with arguments (Obj expressions).
     Native(NativePredicate, Vec<Obj>),
-    /// Reference to another custom predicate by name; resolved in batch lowering.
-    CustomByName(String, Vec<Obj>),
-    /// Reference to an arbitrary custom predicate via explicit ref (not batch-resolved by name).
-    CustomRef(CustomPredicateRef, Vec<Obj>),
-    // Future: Custom(String, Vec<Obj>)
 }
 
 /// Construction context exposed to reducer author functions.
 pub struct Ctx {
     pub(crate) guards: Vec<Guard>,
+    next_witness: usize,
 }
 
 impl Ctx {
     pub fn new() -> Self {
-        Self { guards: Vec::new() }
+        Self {
+            guards: Vec::new(),
+            next_witness: 0,
+        }
+    }
+    /// A fresh empty dictionary literal.
+    pub fn empty_dict(&self) -> Obj {
+        Obj::empty_dict()
+    }
+    /// A fresh empty set literal.
+    pub fn empty_set(&self) -> Obj {
+        Obj::empty_set()
     }
     pub fn state(&self) -> Obj {
         Obj::var(VarKind::Prev)
     }
     pub fn action(&self) -> Obj {
         Obj::var(VarKind::Action)
+    }
+    /// Expose guards collected so far (for macro/internal use and external callers).
+    pub fn guards(&self) -> &[Guard] {
+        &self.guards
     }
     /// Generic require with explicit predicate and n-args helper overloads.
     pub fn require_native(&mut self, pred: NativePredicate, args: Vec<Obj>) {
@@ -114,32 +125,17 @@ impl Ctx {
     require_impl_oa!(require_set_delete, SetDelete, 3);
     require_impl_oa!(require_array_update, ArrayUpdate, 4);
 
-    /// Require a custom predicate call by name (resolved in batch builds).
-    pub fn require_custom_by_name(&mut self, name: impl Into<String>, args: Vec<Obj>) {
-        self.guards.push(Guard::CustomByName(name.into(), args));
+    /// Lookup a value in a dictionary by a (possibly dynamic) key and return a
+    /// symbolic witness bound by a DictContains guard.
+    pub fn lookup(&mut self, dict: Obj, key: Obj) -> Obj {
+        self.next_witness += 1;
+        let name = format!("lk_{}", self.next_witness);
+        let w = Obj::var(VarKind::Witness(name));
+        self.require_dict_contains(dict, key, w.clone());
+        w
     }
-    pub fn call(
-        &mut self,
-        name: impl Into<String>,
-        a1: impl Into<Obj>,
-        a2: impl Into<Obj>,
-        a3: impl Into<Obj>,
-    ) {
-        self.require_custom_by_name(name, vec![a1.into(), a2.into(), a3.into()]);
-    }
-    /// Require a custom predicate via explicit reference (external to batch name resolution).
-    pub fn require_custom_ref(&mut self, cpr: CustomPredicateRef, args: Vec<Obj>) {
-        self.guards.push(Guard::CustomRef(cpr, args));
-    }
-    pub fn call_ref(
-        &mut self,
-        cpr: CustomPredicateRef,
-        a1: impl Into<Obj>,
-        a2: impl Into<Obj>,
-        a3: impl Into<Obj>,
-    ) {
-        self.require_custom_ref(cpr, vec![a1.into(), a2.into(), a3.into()]);
-    }
+
+    // Custom predicate calls removed in simplified API
 }
 
 impl Default for Ctx {
