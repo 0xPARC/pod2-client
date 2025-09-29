@@ -1,4 +1,4 @@
-use pod2::middleware::NativePredicate;
+use pod2::middleware::{CustomPredicateRef, NativePredicate};
 
 use crate::{ast::VarKind, builder::Obj};
 
@@ -7,6 +7,10 @@ use crate::{ast::VarKind, builder::Obj};
 pub enum Guard {
     /// Generic native predicate with arguments (Obj expressions).
     Native(NativePredicate, Vec<Obj>),
+    /// Reference to another custom predicate by name; resolved in batch lowering.
+    CustomByName(String, Vec<Obj>),
+    /// Reference to an arbitrary custom predicate via explicit ref (not batch-resolved by name).
+    CustomRef(CustomPredicateRef, Vec<Obj>),
     // Future: Custom(String, Vec<Obj>)
 }
 
@@ -109,6 +113,33 @@ impl Ctx {
     require_impl_oa!(require_set_insert, SetInsert, 3);
     require_impl_oa!(require_set_delete, SetDelete, 3);
     require_impl_oa!(require_array_update, ArrayUpdate, 4);
+
+    /// Require a custom predicate call by name (resolved in batch builds).
+    pub fn require_custom_by_name(&mut self, name: impl Into<String>, args: Vec<Obj>) {
+        self.guards.push(Guard::CustomByName(name.into(), args));
+    }
+    pub fn call(
+        &mut self,
+        name: impl Into<String>,
+        a1: impl Into<Obj>,
+        a2: impl Into<Obj>,
+        a3: impl Into<Obj>,
+    ) {
+        self.require_custom_by_name(name, vec![a1.into(), a2.into(), a3.into()]);
+    }
+    /// Require a custom predicate via explicit reference (external to batch name resolution).
+    pub fn require_custom_ref(&mut self, cpr: CustomPredicateRef, args: Vec<Obj>) {
+        self.guards.push(Guard::CustomRef(cpr, args));
+    }
+    pub fn call_ref(
+        &mut self,
+        cpr: CustomPredicateRef,
+        a1: impl Into<Obj>,
+        a2: impl Into<Obj>,
+        a3: impl Into<Obj>,
+    ) {
+        self.require_custom_ref(cpr, vec![a1.into(), a2.into(), a3.into()]);
+    }
 }
 
 impl Default for Ctx {

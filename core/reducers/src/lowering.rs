@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pod2::middleware::{
     Key, NativePredicate, Params, Predicate, StatementTmpl, StatementTmplArg, Value, Wildcard,
 };
@@ -233,7 +235,11 @@ fn lower_as_arg(ctx: &mut LowerCtx, e: &Expr) -> Arg {
     }
 }
 
-fn lower_guards(ctx: &mut LowerCtx, guards: &[Guard]) {
+fn lower_guards(
+    ctx: &mut LowerCtx,
+    guards: &[Guard],
+    name_to_index: Option<&HashMap<String, usize>>,
+) {
     for g in guards {
         match g {
             Guard::Native(pred, args) => {
@@ -242,6 +248,33 @@ fn lower_guards(ctx: &mut LowerCtx, guards: &[Guard]) {
                     .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
                     .collect();
                 ctx.add_stmt(*pred, lowered);
+            }
+            Guard::CustomByName(name, args) => {
+                let Some(map) = name_to_index else {
+                    panic!("CustomByName guard used without batch name resolver");
+                };
+                let idx = map
+                    .get(name)
+                    .copied()
+                    .unwrap_or_else(|| panic!("Unknown custom predicate name: {name}"));
+                let lowered: Vec<StatementTmplArg> = args
+                    .iter()
+                    .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
+                    .collect();
+                ctx.stmts.push(StatementTmpl {
+                    pred: Predicate::BatchSelf(idx),
+                    args: lowered,
+                });
+            }
+            Guard::CustomRef(cpr, args) => {
+                let lowered: Vec<StatementTmplArg> = args
+                    .iter()
+                    .map(|o| StatementTmplArg::from(lower_as_arg(ctx, o.expr())))
+                    .collect();
+                ctx.stmts.push(StatementTmpl {
+                    pred: Predicate::Custom(cpr.clone()),
+                    args: lowered,
+                });
             }
         }
     }
@@ -257,7 +290,7 @@ where
     let mut lctx = LowerCtx::new(params);
 
     // Lower guards first (ordering not semantically significant for AND)
-    lower_guards(&mut lctx, &ctx.guards);
+    lower_guards(&mut lctx, &ctx.guards, None);
     // Lower reducer body, tying to Next
     let result_arg = lower_as_arg(&mut lctx, next_expr.expr());
     let next_wc = lctx.wildcard("Next");
@@ -280,4 +313,36 @@ where
         predicate: pred,
         wildcard_names: lctx.names,
     }
+}
+
+/// Build a predicate intended to be part of a batch, resolving any
+/// `Guard::CustomByName` entries against the provided `name_to_index` map
+/// using `Predicate::BatchSelf(index)`.
+pub fn build_predicate_in_batch<F>(
+    params: &Params,
+    name: &str,
+    f: F,
+    name_to_index: &HashMap<String, usize>,
+) -> pod2::middleware::CustomPredicate
+where
+    F: FnOnce(&mut Ctx) -> Obj,
+{
+    let mut ctx = Ctx::new();
+    let next_expr = f(&mut ctx);
+    let mut lctx = LowerCtx::new(params);
+    lower_guards(&mut lctx, &ctx.guards, Some(name_to_index));
+    let result_arg = lower_as_arg(&mut lctx, next_expr.expr());
+    let next_wc = lctx.wildcard("Next");
+    lctx.add_stmt(
+        NativePredicate::Equal,
+        vec![StatementTmplArg::Wildcard(next_wc), result_arg.into()],
+    );
+    pod2::middleware::CustomPredicate::and(
+        params,
+        name.to_string(),
+        lctx.stmts.clone(),
+        3,
+        lctx.names.clone(),
+    )
+    .expect("valid custom predicate")
 }

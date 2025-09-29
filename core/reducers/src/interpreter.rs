@@ -24,10 +24,7 @@ fn eval_expr(expr: &Expr, env: &EvalEnv) -> Result<Value> {
             let base_v = eval_expr(base, env)?;
             match base_v.typed() {
                 TypedValue::Dictionary(d) => Ok(d.get(&Key::from(key.clone()))?.clone()),
-                other => Err(Error::Type(format!(
-                    "Field base not a dictionary: {}",
-                    other
-                ))),
+                other => Err(Error::Type(format!("Field base not a dictionary: {other}"))),
             }
         }
         Expr::Add(a, b) => {
@@ -158,9 +155,21 @@ pub fn exec_reducer(
 ) -> Result<MwDict> {
     let env = EvalEnv { prev, action };
     for g in guards {
-        if let Guard::Native(pred, args) = g {
-            if !check_guard(*pred, args, &env)? {
-                return Err(Error::Msg(format!("Guard failed: {:?}", pred)));
+        match g {
+            Guard::Native(pred, args) => {
+                if !check_guard(*pred, args, &env)? {
+                    return Err(Error::Msg(format!("Guard failed: {pred:?}")));
+                }
+            }
+            Guard::CustomByName(name, _args) => {
+                return Err(Error::Msg(format!(
+                    "exec mode does not evaluate custom predicate calls: {name}"
+                )));
+            }
+            Guard::CustomRef(_cpr, _args) => {
+                return Err(Error::Msg(
+                    "exec mode does not evaluate external custom predicate calls".into(),
+                ));
             }
         }
     }
@@ -168,8 +177,7 @@ pub fn exec_reducer(
     match out.typed() {
         TypedValue::Dictionary(d) => Ok(d.clone()),
         other => Err(Error::Type(format!(
-            "Reducer did not return a dictionary: {}",
-            other
+            "Reducer did not return a dictionary: {other}"
         ))),
     }
 }
